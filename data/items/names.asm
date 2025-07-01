@@ -71,7 +71,7 @@ ItemNames::
 	li "Soda Pop"
 	li "Lemonade"
 	li "Moomoo Milk"
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_ITEMS)
 	li "RageCandyBar"
 else
 	li "Cake of Rage"
@@ -134,7 +134,7 @@ endc
 
 	li "Mulch"
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_ITEMS)
 	li "Honey"
 else
 	li "Sweet Honey"
@@ -147,7 +147,7 @@ endc
 	li "X Sp.Def"
 	li "X Accuracy"
 	li "Dire Hit"
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_ITEMS)
 	li "Guard Spec."
 else
 	li "Guard Stats"

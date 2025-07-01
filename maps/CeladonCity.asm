@@ -327,7 +327,7 @@ CeladonCityHotelSignText:
 CeladonCityTrainerTips1Text:
 	text "Trainer Tips"
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_ITEMS)
 	para "Guard Spec."
 else
 	para "Guard Stats"

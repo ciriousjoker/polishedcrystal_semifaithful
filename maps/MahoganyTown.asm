@@ -108,7 +108,7 @@ RageCandyBarMerchantTryOneText:
 	para "Since you're new,"
 	line "you should try a"
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_ITEMS)
 	para "yummy RageCandy-"
 	line "Bar!"
 else
@@ -131,7 +131,7 @@ RageCandyBarMerchantNoRoomText:
 	done
 
 RageCandyBarMerchantSoldOutText:
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_ITEMS)
 	text "RageCandyBars are"
 else
 	text "Cakes of Rage are"

@@ -32,7 +32,7 @@ GoldenrodHoneyHousePokefanFScript:
 
 .AfterText:
 	text "My little brother"
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_ITEMS)
 	line "takes Honey and"
 
 	para "spreads it around"
@@ -56,7 +56,7 @@ endc
 .IntroText:
 	text "My #mon is an"
 	line "expert at collect-"
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_ITEMS)
 	cont "ing Honey."
 else
 	cont "ing Sweet Honey."
@@ -116,7 +116,7 @@ endc
 
 .SellText:
 	text "Would you like to"
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_ITEMS)
 	line "buy some Honey"
 
 	para "for attracting"

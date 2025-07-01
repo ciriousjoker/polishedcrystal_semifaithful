@@ -654,7 +654,7 @@ SnowWarningDescription:
 
 HoneyGatherDescription:
 	text "The #mon may"
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_ITEMS)
 	next "gather Honey."
 else
 	next "find Sweet Honey."

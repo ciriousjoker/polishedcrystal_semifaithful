@@ -10,7 +10,7 @@ ENDM
 
 PluralTable:
 	; Note that order matters since "ay" is a subset of "y" for example.
-if !DEF(FAITHFUL)
+if !DEF(FAITHFUL_ITEMS)
 	plural "e of Rage", "es of Rage" ; Cakes of Rage
 endc
 	plural "Honey",     "Honey"      ; (Sweet) Honey
@@ -21,7 +21,7 @@ endc
 	plural "runch",     "runchies"   ; PewterCrunchies
 	plural "h",         "hes"        ; Sacred Ashes, Mulches, etc
 	plural "der",       "der"        ; Powders (EnergyPowder, Heal Powder, etc)
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_ITEMS)
 	plural "c.",        "cs."        ; Guard Specs.
 endc
 	plural "ts",        "ts"         ; Guard Stats, Heavy Boots

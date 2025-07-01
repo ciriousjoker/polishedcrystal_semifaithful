@@ -48,7 +48,7 @@ CeladonUniversityWestwoodsOfficeChildScript:
 
 	para "…Maybe I should"
 	line "quit snacking on"
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_ITEMS)
 	cont "RageCandyBars."
 else
 	cont "Cakes of Rage."

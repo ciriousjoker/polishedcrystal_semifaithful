@@ -1174,7 +1174,7 @@ BugCatcherWayneBeatenText:
 
 IlexForestHoneyBoyText:
 	text "I'm slathering"
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_ITEMS)
 	line "Honey on the"
 	cont "ground."
 else
