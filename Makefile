@@ -37,6 +37,7 @@ ifeq ($(filter faithful,$(MAKECMDGOALS)),faithful)
 MODIFIERS := $(MODIFIERS)-faithful
 RGBASM_FLAGS += -DFAITHFUL 
 RGBASM_FLAGS += -DFAITHFUL_PKM_STATS 
+RGBASM_FLAGS += -DFAITHFUL_PKM_TYPE 
 endif
 ifeq ($(filter monochrome,$(MAKECMDGOALS)),monochrome)
 MODIFIERS := $(MODIFIERS)-monochrome
