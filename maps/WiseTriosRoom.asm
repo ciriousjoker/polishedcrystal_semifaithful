@@ -229,7 +229,7 @@ SageMasaAfterBattleText:
 	line "were two nine-tier"
 	cont "towers here."
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_TEXTS)
 	para "The Brass Tower,"
 else
 	para "The Gong Tower,"
@@ -255,7 +255,7 @@ endc
 	line "was said to make"
 
 	para "its roost atop the"
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_TEXTS)
 	line "Brass Tower."
 else
 	line "Gong Tower."

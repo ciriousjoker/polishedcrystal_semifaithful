@@ -80,7 +80,7 @@ WartortlePokedexEntry::
 
 SECTION "BlastoisePokedexEntry", ROMX
 BlastoisePokedexEntry::
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_TEXTS)
 	db "Shellfish@"
 else
 	db "Shell@"
@@ -794,7 +794,7 @@ SlowpokePlainPokedexEntry::
 
 SECTION "SlowbroPlainPokedexEntry", ROMX
 SlowbroPlainPokedexEntry::
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_TEXTS)
 	db "Hermit Crab@"
 else
 	db "Squatter@"
@@ -3137,7 +3137,7 @@ SlowpokeGalarianPokedexEntry::
 
 SECTION "SlowbroGalarianPokedexEntry", ROMX
 SlowbroGalarianPokedexEntry::
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_TEXTS)
 	db "Hermit Crab@"
 else
 	db "Squatter@"

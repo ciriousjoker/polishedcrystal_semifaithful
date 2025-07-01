@@ -126,7 +126,7 @@ CeladonUniversityClassroom2BlackboardText:
 
 CeladonUniversityClassroom2Bookshelf1Text:
 	text "It's a book about"
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_TEXTS)
 	line "how the Brass"
 	cont "Tower in Ecruteak"
 

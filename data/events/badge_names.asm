@@ -12,7 +12,7 @@ BadgeNames:
     li "Cascade"
     li "Thunder"
     li "Rainbow"
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_TEXTS)
     li "Soul"
     li "Marsh"
 else

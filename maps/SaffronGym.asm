@@ -210,7 +210,7 @@ SabrinaWinLossText:
 
 	para "OK, you win. You"
 	line "earned yourself"
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_TEXTS)
 	cont "the Marsh Badge."
 else
 	cont "the Soul Badge."

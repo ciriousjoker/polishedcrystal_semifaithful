@@ -383,7 +383,7 @@ TinTower1FSage1Text:
 	done
 
 TinTower1FSage2Text:
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_TEXTS)
 	text "When the Brass"
 else
 	text "When the Gong"

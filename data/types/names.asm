@@ -71,7 +71,7 @@ Mineral:      db "Mineral@"
 Amorphous:    db "Amorphous@"
 Ditto:        db "Ditto@"
 Undiscovered: db "Undiscovered@"
-if !DEF(FAITHFUL)
+if !DEF(FAITHFUL_TEXTS)
 Water1:       db "Amphibian@"
 Water2:       db "Fish@"
 Water3:       db "Invertebrate@"

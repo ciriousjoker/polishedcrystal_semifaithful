@@ -219,7 +219,7 @@ JanineText_ToughOne:
 	line "tough one. You"
 	cont "definitely won…"
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_TEXTS)
 	para "Here's the Soul"
 else
 	para "Here's the Marsh"
