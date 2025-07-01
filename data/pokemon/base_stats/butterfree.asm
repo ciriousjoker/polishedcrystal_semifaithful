@@ -1,5 +1,5 @@
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_STATS)
 	db  60,  45,  50,  70,  90,  80 ; 395 BST
 	;   hp  atk  def  spe  sat  sdf
 else
@@ -13,7 +13,7 @@ else
 	db BUG, PSYCHIC ; type
 endc
 	db 45 ; catch rate
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_STATS)
 	db 160 ; base exp
 else
 	db 185 ; base exp

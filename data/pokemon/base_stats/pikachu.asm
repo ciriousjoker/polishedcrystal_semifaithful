@@ -1,4 +1,4 @@
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_STATS)
 	db  35,  55,  40,  90,  50,  50 ; 320 BST
 	;   hp  atk  def  spe  sat  sdf
 else
@@ -8,7 +8,7 @@ endc
 
 	db ELECTRIC, ELECTRIC ; type
 	db 190 ; catch rate
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_STATS)
 	db 82 ; base exp
 else
 	db 92 ; base exp

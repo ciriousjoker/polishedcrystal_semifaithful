@@ -4,7 +4,7 @@ BattleTower_DVSpreads:
 	; hp:atk, def:spe, sat:sdf
 	db $ff, $ff, $ff ; BTDVS_PERFECT
 	db $ff, $f0, $ff ; BTDVS_TRICK_ROOM
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_STATS)
 	db $ff, $ee, $ee ; BTDVS_HP_FIGHTING
 	db $ee, $ef, $ee ; BTDVS_HP_FLYING
 	db $ff, $ef, $ee ; BTDVS_HP_POISON

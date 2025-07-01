@@ -1,4 +1,4 @@
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_STATS)
 	db  55,  35,  50,  85,  55, 110 ; 390 BST
 	;   hp  atk  def  spe  sat  sdf
 else

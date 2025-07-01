@@ -1,4 +1,4 @@
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_STATS)
 	db 106, 110,  90, 130, 154,  90 ; 680 BST
 	;   hp  atk  def  spe  sat  sdf
 else
@@ -21,7 +21,7 @@ endc
 	db GROWTH_SLOW ; growth rate
 	dn EGG_NONE, EGG_NONE ; egg groups
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_STATS)
 	ev_yield 3 SAt
 else
 	ev_yield 1 Def, 2 SAt, 1 SDf

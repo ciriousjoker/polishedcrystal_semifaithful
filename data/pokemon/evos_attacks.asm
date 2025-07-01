@@ -3831,7 +3831,7 @@ endc
 	learnset 46, THUNDER
 
 	evos_attacks Flaaffy
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_STATS)
 	evo_data EVOLVE_LEVEL, 30, AMPHAROS
 else
 	evo_data EVOLVE_LEVEL, 36, AMPHAROS

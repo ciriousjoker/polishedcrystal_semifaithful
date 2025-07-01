@@ -10,7 +10,7 @@ DEF NUM_EV_SPREADS = 0
 
 ; Hidden Power DVs ($00 is converted to $ff in regular trainer sets)
 ; Chosen for stat importance: Speed > * > Atk (hidden power is a special move)
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_STATS)
 	DEF DVS_HP_FIGHTING EQUS "14 Def, 14 Spe, 14 SAt, 14 SDf"
 	DEF DVS_HP_FLYING   EQUS "14 HP, 14 Atk, 14 Def, 14 SAt, 14 SDf"
 	DEF DVS_HP_POISON   EQUS "14 Def, 14 SAt, 14 SDf"

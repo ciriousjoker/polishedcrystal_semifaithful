@@ -1,4 +1,4 @@
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_STATS)
 	db  75,  75,  55,  30, 105,  85 ; 425 BST
 	;   hp  atk  def  spe  sat  sdf
 else
@@ -11,12 +11,12 @@ if DEF(FAITHFUL)
 else
 	db GRASS, FIRE ; type
 endc
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_STATS)
 	db 120 ; catch rate
 else
 	db 110 ; catch rate
 endc
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_STATS)
 	db 146 ; base exp
 else
 	db 156 ; base exp
