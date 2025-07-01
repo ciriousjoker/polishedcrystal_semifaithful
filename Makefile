@@ -35,7 +35,8 @@ RGBFIX_FLAGS     = -Weverything -csjv -t $(TITLE) -i $(MCODE) -n $(ROMVERSION) -
 
 ifeq ($(filter faithful,$(MAKECMDGOALS)),faithful)
 MODIFIERS := $(MODIFIERS)-faithful
-RGBASM_FLAGS += -DFAITHFUL
+RGBASM_FLAGS += -DFAITHFUL 
+RGBASM_FLAGS += -DFAITHFUL_PKM_STATS 
 endif
 ifeq ($(filter monochrome,$(MAKECMDGOALS)),monochrome)
 MODIFIERS := $(MODIFIERS)-monochrome
