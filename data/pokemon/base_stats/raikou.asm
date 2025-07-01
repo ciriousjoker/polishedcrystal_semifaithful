@@ -7,7 +7,7 @@
 	db ALWAYS_ITEM_2, MAGNET ; held items
 	dn GENDER_UNKNOWN, HATCH_UNKNOWN ; gender ratio, step cycles to hatch
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_ABILITIES)
 	abilities_for RAIKOU, PRESSURE, PRESSURE, INNER_FOCUS
 else
 	abilities_for RAIKOU, PRESSURE, INNER_FOCUS, VOLT_ABSORB

@@ -7,7 +7,7 @@
 	db ALWAYS_ITEM_2, ASPEAR_BERRY ; held items
 	dn GENDER_F100, HATCH_MEDIUM_SLOW ; gender ratio, step cycles to hatch
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_ABILITIES)
 	abilities_for SMOOCHUM, OBLIVIOUS, FOREWARN, HYDRATION
 else
 	abilities_for SMOOCHUM, OBLIVIOUS, FILTER, HYDRATION

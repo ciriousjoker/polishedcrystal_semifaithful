@@ -7,7 +7,7 @@
 	db ALWAYS_ITEM_2, SACRED_ASH ; held items
 	dn GENDER_UNKNOWN, HATCH_UNKNOWN ; gender ratio, step cycles to hatch
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_ABILITIES)
 	abilities_for HO_OH, PRESSURE, PRESSURE, REGENERATOR
 else
 	abilities_for HO_OH, PRESSURE, DROUGHT, REGENERATOR

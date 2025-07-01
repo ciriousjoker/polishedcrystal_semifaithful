@@ -7,7 +7,7 @@
 	db NO_ITEM, NO_ITEM ; held items
 	dn GENDER_F12_5, HATCH_SLOWER ; gender ratio, step cycles to hatch
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_ABILITIES)
 	abilities_for GLACEON, SNOW_CLOAK, SNOW_CLOAK, ICE_BODY
 else
 	abilities_for GLACEON, SNOW_CLOAK, SNOW_WARNING, ICE_BODY

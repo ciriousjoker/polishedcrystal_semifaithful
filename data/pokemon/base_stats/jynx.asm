@@ -12,7 +12,7 @@ endc
 	db RAWST_BERRY, RAWST_BERRY ; held items
 	dn GENDER_F100, HATCH_MEDIUM_SLOW ; gender ratio, step cycles to hatch
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_ABILITIES)
 	abilities_for JYNX, OBLIVIOUS, FOREWARN, DRY_SKIN
 else
 	abilities_for JYNX, OBLIVIOUS, FILTER, DRY_SKIN

@@ -16,7 +16,7 @@ endc
 	db NO_ITEM, NO_ITEM ; held items
 	dn GENDER_F12_5, HATCH_MEDIUM_FAST ; gender ratio, step cycles to hatch
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_ABILITIES)
 	abilities_for CHARIZARD, BLAZE, SOLAR_POWER, DROUGHT
 else
 	abilities_for CHARIZARD, BLAZE, SOLAR_POWER, TOUGH_CLAWS

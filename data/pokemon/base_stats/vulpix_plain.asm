@@ -7,7 +7,7 @@
 	db ALWAYS_ITEM_2, ASPEAR_BERRY ; held items
 	dn GENDER_F75, HATCH_MEDIUM_FAST ; gender ratio, step cycles to hatch
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_ABILITIES)
 	abilities_for VULPIX, FLASH_FIRE, FLASH_FIRE, DROUGHT
 else
 	abilities_for VULPIX, FLASH_FIRE, FOREWARN, DROUGHT

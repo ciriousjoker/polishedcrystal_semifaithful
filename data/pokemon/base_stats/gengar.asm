@@ -7,7 +7,7 @@
 	db NO_ITEM, SPELL_TAG ; held items
 	dn GENDER_F50, HATCH_MEDIUM_FAST ; gender ratio, step cycles to hatch
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_ABILITIES)
 	abilities_for GENGAR, CURSED_BODY, CURSED_BODY, SHADOW_TAG
 else
 	abilities_for GENGAR, CURSED_BODY, LEVITATE, SHADOW_TAG

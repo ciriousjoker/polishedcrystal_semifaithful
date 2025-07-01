@@ -7,7 +7,7 @@
 	db NO_ITEM, NO_ITEM ; held items
 	dn GENDER_F50, HATCH_SLOWEST ; gender ratio, step cycles to hatch
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_ABILITIES)
 	abilities_for LARVITAR, GUTS, GUTS, SAND_VEIL
 else
 	abilities_for LARVITAR, GUTS, BATTLE_ARMOR, SAND_VEIL

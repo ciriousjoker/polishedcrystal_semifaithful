@@ -7,7 +7,7 @@
 	db ALWAYS_ITEM_2, MYSTIC_WATER ; held items
 	dn GENDER_UNKNOWN, HATCH_UNKNOWN ; gender ratio, step cycles to hatch
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_ABILITIES)
 	abilities_for SUICUNE, PRESSURE, PRESSURE, INNER_FOCUS
 else
 	abilities_for SUICUNE, PRESSURE, INNER_FOCUS, WATER_ABSORB

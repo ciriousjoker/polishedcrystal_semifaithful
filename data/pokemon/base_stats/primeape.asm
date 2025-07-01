@@ -7,7 +7,7 @@
 	db NO_ITEM, KEE_BERRY ; held items
 	dn GENDER_F50, HATCH_MEDIUM_FAST ; gender ratio, step cycles to hatch
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_ABILITIES)
 	abilities_for PRIMEAPE, VITAL_SPIRIT, ANGER_POINT, DEFIANT
 else
 	abilities_for PRIMEAPE, GORILLA_TACTICS, ANGER_POINT, DEFIANT

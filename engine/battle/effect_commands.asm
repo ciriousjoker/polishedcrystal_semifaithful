@@ -3822,7 +3822,7 @@ RaiseStatWithItem:
 
 DittoMetalPowder:
 	assert !HIGH(DITTO)
-if !DEF(FAITHFUL)
+if !DEF(FAITHFUL_PKM_ABILITIES)
 	; grabs true species -- works even if transformed to non-Ditto
 	ld a, MON_FORM
 	call OpponentPartyAttr

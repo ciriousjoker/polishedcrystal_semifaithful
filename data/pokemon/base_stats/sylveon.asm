@@ -7,7 +7,7 @@
 	db NO_ITEM, PINK_BOW ; held items
 	dn GENDER_F12_5, HATCH_SLOWER ; gender ratio, step cycles to hatch
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_ABILITIES)
 	abilities_for SYLVEON, CUTE_CHARM, CUTE_CHARM, PIXILATE
 else
 	abilities_for SYLVEON, CUTE_CHARM, SERENE_GRACE, PIXILATE

@@ -7,7 +7,7 @@
 	db NO_ITEM, METAL_COAT ; held items
 	dn GENDER_UNKNOWN, HATCH_MEDIUM_FAST ; gender ratio, step cycles to hatch
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_ABILITIES)
 	abilities_for MAGNEZONE, MAGNET_PULL, STURDY, ANALYTIC
 else
 	abilities_for MAGNEZONE, MAGNET_PULL, LEVITATE, ANALYTIC

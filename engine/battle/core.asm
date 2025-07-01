@@ -4593,7 +4593,7 @@ UserCanSwitch:
 	ld a, b
 	cp HELD_SHED_SHELL
 	ret z
-if !DEF(FAITHFUL)
+if !DEF(FAITHFUL_PKM_ABILITIES)
 	call GetTrueUserAbility
 	cp RUN_AWAY
 	ret z
@@ -5950,7 +5950,7 @@ LoadEnemyWildmon:
 	call GetLeadAbility
 	cp SUPER_LUCK
 	jr z, .compound_eyes
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_ABILITIES)
 	cp COMPOUND_EYES
 	jr nz, .no_compound_eyes_or_amulet_coin
 else

@@ -11,7 +11,7 @@ endc
 	db NO_ITEM, WIDE_LENS ; held items
 	dn GENDER_F50, HATCH_MEDIUM_FAST ; gender ratio, step cycles to hatch
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_ABILITIES)
 	abilities_for YANMEGA, SPEED_BOOST, TINTED_LENS, FRISK
 else
 	abilities_for YANMEGA, SPEED_BOOST, TINTED_LENS, LEVITATE

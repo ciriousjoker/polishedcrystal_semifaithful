@@ -11,7 +11,7 @@ endc
 	db NO_ITEM, NO_ITEM ; held items
 	dn GENDER_F50, HATCH_MEDIUM_FAST ; gender ratio, step cycles to hatch
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_ABILITIES)
 	abilities_for DUNSPARCE, SERENE_GRACE, RUN_AWAY, RATTLED
 else
 	abilities_for DUNSPARCE, SERENE_GRACE, RUN_AWAY, SAND_STREAM

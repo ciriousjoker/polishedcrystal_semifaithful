@@ -7,7 +7,7 @@
 	db NO_ITEM, NO_ITEM ; held items
 	dn GENDER_F100, HATCH_MEDIUM_FAST ; gender ratio, step cycles to hatch
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_ABILITIES)
 	abilities_for KANGASKHAN, EARLY_BIRD, SCRAPPY, INNER_FOCUS
 else
 	abilities_for KANGASKHAN, EARLY_BIRD, SCRAPPY, PARENTAL_BOND

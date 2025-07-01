@@ -7,7 +7,7 @@
 	db NO_ITEM, NO_ITEM ; held items
 	dn GENDER_F50, HATCH_FAST ; gender ratio, step cycles to hatch
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_ABILITIES)
 	abilities_for GOLBAT, INNER_FOCUS, INNER_FOCUS, INFILTRATOR
 else
 	abilities_for GOLBAT, INNER_FOCUS, ANTICIPATION, INFILTRATOR

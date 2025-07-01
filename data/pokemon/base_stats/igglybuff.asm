@@ -7,7 +7,7 @@
 	db NO_ITEM, NO_ITEM ; held items
 	dn GENDER_F75, HATCH_FASTER ; gender ratio, step cycles to hatch
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_ABILITIES)
 	abilities_for IGGLYBUFF, CUTE_CHARM, COMPETITIVE, FRISK
 else
 	abilities_for IGGLYBUFF, CUTE_CHARM, COMPETITIVE, SOUNDPROOF

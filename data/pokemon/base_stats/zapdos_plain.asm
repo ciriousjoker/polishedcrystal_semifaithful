@@ -7,7 +7,7 @@
 	db ALWAYS_ITEM_2, LUM_BERRY ; held items
 	dn GENDER_UNKNOWN, HATCH_UNKNOWN ; gender ratio, step cycles to hatch
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_ABILITIES)
 	abilities_for ZAPDOS, PRESSURE, PRESSURE, STATIC
 else
 	abilities_for ZAPDOS, PRESSURE, DRIZZLE, STATIC
