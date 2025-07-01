@@ -6,7 +6,7 @@ else
 	;   hp  atk  def  spe  sat  sdf
 endc
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_TYPE)
 	db NORMAL, FLYING ; type
 	db 90 ; catch rate
 else

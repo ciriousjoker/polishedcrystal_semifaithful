@@ -6,7 +6,7 @@ else
 	;   hp  atk  def  spe  sat  sdf
 endc
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_TYPE)
 	db NORMAL, NORMAL ; type
 else
 	db NORMAL, PSYCHIC ; type

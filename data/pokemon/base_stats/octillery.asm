@@ -1,7 +1,7 @@
 	db  75, 105,  75,  45, 105,  75 ; 480 BST
 	;   hp  atk  def  spe  sat  sdf
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_TYPE)
 	db WATER, WATER ; type
 else
 	db WATER, FIRE ; type

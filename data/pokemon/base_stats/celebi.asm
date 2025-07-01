@@ -1,7 +1,7 @@
 	db 100, 100, 100, 100, 100, 100 ; 600 BST
 	;   hp  atk  def  spe  sat  sdf
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_TYPE)
 	db PSYCHIC, GRASS ; type
 else
 	db GRASS, FAIRY ; type

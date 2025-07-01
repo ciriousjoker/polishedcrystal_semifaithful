@@ -8,7 +8,7 @@ endc
 
 	db NORMAL, FLYING ; type
 	db 90 ; catch rate
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_TYPE)
 	db 162 ; base exp
 else
 	db 169 ; base exp

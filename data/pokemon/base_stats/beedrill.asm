@@ -8,7 +8,7 @@ endc
 
 	db BUG, POISON ; type
 	db 45 ; catch rate
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_TYPE)
 	db 159 ; base exp
 else
 	db 184 ; base exp

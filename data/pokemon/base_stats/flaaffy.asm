@@ -7,7 +7,7 @@ else
 endc
 
 	db ELECTRIC, ELECTRIC ; type
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_TYPE)
 	db 120 ; catch rate
 	db 117 ; base exp
 else

@@ -88,7 +88,7 @@ LakeOfRageAdvancedTipsSignText:
 
 	para "The Hidden Power"
 	line "move can take on"
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_TYPE)
 	cont "any type, except"
 else
 	cont "any type, even"

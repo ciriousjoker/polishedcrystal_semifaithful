@@ -1,7 +1,7 @@
 	db 100,  70,  70,  45,  65,  65 ; 415 BST
 	;   hp  atk  def  spe  sat  sdf
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_TYPE)
 	db NORMAL, NORMAL ; type
 else
 	db NORMAL, GROUND ; type

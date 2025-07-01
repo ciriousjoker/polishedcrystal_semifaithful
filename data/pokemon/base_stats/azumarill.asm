@@ -8,7 +8,7 @@ endc
 
 	db WATER, FAIRY ; type
 	db 75 ; catch rate
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_TYPE)
 	db 153 ; base exp
 else
 	db 183 ; base exp

@@ -6,7 +6,7 @@ else
 	;   hp  atk  def  spe  sat  sdf
 endc
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_TYPE)
 	db ELECTRIC, ELECTRIC ; type
 	db 45 ; catch rate
 	db 194 ; base exp

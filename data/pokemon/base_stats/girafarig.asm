@@ -1,4 +1,4 @@
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_STATS)
 	db  70,  80,  65,  85,  90,  65 ; 455 BST
 	;   hp  atk  def  spe  sat  sdf
 else
@@ -6,7 +6,7 @@ else
 	;   hp  atk  def  spe  sat  sdf
 endc
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_TYPE)
 	db NORMAL, PSYCHIC ; type
 else
 	db PSYCHIC, DARK ; type

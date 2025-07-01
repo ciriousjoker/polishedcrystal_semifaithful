@@ -1,7 +1,7 @@
 	db  65, 100,  70, 105,  80,  80 ; 500 BST
 	;   hp  atk  def  spe  sat  sdf
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_TYPE)
 	db FIRE, FIRE ; type
 else
 	db FIRE, FAIRY ; type

@@ -1,7 +1,7 @@
 	db  80,  82,  78,  85,  95,  80 ; 500 BST
 	;   hp  atk  def  spe  sat  sdf
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_TYPE)
 	db WATER, WATER ; type
 else
 	db WATER, PSYCHIC ; type
