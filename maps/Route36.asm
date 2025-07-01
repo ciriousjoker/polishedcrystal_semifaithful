@@ -576,7 +576,7 @@ RockSmashGuyText2:
 
 RockSmashGuyText3:
 	text "That happens to be"
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_MOVES)
 	line "Rock Smash."
 else
 	line "Brick Break."
@@ -590,7 +590,7 @@ endc
 
 	para "If any rocks are"
 	line "in your way, just"
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_MOVES)
 	cont "smash 'em up!"
 else
 	cont "break 'em up!"

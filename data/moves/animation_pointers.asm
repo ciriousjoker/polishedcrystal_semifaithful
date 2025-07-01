@@ -251,7 +251,7 @@ BattleAnimations::
 	fardw BattleAnim_Ancientpower
 	fardw BattleAnim_ShadowBall
 	fardw BattleAnim_FutureSight
-if !DEF(FAITHFUL)
+if !DEF(FAITHFUL_PKM_MOVES)
 	fardw BattleAnim_BrickBreak
 else
 	fardw BattleAnim_RockSmash

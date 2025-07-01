@@ -191,7 +191,7 @@ EvolutionMoves::
 	db NO_MOVE      ; JUMPLUFF
 	db NO_MOVE      ; AIPOM
 	db NO_MOVE      ; SUNKERN
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_MOVES)
 	db NO_MOVE      ; SUNFLORA
 else
 	db EMBER        ; SUNFLORA

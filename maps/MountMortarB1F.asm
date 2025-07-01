@@ -90,7 +90,7 @@ MountMortarB1FKiyoGotTyrogueText:
 
 MountMortarB1FHikerText:
 	text "My #mon used"
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_MOVES)
 	line "Rock Smash on a"
 else
 	line "Brick Break on a"

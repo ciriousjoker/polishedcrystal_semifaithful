@@ -9,7 +9,7 @@ Pokedex_AreaTypeLists:
 	li "Good Rod"
 	li "Super Rod"
 	li "Headbutt"
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_MOVES)
 	li "Rock Smash"
 else
 	li "Brick Break"

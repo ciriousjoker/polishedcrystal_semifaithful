@@ -187,7 +187,7 @@ CianwoodCityPokefanMText:
 	line "something."
 
 	para "Your #mon could"
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_MOVES)
 	line "use Rock Smash to"
 	cont "break them."
 else

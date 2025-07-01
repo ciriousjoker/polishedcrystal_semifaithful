@@ -444,7 +444,7 @@ PlayRoughDescription:
 	done
 
 RockSmashDescription:
-if !DEF(FAITHFUL)
+if !DEF(FAITHFUL_PKM_MOVES)
 	text "Removes Reflect"
 	next "and Light Screen."
 	done

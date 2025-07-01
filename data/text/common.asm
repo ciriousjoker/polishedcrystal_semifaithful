@@ -2095,7 +2095,7 @@ SECTION "_UseRockSmashText", ROMX
 _UseRockSmashText::
 	text_ram wStringBuffer2
 	text " used"
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_MOVES)
 	line "Rock Smash!"
 else
 	line "Brick Break!"
@@ -2113,7 +2113,7 @@ _AskRockSmashText::
 	text "This rock looks"
 	line "breakable."
 
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_MOVES)
 	para "Want to use Rock"
 	line "Smash?"
 else

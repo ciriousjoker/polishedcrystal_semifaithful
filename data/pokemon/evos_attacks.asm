@@ -244,7 +244,7 @@ EvosAttacks::
 	learnset 53, RAIN_DANCE
 	learnset 60, HYDRO_PUMP
 	learnset 67, SHELL_SMASH ; Sw/Sw move
-if !DEF(FAITHFUL)
+if !DEF(FAITHFUL_PKM_MOVES)
 	learnset 75, IRON_HEAD ; TM move
 endc
 
@@ -1813,7 +1813,7 @@ endc
 	learnset 1, MUD_SLAP ; Sand Attack → similar move
 	learnset 5, LEER
 	learnset 10, QUICK_ATTACK ; Fury Cutter → egg move
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_MOVES)
 	learnset 15, ROCK_SMASH
 else
 	learnset 15, REVERSAL ; Rock Smash → TM move
@@ -1822,7 +1822,7 @@ endc
 	learnset 25, PROTECT ; Detect → similar move
 	learnset 30, KNOCK_OFF
 	learnset 35, STEEL_WING ; Defog → TM move
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_MOVES)
 	learnset 40, NIGHT_SLASH ; Brick Break → egg move
 else
 	learnset 40, ROCK_SMASH ; Brick Break
@@ -2352,7 +2352,7 @@ endc
 	learnset 9, PURSUIT ; Rolling Kick → egg move
 	learnset 13, LOW_KICK ; Jump Kick → HGSS tutor move
 	learnset 17, STOMP ; Brick Break → new move
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_MOVES)
 	learnset 21, ENDURE ; Focus Energy → TM move
 else
 	learnset 21, ROCK_SMASH ; Focus Energy → "Brick Break"
@@ -4053,7 +4053,7 @@ endc
 	learnset 1, SPLASH ; Growth → Hoppip move
 	learnset 1, TACKLE ; Pound → similar move
 	learnset 1, ABSORB
-if !DEF(FAITHFUL)
+if !DEF(FAITHFUL_PKM_MOVES)
 	learnset 1, EMBER ; evolution move
 endc
 	learnset 4, GROWTH ; Ingrain → Growth
@@ -4065,7 +4065,7 @@ endc
 	learnset 22, GIGA_DRAIN
 	learnset 25, AGILITY ; Bullet Seed → TM move
 	learnset 28, PETAL_DANCE
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_MOVES)
 	learnset 31, EARTH_POWER ; Natural Gift → tutor move
 else
 	learnset 31, FLAMETHROWER ; Natural Gift → TM move
@@ -4074,7 +4074,7 @@ endc
 	learnset 37, DOUBLE_EDGE
 	learnset 40, SUNNY_DAY
 	learnset 43, SEED_BOMB ; Leaf Storm → Sunkern move
-if !DEF(FAITHFUL)
+if !DEF(FAITHFUL_PKM_MOVES)
 	learnset 50, FIRE_BLAST ; Petal Blizzard → TM move
 endc
 
@@ -4090,7 +4090,7 @@ endc
 	learnset 22, DRAGON_RAGE ; Supersonic → new move
 	learnset 27, SUPERSONIC ; Uproar → Supersonic
 	learnset 30, PURSUIT
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_MOVES)
 	learnset 33, ANCIENTPOWER
 else
 	learnset 35, ANCIENTPOWER
@@ -4290,7 +4290,7 @@ endc
 	learnset 41, BATON_PASS
 	learnset 46, NASTY_PLOT
 	learnset 50, PSYCHIC_M
-if !DEF(FAITHFUL)
+if !DEF(FAITHFUL_PKM_MOVES)
 	learnset 55, DARK_PULSE ; new move
 endc
 
@@ -4771,7 +4771,7 @@ endc
 	learnset 46, SEED_BOMB ; Bullet Seed → tutor move
 	learnset 52, GUNK_SHOT ; Hydro Pump → new move
 	learnset 58, HYDRO_PUMP ; Hyper Beam → Hydro Pump
-if !DEF(FAITHFUL)
+if !DEF(FAITHFUL_PKM_MOVES)
 	learnset 58, FIRE_BLAST ; new move
 endc
 	learnset 64, AURA_SPHERE ; Soak → new move
@@ -5562,7 +5562,7 @@ endc
 	learnset 22, DRAGON_RAGE ; Supersonic → new move
 	learnset 27, SUPERSONIC ; Uproar → Supersonic
 	learnset 30, PURSUIT
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_MOVES)
 	learnset 33, ANCIENTPOWER
 else
 	learnset 35, ANCIENTPOWER
@@ -5705,7 +5705,7 @@ endc
 	learnset 1, PECK
 	learnset 1, MUD_SLAP ; Sand Attack → similar move
 	learnset 1, LEER
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_MOVES)
 	learnset 15, ROCK_SMASH
 else
 	learnset 15, REVERSAL ; Rock Smash → TM move
@@ -5714,7 +5714,7 @@ endc
 	learnset 25, PROTECT ; Detect → similar move
 	learnset 30, KNOCK_OFF
 	learnset 35, STEEL_WING ; Defog → TM move
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_MOVES)
 	learnset 40, NIGHT_SLASH ; Brick Break → egg move
 else
 	learnset 40, ROCK_SMASH ; Brick Break

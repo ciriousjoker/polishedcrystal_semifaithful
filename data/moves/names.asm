@@ -248,7 +248,7 @@ MoveNames::
 	li "AncientPower"
 	li "Shadow Ball"
 	li "Future Sight"
-if DEF(FAITHFUL)
+if DEF(FAITHFUL_PKM_MOVES)
 	li "Rock Smash"
 else
 	li "Brick Break"
