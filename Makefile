@@ -113,7 +113,7 @@ clean: tidy
 
 tidy:
 	$(RM) $(crystal_obj) $(crystal_vc_obj) $(wildcard $(NAME)-*.gbc) $(wildcard $(NAME)-*.pocket) $(wildcard $(NAME)-*.bsp) \
-		$(wildcard $(NAME)-*.map) $(wildcard $(NAME)-*.sym) $(wildcard $(NAME)-*.patch) rgbdscheck.o
+		$(wildcard $(NAME)-*.map) $(wildcard $(NAME)-*.sym) $(wildcard $(NAME)-*.patch) rgbdscheck.o player1.gbc player2.gbc
 
 freespace: crystal tools/bankends
 	tools/bankends $(ROM_NAME).map > bank_ends.txt
@@ -155,6 +155,8 @@ $(ROM_NAME).$(EXTENSION): $(crystal_obj) layout.link
 	$Q$(RGBDS)rgblink $(RGBLINK_FLAGS) -l layout.link -o $@ $(filter %.o,$^)
 	$Q$(RGBDS)rgbfix $(RGBFIX_FLAGS) $@
 	$Qtools/bankends -q $(ROM_NAME).map >&2
+	$Qcp $@ player1.gbc
+	$Qcp $@ player2.gbc
 
 $(ROM_NAME)_vc.gbc: $(crystal_vc_obj) layout.link
 	$Q$(RGBDS)rgblink $(RGBLINK_VC_FLAGS) -l layout.link -o $@ $(filter %.o,$^)
