@@ -311,6 +311,7 @@ endc
 	evos_attacks Pidgey
 	evo_data EVOLVE_LEVEL, 18, PIDGEOTTO
 	learnset 1, TACKLE
+	learnset 1, POISON_STING
 	learnset 5, GUST ; Sand Attack → Gust
 	learnset 9, MUD_SLAP ; Gust → GSC TM move
 	learnset 13, QUICK_ATTACK
@@ -3500,6 +3501,7 @@ endc
 	evos_attacks Sentret
 	evo_data EVOLVE_LEVEL, 15, FURRET
 	learnset 1, TACKLE
+	learnset 1, POISON_STING
 	learnset 1, FORESIGHT
 	learnset 4, DEFENSE_CURL
 	learnset 7, QUICK_ATTACK
