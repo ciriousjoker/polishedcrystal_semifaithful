@@ -102,9 +102,6 @@ HandleMap:
 	farcall DoOverworldWeather
 	farcall PrintTextLazyExecute
 	
-	; Process any pending multiplayer data marked from VBlank
-	; farcall ProcessPendingMultiplayerData
-	
 	xor a
 	ret
 
@@ -978,7 +975,8 @@ CountStep:
 	; Increase the EXP of (both) DayCare Pokemon by 1.
 	farcall DayCareStep
 
-  farcall MultiplayerSendPlayerMovement
+  ; Send multiplayer movement data
+  call SendPlayerMovementData
 
 	; Every four steps, deal damage to all Poisoned Pokemon
 	ld hl, wPoisonStepCount
@@ -1493,3 +1491,68 @@ DoBikeStep::
 INCLUDE "engine/overworld/landmarks.asm"
 INCLUDE "engine/overworld/stone_table.asm"
 INCLUDE "engine/overworld/scripting.asm"
+
+; Send player movement data via multiplayer
+SendPlayerMovementData:
+	; Only send if we have actual movement
+	ld a, [wPlayerStepFlags]
+	bit PLAYERSTEP_STOP_F, a
+	ret z
+	
+	; Create movement package
+	ld hl, wTempBuffer
+	
+	; Byte 0: Package type (0x01 = movement)
+	ld a, $01
+	ld [hli], a
+	
+	; Byte 1: Player X coordinate
+	; ld a, [wPlayerMapX]
+	ld a, $02
+	ld [hli], a
+	
+	; Byte 2: Player Y coordinate
+	; ld a, [wPlayerMapY]
+	ld a, $03
+	ld [hli], a
+	
+	; Byte 3: Player direction
+	; ld a, [wPlayerDirection]
+	ld a, $04
+	ld [hli], a
+	
+	; Byte 4: Player state
+	; ld a, [wPlayerState]
+	ld a, $05
+	ld [hli], a
+	
+	; Byte 5: Map group
+	; ld a, [wMapGroup]
+	ld a, $06
+	ld [hli], a
+	
+	; Byte 6: Map number
+	; ld a, [wMapNumber]
+	ld a, $07
+	ld [hli], a
+
+	; Byte 7: MOCKED
+	ld a, $00
+	ld [hli], a
+	
+; 	; Byte 7: Checksum (simple XOR of all bytes)
+; 	ld hl, wTempBuffer
+; 	ld b, 7
+; 	xor a
+; .checksum_loop:
+; 	xor [hl]
+; 	inc hl
+; 	dec b
+; 	jr nz, .checksum_loop
+; 	ld [hl], a
+	
+	; Queue the package
+	ld hl, wTempBuffer
+	farcall MultiplayerQueuePackage
+	
+	ret
