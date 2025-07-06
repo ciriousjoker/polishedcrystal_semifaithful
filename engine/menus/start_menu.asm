@@ -12,6 +12,9 @@
 
 StartMenu::
 
+	; Become multiplayer master when start menu is opened
+	farcall BecomeMultiplayerMaster
+
 	call ClearWindowData
 	call BackupSprites
 	call ClearSpritesUnderStartMenu

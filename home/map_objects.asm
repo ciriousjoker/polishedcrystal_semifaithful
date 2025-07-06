@@ -341,6 +341,9 @@ UpdateSprites::
 	bit SPRITE_UPDATES_DISABLED_F, a
 	ret z
 
+	; ; Update multiplayer objects before updating regular sprites
+	; farcall UpdateMultiplayerObjects
+
 	farjp UpdateMapObjectDataAndSprites
 
 GetObjectStruct::

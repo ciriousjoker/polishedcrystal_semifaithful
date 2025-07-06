@@ -450,6 +450,10 @@ FinishContinueFunction:
 	ld [wGameTimerPaused], a
 	ld hl, wEnteredMapFromContinue
 	set 1, [hl]
+	
+	; Initialize multiplayer system on game start/load
+	farcall MultiplayerInitialize
+	
 	farcall OverworldLoop
 	ld a, [wSpawnAfterChampion]
 	cp SPAWN_LEAF

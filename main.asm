@@ -751,3 +751,7 @@ INCLUDE "audio/music/printer.asm"
 SECTION "LureMenu", ROMX
 
 INCLUDE "engine/menus/lure_menu.asm"
+
+SECTION "Multiplayer System", ROMX
+
+INCLUDE "engine/multiplayer/multiplayer.asm"

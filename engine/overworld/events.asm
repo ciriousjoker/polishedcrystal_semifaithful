@@ -100,6 +100,10 @@ HandleMap:
 	call HandleMapBackground
 	call CheckPlayerState
 	farcall DoOverworldWeather
+	
+	; Process any pending multiplayer data marked from VBlank
+	; farcall ProcessPendingMultiplayerData
+	
 	xor a
 	ret
 
@@ -797,6 +801,18 @@ INCLUDE "engine/events/hidden_item.asm"
 PlayerMovement:
 	farcall DoPlayerMovement
 	ld a, c
+	
+; 	; Check if player moved (not standing/turning) and broadcast position
+; 	cp PLAYERMOVEMENT_NORMAL
+; 	jr nz, .no_broadcast
+; 	; Broadcast the player's new position to other Game Boys
+; 	; push bc
+;   ; push hl
+; 	; farcall BroadcastPlayerMovement
+;   ; pop hl
+; 	; pop bc
+; .no_broadcast
+	
 	ld hl, PlayerMovementPointers
 	call JumpTable
 	ld a, c
@@ -960,6 +976,8 @@ CountStep:
 .skip_egg
 	; Increase the EXP of (both) DayCare Pokemon by 1.
 	farcall DayCareStep
+
+  farcall MultiplayerSendPlayerMovement
 
 	; Every four steps, deal damage to all Poisoned Pokemon
 	ld hl, wPoisonStepCount

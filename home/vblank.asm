@@ -185,6 +185,9 @@ VBlank0::
 	ld [wTextDelayFrames], a
 .noDelay2
 	call Joypad
+	
+	; ; Process multiplayer data (simple home bank version)
+	; call ProcessMultiplayerDataHome
 	; fallthrough
 
 VBlank2::
@@ -413,6 +416,29 @@ VBlank7::
 	ld a, BANK(VBlankSafeCopyTilemapAtOnce)
 	rst Bankswitch
 	jmp VBlankSafeCopyTilemapAtOnce ; far-ok
+
+; ; Process multiplayer data in the home bank safely
+; ProcessMultiplayerDataHome::
+; 	; ; Check if multiplayer mode is enabled
+; 	; ld a, [wMultiplayerModeEnabled]
+; 	; and a
+; 	; ret z
+	
+; 	; ; Simple check - just set a flag that multiplayer data needs processing
+; 	; ; The actual processing will be done outside of VBlank in the main loop
+; 	; ld a, [wMultiplayerDataPending]
+; 	; and a
+; 	; ret nz  ; Already pending, don't overwrite
+	
+; 	; ; Check if we have data to process
+; 	; ld a, [wMultiplayerReceiveBufferStatus]
+; 	; and a
+; 	; ret z  ; No data received
+	
+; 	; ; Mark that multiplayer data needs processing
+; 	; ld a, 1
+; 	; ld [wMultiplayerDataPending], a
+; 	ret
 
 VBlank8:
 	; bg map
