@@ -7,9 +7,53 @@ This implementation provides a full-duplex, frame-based multiplayer communicatio
 ## Architecture
 
 ### Package Structure
+
 Each multiplayer package consists of 8 bytes of data that can contain any type of information (player movement, battle commands, chat messages, etc.).
 
-### SB Register Format
+### Communication Flow
+
+1. **Package Queuing**: `MultiplayerQueuePackage()` queues an 8-byte package for transmission
+2. **Package Buffering**: `MultiplayerSendPackage()` moves queued packages to the transmission buffer
+3. **Nibble Transmission**: `MultiplayerSendReceiveNibble()` handles the actual bit-level communication
+4. **Package Reception**: `MultiplayerOnPackageReceived()` processes complete received packages
+
+## Implementation Details
+
+### Core Functions
+
+#### `MultiplayerInitialize()`
+
+Initializes all multiplayer buffers and state variables. Should be called once at startup.
+
+#### `MultiplayerQueuePackage(HL)`
+
+Queues an 8-byte package for transmission.
+
+- Input: HL = pointer to 8-byte data to send
+- The package will be transmitted when the link is available
+
+#### `MultiplayerSendPackage()`
+
+Called once per frame. Moves queued packages to the transmission buffer if no package is currently being transmitted.
+
+#### `MultiplayerSendReceiveNibble()`
+
+The core communication function called once per frame. Handles:
+
+- Processing incoming nibbles with sequence validation
+- Managing ACK/timeout for outgoing nibbles
+- Preparing and transmitting the next nibble
+
+#### `HandleMultiplayerPackage()`
+
+Processes complete received packages. Override this function to handle specific package types.
+
+### VBlank Integration
+
+The multiplayer system integrates with the VBlank interrupt through `MultiplayerVBlankHandler()`, which is called every frame from the main VBlank routine.
+
+## SB Register Format
+
 Every frame, an 8-bit value is transmitted via the SB register with the following bit layout:
 
 ```
@@ -23,101 +67,6 @@ Bit: [ 7    6    5    4 ][3 2 1 0]
 - **Bit 4**: Master (1) or Slave (0) indicator. Necessary so the cartridge can ignore its own nibbles
 - **Bits 3-0**: 4-bit payload nibble
 
-### Communication Flow
-
-1. **Package Queuing**: `MultiplayerQueuePackage()` queues an 8-byte package for transmission
-2. **Package Buffering**: `MultiplayerSendPackage()` moves queued packages to the transmission buffer
-3. **Nibble Transmission**: `MultiplayerSendReceiveNibble()` handles the actual bit-level communication
-4. **Package Reception**: `MultiplayerOnPackageReceived()` processes complete received packages
-
-## Implementation Details
-
-### RAM Variables (`ram/multiplayer.asm`)
-
-```z80
-; Package buffers (8 bytes each)
-wMultiplayerQueuedPackage:: ds 8    ; Package queued for transmission
-wMultiplayerBufferedPackage:: ds 8  ; Package currently being transmitted
-wMultiplayerReceivedPackage:: ds 8  ; Package currently being received
-wMultiplayerPackageToExecute:: ds 8 ; Complete received package ready for processing
-
-; Send state variables
-wMultiplayerSendByteIdx:: db        ; Current byte being sent (0-7)
-wMultiplayerSendNibbleIdx:: db      ; Current nibble being sent (0=high, 1=low)
-wMultiplayerSendSeq:: db           ; Send sequence bit (0/1)
-
-; Receive state variables
-wMultiplayerReceiveByteIdx:: db     ; Current byte being received (0-7)
-wMultiplayerReceiveNibbleIdx:: db   ; Current nibble being received (0=high, 1=low)
-wMultiplayerRecvSeq:: db           ; Expected receive sequence bit (0/1)
-
-; Communication state
-wMultiplayerTimeoutCounter:: db     ; Timeout counter in frames
-wMultiplayerLastSB:: db            ; Last SB value received
-wMultiplayerQueuedPackageFlag:: db  ; 1 if queued package is available
-wMultiplayerBufferedPackageFlag:: db ; 1 if buffered package is being transmitted
-```
-
-### Core Functions
-
-#### `MultiplayerInitialize()`
-Initializes all multiplayer buffers and state variables. Should be called once at startup.
-
-#### `MultiplayerQueuePackage(HL)`
-Queues an 8-byte package for transmission.
-- Input: HL = pointer to 8-byte data to send
-- The package will be transmitted when the link is available
-
-#### `MultiplayerSendPackage()`
-Called once per frame. Moves queued packages to the transmission buffer if no package is currently being transmitted.
-
-#### `MultiplayerSendReceiveNibble()`
-The core communication function called once per frame. Handles:
-- Processing incoming nibbles with sequence validation
-- Managing ACK/timeout for outgoing nibbles
-- Preparing and transmitting the next nibble
-
-#### `HandleMultiplayerPackage()`
-Processes complete received packages. Override this function to handle specific package types.
-
-### VBlank Integration
-
-The multiplayer system integrates with the VBlank interrupt through `MultiplayerVBlankHandler()`, which is called every frame from the main VBlank routine.
-
-## Usage Example
-
-### Basic Setup
-```z80
-; Initialize the multiplayer system
-call MultiplayerInitialize
-
-; Set as master (one Game Boy should be master, other slave)
-ld a, 1
-ld [wMultiplayerIsMaster], a
-
-; Create a package
-ld hl, wTempBuffer
-ld a, $01  ; Package type: player movement
-ld [hli], a
-ld a, [wPlayerMapX]
-ld [hli], a
-ld a, [wPlayerMapY]
-ld [hli], a
-; ... fill remaining bytes ...
-
-; Queue the package
-ld hl, wTempBuffer
-call MultiplayerQueuePackage
-```
-
-### Player Movement Integration
-The system automatically sends player movement data when the player takes a step:
-
-```z80
-; In CountStep routine
-call SendPlayerMovementData  ; Sends movement package
-```
-
 ## Frame-by-Frame Example
 
 Here's a simulation of sending "123" from Master to Slave, with "abc" being sent back starting at frame 3:
@@ -125,25 +74,29 @@ Here's a simulation of sending "123" from Master to Slave, with "abc" being sent
 ```
 | Frame | SB Master    | M→S nibble | SB Slave     | S→M nibble | Comment                                  |
 | ----- | ------------ | ---------- | ------------ | ---------- | ---------------------------------------- |
-| 1     | 0 0 1 0 0011 | 1 H (0x3)  | 0 0 0 0 0000 | idle       | Master sends High-nibble of '1'          |
-| 2     | 1 1 0 0 0001 | 1 L (0x1)  | 0 0 0 0 0000 | idle       | Master sends Low-nibble of '1', gets ACK |
-| 3     | 1 0 1 0 0011 | 2 H (0x3)  | 0 0 1 0 0110 | a H (0x6)  | Both send simultaneously                 |
-| 4     | 1 1 0 0 0010 | 2 L (0x2)  | 1 0 0 0 0001 | a L (0x1)  | Continue transmission                    |
-| 5     | 0 1 1 0 0011 | 3 H (0x3)  | 0 0 1 0 0110 | b H (0x6)  | Full duplex operation                    |
-| 6     | 1 0 0 0 0011 | 3 L (0x3)  | 1 0 0 0 0010 | b L (0x2)  | Final nibbles                            |
-| 7     | 1 1 0 0 0000 | idle       | 0 0 1 0 0110 | c H (0x6)  | Master done, slave continues             |
-| 8     | 1 0 0 0 0000 | idle       | 1 1 0 0 0011 | c L (0x3)  | Transmission complete                    |
+| 0     | 0 0 1 1 0011 | h-1 (0x3)  | 1 1 1 1 1111 | disconnect | Master sends high-'1'. slave isn't connected, therefore rSB is floating at 0xFF.        |
+| 1     | 0 0 1 1 0011 | h-1 (0x3)  | 0 0 0 0 1111 | ack h-1 ---| Master sends high-'1' again, because 0xFF is invalid. slave acks high-'1' and payload of 0xF, representing "nothing"       |
+| 2     | 1 0 0 1 0001 | l-1 (0x1)  | 0 0 0 0 1111 | ack h-1 ---| Master acks nothing because payload 0xF is invalid and sends low-'1'. slave acks high-'1' (again) and sends 0xF, ie "nothing" |
+| 3     | 1 0 1 1 0011 | 2 H (0x3)  | 0 1 1 0 0110 | a H (0x6)  | Master acks nothing because 0xF is invalid and sends high-'2'. slave acks low-'1' sends high-'a'                           |
+| 4     | 1 0 0 1 0010 | 2 L (0x2)  | 1 0 0 0 0001 | a L (0x1)  | Master acks high-'a' and sends low-'2'. slave acks high-'2' and sends low-'a'      |
+| 5     | 0 1 1 1 0011 | 3 H (0x3)  | 0 0 1 0 0110 | b H (0x6)  | Master acks low-'a' and sends high-'3'. slave acks low-'2' and sends high-'b'      |
+| 6     | 1 0 0 1 0011 | 3 L (0x3)  | 1 0 0 0 0010 | b L (0x2)  | Master acks high-'b' and sends low-'3'. slave acks high-'3'                            |
+| 7     | 1 1 0 1 0000 | idle       | 0 0 1 0 0110 | c H (0x6)  | Master done, slave continues             |
+| 8     | 1 0 0 1 0000 | idle       | 1 1 0 0 0011 | c L (0x3)  | Transmission complete                    |
 ```
 
 ## Testing
 
 The multiplayer system operates automatically:
+
 - Initialization happens when toggling master/slave status
 - Player movement data is sent automatically when stepping
 - Package reception and processing happens in VBlank
 
 ### Package Types
+
 The system supports different package types:
+
 - `$01`: Player movement data
 - `$02`: Battle command (future)
 - `$03`: Chat message (future)
@@ -182,11 +135,13 @@ QueuePackage (queues an 8 byte package of "12345678" to send it once the current
 
 called on every frame:
 SendPackage
+
 - if queued package is empty -> ret
 - if buffered package isn't empty -> ret
 - copy queued package to buffered package
 
 SendReceiveNibble
+
 - Checks if there's an incoming nibble and stores it in a buffer
 - Checks if there's an incoming ack for the currently waiting-to-be-acknowledged nibble
 - If there is no ack within 60 VBlanks -> timeout, ie destroy buffered package
@@ -200,10 +155,12 @@ SendReceiveNibble
 
 Called on full transmission
 OnPackageReceived:
+
 - copy received package to packageToExecute buffer
 - Call HandlePackage
 
 HandlePackage
+
 - just simple debug textbox for now
 - wipes packageToExecute buffer afterwards
 
@@ -215,6 +172,7 @@ Write a very detailed explanation on what variables are necessary to make this w
 An experienced z80 gbc developer should be able to implement this in an assembly decomp of Pokemon Crystal.
 
 Include:
+
 - list of function stubs with a series of detailed comments & pseudocode
 - list of variables
 - package structure of a single nibble package and what each bit indicates and why (be very detailed here!!)

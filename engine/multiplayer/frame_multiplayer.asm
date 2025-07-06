@@ -7,55 +7,34 @@ SECTION "Frame Multiplayer", ROMX
 ; SB Register bit layout (7 6 5 4 3 2 1 0):
 ; Bit 7: SeqOut - Toggle bit for sequence control
 ; Bit 6: AckOut - Mirror of last received SeqIn
-; Bit 5: H/L - 1=High nibble, 0=Low nibble  
+; Bit 5: H/L - 1=High nibble, 0=Low nibble
 ; Bit 4: Master/Slave - 1 if master, 0 if slave (used to avoid interpreting own nibbles as received ones)
 ; Bits 3-0: Payload nibble
 
 DEF MULTIPLAYER_PACKAGE_SIZE EQU 8
 DEF MULTIPLAYER_TIMEOUT_FRAMES EQU 60
 
-; Initialize multiplayer system
+; MultiplayerInitialize:
+; Purpose: Initializes all multiplayer-related RAM variables and hardware registers to a clean state.
+;          This should be called once when activating the multiplayer feature.
 MultiplayerInitialize::
-	; Clear all buffers
+	; Clear all package buffers to 0.
 	ld hl, wMultiplayerQueuedPackage
-	ld bc, MULTIPLAYER_PACKAGE_SIZE
+	ld bc, wTempBuffer - wMultiplayerQueuedPackage ; Zero out all multiplayer WRAM variables up to the temp buffer
 	xor a
 	rst ByteFill
-	
-	ld hl, wMultiplayerBufferedPackage
-	ld bc, MULTIPLAYER_PACKAGE_SIZE
-	xor a
-	rst ByteFill
-	
-	ld hl, wMultiplayerReceivedPackage
-	ld bc, MULTIPLAYER_PACKAGE_SIZE
-	xor a
-	rst ByteFill
-	
-	ld hl, wMultiplayerPackageToExecute
-	ld bc, MULTIPLAYER_PACKAGE_SIZE
-	xor a
-	rst ByteFill
-	
-	; Reset state variables
-	xor a
-	ld [wMultiplayerSendByteIdx], a
-	ld [wMultiplayerSendNibbleIdx], a
-	ld [wMultiplayerSendSeq], a
-	ld [wMultiplayerReceiveByteIdx], a
-	ld [wMultiplayerReceiveNibbleIdx], a
-	ld [wMultiplayerRecvSeq], a
-	ld [wMultiplayerTimeoutCounter], a
-	ld [wMultiplayerLastSB], a
-	ld [wMultiplayerQueuedPackageFlag], a
-	ld [wMultiplayerBufferedPackageFlag], a
 
-	; Reset serial registers to a known state
-	ld a, $FF
-	ldh [rSB], a
+	; Reset state variables to their initial values.
 	xor a
-	ldh [rSC], a
-	
+	ld [wMultiplayerSendSeq], a
+	ld [wMultiplayerRecvSeq], a
+	ld [wMultiplayerLastSB], a ; Using 0 as initial "last SB" is fine, as valid SB is never 0.
+
+	; Reset serial registers to a known, safe state.
+	ld a, $FF
+	ldh [rSB], a ; $FF is a safe value indicating no connection.
+	xor a
+	ldh [rSC], a ; Clear serial control register.
 	ret
 
 ; Queue a package for transmission
