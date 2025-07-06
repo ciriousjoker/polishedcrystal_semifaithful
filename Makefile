@@ -157,7 +157,8 @@ $(ROM_NAME).$(EXTENSION): $(crystal_obj) layout.link
 	$Qtools/bankends -q $(ROM_NAME).map >&2
 	$Qcp $@ player1.gbc
 	$Qcp $@ player2.gbc
-
+	$Qcp $(ROM_NAME).sym player1.sym
+	$Qcp $(ROM_NAME).sym player2.sym
 $(ROM_NAME)_vc.gbc: $(crystal_vc_obj) layout.link
 	$Q$(RGBDS)rgblink $(RGBLINK_VC_FLAGS) -l layout.link -o $@ $(filter %.o,$^)
 	$Q$(RGBDS)rgbfix $(RGBFIX_FLAGS) $@
