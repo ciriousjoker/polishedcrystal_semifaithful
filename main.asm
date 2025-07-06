@@ -755,3 +755,4 @@ INCLUDE "engine/menus/lure_menu.asm"
 SECTION "Multiplayer System", ROMX
 
 INCLUDE "engine/multiplayer/multiplayer.asm"
+INCLUDE "engine/multiplayer/frame_multiplayer.asm"
