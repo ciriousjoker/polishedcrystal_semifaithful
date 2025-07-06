@@ -159,6 +159,8 @@ $(ROM_NAME).$(EXTENSION): $(crystal_obj) layout.link
 	$Qcp $@ player2.gbc
 	$Qcp $(ROM_NAME).sym player1.sym
 	$Qcp $(ROM_NAME).sym player2.sym
+	$Qcp $(ROM_NAME).map player1.map
+	$Qcp $(ROM_NAME).map player2.map
 $(ROM_NAME)_vc.gbc: $(crystal_vc_obj) layout.link
 	$Q$(RGBDS)rgblink $(RGBLINK_VC_FLAGS) -l layout.link -o $@ $(filter %.o,$^)
 	$Q$(RGBDS)rgbfix $(RGBFIX_FLAGS) $@
