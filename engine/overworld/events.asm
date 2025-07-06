@@ -100,6 +100,7 @@ HandleMap:
 	call HandleMapBackground
 	call CheckPlayerState
 	farcall DoOverworldWeather
+	farcall PrintTextLazyExecute
 	
 	; Process any pending multiplayer data marked from VBlank
 	; farcall ProcessPendingMultiplayerData

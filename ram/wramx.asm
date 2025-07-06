@@ -1795,3 +1795,8 @@ SECTION "Window Stack", WRAMX
 
 wWindowStack:: ds $1000 - 1
 wWindowStackBottom:: db
+
+
+SECTION "PrintTextLazy", WRAMX
+
+wPrintTextLazyId:: db

@@ -923,3 +923,39 @@ CheckTerminatorChar:
 	ret z
 	cp "<PROMPT>"
 	ret
+
+
+PrintTextLazy::
+	ld a, 1
+	ld [wPrintTextLazyId], a
+
+  ret
+
+
+PrintTextLazyExecute::
+  ; if wPrintTextLazyId == 0, return
+	ld a, [wPrintTextLazyId]
+	and a
+	ret z
+
+  ; set wPrintTextLazyId to 0
+  xor a
+	ld [wPrintTextLazyId], a
+
+	push hl
+	push bc
+	push de
+
+	call OpenText
+	ld hl, .PrintLazyText1
+	call PrintText
+	call CloseText
+
+	pop de
+	pop bc
+	pop hl
+  ret
+
+.PrintLazyText1:
+	text "Print lazy"
+  done
