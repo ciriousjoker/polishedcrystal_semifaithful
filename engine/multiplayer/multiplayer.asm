@@ -32,6 +32,8 @@ MultiplayerSendPlayerMovement::
 	push bc
 	push de
 
+	call SendPlayerMovementData
+
 	call OpenText
 	ld hl, .StepText
 	call PrintText
