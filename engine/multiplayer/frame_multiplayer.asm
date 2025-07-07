@@ -5,14 +5,13 @@
 SECTION "Frame Multiplayer", ROMX
 
 ; SB Register bit layout (7 6 5 4 3 2 1 0):
-; Bit 7: SeqOut - Toggle bit for sequence control
-; Bit 6: AckOut - Mirror of last received SeqIn
+; Bit 7: SeqOut - Toggle bit for sequence control. Toggled each frame if AckIn matched SeqOut.
+; Bit 6: AckOut - Flipped version of the last received SeqIn (ie we predict the happy path and wait for sync if it fails).
 ; Bit 5: H/L - 1=High nibble, 0=Low nibble
 ; Bit 4: Master/Slave - 1 if master, 0 if slave (used to avoid interpreting own nibbles as received ones)
 ; Bits 3-0: Payload nibble
 
 DEF MULTIPLAYER_PACKAGE_SIZE EQU 8
-DEF MULTIPLAYER_TIMEOUT_FRAMES EQU 60
 
 ; MultiplayerInitialize:
 ; Purpose: Initializes all multiplayer-related RAM variables and hardware registers to a clean state.
@@ -130,6 +129,9 @@ MultiplayerSendReceiveNibble::
   ;   ; This is a desync error.
   ;   jump .restart_package
 
+  ; ; If we've desynced, we need to resync somehow. We do this by requiring
+  ; ; a full package start signal. Until then, we keep sending a noop byte to the other side,
+  ; ; expecting a noop byte in return. Once we've received that, we know that we've resynced.
   ; if wMultiplayerWaitForPackageStartHigh:
   ;   if H/L == 1 and payload = 0xF:
   ;     set wMultiplayerWaitForPackageStartHigh to FALSE
@@ -154,7 +156,10 @@ MultiplayerSendReceiveNibble::
   ;     reset wMultiplayerReceiveNibbleIdx     
   ;     increment wMultiplayerReceiveByteIdx
 
-  ;     if wMultiplayerLastReceivedByte == 0xFF: ; received a full noop byte, start receiving a new package
+  ;     if wMultiplayerLastReceivedByte == 0xFF:
+  ;       ; received a full noop byte, so we need to treat everything afterwards
+  ;       ; as a new package. This usually means either a desync or that the last package was fully sent
+  ;       ; and the other side doesn't have a useful package to send yet.
   ;       set wMultiplayerReceiveByteIdx to 0
   ;
   ;     store wMultiplayerLastReceivedByte in wMultiplayerReceivePackage at wMultiplayerReceiveByteIdx
@@ -181,7 +186,23 @@ MultiplayerSendReceiveNibble::
   ;       reset wMultiplayerSendByteIdx
   ;       reset wMultiplayerHasBufferedPackage
   ;       call MultiplayerOnCompletePackageSent
-  ;
+  ; jump .send_nibble
+
+.restart_package:
+  ; reset send byte counter
+  ; NOTE: Use compiler constants for the initial values
+  ; NOTE: The default for wMultiplayerWaitForPackageStartHigh is TRUE
+  ; NOTE: The default for wMultiplayerWaitForPackageStartLow is FALSE
+  ; reset wMultiplayerReceiveNibbleIdx to initial value
+  ; reset wMultiplayerReceiveByteIdx to initial value
+  ; set wMultiplayerWaitForPackageStartHigh to TRUE
+  ; set wMultiplayerWaitForPackageStartLow to FALSE
+  ; reset wMultiplayerNextSeqToSend to initial value
+  ; reset wMultiplayerNextAckToSend to initial value
+  ; reset wMultiplayerSendNibbleIdx to initial value
+  ; reset wMultiplayerSendByteIdx to initial value
+
+.send_nibble:
   ; ;; Logic to send the next nibble:
   ; call PrepareNextNibble
   ;   BuildByteToSend:
@@ -199,23 +220,8 @@ MultiplayerSendReceiveNibble::
   ;   store byte in rSB
 
 .start_transmission
-  ; set rSC bit 7 to 1 (start transmission)
-  ; jump .cleanup
-
-.restart_package:
-  ; reset send byte counter
-  ; NOTE: Use compiler constants for the initial values
-  ; NOTE: The default for wMultiplayerWaitForPackageStartHigh is TRUE
-  ; NOTE: The default for wMultiplayerWaitForPackageStartLow is FALSE
-  ; reset wMultiplayerReceiveNibbleIdx to initial value
-  ; reset wMultiplayerReceiveByteIdx to initial value
-  ; set wMultiplayerWaitForPackageStartHigh to TRUE
-  ; set wMultiplayerWaitForPackageStartLow to FALSE
-  ; reset wMultiplayerNextSeqToSend to initial value
-  ; reset wMultiplayerNextAckToSend to initial value
-  ; reset wMultiplayerSendNibbleIdx to initial value
-  ; reset wMultiplayerSendByteIdx to initial value
-  ; jump .cleanup
+  ; call IfIsMaster:
+  ;   set rSC bit 7 to 1 (start transmission)
 
 .cleanup:
 	pop de
