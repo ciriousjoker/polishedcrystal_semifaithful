@@ -129,21 +129,6 @@ MultiplayerSendReceiveNibble::
   ;   ; This is a desync error.
   ;   jump .restart_package
 
-  ; ; If we've desynced, we need to resync somehow. We do this by requiring
-  ; ; a full package start signal. Until then, we keep sending a noop byte to the other side,
-  ; ; expecting a noop byte in return. Once we've received that, we know that we've resynced.
-  ; if wMultiplayerWaitForPackageStartHigh:
-  ;   if H/L == 1 and payload = 0xF:
-  ;     set wMultiplayerWaitForPackageStartHigh to FALSE
-  ;     set wMultiplayerWaitForPackageStartLow to TRUE
-  ;   else:
-  ;     jump .restart_package
-  ; else if wMultiplayerWaitForPackageStartLow:
-  ;   if H/L == 0 and payload = 0xF:
-  ;     set wMultiplayerWaitForPackageStartLow to FALSE
-  ;   else:
-  ;     jump .restart_package
-
   ; ;; Logic to update the seq/ack variables
   ; flip wMultiplayerNextSeqToSend
   ; set wMultiplayerNextAckToSend to just received a flipped SeqIn
@@ -169,8 +154,6 @@ MultiplayerSendReceiveNibble::
   ;         reset wMultiplayerReceiveByteIdx
   ;         reset wMultiplayerReceiveNibbleIdx
   ;         reset wMultiplayerReceivePackag
-  ;         set wMultiplayerWaitForPackageStartHigh to TRUE
-  ;         set wMultiplayerWaitForPackageStartLow to FALSE
 
 .handle_sent_nibble:
   ; ;; Logic to handle the sent nibble
@@ -191,12 +174,8 @@ MultiplayerSendReceiveNibble::
 .restart_package:
   ; reset send byte counter
   ; NOTE: Use compiler constants for the initial values
-  ; NOTE: The default for wMultiplayerWaitForPackageStartHigh is TRUE
-  ; NOTE: The default for wMultiplayerWaitForPackageStartLow is FALSE
   ; reset wMultiplayerReceiveNibbleIdx to initial value
   ; reset wMultiplayerReceiveByteIdx to initial value
-  ; set wMultiplayerWaitForPackageStartHigh to TRUE
-  ; set wMultiplayerWaitForPackageStartLow to FALSE
   ; reset wMultiplayerNextSeqToSend to initial value
   ; reset wMultiplayerNextAckToSend to initial value
   ; reset wMultiplayerSendNibbleIdx to initial value
