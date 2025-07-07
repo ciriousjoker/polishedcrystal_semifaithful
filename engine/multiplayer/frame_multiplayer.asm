@@ -136,9 +136,9 @@ MultiplayerSendReceiveNibble::
 	call IfHLBitMismatchesExpectedNibble
 	jp z, .restart_package
 
-  ; ;; Logic to update the seq/ack variables
-  ; flip wMultiplayerNextSeqToSend
-  ; set wMultiplayerNextAckToSend to just received a flipped SeqIn
+	; Update sequence/acknowledgment variables
+	call UpdateSequenceBit
+	call UpdateAckBit
   ;
   ; ;; Logic to handle the received nibble:
   ; call MultiplayerOnNibbleReceived
@@ -215,6 +215,29 @@ MultiplayerSendReceiveNibble::
 	pop hl
 	ret
 
+; Flip the next sequence bit to send
+UpdateSequenceBit:
+	ld a, [wMultiplayerNextSeqToSend]
+	xor 1
+	ld [wMultiplayerNextSeqToSend], a
+	ret
+
+; Set next ACK to send based on received sequence bit
+; Input: E = received byte from rSB
+UpdateAckBit:
+	ld a, e
+	and %10000000	; Extract SEQ bit (bit 7)
+	rrca
+	rrca
+	rrca
+	rrca
+	rrca
+	rrca
+	rrca	; Shift to bit 0
+	xor 1	; Flip it
+	ld [wMultiplayerNextAckToSend], a
+	ret
+
 ; Check if received rSB has an invalid ACK bit
 ; Must be called before wMultiplayerNextSeqToSend is flipped for the current package
 ; Input:
@@ -231,11 +254,11 @@ IfReceivedInvalidAck:
 
   ; The received ACK must match the last sent SEQ directly
 	ld a, [wMultiplayerNextSeqToSend]
-	
+
 	; Compare with received ACK
 	cp b
 	jr z, .valid_ack  ; Jump if ACKs match (valid)
-	
+
   call Desync
 	xor a  ; Set Z flag
 	ret
