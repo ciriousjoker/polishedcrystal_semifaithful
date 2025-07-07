@@ -130,13 +130,18 @@ MultiplayerSendReceiveNibble::
   ;   ; This is a desync error.
   ;   jump .restart_package
 
-  ; if wMultiplayerWaitForPackageStart:
+  ; if wMultiplayerWaitForPackageStartHigh:
   ;   if H/L == 1 and payload = 0xF:
-  ;     set wMultiplayerWaitForPackageStart to FALSE
-  ;     set wMultiplayerReceiveNibbleIdx to 1
+  ;     set wMultiplayerWaitForPackageStartHigh to FALSE
+  ;     set wMultiplayerWaitForPackageStartLow to TRUE
   ;   else:
   ;     jump .restart_package
-  ;
+  ; else if wMultiplayerWaitForPackageStartLow:
+  ;   if H/L == 0 and payload = 0xF:
+  ;     set wMultiplayerWaitForPackageStartLow to FALSE
+  ;   else:
+  ;     jump .restart_package
+
   ; ;; Logic to update the seq/ack variables
   ; flip wMultiplayerNextSeqToSend
   ; set wMultiplayerNextAckToSend to just received a flipped SeqIn
@@ -146,8 +151,12 @@ MultiplayerSendReceiveNibble::
   ;   store received nibble in wMultiplayerLastReceivedByte ; offset needs to be determined based on rSB's H/L bit
   ;   increment wMultiplayerReceiveNibbleIdx
   ;   if wMultiplayerReceiveNibbleIdx == 2:
-  ;     reset wMultiplayerReceiveNibbleIdx
+  ;     reset wMultiplayerReceiveNibbleIdx     
   ;     increment wMultiplayerReceiveByteIdx
+
+  ;     if wMultiplayerLastReceivedByte == 0xFF: ; received a full noop byte, start receiving a new package
+  ;       set wMultiplayerReceiveByteIdx to 0
+  ;
   ;     store wMultiplayerLastReceivedByte in wMultiplayerReceivePackage at wMultiplayerReceiveByteIdx
   ;     if wMultiplayerReceiveByteIdx == MULTIPLAYER_PACKAGE_SIZE:
   ;       store wMultiplayerReceivePackage in wMultiplayerPackageToExecute at wMultiplayerReceiveByteIdx
@@ -155,7 +164,8 @@ MultiplayerSendReceiveNibble::
   ;         reset wMultiplayerReceiveByteIdx
   ;         reset wMultiplayerReceiveNibbleIdx
   ;         reset wMultiplayerReceivePackag
-  ;         set wMultiplayerWaitForPackageStart to TRUE 
+  ;         set wMultiplayerWaitForPackageStartHigh to TRUE
+  ;         set wMultiplayerWaitForPackageStartLow to FALSE
 
 .handle_sent_nibble:
   ; ;; Logic to handle the sent nibble
@@ -195,10 +205,12 @@ MultiplayerSendReceiveNibble::
 .restart_package:
   ; reset send byte counter
   ; NOTE: Use compiler constants for the initial values
-  ; NOTE: The default for wMultiplayerWaitForPackageStart is TRUE
+  ; NOTE: The default for wMultiplayerWaitForPackageStartHigh is TRUE
+  ; NOTE: The default for wMultiplayerWaitForPackageStartLow is FALSE
   ; reset wMultiplayerReceiveNibbleIdx to initial value
   ; reset wMultiplayerReceiveByteIdx to initial value
-  ; TODO: set wMultiplayerWaitForPackageStart to TRUE
+  ; set wMultiplayerWaitForPackageStartHigh to TRUE
+  ; set wMultiplayerWaitForPackageStartLow to FALSE
   ; reset wMultiplayerNextSeqToSend to initial value
   ; reset wMultiplayerNextAckToSend to initial value
   ; reset wMultiplayerSendNibbleIdx to initial value
