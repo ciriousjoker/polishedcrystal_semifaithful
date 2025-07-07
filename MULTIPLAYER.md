@@ -1,179 +1,95 @@
-# Frame-Based Multiplayer System Documentation
+# Polished Crystal Multiplayer Protocol
 
-## Overview
+This document outlines the multiplayer communication protocol used in Polished Crystal. The protocol is a full-duplex, piggybacked-acknowledgment system designed for the Game Boy's serial link cable, operating on a per-VBlank frame basis.
 
-This implementation provides a full-duplex, frame-based multiplayer communication system for Pokemon Crystal using the Z80 Game Boy Link Cable. The system operates on a piggy-back-ACK protocol that allows two Game Boys to exchange 8-byte packages reliably.
+## Core Concepts
 
-## Architecture
-
-### Package Structure
-
-Each multiplayer package consists of 8 bytes of data that can contain any type of information (player movement, battle commands, chat messages, etc.).
-
-### Communication Flow
-
-1. **Package Queuing**: `MultiplayerQueuePackage()` queues an 8-byte package for transmission
-2. **Package Buffering**: `MultiplayerSendPackage()` moves queued packages to the transmission buffer
-3. **Nibble Transmission**: `MultiplayerSendReceiveNibble()` handles the actual bit-level communication
-4. **Package Reception**: `MultiplayerOnPackageReceived()` processes complete received packages
-
-## Implementation Details
-
-### Core Functions
-
-#### `MultiplayerInitialize()`
-
-Initializes all multiplayer buffers and state variables. Should be called once at startup.
-
-#### `MultiplayerQueuePackage(HL)`
-
-Queues an 8-byte package for transmission.
-
-- Input: HL = pointer to 8-byte data to send
-- The package will be transmitted when the link is available
-
-#### `MultiplayerSendPackage()`
-
-Called once per frame. Moves queued packages to the transmission buffer if no package is currently being transmitted.
-
-#### `MultiplayerSendReceiveNibble()`
-
-The core communication function called once per frame. Handles:
-
-- Processing incoming nibbles with sequence validation
-- Managing ACK/timeout for outgoing nibbles
-- Preparing and transmitting the next nibble
-
-#### `HandleMultiplayerPackage()`
-
-Processes complete received packages. Override this function to handle specific package types.
-
-### VBlank Integration
-
-The multiplayer system integrates with the VBlank interrupt through `MultiplayerVBlankHandler()`, which is called every frame from the main VBlank routine.
-
-## SB Register Format
-
-Every frame, an 8-bit value is transmitted via the SB register with the following bit layout:
-
-```
-Bit: [ 7    6    5    4 ][3 2 1 0]
-     [Seq][Ack][H/L][M/S][Payload]
-```
-
-- **Bit 7 (SeqOut)**: Toggle bit that changes 0→1→0... each time a nibble is successfully acknowledged
-- **Bit 6 (AckOut)**: Mirror of the last received SeqIn bit (acknowledgment)
-- **Bit 5 (H/L)**: 1 = High nibble (bits 7-4), 0 = Low nibble (bits 3-0)
-- **Bit 4**: Master (1) or Slave (0) indicator. Necessary so the cartridge can ignore its own nibbles
-- **Bits 3-0**: 4-bit payload nibble
-
-## Frame-by-Frame Example
-
-Here's a simulation of sending "123" from Master to Slave, with "abc" being sent back starting at frame 3:
-
-```
-| Frame | SB Master    | M→S nibble | SB Slave     | S→M nibble | Comment                                  |
-| ----- | ------------ | ---------- | ------------ | ---------- | ---------------------------------------- |
-| 0     | 0 0 1 1 0011 | h-1 (0x3)  | 1 1 1 1 1111 | disconnect | Master sends high-'1'. slave isn't connected, therefore rSB is floating at 0xFF.        |
-| 1     | 0 0 1 1 0011 | h-1 (0x3)  | 0 0 0 0 1111 | ack h-1 ---| Master sends high-'1' again, because 0xFF is invalid. slave acks high-'1' and payload of 0xF, representing "nothing"       |
-| 2     | 1 0 0 1 0001 | l-1 (0x1)  | 0 0 0 0 1111 | ack h-1 ---| Master acks nothing because payload 0xF is invalid and sends low-'1'. slave acks high-'1' (again) and sends 0xF, ie "nothing" |
-| 3     | 1 0 1 1 0011 | 2 H (0x3)  | 0 1 1 0 0110 | a H (0x6)  | Master acks nothing because 0xF is invalid and sends high-'2'. slave acks low-'1' sends high-'a'                           |
-| 4     | 1 0 0 1 0010 | 2 L (0x2)  | 1 0 0 0 0001 | a L (0x1)  | Master acks high-'a' and sends low-'2'. slave acks high-'2' and sends low-'a'      |
-| 5     | 0 1 1 1 0011 | 3 H (0x3)  | 0 0 1 0 0110 | b H (0x6)  | Master acks low-'a' and sends high-'3'. slave acks low-'2' and sends high-'b'      |
-| 6     | 1 0 0 1 0011 | 3 L (0x3)  | 1 0 0 0 0010 | b L (0x2)  | Master acks high-'b' and sends low-'3'. slave acks high-'3'                            |
-| 7     | 1 1 0 1 0000 | idle       | 0 0 1 0 0110 | c H (0x6)  | Master done, slave continues             |
-| 8     | 1 0 0 1 0000 | idle       | 1 1 0 0 0011 | c L (0x3)  | Transmission complete                    |
-```
-
-## Testing
-
-The multiplayer system operates automatically:
-
-- Initialization happens when toggling master/slave status
-- Player movement data is sent automatically when stepping
-- Package reception and processing happens in VBlank
-
-### Package Types
-
-The system supports different package types:
-
-- `$01`: Player movement data
-- `$02`: Battle command (future)
-- `$03`: Chat message (future)
-- `$FF`: Debug/test data (future)
-
-## Error Handling
-
-- **Timeout**: If no ACK is received within 60 frames, the package is discarded
-- **Sequence Validation**: Duplicate or out-of-order nibbles are ignored
-- **Buffer Overflow**: Prevents writing beyond buffer boundaries
-
-## Performance Considerations
-
-- The system processes one nibble per frame (60 Hz)
-- An 8-byte package takes 16 frames to transmit (≈267ms)
-- Full-duplex operation allows simultaneous bidirectional communication
-- The system adds minimal overhead to VBlank processing
-
-## Future Enhancements
-
-- Compression for frequently sent data
-- Priority queuing for urgent packages
-- Automatic retry for critical packages
-- Extended package types for specific game features
-
-This multiplayer system provides a robust foundation for real-time Game Boy communication while maintaining the game's 60 FPS performance.
+- **Full-Duplex:** Both Game Boys can send and receive data simultaneously during each serial transfer.
+- **Nibble-Based:** Communication is broken down into 4-bit chunks called "nibbles". A full byte requires two separate transfers (one for the high nibble, one for the low nibble).
+- **Piggybacked ACK:** Instead of sending dedicated acknowledgment packets, the acknowledgment for a received nibble is "piggybacked" onto the next outgoing data nibble. This is highly efficient.
+- **Stateful Handshake:** A `SEQ` (sequence) and `ACK` (acknowledgment) bit are used to ensure each nibble is sent and received correctly, preventing data loss or duplication.
+- **Packages:** Data is transmitted in fixed-size blocks called packages. A new package transmission is always preceded by a special `noop` byte (`0xFF`) to signal its start and synchronize the link.
 
 ---
 
-Prompt:
+## The Transmission Byte
 
-I need to write the following functions:
+Each 8-bit value placed in the `rSB` (Serial Transfer Data) register is meticulously structured. It contains one 4-bit data nibble plus 4 bits of metadata for the handshake.
 
-called on step:
-QueuePackage (queues an 8 byte package of "12345678" to send it once the current package has been delivered)
-
-called on every frame:
-SendPackage
-
-- if queued package is empty -> ret
-- if buffered package isn't empty -> ret
-- copy queued package to buffered package
-
-SendReceiveNibble
-
-- Checks if there's an incoming nibble and stores it in a buffer
-- Checks if there's an incoming ack for the currently waiting-to-be-acknowledged nibble
-- If there is no ack within 60 VBlanks -> timeout, ie destroy buffered package
-- If there is a valid ack -> increase send counter, flip seq bit variable
-- Every second nibble: combines the two nibbles in a single byte
-- on every byte: stores received byte into receivedPackage (until its full)
-- If receivedPackage is full: call OnPackageReceived
-- Determines the next nibble to send based on the queued package and a sendCounter
-- Update SB with the new buffer: seq bit, acknowledge nibble if necessary, ..., nibble data to send
-- If master: trigger the transmission exchange
-
-Called on full transmission
-OnPackageReceived:
-
-- copy received package to packageToExecute buffer
-- Call HandlePackage
-
-HandlePackage
-
-- just simple debug textbox for now
-- wipes packageToExecute buffer afterwards
+| Bit | Name                | Description                                                                                                          |
+| :-- | :------------------ | :------------------------------------------------------------------------------------------------------------------- |
+| 7   | `SEQ` (Sequence)    | Flips (0/1) for each new nibble sent. Used by the receiver to detect duplicate or missed nibbles.                    |
+| 6   | `ACK` (Acknowledge) | Flips (0/1) to acknowledge the successful receipt of the remote player's last nibble.                                |
+| 5   | `H/L` (High/Low)    | Indicates which part of a byte is being sent. `1` for the high nibble (bits 7-4), `0` for the low nibble (bits 3-0). |
+| 4   | `M` (Master/Slave)  | Identifies the device's role. `1` for the master, `0` for the slave.                                                 |
+| 3-0 | `Payload`           | The 4-bit data nibble.                                                                                               |
 
 ---
 
-Write a very detailed explanation on how to implement each of these functions and where to call them. (no specific code, just general guidance)
-Write a very detailed explanation on what variables are necessary to make this work.
+## The Handshake Process
 
-An experienced z80 gbc developer should be able to implement this in an assembly decomp of Pokemon Crystal.
+The entire transmission is managed by a state machine that runs on every VBlank interrupt.
 
-Include:
+1.  **Check Transfer Status:** The routine first checks if a serial transfer is already in progress. If so, it waits for the next frame.
 
-- list of function stubs with a series of detailed comments & pseudocode
-- list of variables
-- package structure of a single nibble package and what each bit indicates and why (be very detailed here!!)
-- full simulation for a transmission of "123" from master->slave + "abc" from slave->master ("a" starts at "2" to simulate the asynchronous nature)
+2.  **Validate Received Nibble:** Upon completion of a transfer, the received byte from `rSB` is validated.
+
+    - The received `ACK` bit is checked. It must be the inverse of the `SEQ` bit from the _previous_ nibble this client sent. If it doesn't match, it means the other player did not correctly receive the last nibble. This is a critical error, and the entire package transmission is restarted from the beginning (`.restart_package`).
+    - The received `SEQ` bit is checked. If it's the same as the last `SEQ` received from that player, the nibble is ignored as a duplicate.
+
+3.  **Process Valid Nibble:** If the `ACK` and `SEQ` bits are valid:
+
+    - The 4-bit `Payload` is extracted and stored.
+    - The `H/L` bit determines if this is the high or low part of a byte, and the byte is assembled accordingly.
+    - Once a full byte is received, the byte counter is incremented.
+    - Once all bytes for a package are received, the package is marked as ready for execution.
+
+4.  **Prepare Next Outgoing Nibble:**
+
+    - The state machine prepares the next nibble to send.
+    - The `ACK` bit is flipped to acknowledge the valid nibble that was just received.
+    - The `SEQ` bit is flipped to mark this new outgoing nibble as unique.
+    - The `H/L` bit is set based on whether the high or low nibble of the current byte in the send buffer is next.
+    - The payload is loaded from the buffered package.
+
+5.  **Start Transfer:** The newly constructed 8-bit value is written to `rSB`, and a serial transfer is initiated.
+
+This creates a reliable, lock-step sequence:
+
+- Master sends Nibble A (with `SEQ=0`).
+- Slave receives Nibble A, validates it, and prepares a response.
+- Slave sends Nibble B (with its own `SEQ=0` and an `ACK=1` to acknowledge Master's `SEQ=0`).
+- Master receives Nibble B, validates the `ACK`, and prepares its next nibble.
+- Master sends Nibble C (with `SEQ=1` and an `ACK=1` to acknowledge Slave's `SEQ=0`).
+  ...and so on.
+
+---
+
+## Simulation: Transmitting "123" ↔ "abc"
+
+The following table demonstrates a full transmission of a 3-byte package between a Master and a Slave device. The master sends "123" and the slave sends "abc".
+
+- **Package Start:** The transmission begins with a `noop` byte (`0xFF`) from both sides to signal the start of a new package and synchronize.
+- **Payload Data:**
+  - Master sends `'1'` (`0x31`), `'2'` (`0x32`), `'3'` (`0x33`).
+  - Slave sends `'a'` (`0x61`), `'b'` (`0x62`), `'c'` (`0x63`).
+
+Note:
+In this example, imagining the initial `noop` byte on the master is left as an exercise for the reader (ie I forgot).
+
+| comment                                  | Seq | Ack | H/L | M/S | data    | send        |     | ACK STATUS  |     | Seq | Ack   | H/L | M/S | data    | send   |
+| ---------------------------------------- | --- | --- | --- | --- | ------- | ----------- | --- | ----------- | --- | --- | ----- | --- | --- | ------- | ------ |
+| both floating                            | 1   | 1   | 1   | 1   | 1 1 1 1 |             |     | 0 failed 0  |     | 1   | 1     | 1   | 1   | 1 1 1 1 |        |
+| master: starts packet (default Seq, ...) | 0   | 0   | 1   | 1   | 0 0 1 1 | h-1         |     | 0 failed 0  |     | 1   | 1     | 1   | 1   | 1 1 1 1 |        |
+| master restarts packet (no ack)          | 0   | 0   | 1   | 1   | 0 0 1 1 | h-1         |     | 1 success 1 |     | 0   | 0     | 1   | 0   | 1 1 1 1 | h-noop |
+|                                          | 1   | 1   | 0   | 1   | 0 0 0 1 | l-1         |     | 1 success 1 |     | 1   | 1     | 0   | 0   | 1 1 1 1 | l-noop |
+| Hardware error lead to failed ack        | 0   | 0   | 1   | 1   | 0 0 1 1 | h-2         |     | 0 failed 1  |     | 0   | 1 (E) | 1   | 0   | 1 1 1 1 | h-noop |
+| master restarts packet (no ack)          | 0   | 0   | 1   | 1   | 0 0 1 1 | h-1         |     | 0 failed 0  |     | 1   | 1     | 0   | 0   | 1 1 1 1 | l-noop |
+| both restart packet                      | 0   | 0   | 1   | 1   | 0 0 1 1 | h-1         |     | 1 success 1 |     | 0   | 0     | 1   | 0   | 1 1 1 1 | h-noop |
+| both in sync again                       | 1   | 1   | 0   | 1   | 0 0 0 1 | l-1         |     | 1 success 1 |     | 1   | 1     | 0   | 0   | 1 1 1 1 | l-noop |
+|                                          | 0   | 0   | 1   | 1   | 0 0 1 1 | h-2         |     | 1 success 1 |     | 0   | 0     | 1   | 0   | 0 1 1 0 | h-a    |
+|                                          | 1   | 1   | 0   | 1   | 0 0 1 0 | l-2         |     | 1 success 1 |     | 1   | 1     | 0   | 0   | 0 0 0 1 | l-a    |
+|                                          | 0   | 0   | 1   | 1   | 0 0 1 1 | h-3         |     | 1 success 1 |     | 0   | 0     | 1   | 0   | 0 1 1 0 | h-b    |
+| package fully transmitted to slave       | 1   | 1   | 0   | 1   | 0 0 1 1 | l-3         |     | 1 success 1 |     | 1   | 1     | 0   | 0   | 0 0 0 1 | l-b    |
+| master: nothing else to send, send noop  | 0   | 0   | 1   | 1   | 1 1 1 1 | noop part 1 |     | 1 success 1 |     | 0   | 0     | 1   | 0   | 0 1 1 0 | h-c    |
+| package fully transmitted to master      | 1   | 1   | 0   | 1   | 1 1 1 1 | noop part 2 |     | 1 success 1 |     | 1   | 1     | 0   | 0   | 0 0 0 1 | l-c    |
