@@ -113,7 +113,10 @@ MultiplayerSendReceiveNibble::
 	push bc
 	push de
 	
-  ; read rSB
+	; Read received byte from serial buffer and store in E for reuse
+	ldh a, [rSB]
+	ld e, a
+
   ; call IfSBIsFloating:
   ;   jump .restart_package
   ; call IfSBHasInvalidAck:
