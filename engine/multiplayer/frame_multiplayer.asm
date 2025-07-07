@@ -124,12 +124,14 @@ MultiplayerSendReceiveNibble::
 	cp $FF
 	jp z, .restart_package
 	
+	; Check if we received our own nibble (should not happen in normal operation)
+	call IfSBContainsOwnNibble
+	jp z, .start_transmission
+
 	; Check if received ACK bit is invalid
 	call IfReceivedInvalidAck
 	jp nz, .restart_package
 
-  ; call IfSBContainsOwnNibble:
-  ;   jump .start_transmission ; here we resend the same nibble again. This should never happen though.
 
   ; call IfHLBitMismatchesExpectedNibble:
   ;   ; Example: We expect a low nibble (wRecvNibbleIdx=1) but got a high nibble (H/L bit=1).
@@ -234,6 +236,42 @@ IfReceivedInvalidAck:
 	; Compare with received ACK
 	cp b
 	ret  ; Z flag indicates result: Z=valid ACK, NZ=invalid ACK
+
+
+; Check if received byte contains our own nibble (echoed back)
+; Input: E = received byte from rSB
+; Output: Z flag set if we received our own nibble, clear if it's from remote
+IfSBContainsOwnNibble:
+  ; Extract Master/Slave bit (bit 4) from received byte
+  ld a, e
+  and %00010000  ; Isolate bit 4
+  ld b, a  ; Store received M/S bit in B
+  
+  ; Get our current role and shift to bit 4 position
+  ld a, [wMultiplayerIsMaster]
+  and a
+  jr z, .we_are_slave
+  
+  ; We are master, so our M/S bit should be 1 (bit 4 set)
+  ld a, %00010000
+  jr .compare
+    
+.we_are_slave:
+  ; We are slave, so our M/S bit should be 0 (bit 4 clear)
+  ld a, %00000000
+    
+.compare:
+  ; Compare our expected M/S bit with received M/S bit
+  cp b
+  jr z, .own_nibble  ; Z flag set if same (our own nibble)
+  
+  ; Different M/S bit - this is a remote nibble (normal case)
+  ret
+
+.own_nibble:
+  ; We received our own nibble - this should never happen!
+  ld a, ERR_MULTIPLAYER_DESYNC
+  jmp Crash
 
 
 ; VBlank interrupt handler for multiplayer
