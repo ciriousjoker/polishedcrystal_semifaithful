@@ -215,13 +215,12 @@ MultiplayerSendReceiveNibble::
 	pop hl
 	ret
 
-
 ; Check if received rSB has an invalid ACK bit
 ; Must be called before wMultiplayerNextSeqToSend is flipped for the current package
 ; Input:
 ;   - E = received byte from rSB
 ;   - wMultiplayerNextSeqToSend (unmodified, ie before flipping it for the current package)
-; Output: Z flag set if ACK is invalid, clear if invalid
+; Output: Z flag set if ACK is invalid, clear if valid
 IfReceivedInvalidAck:
 	; Extract ACK bit (bit 6) from E and shift to bit 0
 	ld a, e
@@ -235,14 +234,15 @@ IfReceivedInvalidAck:
 	
 	; Compare with received ACK
 	cp b
-	jr nz, .desync
+	jr z, .valid_ack  ; Jump if ACKs match (valid)
+
+	xor a  ; Set Z flag
 	ret
-
-.desync
-	; Invalid ACK - desync error!
-	ld a, ERR_MULTIPLAYER_DESYNC
-	jmp Crash
-
+    
+.valid_ack:
+	; Valid ACK - clear Z flag and return
+	or 1   ; Clear Z flag
+	ret
 
 ; Check if received byte contains our own nibble (echoed back)
 ; Input: E = received byte from rSB
