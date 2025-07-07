@@ -134,7 +134,7 @@ MultiplayerSendReceiveNibble::
 
 	; Check if H/L bit mismatches expected nibble type
 	call IfHLBitMismatchesExpectedNibble
-	jp nz, .restart_package
+	jp z, .restart_package
 
   ; ;; Logic to update the seq/ack variables
   ; flip wMultiplayerNextSeqToSend
@@ -235,7 +235,8 @@ IfReceivedInvalidAck:
 	; Compare with received ACK
 	cp b
 	jr z, .valid_ack  ; Jump if ACKs match (valid)
-
+	
+  call Desync
 	xor a  ; Set Z flag
 	ret
     
@@ -275,38 +276,46 @@ IfSBContainsOwnNibble:
   ret
 
 .own_nibble:
-  ; We received our own nibble - this should never happen!
-  ld a, ERR_MULTIPLAYER_DESYNC
-  jmp Crash
-
+  call Desync
 
 ; Check if H/L bit mismatches expected nibble type
 ; Input: E = received byte from rSB
-; Output: Z flag set if H/L bit matches expected, clear if mismatch (desync)
+; Output: Z flag set if H/L bit mismatches (desync), clear if matches
 IfHLBitMismatchesExpectedNibble:
 	; Extract H/L bit (bit 5) from received byte
 	ld a, e
-	and %00100000  ; Isolate bit 5 (H/L bit)
-	ld b, a  ; Store received H/L bit in B
+	and %00100000	; Isolate bit 5 (H/L bit)
+	ld b, a	; Store received H/L bit in B
 	
-	; Get expected nibble index (1=high nibble expected, 0=low nibble expected)
+	; Get expected nibble index (0=high nibble expected, 1=low nibble expected)
 	ld a, [wMultiplayerReceiveNibbleIdx]
 	and a
 	jr z, .expect_high_nibble
 	
-	; We expect low nibble (wReceiveNibbleIdx=1), so H/L bit should be 0
-	ld a, %00000000
-	jr .compare
-	
-.expect_high_nibble:
-	; We expect high nibble (wReceiveNibbleIdx=0), so H/L bit should be 1
+	; We expect low nibble (wReceiveNibbleIdx=1), so H/L bit should be 1
 	ld a, %00100000
-	
+	jr .compare
+    
+.expect_high_nibble:
+	; We expect high nibble (wReceiveNibbleIdx=0), so H/L bit should be 0
+	ld a, %00000000
+    
 .compare:
 	; Compare expected H/L bit with received H/L bit
 	cp b
-	ret z  ; Z flag set if match (correct nibble)
+	jr z, .match	; Jump if they match (correct nibble)
 	
+	call Desync
+	; Mismatch - set Z flag and return
+	xor a	; Set Z flag
+	ret
+    
+.match:
+	; Match - clear Z flag and return
+	or 1	; Clear Z flag
+	ret
+
+Desync:
 	; H/L bit mismatch - desync error!
 	ld a, ERR_MULTIPLAYER_DESYNC
 	jmp Crash
