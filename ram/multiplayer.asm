@@ -34,6 +34,9 @@ wMultiplayerLastReceivedNibble:: db ; Temporary storage for nibble being assembl
 ; TODO: Seems unnecessary, remove?
 ; wMultiplayerLastReceivedSeq:: db    ; Last received sequence bit (0/1).
 
+; Duplicate detection state
+wMultiplayerLastReceivedRSB:: db    ; Last received rSB value for duplicate detection
+
 ; Communication state
 wMultiplayerHasQueuedPackage:: db   ; 1 if queued package is available
 wMultiplayerHasBufferedPackage:: db ; 1 if buffered package is being transmitted

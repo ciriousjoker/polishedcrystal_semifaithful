@@ -20,7 +20,7 @@ Each 8-bit value placed in the `rSB` (Serial Transfer Data) register is meticulo
 | Bit | Name                | Description                                                                                                          |
 | :-- | :------------------ | :------------------------------------------------------------------------------------------------------------------- |
 | 7   | `V` (Valid)         | Always `0` to differentiate valid transmissions from floating line (`0xFF`).                                        |
-| 6   | `SEQ` (Sequence)    | Flips (0/1) for each new chunk sent. Used by the receiver to detect duplicate or missed chunks.                     |
+| 6   | `SEQ` (Sequence)    | Flips (0/1) for each new chunk sent. Combined with full rSB comparison, provides robust duplicate detection.                     |
 | 5   | `ACK` (Acknowledge) | Flips (0/1) to acknowledge the successful receipt of the remote player's last chunk.                                |
 | 4   | `M` (Master/Slave)  | Identifies the device's role. `1` for the master, `0` for the slave.                                                 |
 | 3   | `N` (Nibble Index)  | Indicates which nibble of a byte is being sent. `1` for the high nibble (bits 7-4), `0` for the low nibble (bits 3-0). |
@@ -43,9 +43,9 @@ The entire transmission is managed by a state machine that runs on every VBlank 
 
 2.  **Validate Received Chunk:** Upon completion of a transfer, the received byte from `rSB` is validated.
 
+    - **Duplicate Detection:** The received `rSB` value is compared with the last received `rSB` value. If they are identical, this indicates a duplicate packet (common with emulator speed mismatches) and the packet is ignored. This provides robust tolerance for timing differences between emulators.
     - Bit 7 must be 0 (Valid bit). If it's 1, this indicates a floating line or invalid transmission.
     - Received `AckIn` (bit 5) must be a flipped version of the last sent `SeqOut` (and vice versa). If it doesn't match, it means the other player did not correctly receive the last chunk. This is a critical error, and the entire package transmission is restarted from the beginning (`.restart_package`).
-    - The received `SEQ` bit (bit 6) is checked. If it's the same as the last `SEQ` received from that player, the chunk is ignored as a duplicate.
 
 3.  **Process Valid Chunk:** If the `ACK` and `SEQ` bits are valid:
 

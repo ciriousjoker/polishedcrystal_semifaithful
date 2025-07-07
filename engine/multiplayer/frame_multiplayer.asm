@@ -128,6 +128,17 @@ MultiplayerSendReceiveNibble::
 	ldh a, [rSB]
 	ld e, a
 	
+	; Check for duplicates (emulator speed mismatch tolerance)
+	; Compare with last received rSB value to detect duplicates
+	; Since SEQ bit always flips, adjacent chunks can never be identical,
+	; making full rSB comparison safe for duplicate detection
+	ld hl, wMultiplayerLastReceivedRSB
+	cp [hl]
+	jr z, .cleanup  ; If same as last received, ignore this duplicate
+	
+	; Store new rSB value for future duplicate detection
+	ld [hl], a
+	
 	; Check if SB is floating ($FF indicates no connection)
 	cp $FF
 	jp z, .restart_package
@@ -189,6 +200,7 @@ MultiplayerSendReceiveNibble::
   ; reset wMultiplayerSendNibbleIdx to initial value
   ; reset wMultiplayerSendChunkIdx to initial value
   ; reset wMultiplayerSendByteIdx to initial value
+  ; reset wMultiplayerLastReceivedRSB to $FF (force detection of next packet)
 
 .send_chunk:
   ; ;; Logic to send the next chunk:
@@ -220,6 +232,8 @@ MultiplayerSendReceiveNibble::
 	ret
 
 ; Flip the next sequence bit to send
+; We ALWAYS flip the sequence bit, so the remote side can detect if we sent a new package,
+; even if it was otherwise identical to the last one (e.g. we resend a nibble that was lost).
 UpdateSequenceBit:
 	ld a, [wMultiplayerNextSeqToSend]
 	xor 1
