@@ -18,7 +18,7 @@ SECTION "Frame Multiplayer", ROMX
 ; Bits 1-0: Payload chunk (2 bits)
 
 DEF MULTIPLAYER_PACKAGE_SIZE EQU 8
-DEF MULTIPLAYER_IDLE_FRAMES EQU 300 ; 5 * 60fps -> ~5s
+DEF MULTIPLAYER_IDLE_FRAMES EQU 10 ; 5 * 60fps -> ~5s
 DEF MULTIPLAYER_NOOP_BYTE EQU $0F  ; Use 0x0F (0b00001111) as noop - bit 7 is 0
 
 ; MultiplayerInitialize:
@@ -617,13 +617,5 @@ MultiplayerOnPackageReceived:
 	rst ByteFill
 	
 	; TODO: Process the package in wMultiplayerPackageToExecute
-	; For now, just debug output
-	call OpenText
-	ld hl, .PackageReceivedText
-	call PrintText
-	call CloseText
+	call PrintTextLazy
 	ret
-
-.PackageReceivedText:
-	text "Package received!"
-	done
