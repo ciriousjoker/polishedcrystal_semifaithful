@@ -17,6 +17,7 @@ SECTION "Frame Multiplayer", ROMX
 
 DEF MULTIPLAYER_PACKAGE_SIZE EQU 8
 DEF MULTIPLAYER_IDLE_FRAMES EQU 300 ; 5 * 60fps -> ~5s
+DEF MULTIPLAYER_NOOP_BYTE EQU $EE  ; Use 0xEE (0b11101110) as noop
 
 ; MultiplayerInitialize:
 ; Purpose: Initializes all multiplayer-related RAM variables and hardware registers to a clean state.
@@ -29,7 +30,7 @@ MultiplayerInitialize::
 	rst ByteFill
 
 	; Initialize the static noop byte constant
-	ld a, $FF
+	ld a, MULTIPLAYER_NOOP_BYTE
 	ld [wMultiplayerStaticNoopByte], a
 
 	; Reset serial registers to a known, safe state.
@@ -429,9 +430,9 @@ HandleCompletedByte:
 	xor a
 	ld [wMultiplayerReceiveNibbleIdx], a
 	
-	; Check if received byte is a noop ($FF)
+	; Check if received byte is a noop ($81)
 	ld a, [wMultiplayerLastReceivedByte]
-	cp $FF
+	cp MULTIPLAYER_NOOP_BYTE
 	jr z, .received_noop
 	
 	; Store byte in receive package
