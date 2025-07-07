@@ -107,6 +107,7 @@ MultiplayerCopyQueuedPackageToSendBufferIfPossible::
 	xor a
 	ld [wMultiplayerSendByteIdx], a
 	ld [wMultiplayerSendNibbleIdx], a
+	ld [wMultiplayerSendChunkIdx], a
 	
 	ret
 
@@ -171,24 +172,10 @@ MultiplayerSendReceiveNibble::
 	; Handle the received chunk
 	call HandleReceivedChunk
 
-.handle_sent_nibble:
-  ; ;; Logic to handle the sent chunk
-  ; call MultiplayerOnChunkSent:
-  ;   increment wMultiplayerSendChunkIdx
-  ;   if wMultiplayerSendChunkIdx == 2:
-  ;     reset wMultiplayerSendChunkIdx
-  ;     increment wMultiplayerSendNibbleIdx
-  ;     if wMultiplayerSendNibbleIdx == 2:
-  ;       reset wMultiplayerSendNibbleIdx
-  ;
-  ;       ; NOTE: now the previous byte is fully sent (even if it was a high-noop + low-noop)
-  ;       if wMultiplayerHasBufferedPackage:
-  ;         increment wMultiplayerSendByteIdx ; if previous byte was a noop, this will now be 1
-  ;         if wMultiplayerSendByteIdx == MULTIPLAYER_PACKAGE_SIZE + 1: ; +1 to account for the initial noop that signals the start of a package
-  ;           reset wMultiplayerSendByteIdx
-  ;           reset wMultiplayerHasBufferedPackage
-  ;           call MultiplayerOnCompletePackageSent
-  ; jump .send_chunk
+	; Advance send state after successful acknowledgment
+	; Only advances if the ACK validates that the remote side received our chunk
+	call AdvanceSendState
+	jr .send_chunk
 
 .restart_package:
   ; reset send byte counter
@@ -619,4 +606,86 @@ MultiplayerOnPackageReceived:
 	
 	; TODO: Process the package in wMultiplayerPackageToExecute
 	call PrintTextLazy
+	ret
+
+; Advance send state machine after successful ACK
+; Only called when the remote side has acknowledged our last chunk
+; Progresses through: chunk -> nibble -> byte -> package
+; Destroys: A, B, C
+AdvanceSendState:
+	; Increment chunk index
+	ld a, [wMultiplayerSendChunkIdx]
+	inc a
+	ld [wMultiplayerSendChunkIdx], a
+	
+	; Check if we've completed a nibble (sent both chunks)
+	cp 2
+	ret c	; Return if we haven't completed a nibble yet
+	
+	; Reset chunk index and advance to next nibble
+	xor a
+	ld [wMultiplayerSendChunkIdx], a
+	call AdvanceToNextNibble
+	ret
+
+; Advance to next nibble after completing current nibble
+; Progresses nibble state and checks for completed bytes/packages
+; Destroys: A, B, C
+AdvanceToNextNibble:
+	; Increment nibble index
+	ld a, [wMultiplayerSendNibbleIdx]
+	inc a
+	ld [wMultiplayerSendNibbleIdx], a
+	
+	; Check if we've completed a byte (sent both nibbles)
+	cp 2
+	ret c	; Return if we haven't completed a byte yet
+	
+	; Reset nibble index and advance to next byte
+	xor a
+	ld [wMultiplayerSendNibbleIdx], a
+	call AdvanceToNextByte
+	ret
+
+; Advance to next byte after completing current byte
+; Progresses byte state and checks for completed packages
+; Destroys: A, B, C
+AdvanceToNextByte:
+	; Check if we have a buffered package to send
+	ld a, [wMultiplayerHasBufferedPackage]
+	and a
+	jr z, .no_package	; If no package, just return
+	
+	; Increment byte index
+	ld a, [wMultiplayerSendByteIdx]
+	inc a
+	ld [wMultiplayerSendByteIdx], a
+	
+	; Check if we've completed the entire package
+	; +1 to account for the initial noop that signals the start of a package
+	cp MULTIPLAYER_PACKAGE_SIZE + 1
+	ret c	; Return if package not complete yet
+	
+	; Package complete! Reset state and call completion handler
+	xor a
+	ld [wMultiplayerSendByteIdx], a
+	ld [wMultiplayerHasBufferedPackage], a
+	call OnPackageTransmissionComplete
+	ret
+
+.no_package:
+	; No package to send, just return
+	ret
+
+; Handle completion of entire package transmission
+; Called when all bytes (including noop) have been successfully acknowledged
+; Destroys: A, H, L
+OnPackageTransmissionComplete:
+	; Try to move queued package to buffered if available
+	call MultiplayerCopyQueuedPackageToSendBufferIfPossible
+	
+	ld a, ERR_EGG_SPECIES
+	jmp Crash
+
+	; TODO: Add any other completion logic here (e.g., notify game logic)
 	ret
