@@ -1500,7 +1500,7 @@ SendPlayerMovementData:
 	ret z
 	
 	; Create movement package
-	ld hl, wTempBuffer
+	ld hl, wMultiplayerTempPackage
 	
 	; Byte 0: Package type (0x01 = movement)
 	ld a, $01
@@ -1541,7 +1541,7 @@ SendPlayerMovementData:
 	ld [hli], a
 	
 ; 	; Byte 7: Checksum (simple XOR of all bytes)
-; 	ld hl, wTempBuffer
+; 	ld hl, wMultiplayerTempPackage
 ; 	ld b, 7
 ; 	xor a
 ; .checksum_loop:
@@ -1552,7 +1552,7 @@ SendPlayerMovementData:
 ; 	ld [hl], a
 	
 	; Queue the package
-	ld hl, wTempBuffer
+	ld hl, wMultiplayerTempPackage
 	farcall MultiplayerQueuePackage
 	
 	ret

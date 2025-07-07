@@ -18,16 +18,14 @@ DEF MULTIPLAYER_PACKAGE_SIZE EQU 8
 ;          This should be called once when activating the multiplayer feature.
 MultiplayerInitialize::
 	; Clear all package buffers to 0.
-	ld hl, wMultiplayerQueuedPackage
-	ld bc, wTempBuffer - wMultiplayerQueuedPackage ; Zero out all multiplayer WRAM variables up to the temp buffer
+	ld hl, wMultiplayerStart
+	ld bc, wMultiplayerEnd - wMultiplayerStart ; Zero out all multiplayer WRAM variables up to the temp buffer
 	xor a
 	rst ByteFill
 
-	; Reset state variables to their initial values.
-	xor a
-	ld [wMultiplayerSendSeq], a
-	ld [wMultiplayerRecvSeq], a
-	ld [wMultiplayerLastSB], a ; Using 0 as initial "last SB" is fine, as valid SB is never 0.
+	; Initialize the static noop byte constant
+	ld a, $FF
+	ld [wMultiplayerStaticNoopByte], a
 
 	; Reset serial registers to a known, safe state.
 	ld a, $FF
@@ -50,7 +48,7 @@ MultiplayerQueuePackage::
 	
 	; Set queued flag
 	ld a, 1
-	ld [wMultiplayerQueuedPackageFlag], a
+	ld [wMultiplayerHasQueuedPackage], a
 	
 	; Debug output
 	call OpenText
@@ -73,12 +71,12 @@ MultiplayerQueuePackage::
 ; Moves queued package to buffered package if ready
 MultiplayerCopyQueuedPackageToSendBufferIfPossible::
 	; Check if we have a queued package
-	ld a, [wMultiplayerQueuedPackageFlag]
+	ld a, [wMultiplayerHasQueuedPackage]
 	and a
 	ret z
 	
 	; Check if we're still waiting for ACK on buffered package
-	ld a, [wMultiplayerBufferedPackageFlag]
+	ld a, [wMultiplayerHasBufferedPackage]
 	and a
 	ret nz
 	
@@ -90,15 +88,14 @@ MultiplayerCopyQueuedPackageToSendBufferIfPossible::
 	
 	; Set buffered flag, clear queued flag
 	ld a, 1
-	ld [wMultiplayerBufferedPackageFlag], a
+	ld [wMultiplayerHasBufferedPackage], a
 	xor a
-	ld [wMultiplayerQueuedPackageFlag], a
+	ld [wMultiplayerHasQueuedPackage], a
 	
 	; Reset send indices
 	xor a
 	ld [wMultiplayerSendByteIdx], a
 	ld [wMultiplayerSendNibbleIdx], a
-	ld [wMultiplayerTimeoutCounter], a
 	
 	ret
 
