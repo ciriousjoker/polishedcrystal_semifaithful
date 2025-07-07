@@ -197,9 +197,17 @@ MultiplayerSendReceiveNibble::
 	; Send the prepared chunk via serial
 	call SendChunk
 
-.start_transmission
-  ; call IfIsMaster:
-  ;   set rSC bit 7 to 1 (start transmission)
+.start_transmission:
+	; Only the master initiates serial transfers
+	; The slave waits for the master to start each transmission
+	ld a, [wMultiplayerIsMaster]
+	and a
+	jr z, .cleanup	; If we're slave, don't start transmission
+	
+	; We are master - start the serial transmission
+	ld a, %10000001	; Bit 7=1 (start transfer), Bit 0=1 (internal clock)
+	ldh [rSC], a
+	jr .cleanup
 
 .cleanup:
 	pop de
