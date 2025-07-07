@@ -7,6 +7,7 @@ wMultiplayerIsMaster:: db          ; Flag: 1 if this cartridge is the master, 0 
 
 ; Package buffers (8 bytes each)
 wMultiplayerStart: ds 0             ; Marker for the start of multiplayer package buffers. Useful during initialization.
+wMultiplayerIsEnabled:: db          ; Flag: 1 if multiplayer system is enabled and initialized, 0 if not.
 wMultiplayerTempPackage:: ds 8      ; Temporary buffer for creating packages
 wMultiplayerQueuedPackage:: ds 8    ; Package queued for transmission. This can be overwritten at any point to queue a different package.
 wMultiplayerStaticNoopByte:: db     ; Constant $FF for noop byte. Sent when no package is being transmitted or to indicate that a transmission is restarted.

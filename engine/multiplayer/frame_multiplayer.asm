@@ -32,6 +32,9 @@ MultiplayerInitialize::
 	ldh [rSB], a ; $FF is a safe value indicating no connection.
 	xor a
 	ldh [rSC], a ; Clear serial control register.
+
+  ld a, 1
+  ld [wMultiplayerIsEnabled], a
 	ret
 
 ; Queue a package for transmission
@@ -235,10 +238,10 @@ IfReceivedInvalidAck:
 
 ; VBlank interrupt handler for multiplayer
 MultiplayerVBlankHandler::
-	; Only process if multiplayer is initialized
-	ld a, [wMultiplayerIsMaster]
-	cp $FF  ; Check if uninitialized
-	ret z
+  ; Only process if multiplayer is enabled
+  ld a, [wMultiplayerIsEnabled]
+  and a
+  ret z
 	
 	; Call frame-based multiplayer functions
 	call MultiplayerSendReceiveNibble
