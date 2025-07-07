@@ -139,6 +139,7 @@ MultiplayerSendReceiveNibble::
 	; Store new rSB value for future duplicate detection
 	ld [hl], a
 	
+  ; NOTE: This isnt necessary, checking bit 7 is enough to detect floating line.
 	; Check if SB is floating ($FF indicates no connection)
 	cp $FF
 	jp z, .restart_package
