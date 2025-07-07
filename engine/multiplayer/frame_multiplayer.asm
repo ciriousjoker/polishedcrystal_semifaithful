@@ -151,7 +151,7 @@ MultiplayerSendReceiveNibble::
 	
 	; Check if we received our own chunk (should not happen in normal operation)
 	call IfSBContainsOwnChunk
-	jp z, .start_transmission
+	jr z, .cleanup  ; If same as last sent, ignore it and do nothing
 
 	; ; Check if received ACK bit is invalid
 	; call IfReceivedInvalidAck
@@ -191,23 +191,11 @@ MultiplayerSendReceiveNibble::
   ; reset wMultiplayerLastReceivedRSB to $FF (force detection of next packet)
 
 .send_chunk:
-  ; ;; Logic to send the next chunk:
-  ; call PrepareNextChunk
-  ;   BuildByteToSend:
-  ;     bit 7: always 0 (valid bit - differentiates from floating 0xFF)
-  ;     bit 6: use wMultiplayerNextSeqToSend
-  ;     bit 5: use wMultiplayerNextAckToSend
-  ;     bit 4: use wMultiplayerIsMaster (1 for master, 0 for slave)
-  ;     bit 3: use wMultiplayerSendNibbleIdx (0 for high nibble, 1 for low nibble)
-  ;     bit 2: use wMultiplayerSendChunkIdx (0 for high chunk, 1 for low chunk)
-  ;     bits 1-0: load data from [wMultiplayerStaticNoopByte, ...wMultiplayerBufferedPackage] at wMultiplayerSendByteIdx at wMultiplayerSendNibbleIdx at wMultiplayerSendChunkIdx
-  ;     ; NOTE: [wMultiplayerStaticNoopByte] is a constant that is used to treat wMultiplayerSendByteIdx == 0 as a noop byte.
-  ;      
-  ; call MultiplayerBusyWaitForTransmissionComplete ; NOTE: This isn't strictly necessary, but it ensures that rSC hasn't changed since the last check.
-  ; ; NOTE: Keep in mind that emulators might be paused entirely, so there's probably a chance of the previously loaded rSC being stale.
-  ;
-  ; call SendChunk:
-  ;   store byte in rSB
+	; Prepare the next chunk to send
+	call PrepareNextChunk
+	
+	; Send the prepared chunk via serial
+	call SendChunk
 
 .start_transmission
   ; call IfIsMaster:
@@ -301,13 +289,18 @@ IfSBContainsOwnChunk:
 .compare:
   ; Compare our expected M/S bit with received M/S bit
   cp b
-  jr z, .own_nibble  ; Z flag set if same (our own nibble)
+  jr z, .own_chunk  ; Z flag set if same (our own chunk)
   
   ; Different M/S bit - this is a remote chunk (normal case)
+  ; Clear Z flag to indicate remote chunk
+  or 1
   ret
 
-.own_nibble:
-  call Desync
+.own_chunk:
+  ; call Desync
+  ; Z flag is already set from the cp instruction
+  ; Return with Z flag set to indicate own chunk
+  ret
 
 ; Check if nibble index bit mismatches expected nibble type
 ; Input: E = received byte from rSB
@@ -688,4 +681,154 @@ OnPackageTransmissionComplete:
 	jmp Crash
 
 	; TODO: Add any other completion logic here (e.g., notify game logic)
+	ret
+
+; Prepare the next chunk for transmission
+; Builds the complete 8-bit transmission byte with metadata and payload
+; Output: A = prepared byte ready for rSB
+; Destroys: A, B, C, D, H, L
+PrepareNextChunk:
+	; Start with bit 7 = 0 (valid bit)
+	ld a, 0
+	ld d, a	; D will accumulate the final byte
+	
+	; Bit 6: SEQ bit
+	ld a, [wMultiplayerNextSeqToSend]
+	and 1
+	add a, a
+	add a, a
+	add a, a
+	add a, a
+	add a, a
+	add a, a	; Shift to bit 6
+	or d
+	ld d, a
+	
+	; Bit 5: ACK bit  
+	ld a, [wMultiplayerNextAckToSend]
+	and 1
+	add a, a
+	add a, a
+	add a, a
+	add a, a
+	add a, a	; Shift to bit 5
+	or d
+	ld d, a
+	
+	; Bit 4: Master/Slave bit
+	ld a, [wMultiplayerIsMaster]
+	and 1
+	add a, a
+	add a, a
+	add a, a
+	add a, a	; Shift to bit 4
+	or d
+	ld d, a
+	
+	; Bit 3: Nibble index (0=high, 1=low)
+	ld a, [wMultiplayerSendNibbleIdx]
+	and 1
+	add a, a
+	add a, a
+	add a, a	; Shift to bit 3
+	or d
+	ld d, a
+	
+	; Bit 2: Chunk index (0=high, 1=low)
+	ld a, [wMultiplayerSendChunkIdx]
+	and 1
+	add a, a
+	add a, a	; Shift to bit 2
+	or d
+	ld d, a
+	
+	; Bits 1-0: Payload chunk (2 bits from current byte/nibble/chunk)
+	call GetCurrentPayloadChunk
+	and %00000011	; Ensure only 2 bits
+	or d
+	ld d, a
+	
+	; Return prepared byte in A
+	ld a, d
+	ret
+
+; Get the current 2-bit payload chunk to send
+; Returns the chunk from either noop byte or buffered package
+; Output: A = 2-bit chunk (bits 1-0 only)
+; Destroys: A, B, C, H, L
+GetCurrentPayloadChunk:
+	; Check if we're sending noop (byte index 0) or package data
+	ld a, [wMultiplayerSendByteIdx]
+	and a
+	jr z, .send_noop
+	
+	; Check if we have a buffered package
+	ld a, [wMultiplayerHasBufferedPackage]
+	and a
+	jr z, .send_noop	; No package, send noop
+	
+	; Get byte from buffered package (byte index 1-8 maps to array index 0-7)
+	ld a, [wMultiplayerSendByteIdx]
+	dec a	; Convert to 0-based index
+	ld c, a
+	ld b, 0
+	ld hl, wMultiplayerBufferedPackage
+	add hl, bc	; HL points to current byte
+	ld a, [hl]	; Load the byte
+	jr .extract_chunk
+	
+.send_noop:
+	; Send noop byte
+	ld a, [wMultiplayerStaticNoopByte]
+	; Fall through to extract_chunk
+	
+.extract_chunk:
+	; A now contains the source byte
+	; Extract nibble based on wMultiplayerSendNibbleIdx
+	ld b, a	; Save original byte
+	ld a, [wMultiplayerSendNibbleIdx]
+	and a
+	jr z, .high_nibble
+	
+	; Low nibble (bits 3-0)
+	ld a, b
+	and %00001111
+	jr .extract_chunk_from_nibble
+	
+.high_nibble:
+	; High nibble (bits 7-4), shift to low position
+	ld a, b
+	rrca
+	rrca
+	rrca
+	rrca
+	and %00001111
+	
+.extract_chunk_from_nibble:
+	; A now contains the 4-bit nibble
+	; Extract chunk based on wMultiplayerSendChunkIdx
+	ld b, a	; Save nibble
+	ld a, [wMultiplayerSendChunkIdx]
+	and a
+	jr z, .high_chunk
+	
+	; Low chunk (bits 1-0)
+	ld a, b
+	and %00000011
+	ret
+	
+.high_chunk:
+	; High chunk (bits 3-2), shift to low position
+	ld a, b
+	rrca
+	rrca
+	and %00000011
+	ret
+
+; Send the prepared chunk via serial communication
+; Input: A = byte to send
+; Destroys: A
+SendChunk:
+	; Store byte in serial buffer
+	ldh [rSB], a
 	ret
