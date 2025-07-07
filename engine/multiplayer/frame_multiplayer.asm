@@ -16,7 +16,7 @@ SECTION "Frame Multiplayer", ROMX
 ; Bits 3-0: Payload nibble
 
 DEF MULTIPLAYER_PACKAGE_SIZE EQU 8
-DEF MULTIPLAYER_IDLE_FRAMES EQU 120 ; 2 * 60fps -> ~2s
+DEF MULTIPLAYER_IDLE_FRAMES EQU 300 ; 5 * 60fps -> ~5s
 
 ; MultiplayerInitialize:
 ; Purpose: Initializes all multiplayer-related RAM variables and hardware registers to a clean state.
@@ -144,28 +144,9 @@ MultiplayerSendReceiveNibble::
 	; Update sequence/acknowledgment variables
 	call UpdateSequenceBit
 	call UpdateAckBit
-  ;
-  ; ;; Logic to handle the received nibble:
-  ; call MultiplayerOnNibbleReceived
-  ;   store received nibble in wMultiplayerLastReceivedByte ; offset needs to be determined based on rSB's H/L bit
-  ;   increment wMultiplayerReceiveNibbleIdx
-  ;   if wMultiplayerReceiveNibbleIdx == 2:
-  ;     reset wMultiplayerReceiveNibbleIdx     
-  ;     increment wMultiplayerReceiveByteIdx
 
-  ;     if wMultiplayerLastReceivedByte == 0xFF:
-  ;       ; received a full noop byte, so we need to treat everything afterwards
-  ;       ; as a new package. This usually means either a desync or that the last package was fully sent
-  ;       ; and the other side doesn't have a useful package to send yet.
-  ;       set wMultiplayerReceiveByteIdx to 0
-  ;
-  ;     store wMultiplayerLastReceivedByte in wMultiplayerReceivePackage at wMultiplayerReceiveByteIdx
-  ;     if wMultiplayerReceiveByteIdx == MULTIPLAYER_PACKAGE_SIZE:
-  ;       store wMultiplayerReceivePackage in wMultiplayerPackageToExecute at wMultiplayerReceiveByteIdx
-  ;       call MultiplayerOnPackageReceived
-  ;         reset wMultiplayerReceiveByteIdx
-  ;         reset wMultiplayerReceiveNibbleIdx
-  ;         reset wMultiplayerReceivePackag
+	; Handle the received nibble
+	call HandleReceivedNibble
 
 .handle_sent_nibble:
   ; ;; Logic to handle the sent nibble
@@ -389,3 +370,129 @@ MultiplayerVBlankHandler::
 	; Call frame-based multiplayer functions
 	call MultiplayerSendReceiveNibble
 	ret
+
+; Process a received nibble and assemble it into bytes/packages
+; Input: E = received byte from rSB
+; Destroys: A, B, C, D, H, L
+HandleReceivedNibble:
+	; Store the received nibble in the correct position
+	call StoreReceivedNibble
+	
+	; Increment nibble index
+	ld a, [wMultiplayerReceiveNibbleIdx]
+	inc a
+	ld [wMultiplayerReceiveNibbleIdx], a
+	
+	; Check if we've received both nibbles (high and low)
+	cp 2
+	ret c	; Return if we haven't completed a byte yet
+	
+	; We've completed a byte, handle it
+	call HandleCompletedByte
+	ret
+
+; Store received nibble in wMultiplayerLastReceivedByte
+; Input: E = received byte from rSB
+; Destroys: A, B
+StoreReceivedNibble:
+	; Extract the payload nibble (bits 3-0)
+	ld a, e
+	and %00001111
+	ld b, a	; Store nibble in B
+	
+	; Check which nibble position we're expecting
+	ld a, [wMultiplayerReceiveNibbleIdx]
+	and a
+	jr z, .store_high_nibble
+	
+	; Store as low nibble (bits 3-0)
+	ld a, [wMultiplayerLastReceivedByte]
+	and %11110000	; Clear low nibble
+	or b	; Set low nibble
+	ld [wMultiplayerLastReceivedByte], a
+	ret
+	
+.store_high_nibble:
+	; Store as high nibble (bits 7-4)
+	ld a, b
+	add a, a
+	add a, a
+	add a, a
+	add a, a	; Shift nibble to high position
+	ld [wMultiplayerLastReceivedByte], a
+	ret
+
+; Handle a completed byte (both nibbles received)
+; Destroys: A, B, C, D, H, L
+HandleCompletedByte:
+	; Reset nibble index for next byte
+	xor a
+	ld [wMultiplayerReceiveNibbleIdx], a
+	
+	; Check if received byte is a noop ($FF)
+	ld a, [wMultiplayerLastReceivedByte]
+	cp $FF
+	jr z, .received_noop
+	
+	; Store byte in receive package
+	ld a, [wMultiplayerReceiveByteIdx]
+	ld c, a	; Store byte index in C
+	ld b, 0
+	ld hl, wMultiplayerReceivedPackage
+	add hl, bc	; HL now points to correct byte in ram
+	
+	ld a, [wMultiplayerLastReceivedByte]
+	ld [hl], a	; Store the byte
+	
+	; Increment byte index
+	inc c
+	ld a, c
+	ld [wMultiplayerReceiveByteIdx], a
+	
+	; Check if we've completed a full package
+	cp MULTIPLAYER_PACKAGE_SIZE
+	jr z, .package_complete
+	ret
+	
+.received_noop:
+	; Received noop byte - reset to start of new package
+	xor a
+	ld [wMultiplayerReceiveByteIdx], a
+	ret
+	
+.package_complete:
+	; Copy received package to execution buffer
+	ld hl, wMultiplayerReceivedPackage
+	ld de, wMultiplayerPackageToExecute
+	ld bc, MULTIPLAYER_PACKAGE_SIZE
+	rst CopyBytes
+	
+	; Call package received handler
+	call MultiplayerOnPackageReceived
+	ret
+
+; Handle when a complete package has been received
+; Destroys: A, H, L
+MultiplayerOnPackageReceived:
+	; Reset receive state for next package
+	xor a
+	ld [wMultiplayerReceiveByteIdx], a
+	ld [wMultiplayerReceiveNibbleIdx], a
+	
+	; Clear the received package buffer
+	ld hl, wMultiplayerReceivedPackage
+	ld bc, MULTIPLAYER_PACKAGE_SIZE
+	xor a
+	rst ByteFill
+	
+	; TODO: Process the package in wMultiplayerPackageToExecute
+	; For now, just debug output
+	call OpenText
+	ld hl, .PackageReceivedText
+	call PrintText
+	call CloseText
+	ret
+
+.PackageReceivedText:
+	text "Package received!"
+	done
