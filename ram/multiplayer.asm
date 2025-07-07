@@ -10,7 +10,7 @@ wMultiplayerStart: ds 0             ; Marker for the start of multiplayer packag
 wMultiplayerIsEnabled:: db          ; Flag: 1 if multiplayer system is enabled and initialized, 0 if not.
 wMultiplayerTempPackage:: ds 8      ; Temporary buffer for creating packages
 wMultiplayerQueuedPackage:: ds 8    ; Package queued for transmission. This can be overwritten at any point to queue a different package.
-wMultiplayerStaticNoopByte:: db     ; Constant $FF for noop byte. Sent when no package is being transmitted or to indicate that a transmission is restarted.
+wMultiplayerStaticNoopByte:: db     ; Constant noop byte. Sent when no package is being transmitted or to indicate that a transmission is restarted.
 wMultiplayerBufferedPackage:: ds 8  ; Package currently being transmitted
 wMultiplayerReceivedPackage:: ds 8  ; Package currently being received
 wMultiplayerPackageToExecute:: ds 8 ; Complete received package ready for processing.
@@ -27,7 +27,9 @@ wMultiplayerFrameCounter:: db       ; Frame counter for transmission timing (0-2
 ; Receive state variables
 wMultiplayerReceiveByteIdx:: db     ; Current byte being received (0-7)
 wMultiplayerReceiveNibbleIdx:: db   ; Expected nibble idx to be received (0=high, 1=low). If the incoming nibble is not the expected one, we resync.
+wMultiplayerReceiveChunkIdx:: db    ; Expected chunk idx to be received (0=low, 1=high). If the incoming chunk is not the expected one, we resync.
 wMultiplayerLastReceivedByte:: db   ; Temporary storage for byte being assembled
+wMultiplayerLastReceivedNibble:: db ; Temporary storage for nibble being assembled from chunks
 
 ; TODO: Seems unnecessary, remove?
 ; wMultiplayerLastReceivedSeq:: db    ; Last received sequence bit (0/1).

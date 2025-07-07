@@ -5,24 +5,33 @@ This document outlines the multiplayer communication protocol used in Polished C
 ## Core Concepts
 
 - **Full-Duplex:** Both Game Boys can send and receive data simultaneously during each serial transfer.
-- **Nibble-Based:** Communication is broken down into 4-bit chunks called "nibbles". A full byte requires two separate transfers (one for the high nibble, one for the low nibble).
-- **Piggybacked ACK:** Instead of sending dedicated acknowledgment packets, the acknowledgment for a received nibble is "piggybacked" onto the next outgoing data nibble. This is highly efficient.
-- **Stateful Handshake:** A `SEQ` (sequence) and `ACK` (acknowledgment) bit are used to ensure each nibble is sent and received correctly, preventing data loss or duplication.
-- **Packages:** Data is transmitted in fixed-size blocks called packages. A new package transmission is always preceded by a special `noop` byte (`0xFF`) to signal its start and synchronize the link.
+- **Chunk-Based:** Communication is broken down into 2-bit chunks. A full nibble requires two separate transfers (one for the high 2 bits, one for the low 2 bits), and a full byte requires four transfers.
+- **Piggybacked ACK:** Instead of sending dedicated acknowledgment packets, the acknowledgment for a received chunk is "piggybacked" onto the next outgoing data chunk. This is highly efficient.
+- **Stateful Handshake:** A `SEQ` (sequence) and `ACK` (acknowledgment) bit are used to ensure each chunk is sent and received correctly, preventing data loss or duplication.
+- **Packages:** Data is transmitted in fixed-size blocks called packages. A new package transmission is always preceded by a special `noop` byte to signal its start and synchronize the link.
+- **Valid Bit:** Bit 3 is always 0 in valid transmissions, allowing differentiation from floating serial lines (which read as `0xFF`).
 
 ---
 
 ## The Transmission Byte
 
-Each 8-bit value placed in the `rSB` (Serial Transfer Data) register is meticulously structured. It contains one 4-bit data nibble plus 4 bits of metadata for the handshake.
+Each 8-bit value placed in the `rSB` (Serial Transfer Data) register is meticulously structured. It contains one 2-bit data chunk plus 6 bits of metadata for the handshake.
 
 | Bit | Name                | Description                                                                                                          |
 | :-- | :------------------ | :------------------------------------------------------------------------------------------------------------------- |
-| 7   | `SEQ` (Sequence)    | Flips (0/1) for each new nibble sent. Used by the receiver to detect duplicate or missed nibbles.                    |
-| 6   | `ACK` (Acknowledge) | Flips (0/1) to acknowledge the successful receipt of the remote player's last nibble.                                |
-| 5   | `H/L` (High/Low)    | Indicates which part of a byte is being sent. `1` for the high nibble (bits 7-4), `0` for the low nibble (bits 3-0). |
+| 7   | `SEQ` (Sequence)    | Flips (0/1) for each new chunk sent. Used by the receiver to detect duplicate or missed chunks.                     |
+| 6   | `ACK` (Acknowledge) | Flips (0/1) to acknowledge the successful receipt of the remote player's last chunk.                                |
+| 5   | `H/L` (High/Low)    | Indicates which part of a nibble is being sent. `1` for the high 2 bits (bits 3-2), `0` for the low 2 bits (bits 1-0). |
 | 4   | `M` (Master/Slave)  | Identifies the device's role. `1` for the master, `0` for the slave.                                                 |
-| 3-0 | `Payload`           | The 4-bit data nibble.                                                                                               |
+| 3   | `V` (Valid)         | Always `0` to differentiate valid transmissions from floating line (`0xFF`).                                        |
+| 2   | `C` (Chunk Index)   | Indicates which 2-bit chunk of a nibble is being sent. `1` for high chunk (bits 3-2), `0` for low chunk (bits 1-0). |
+| 1-0 | `Payload`           | The 2-bit data chunk.                                                                                               |
+
+In summary:
+- "Package": A 8-byte block of data sent over the serial link
+- "Transmission Byte": A single byte sent over the serial link via `rSB`.
+- "Nibble": 4 bits of data, aka two 2-bit chunks
+- "Chunk": A 2-bit part of a nibble, sent over a single transmission byte
 
 ---
 
