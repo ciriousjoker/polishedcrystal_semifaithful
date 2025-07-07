@@ -1,6 +1,10 @@
 ; Frame-based multiplayer communication system
 ; Full-duplex, piggy-back-ACK link protocol
 ; Each frame processes one nibble with sequence/ACK bits
+;
+; Frame Timing: The VBlank handler increments a frame counter and only calls
+; MultiplayerSendReceiveNibble when MULTIPLAYER_IDLE_FRAMES frames
+; have elapsed, providing a controlled transmission rate to prevent overloading.
 
 SECTION "Frame Multiplayer", ROMX
 
@@ -12,6 +16,7 @@ SECTION "Frame Multiplayer", ROMX
 ; Bits 3-0: Payload nibble
 
 DEF MULTIPLAYER_PACKAGE_SIZE EQU 8
+DEF MULTIPLAYER_IDLE_FRAMES EQU 120 ; 2 * 60fps -> ~2s
 
 ; MultiplayerInitialize:
 ; Purpose: Initializes all multiplayer-related RAM variables and hardware registers to a clean state.
@@ -343,12 +348,43 @@ Desync:
 	ld a, ERR_MULTIPLAYER_DESYNC
 	jmp Crash
 
+; Check if enough frames have passed since the last transmission.
+; Input: None
+; Output: Z flag set if ready for transmission, clear if not ready yet
+; Destroys: A
+IfIsReady:
+	; Increment frame counter
+	ld a, [wMultiplayerFrameCounter]
+	inc a
+	ld [wMultiplayerFrameCounter], a
+	
+	; Check if counter reached transmission threshold
+	cp MULTIPLAYER_IDLE_FRAMES
+	jr c, .not_ready
+	
+	; Reset counter and signal ready
+	xor a
+	ld [wMultiplayerFrameCounter], a
+	; Z flag is already set from 'xor a'
+	ret
+	
+.not_ready:
+	; Clear Z flag to indicate not ready
+	or 1
+	ret
+
 ; VBlank interrupt handler for multiplayer
 MultiplayerVBlankHandler::
-  ; Only process if multiplayer is enabled
-  ld a, [wMultiplayerIsEnabled]
-  and a
-  ret z
+	; Only process if multiplayer is enabled
+	ld a, [wMultiplayerIsEnabled]
+	and a
+	ret z
+	
+	; We don't need maximum performance here,
+  ; so we throttle the transmission rate a bit.
+  ; This makes desyncs less likely and should improve the fps.
+	call IfIsReady
+	ret nz
 	
 	; Call frame-based multiplayer functions
 	call MultiplayerSendReceiveNibble
