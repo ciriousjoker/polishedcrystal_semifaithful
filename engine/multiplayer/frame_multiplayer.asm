@@ -116,9 +116,11 @@ MultiplayerSendReceiveNibble::
 	; Read received byte from serial buffer and store in E for reuse
 	ldh a, [rSB]
 	ld e, a
-
-  ; call IfSBIsFloating:
-  ;   jump .restart_package
+	
+	; Check if SB is floating ($FF indicates no connection)
+	cp $FF
+	jp z, .restart_package
+	
   ; call IfSBHasInvalidAck:
   ;   jump .restart_package
   ; call IfSBContainsOwnNibble:
