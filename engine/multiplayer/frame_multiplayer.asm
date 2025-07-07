@@ -476,7 +476,9 @@ StoreReceivedChunk:
 	jr z, .store_high_chunk
 	
 	; Store as low chunk (bits 1-0)
-	ld a, b
+	ld a, [wMultiplayerLastReceivedNibble]
+	and %11111100	; Clear low chunk (bits 1-0)
+	or b	; Combine with new low chunk
 	ld [wMultiplayerLastReceivedNibble], a
 	ret
 	
