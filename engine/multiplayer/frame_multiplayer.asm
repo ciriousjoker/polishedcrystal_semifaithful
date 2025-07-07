@@ -125,17 +125,17 @@ MultiplayerSendReceiveNibble::
   ; call IfSBContainsOwnNibble:
   ;   jump .start_transmission ; here we resend the same nibble again. This should never happen though.
 
+  ; call IfHLBitMismatchesExpectedNibble:
+  ;   ; Example: We expect a low nibble (wRecvNibbleIdx=1) but got a high nibble (H/L bit=1).
+  ;   ; This is a desync error.
+  ;   jump .restart_package
+
   ; if wMultiplayerWaitForPackageStart:
   ;   if H/L == 1 and payload = 0xF:
   ;     set wMultiplayerWaitForPackageStart to FALSE
   ;     set wMultiplayerReceiveNibbleIdx to 1
   ;   else:
   ;     jump .restart_package
-  
-  ; call IfHLBitMismatchesExpectedNibble:
-  ;   ; Example: We expect a low nibble (wRecvNibbleIdx=1) but got a high nibble (H/L bit=1).
-  ;   ; This is a desync error.
-  ;   jump .restart_package
   ;
   ; ;; Logic to update the seq/ack variables
   ; flip wMultiplayerNextSeqToSend
@@ -143,16 +143,6 @@ MultiplayerSendReceiveNibble::
   ;
   ; ;; Logic to handle the received nibble:
   ; call MultiplayerOnNibbleReceived
-  ;   call IfNibblePayloadIsNoop: ; checks if the payload is 0b1111
-  ;     ; If the payload is a noop nibble, we reset any state related to receiving data.
-  ;     ; We don't reset Seq/Ack here, because even a noop is still a valid nibble.
-  ;     reset wMultiplayerReceiveNibbleIdx
-  ;     reset wMultiplayerReceiveByteIdx
-  ;     reset wMultiplayerLastReceivedByte
-  ;     reset wMultiplayerReceivePackage
-  ;     reset wMultiplayerHasBufferedPackage
-  ;     jump .handle_sent_nibble
-
   ;   store received nibble in wMultiplayerLastReceivedByte ; offset needs to be determined based on rSB's H/L bit
   ;   increment wMultiplayerReceiveNibbleIdx
   ;   if wMultiplayerReceiveNibbleIdx == 2:
