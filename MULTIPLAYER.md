@@ -80,16 +80,16 @@ In this example, imagining the initial `noop` byte on the master is left as an e
 | comment                                  | Seq | Ack | H/L | M/S | data    | send        | Ack success | Sync Status | Ack Success | Seq | Ack   | H/L | M/S | data    | send   |
 | ---------------------------------------- | --- | --- | --- | --- | ------- | ----------- | ----------- | ----------- | ----------- | --- | ----- | --- | --- | ------- | ------ |
 | both floating                            | 1   | 1   | 1   | 1   | 1 1 1 1 |             | 0           | failed      | 0           | 1   | 1     | 1   | 1   | 1 1 1 1 |        |
-| master: starts packet (default Seq, ...) | 0   | 0   | 1   | 1   | 0 0 1 1 | h-1         | 0           | failed      | 0           | 1   | 1     | 1   | 1   | 1 1 1 1 |        |
-| master restarts packet (no ack)          | 0   | 0   | 1   | 1   | 0 0 1 1 | h-1         | 1           | success     | 1           | 0   | 0     | 1   | 0   | 1 1 1 1 | h-noop |
-|                                          | 1   | 1   | 0   | 1   | 0 0 0 1 | l-1         | 1           | success     | 1           | 1   | 1     | 0   | 0   | 1 1 1 1 | l-noop |
-| Hardware error lead to failed ack        | 0   | 0   | 1   | 1   | 0 0 1 1 | h-2         | 0           | failed      | 1           | 0   | 1 (E) | 1   | 0   | 1 1 1 1 | h-noop |
-| master restarts packet (no ack)          | 0   | 0   | 1   | 1   | 0 0 1 1 | h-1         | 0           | failed      | 0           | 1   | 1     | 0   | 0   | 1 1 1 1 | l-noop |
-| both restart packet                      | 0   | 0   | 1   | 1   | 0 0 1 1 | h-1         | 1           | success     | 1           | 0   | 0     | 1   | 0   | 1 1 1 1 | h-noop |
-| both in sync again                       | 1   | 1   | 0   | 1   | 0 0 0 1 | l-1         | 1           | success     | 1           | 1   | 1     | 0   | 0   | 1 1 1 1 | l-noop |
-|                                          | 0   | 0   | 1   | 1   | 0 0 1 1 | h-2         | 1           | success     | 1           | 0   | 0     | 1   | 0   | 0 1 1 0 | h-a    |
-|                                          | 1   | 1   | 0   | 1   | 0 0 1 0 | l-2         | 1           | success     | 1           | 1   | 1     | 0   | 0   | 0 0 0 1 | l-a    |
-|                                          | 0   | 0   | 1   | 1   | 0 0 1 1 | h-3         | 1           | success     | 1           | 0   | 0     | 1   | 0   | 0 1 1 0 | h-b    |
-| package fully transmitted to slave       | 1   | 1   | 0   | 1   | 0 0 1 1 | l-3         | 1           | success     | 1           | 1   | 1     | 0   | 0   | 0 0 0 1 | l-b    |
-| master: nothing else to send, send noop  | 0   | 0   | 1   | 1   | 1 1 1 1 | noop part 1 | 1           | success     | 1           | 0   | 0     | 1   | 0   | 0 1 1 0 | h-c    |
-| package fully transmitted to master      | 1   | 1   | 0   | 1   | 1 1 1 1 | noop part 2 | 1           | success     | 1           | 1   | 1     | 0   | 0   | 0 0 0 1 | l-c    |
+| master: starts packet (default Seq, ...) | 0   | 0   | 0   | 1   | 0 0 1 1 | h-1         | 0           | failed      | 0           | 1   | 1     | 1   | 1   | 1 1 1 1 |        |
+| master restarts packet (no ack)          | 0   | 0   | 0   | 1   | 0 0 1 1 | h-1         | 1           | success     | 1           | 0   | 0     | 0   | 0   | 1 1 1 1 | h-noop |
+|                                          | 1   | 1   | 1   | 1   | 0 0 0 1 | l-1         | 1           | success     | 1           | 1   | 1     | 1   | 0   | 1 1 1 1 | l-noop |
+| Hardware error lead to failed ack        | 0   | 0   | 0   | 1   | 0 0 1 1 | h-2         | 0           | failed      | 1           | 0   | 1 (E) | 0   | 0   | 1 1 1 1 | h-noop |
+| master restarts packet (no ack)          | 0   | 0   | 0   | 1   | 0 0 1 1 | h-1         | 0           | failed      | 0           | 1   | 1     | 1   | 0   | 1 1 1 1 | l-noop |
+| both restart packet                      | 0   | 0   | 0   | 1   | 0 0 1 1 | h-1         | 1           | success     | 1           | 0   | 0     | 0   | 0   | 1 1 1 1 | h-noop |
+| both in sync again                       | 1   | 1   | 1   | 1   | 0 0 0 1 | l-1         | 1           | success     | 1           | 1   | 1     | 1   | 0   | 1 1 1 1 | l-noop |
+|                                          | 0   | 0   | 0   | 1   | 0 0 1 1 | h-2         | 1           | success     | 1           | 0   | 0     | 0   | 0   | 0 1 1 0 | h-a    |
+|                                          | 1   | 1   | 1   | 1   | 0 0 1 0 | l-2         | 1           | success     | 1           | 1   | 1     | 1   | 0   | 0 0 0 1 | l-a    |
+|                                          | 0   | 0   | 0   | 1   | 0 0 1 1 | h-3         | 1           | success     | 1           | 0   | 0     | 0   | 0   | 0 1 1 0 | h-b    |
+| package fully transmitted to slave       | 1   | 1   | 1   | 1   | 0 0 1 1 | l-3         | 1           | success     | 1           | 1   | 1     | 1   | 0   | 0 0 0 1 | l-b    |
+| master: nothing else to send, send noop  | 0   | 0   | 0   | 1   | 1 1 1 1 | noop part 1 | 1           | success     | 1           | 0   | 0     | 0   | 0   | 0 1 1 0 | h-c    |
+| package fully transmitted to master      | 1   | 1   | 1   | 1   | 1 1 1 1 | noop part 2 | 1           | success     | 1           | 1   | 1     | 1   | 0   | 0 0 0 1 | l-c    |

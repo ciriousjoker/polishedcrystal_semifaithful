@@ -17,13 +17,13 @@ wMultiplayerPackageToExecute:: ds 8 ; Complete received package ready for proces
 
 ; Send state variables
 wMultiplayerSendByteIdx:: db        ; Current byte being sent (0 for noop, 1-8 for the package bytes)
-wMultiplayerSendNibbleIdx:: db      ; Current nibble being sent (1=high, 0=low)
+wMultiplayerSendNibbleIdx:: db      ; Current nibble being sent (0=high, 1=low)
 wMultiplayerNextSeqToSend:: db      ; Next sequence bit to send (0/1). Is always a flipped version of the last sent Seq bit. On Ack failure, resets to 0.
 wMultiplayerNextAckToSend:: db      ; Next ACK bit to send (0/1). Is always a flipped version of the last received Seq bit. On Ack failure, resets to 0.
 
 ; Receive state variables
 wMultiplayerReceiveByteIdx:: db     ; Current byte being received (0-7)
-wMultiplayerReceiveNibbleIdx:: db   ; Expected nibble idx to be received (1=high, 0=low). If the incoming nibble is not the expected one, we resync.
+wMultiplayerReceiveNibbleIdx:: db   ; Expected nibble idx to be received (0=high, 1=low). If the incoming nibble is not the expected one, we resync.
 wMultiplayerLastReceivedByte:: db   ; Temporary storage for byte being assembled
   
 ; TODO: Seems unnecessary, remove?
