@@ -121,8 +121,10 @@ MultiplayerSendReceiveNibble::
 	cp $FF
 	jp z, .restart_package
 	
-  ; call IfSBHasInvalidAck:
-  ;   jump .restart_package
+	; Check if received ACK bit is invalid
+	call IfReceivedInvalidAck
+	jp nz, .restart_package
+
   ; call IfSBContainsOwnNibble:
   ;   jump .start_transmission ; here we resend the same nibble again. This should never happen though.
 
@@ -209,6 +211,26 @@ MultiplayerSendReceiveNibble::
 	pop bc
 	pop hl
 	ret
+
+
+; Check if received byte has invalid ACK bit
+; Input: E = received byte from rSB
+; Output: Z flag set if ACK is valid, clear if invalid
+IfReceivedInvalidAck:
+	; Extract ACK bit (bit 6) from E and shift to bit 0
+	ld a, e
+	and %01000000
+	rrca
+	rrca
+	ld b, a  ; Store received ACK in B
+	
+	; Get expected ACK (flipped version of last sent SEQ)
+	ld a, [wMultiplayerNextSeqToSend]
+	xor 1  ; Flip to get the last sent SEQ bit
+	
+	; Compare with received ACK
+	cp b
+	ret  ; Z flag indicates result: Z=valid ACK, NZ=invalid ACK
 
 
 ; VBlank interrupt handler for multiplayer
