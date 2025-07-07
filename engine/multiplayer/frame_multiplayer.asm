@@ -133,9 +133,9 @@ MultiplayerSendReceiveNibble::
 	call IfSBContainsOwnNibble
 	jp z, .start_transmission
 
-	; Check if received ACK bit is invalid
-	call IfReceivedInvalidAck
-	jp z, .restart_package
+	; ; Check if received ACK bit is invalid
+	; call IfReceivedInvalidAck
+	; jp z, .restart_package
 
 	; Check if H/L bit mismatches expected nibble type
 	call IfHLBitMismatchesExpectedNibble
@@ -314,7 +314,7 @@ IfHLBitMismatchesExpectedNibble:
 	cp b
 	jr z, .match	; Jump if they match (correct nibble)
 	
-	call Desync
+	; call Desync
 	; Mismatch - set Z flag and return
 	xor a	; Set Z flag
 	ret
