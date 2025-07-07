@@ -9,17 +9,17 @@
 SECTION "Frame Multiplayer", ROMX
 
 ; SB Register bit layout (7 6 5 4 3 2 1 0):
-; Bit 7: SeqOut - Toggle bit for sequence control. Toggled each frame if AckIn matched SeqOut.
-; Bit 6: AckOut - Flipped version of the last received SeqIn (ie we predict the happy path and wait for sync if it fails).
-; Bit 5: H/L - 1=High nibble, 0=Low nibble  
+; Bit 7: Valid - Always 0 to differentiate from floating line (0xFF)
+; Bit 6: SeqOut - Toggle bit for sequence control. Toggled each frame if AckIn matched SeqOut.
+; Bit 5: AckOut - Flipped version of the last received SeqIn (ie we predict the happy path and wait for sync if it fails).
 ; Bit 4: Master/Slave - 1 if master, 0 if slave (used to avoid interpreting own chunks as received ones)
-; Bit 3: Valid - Always 0 to differentiate from floating line (0xFF)
-; Bit 2: Chunk Index - 1=High chunk (bits 3-2), 0=Low chunk (bits 1-0)
+; Bit 3: Nibble Index - 0=High nibble, 1=Low nibble  
+; Bit 2: Chunk Index - 0=High chunk (bits 3-2), 1=Low chunk (bits 1-0)
 ; Bits 1-0: Payload chunk (2 bits)
 
 DEF MULTIPLAYER_PACKAGE_SIZE EQU 8
 DEF MULTIPLAYER_IDLE_FRAMES EQU 300 ; 5 * 60fps -> ~5s
-DEF MULTIPLAYER_NOOP_BYTE EQU $40  ; Use 0x40 (0b01000000) as noop - bit 3 is 0
+DEF MULTIPLAYER_NOOP_BYTE EQU $0F  ; Use 0x0F (0b00001111) as noop - bit 7 is 0
 
 ; MultiplayerInitialize:
 ; Purpose: Initializes all multiplayer-related RAM variables and hardware registers to a clean state.
@@ -132,8 +132,8 @@ MultiplayerSendReceiveNibble::
 	cp $FF
 	jp z, .restart_package
 	
-	; Check if bit 3 is set (invalid - should always be 0)
-	bit 3, a
+	; Check if bit 7 is set (invalid - should always be 0)
+	bit 7, a
 	jp nz, .restart_package
 	
 	; Check if we received our own chunk (should not happen in normal operation)
@@ -145,7 +145,7 @@ MultiplayerSendReceiveNibble::
 	; jp z, .restart_package
 
 	; Check if H/L bit mismatches expected nibble type
-	call IfHLBitMismatchesExpectedNibble
+	call IfNibbleIndexMismatchesExpected
 	jp z, .restart_package
 
 	; Check if C (chunk index) bit mismatches expected chunk type  
@@ -194,12 +194,12 @@ MultiplayerSendReceiveNibble::
   ; ;; Logic to send the next chunk:
   ; call PrepareNextChunk
   ;   BuildByteToSend:
-  ;     bit 7: use wMultiplayerNextSeqToSend
-  ;     bit 6: use wMultiplayerNextAckToSend
-  ;     bit 5: use wMultiplayerSendNibbleIdx (1 for high nibble, 0 for low nibble)
+  ;     bit 7: always 0 (valid bit - differentiates from floating 0xFF)
+  ;     bit 6: use wMultiplayerNextSeqToSend
+  ;     bit 5: use wMultiplayerNextAckToSend
   ;     bit 4: use wMultiplayerIsMaster (1 for master, 0 for slave)
-  ;     bit 3: always 0 (valid bit - differentiates from floating 0xFF)
-  ;     bit 2: use wMultiplayerSendChunkIdx (1 for high chunk, 0 for low chunk)
+  ;     bit 3: use wMultiplayerSendNibbleIdx (0 for high nibble, 1 for low nibble)
+  ;     bit 2: use wMultiplayerSendChunkIdx (0 for high chunk, 1 for low chunk)
   ;     bits 1-0: load data from [wMultiplayerStaticNoopByte, ...wMultiplayerBufferedPackage] at wMultiplayerSendByteIdx at wMultiplayerSendNibbleIdx at wMultiplayerSendChunkIdx
   ;     ; NOTE: [wMultiplayerStaticNoopByte] is a constant that is used to treat wMultiplayerSendByteIdx == 0 as a noop byte.
   ;      
@@ -230,8 +230,7 @@ UpdateSequenceBit:
 ; Input: E = received byte from rSB
 UpdateAckBit:
 	ld a, e
-	and %10000000	; Extract SEQ bit (bit 7)
-	rrca
+	and %01000000	; Extract SEQ bit (bit 6)
 	rrca
 	rrca
 	rrca
@@ -249,24 +248,27 @@ UpdateAckBit:
 ;   - wMultiplayerNextSeqToSend (unmodified, ie before flipping it for the current package)
 ; Output: Z flag set if ACK is invalid, clear if valid
 IfReceivedInvalidAck:
-	; Extract ACK bit (bit 6) from E and shift to bit 0
+	; Extract ACK bit (bit 5) from E and shift to bit 0
 	ld a, e
-	and %01000000
+	and %00100000
 	rrca
 	rrca
+	rrca
+	rrca
+	rrca	; Shift to bit 0
 	ld b, a  ; Store received ACK in B
 
   ; The received ACK must match the last sent SEQ directly
 	ld a, [wMultiplayerNextSeqToSend]
-
+	
 	; Compare with received ACK
 	cp b
 	jr z, .valid_ack  ; Jump if ACKs match (valid)
-
+	
   call Desync
 	xor a  ; Set Z flag
 	ret
-    
+
 .valid_ack:
 	; Valid ACK - clear Z flag and return
 	or 1   ; Clear Z flag
@@ -305,30 +307,30 @@ IfSBContainsOwnChunk:
 .own_nibble:
   call Desync
 
-; Check if H/L bit mismatches expected nibble type
+; Check if nibble index bit mismatches expected nibble type
 ; Input: E = received byte from rSB
-; Output: Z flag set if H/L bit mismatches (desync), clear if matches
-IfHLBitMismatchesExpectedNibble:
-	; Extract H/L bit (bit 5) from received byte
+; Output: Z flag set if nibble index mismatches (desync), clear if matches
+IfNibbleIndexMismatchesExpected:
+	; Extract nibble index bit (bit 3) from received byte
 	ld a, e
-	and %00100000	; Isolate bit 5 (H/L bit)
-	ld b, a	; Store received H/L bit in B
+	and %00001000	; Isolate bit 3 (nibble index bit)
+	ld b, a	; Store received nibble index bit in B
 	
-	; Get expected nibble index (0=high nibble expected, 1=low nibble expected)
+	; Get expected nibble index (0=low nibble expected, 1=high nibble expected)
 	ld a, [wMultiplayerReceiveNibbleIdx]
 	and a
-	jr z, .expect_high_nibble
+	jr z, .expect_low_nibble
 	
-	; We expect low nibble (wReceiveNibbleIdx=1), so H/L bit should be 1
-	ld a, %00100000
+	; We expect high nibble (wReceiveNibbleIdx=1), so nibble index bit should be 1
+	ld a, %00001000
 	jr .compare
     
-.expect_high_nibble:
-	; We expect high nibble (wReceiveNibbleIdx=0), so H/L bit should be 0
+.expect_low_nibble:
+	; We expect low nibble (wReceiveNibbleIdx=0), so nibble index bit should be 0
 	ld a, %00000000
     
 .compare:
-	; Compare expected H/L bit with received H/L bit
+	; Compare expected nibble index bit with received nibble index bit
 	cp b
 	jr z, .match	; Jump if they match (correct nibble)
 	
