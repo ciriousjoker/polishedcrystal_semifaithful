@@ -235,7 +235,11 @@ IfReceivedInvalidAck:
 	
 	; Compare with received ACK
 	cp b
-	ret  ; Z flag indicates result: Z=valid ACK, NZ=invalid ACK
+	ret z  ; Z flag set if valid ACK
+	
+	; Invalid ACK - desync error!
+	ld a, ERR_MULTIPLAYER_DESYNC
+	jmp Crash
 
 
 ; Check if received byte contains our own nibble (echoed back)
