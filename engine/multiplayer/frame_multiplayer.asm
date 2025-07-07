@@ -132,11 +132,9 @@ MultiplayerSendReceiveNibble::
 	call IfReceivedInvalidAck
 	jp nz, .restart_package
 
-
-  ; call IfHLBitMismatchesExpectedNibble:
-  ;   ; Example: We expect a low nibble (wRecvNibbleIdx=1) but got a high nibble (H/L bit=1).
-  ;   ; This is a desync error.
-  ;   jump .restart_package
+	; Check if H/L bit mismatches expected nibble type
+	call IfHLBitMismatchesExpectedNibble
+	jp nz, .restart_package
 
   ; ;; Logic to update the seq/ack variables
   ; flip wMultiplayerNextSeqToSend
@@ -277,6 +275,37 @@ IfSBContainsOwnNibble:
   ld a, ERR_MULTIPLAYER_DESYNC
   jmp Crash
 
+
+; Check if H/L bit mismatches expected nibble type
+; Input: E = received byte from rSB
+; Output: Z flag set if H/L bit matches expected, clear if mismatch (desync)
+IfHLBitMismatchesExpectedNibble:
+	; Extract H/L bit (bit 5) from received byte
+	ld a, e
+	and %00100000  ; Isolate bit 5 (H/L bit)
+	ld b, a  ; Store received H/L bit in B
+	
+	; Get expected nibble index (1=high nibble expected, 0=low nibble expected)
+	ld a, [wMultiplayerReceiveNibbleIdx]
+	and a
+	jr z, .expect_high_nibble
+	
+	; We expect low nibble (wReceiveNibbleIdx=1), so H/L bit should be 0
+	ld a, %00000000
+	jr .compare
+	
+.expect_high_nibble:
+	; We expect high nibble (wReceiveNibbleIdx=0), so H/L bit should be 1
+	ld a, %00100000
+	
+.compare:
+	; Compare expected H/L bit with received H/L bit
+	cp b
+	ret z  ; Z flag set if match (correct nibble)
+	
+	; H/L bit mismatch - desync error!
+	ld a, ERR_MULTIPLAYER_DESYNC
+	jmp Crash
 
 ; VBlank interrupt handler for multiplayer
 MultiplayerVBlankHandler::
