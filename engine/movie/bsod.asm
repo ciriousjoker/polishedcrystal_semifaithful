@@ -127,6 +127,7 @@ BSODErrorStrings:
 	dr .NewBox           ; ERR_NEWBOX
 	dr .WinStackOverflow ; ERR_WINSTACK_OVERFLOW
 	dr .CorruptSavestate ; ERR_CORRUPT_SAVESTATE
+  dr .MultiplayerDesync     ; ERR_MULTIPLAYER_DESYNC
 	dr .UnknownError     ; unknown
 	assert_table_length NUM_ERR_CODES + 1
 
@@ -142,4 +143,5 @@ BSODErrorStrings:
 .NewBox:           text "Fatal PC Box error@"
 .WinStackOverflow: text "Win.stack overflow@"
 .CorruptSavestate: text "Corrupt savestate@"
+.MultiplayerDesync: text "Multiplayer desync@"
 .UnknownError:     text "Unknown error@"
