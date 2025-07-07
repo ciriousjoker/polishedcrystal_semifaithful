@@ -330,17 +330,17 @@ IfNibbleIndexMismatchesExpected:
 	and %00001000	; Isolate bit 3 (nibble index bit)
 	ld b, a	; Store received nibble index bit in B
 	
-	; Get expected nibble index (0=low nibble expected, 1=high nibble expected)
+	; Get expected nibble index (0=high nibble expected, 1=low nibble expected)
 	ld a, [wMultiplayerReceiveNibbleIdx]
 	and a
-	jr z, .expect_low_nibble
+	jr z, .expect_high_nibble
 	
-	; We expect high nibble (wReceiveNibbleIdx=1), so nibble index bit should be 1
+	; We expect low nibble (wReceiveNibbleIdx=1), so nibble index bit should be 1
 	ld a, %00001000
 	jr .compare
     
-.expect_low_nibble:
-	; We expect low nibble (wReceiveNibbleIdx=0), so nibble index bit should be 0
+.expect_high_nibble:
+	; We expect high nibble (wReceiveNibbleIdx=0), so nibble index bit should be 0
 	ld a, %00000000
     
 .compare:
@@ -473,8 +473,14 @@ StoreReceivedChunk:
 	; Check which chunk position we're expecting
 	ld a, [wMultiplayerReceiveChunkIdx]
 	and a
-	jr z, .store_low_chunk
+	jr z, .store_high_chunk
 	
+	; Store as low chunk (bits 1-0)
+	ld a, b
+	ld [wMultiplayerLastReceivedNibble], a
+	ret
+	
+.store_high_chunk:
 	; Store as high chunk (bits 3-2)
 	ld a, [wMultiplayerLastReceivedNibble]
 	and %11110011	; Clear high chunk
@@ -483,12 +489,6 @@ StoreReceivedChunk:
 	add a, a
 	add a, a	; Shift chunk to high position (bits 3-2)
 	or c	; Combine with existing nibble
-	ld [wMultiplayerLastReceivedNibble], a
-	ret
-	
-.store_low_chunk:
-	; Store as low chunk (bits 1-0)
-	ld a, b
 	ld [wMultiplayerLastReceivedNibble], a
 	ret
 
@@ -538,6 +538,12 @@ StoreReceivedNibble:
 .store_high_nibble:
 	; Store as high nibble (bits 7-4)
 	ld a, b
+	add a, a
+	add a, a
+	add a, a
+	add a, a	; Shift nibble to high position
+	ld [wMultiplayerLastReceivedByte], a
+	ret
 	add a, a
 	add a, a
 	add a, a

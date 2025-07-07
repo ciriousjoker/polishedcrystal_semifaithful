@@ -23,8 +23,8 @@ Each 8-bit value placed in the `rSB` (Serial Transfer Data) register is meticulo
 | 6   | `SEQ` (Sequence)    | Flips (0/1) for each new chunk sent. Combined with full rSB comparison, provides robust duplicate detection.                     |
 | 5   | `ACK` (Acknowledge) | Flips (0/1) to acknowledge the successful receipt of the remote player's last chunk.                                |
 | 4   | `M` (Master/Slave)  | Identifies the device's role. `1` for the master, `0` for the slave.                                                 |
-| 3   | `N` (Nibble Index)  | Indicates which nibble of a byte is being sent. `1` for the high nibble (bits 7-4), `0` for the low nibble (bits 3-0). |
-| 2   | `C` (Chunk Index)   | Indicates which 2-bit chunk of a nibble is being sent. `1` for high chunk (bits 3-2), `0` for low chunk (bits 1-0). |
+| 3   | `N` (Nibble Index)  | Indicates which nibble of a byte is being sent. `0` for the high nibble (bits 7-4), `1` for the low nibble (bits 3-0). |
+| 2   | `C` (Chunk Index)   | Indicates which 2-bit chunk of a nibble is being sent. `0` for high chunk (bits 3-2), `1` for low chunk (bits 1-0). |
 | 1-0 | `Payload`           | The 2-bit data chunk.                                                                                               |
 
 In summary:
