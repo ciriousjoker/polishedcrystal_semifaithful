@@ -245,7 +245,8 @@ AssertRemoteNibble:
 	xor e
 	bit 6, a
 	jr nz, .ok	; If bit 6 is different, this is a remote nibble (normal)
-	call Desync	; If bit 6 is the same, protocol error
+	ld a, ERR_EGG_SPECIES
+	jmp Crash
 .ok
 	ret
 
