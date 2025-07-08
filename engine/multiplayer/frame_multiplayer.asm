@@ -564,12 +564,6 @@ StoreReceivedNibble:
 	add a, a	; Shift nibble to high position
 	ld [wMultiplayerLastReceivedByte], a
 	ret
-	add a, a
-	add a, a
-	add a, a
-	add a, a	; Shift nibble to high position
-	ld [wMultiplayerLastReceivedByte], a
-	ret
 
 ; Handle a completed byte (both nibbles received)
 ; Destroys: A, B, C, D, H, L
