@@ -716,8 +716,8 @@ OnPackageTransmissionComplete:
 	; Try to move queued package to buffered if available
 	call MultiplayerCopyQueuedPackageToSendBufferIfPossible
 	
-	ld a, ERR_EGG_SPECIES
-	jmp Crash
+	; ld a, ERR_EGG_SPECIES
+	; jmp Crash
 
 	; TODO: Add any other completion logic here (e.g., notify game logic)
 	ret
