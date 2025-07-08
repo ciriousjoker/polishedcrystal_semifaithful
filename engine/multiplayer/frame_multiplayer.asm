@@ -360,27 +360,12 @@ HandleReceivedNibble:
 	; Check if this nibble has the reset flag (bit 5)
 	ld a, e
 	and %00100000	; Isolate reset bit (bit 5)
-	jr z, .no_reset
+	jr z, .process_nibble
 	
 	; Reset flag is set - reset receive indices and validate nibble index
 	xor a
 	ld [wMultiplayerReceiveByteIdx], a      ; Reset to start of package
 	ld [wMultiplayerReceiveNibbleIdx], a    ; Reset to high nibble
-	
-	; Validate that nibble index (bit 4) is 0 (high nibble) when reset flag is set
-	ld a, e
-	and %00010000	; Isolate nibble index bit (bit 4)
-	jr nz, .reset_desync	; If not 0, this is an error
-	
-	jr .process_nibble
-	
-.reset_desync:
-	; Reset flag was set but nibble index wasn't 0 - this is invalid
-	call Desync
-	ret
-	
-.no_reset:
-	; Normal processing without reset
 	
 .process_nibble:
 	; Extract 4-bit payload from bits 3-0
