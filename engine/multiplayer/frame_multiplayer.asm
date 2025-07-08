@@ -341,27 +341,31 @@ HandleReceivedNibble:
 	and %00001111
 	ld b, a
 
-	ld a, [wMultiplayerReceiveNibbleIdx]
-	and a
-	jr z, .store_high_nibble
-
-	; Low nibble - combine with stored high nibble
-	ld a, [wMultiplayerLastReceivedByte]
-	or b
-	ld [wMultiplayerLastReceivedByte], a
-	call HandleCompletedByte
-	jr .advance_nibble
-
-.store_high_nibble:
-	; High nibble - store in upper 4 bits
-	ld a, b
-	swap a
-	ld [wMultiplayerLastReceivedByte], a
-
-.advance_nibble:
+	; Toggle the nibble index (0->1 or 1->0) and update the flags.
+	; If the index *was* 1, it becomes 0, and the Z flag is SET.
+	; If the index *was* 0, it becomes 1, and the Z flag is CLEAR.
 	ld a, [wMultiplayerReceiveNibbleIdx]
 	xor 1
 	ld [wMultiplayerReceiveNibbleIdx], a
+
+	; If Z flag is set, we just finished a low nibble.
+	jr z, .was_low_nibble
+
+.was_high_nibble:
+	; The index was 0 (high nibble). Move payload to upper 4 bits and store.
+	ld a, b
+	swap a
+	ld [wMultiplayerLastReceivedByte], a
+	ret
+
+.was_low_nibble:
+	; The index was 1 (low nibble). Combine with the stored high nibble.
+	ld a, [wMultiplayerLastReceivedByte]
+	or b
+	ld [wMultiplayerLastReceivedByte], a
+
+	; Handle the now-completed byte.
+	call HandleCompletedByte
 	ret
 
 ; Handle a completed byte (both nibbles received)
