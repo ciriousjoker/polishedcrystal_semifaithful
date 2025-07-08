@@ -142,9 +142,14 @@ MultiplayerSendReceiveNibble::
 	call IfSBContainsOwnChunk
 	jr z, .cleanup  ; If our own chunk, ignore it completely
 	
-	; Now check for duplicates (only for remote chunks)
-	call IfIsDuplicate
-	jr z, .handle_duplicate
+	; ; Check if sequence bits mismatch and we should resend
+	; call IfReceivedInvalidSeq
+	; jr z, .resync_seq
+
+	; ; Now check for duplicates (only for remote chunks)
+	; call IfIsDuplicate
+	; jr z, .handle_duplicate
+	; ; jr z, .cleanup  ; If our own chunk, ignore it completely
 	
 	; Store new rSB value for future duplicate detection (only remote chunks)
 	ld hl, wMultiplayerLastReceivedRSB
@@ -153,11 +158,11 @@ MultiplayerSendReceiveNibble::
 	; Normal processing - new chunk from remote
 	jr .process_new_chunk
 
-.handle_duplicate:
-	; Handle duplicate chunk from remote side
-	; (We already know it's not our own chunk from the check above)
-	call PrepareChunkToResend
-	jr .send_chunk
+; .handle_duplicate:
+; 	; Handle duplicate chunk from remote side
+; 	; (We already know it's not our own chunk from the check above)
+; 	call PrepareChunkToResend
+; 	jr .send_chunk
 
 .process_new_chunk:
 	; Normal processing of new chunk
@@ -169,13 +174,13 @@ MultiplayerSendReceiveNibble::
 	call IfChunkIndexMismatchesExpected
 	jp z, .restart_their_package
 
-	; Check if received ACK is invalid (they didn't acknowledge our data properly)
-	call IfReceivedInvalidAck
-	jp z, .restart_own_package  ; Invalid ACK = restart our own transmission
+	; ; Check if received ACK is invalid (they didn't acknowledge our data properly)
+	; call IfReceivedInvalidAck
+	; jp z, .restart_own_package  ; Invalid ACK = restart our own transmission
 
 	; Update sequence/acknowledgment variables
-	call UpdateSequenceBit
-	call UpdateAckBit
+	; call UpdateSequenceBit
+	; call UpdateAckBit
 
 	; Handle the received chunk
 	call HandleReceivedChunk
@@ -184,6 +189,11 @@ MultiplayerSendReceiveNibble::
 	; Only advances if the ACK validates that the remote side received our chunk
 	call AdvanceSendState
 	jr .send_chunk
+
+; .resync_seq:
+; 	; Resend the exact same byte to trigger duplicate detection on the other side
+; 	call ResendExactSameByte
+; 	jr .start_transmission
 
 .restart_own_package:
 	; Complete desync detected - reset all state variables to initial values
@@ -335,6 +345,7 @@ IfReceivedInvalidAck:
 ; Check if received byte contains our own chunk (echoed back)
 ; Input: E = received byte from rSB
 ; Output: Z flag set if we received our own chunk, clear if it's from remote
+; TODO: This should never actually be necessary. Maybe crash if it happens?
 IfSBContainsOwnChunk:
   ; Extract Master/Slave bit (bit 4) from received byte
   ld a, e
@@ -895,4 +906,70 @@ GetCurrentPayloadChunk:
 SendChunk:
 	; Store byte in serial buffer
 	ldh [rSB], a
+	ret
+
+; Check if received sequence bit mismatches our own sequence bit
+; If mismatch, the side with SEQ=0 resends the exact same byte to trigger duplicate detection
+; Input: E = received byte from rSB
+; Output: Z flag set if sequences mismatch and we should resend, clear if sequences match or we shouldn't resend
+; Destroys: A, B
+IfReceivedInvalidSeq:
+	; Extract SEQ bit (bit 6) from received byte
+	ld a, e
+	and %01000000	; Isolate bit 6 (sequence bit)
+	rrca
+	rrca
+	rrca
+	rrca
+	rrca
+	rrca	; Shift to bit 0
+	ld b, a	; Store received SEQ in B
+	
+	; Get our current sequence bit
+	ld a, [wMultiplayerNextSeqToSend]
+	and 1	; Ensure only bit 0
+	
+	; Compare sequences
+	cp b
+	jr nz, .sequences_mismatch
+	
+	; Sequences match - clear Z flag and return
+	or 1
+	ret
+	
+.sequences_mismatch:
+	; Sequences don't match - check if we should resend
+	; Only the side with SEQ=0 should resend to trigger duplicate detection
+	ld a, [wMultiplayerNextSeqToSend]
+	and 1
+	jr nz, .we_have_seq_1
+	
+	; We have SEQ=0, so we should resend the exact same byte
+	; Set Z flag to indicate we should resend
+	xor a
+	ret
+	
+.we_have_seq_1:
+	; We have SEQ=1, so we should NOT resend
+	; Clear Z flag to indicate normal processing
+	or 1
+	ret
+
+; Resend the exact same byte without any modifications
+; This is used when sequence bits are mismatched and we need to trigger duplicate detection
+; Destroys: A
+ResendExactSameByte:
+	; Ensure our SEQ bit is 0 before resending (only SEQ=0 side should resend)
+	xor a
+	ld [wMultiplayerNextSeqToSend], a  ; Force SEQ to 0
+
+  ; Set ACK to match the sequence we expect from them
+	; If we're sending SEQ=0, we expect them to send SEQ=1, so we should ACK=1
+	ld a, 1
+	ld [wMultiplayerNextAckToSend], a  ; Force ACK to 1
+
+	; Reconstruct the byte with SEQ=0 from current state
+	call PrepareNextChunk
+	; Don't call UpdateSequenceBit - keep SEQ at 0 for the resend
+	call SendChunk
 	ret
