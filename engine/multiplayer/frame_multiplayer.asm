@@ -557,34 +557,32 @@ PrepareNextNibble:
 
 ; Check if we should set the reset bit (start of new package)
 ; Output: A = 1 if reset bit should be set, 0 otherwise
-; Destroys: A
+; Destroys: A, L
 ShouldSetResetBit:
-	; Reset bit should ONLY be set if:
-	; - No package is being sent, OR
-	; - We're at nibble 0 of a package (reset can only be set with nibble index 0)
+	; The reset bit is set if we are at the very start of a package
+	; (both send indices are 0), OR if there is no package buffered at all.
 	
-	; Check if we have a buffered package
-	ld a, [wMultiplayerHasBufferedPackage]
-	and a
-	jr z, .set_reset	; No package = always set reset
-	
-	; We have a package - only set reset for nibble 0 of first byte
+	; First, check if both send indices are 0, using L as a temporary register.
 	ld a, [wMultiplayerSendByteIdx]
-	and a
-	jr nz, .clear_reset	; Not byte 0 = clear reset
-	
-	; We're at byte 0 - check if we're at nibble 0
+	ld l, a
 	ld a, [wMultiplayerSendNibbleIdx]
-	and a
-	jr nz, .clear_reset	; Not nibble 0 = clear reset
+	or l ; A is 0 if and only if both indices were 0
+	jr z, .set_reset ; If so, we must set the reset bit.
 	
-	; We're at byte 0, nibble 0 = set reset (nibble index will be 0)
-.set_reset:
-	ld a, 1
-	ret
+	; If we are not at the start of a package, the reset bit is only set
+	; if there is no package currently buffered.
+	ld a, [wMultiplayerHasBufferedPackage]
+	and a ; Sets Z flag if a is 0.
+	jr z, .set_reset ; If no package, set the reset bit.
 	
+	; If we reach here, there is a package and we are not at the start.
+	; So, we clear the reset bit.
 .clear_reset:
-	ld a, 0
+	xor a ; Sets A to 0 and sets the Z flag.
+	ret
+
+.set_reset:
+	ld a, 1 ; Sets A to 1.
 	ret
 
 
