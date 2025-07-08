@@ -263,7 +263,7 @@ IfSBContainsOwnNibble:
 .we_are_slave:
   ; We are slave, so our M/S bit should be 0 (bit 6 clear)
   ld a, %00000000
-    
+
 .compare:
   ; Compare our expected M/S bit with received M/S bit
   cp b
@@ -275,7 +275,7 @@ IfSBContainsOwnNibble:
   ret
 
 .own_nibble:
-  ; call Desync
+  call Desync
   ; Z flag is already set from the cp instruction
   ; Return with Z flag set to indicate own nibble
   ret
