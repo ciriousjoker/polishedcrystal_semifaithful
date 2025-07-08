@@ -39,7 +39,12 @@ MultiplayerInitialize::
 	xor a
 	ldh [rSC], a ; Clear serial control register.
 
+	; Initialize frame counter to 1.
+  ; This fixes a once-per launch underflow error where
+  ; the first package takes 0xFF frames to send.
 	ld a, 1
+	ld [wMultiplayerFrameCounter], a
+
 	ld [wMultiplayerIsEnabled], a
 	ret
 
