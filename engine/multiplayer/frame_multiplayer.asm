@@ -18,7 +18,7 @@ SECTION "Frame Multiplayer", ROMX
 ; Bits 1-0: Payload chunk (2 bits)
 
 DEF MULTIPLAYER_PACKAGE_SIZE EQU 8
-DEF MULTIPLAYER_IDLE_FRAMES EQU 10 ; 5 * 60fps -> ~5s
+DEF MULTIPLAYER_IDLE_FRAMES EQU 300 ; 5 * 60fps -> ~5s
 DEF MULTIPLAYER_NOOP_BYTE EQU $0F  ; Use 0x0F (0b00001111) as noop - bit 7 is 0
 
 ; MultiplayerInitialize:
@@ -198,14 +198,19 @@ MultiplayerSendReceiveNibble::
 	call SendChunk
 
 .start_transmission:
-	; Only the master initiates serial transfers
-	; The slave waits for the master to start each transmission
+	; Both master and slave need to set rSC for transfer to work
 	ld a, [wMultiplayerIsMaster]
 	and a
-	jr z, .cleanup	; If we're slave, don't start transmission
+	jr z, .slave_transmission
 	
-	; We are master - start the serial transmission
+	; We are master - start the serial transmission with internal clock
 	ld a, %10000001	; Bit 7=1 (start transfer), Bit 0=1 (internal clock)
+	ldh [rSC], a
+	jr .cleanup
+	
+.slave_transmission:
+	; We are slave - prepare for transmission with external clock
+	ld a, %10000000	; Bit 7=1 (start transfer), Bit 0=0 (external clock)
 	ldh [rSC], a
 	jr .cleanup
 
