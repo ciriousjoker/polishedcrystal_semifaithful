@@ -11,14 +11,12 @@ SECTION "Frame Multiplayer", ROMX
 ; SB Register bit layout (7 6 5 4 3 2 1 0):
 ; Bit 7: Valid - Always 0 to differentiate from floating line (0xFF)
 ; Bit 6: Master/Slave - 1 if master, 0 if slave (used to avoid interpreting own chunks as received ones)
-; Bit 5: Unused - Always 0
+; Bit 5: Reset - 1 to signal start of new package (resets receiver indices)
 ; Bit 4: Nibble Index - 0=High nibble, 1=Low nibble  
 ; Bits 3-0: Payload nibble (4 bits)
 
 DEF MULTIPLAYER_PACKAGE_SIZE EQU 8
 DEF MULTIPLAYER_IDLE_FRAMES EQU 10 ; 5 * 60fps -> ~5s
-DEF MULTIPLAYER_NOOP_BYTE EQU $FF  ; Use 0xFF as a noop (which also is the package start marker).
-                                   ; It's transferred across 2 nibbles (high and low).
 
 ; MultiplayerInitialize:
 ; Purpose: Initializes all multiplayer-related RAM variables and hardware registers to a clean state.
@@ -29,10 +27,6 @@ MultiplayerInitialize::
 	ld bc, wMultiplayerEnd - wMultiplayerStart ; Zero out all multiplayer WRAM variables up to the temp buffer
 	xor a
 	rst ByteFill
-
-	; Initialize the static noop byte constant
-	ld a, MULTIPLAYER_NOOP_BYTE
-	ld [wMultiplayerStaticNoopByte], a
 
 	; Reset serial registers to a known, safe state.
 	ld a, $FF
@@ -363,6 +357,32 @@ MultiplayerVBlankHandler::
 ; Input: E = received byte from rSB  
 ; Destroys: A, B, C, D, H, L
 HandleReceivedNibble:
+	; Check if this nibble has the reset flag (bit 5)
+	ld a, e
+	and %00100000	; Isolate reset bit (bit 5)
+	jr z, .no_reset
+	
+	; Reset flag is set - reset receive indices and validate nibble index
+	xor a
+	ld [wMultiplayerReceiveByteIdx], a      ; Reset to start of package
+	ld [wMultiplayerReceiveNibbleIdx], a    ; Reset to high nibble
+	
+	; Validate that nibble index (bit 4) is 0 (high nibble) when reset flag is set
+	ld a, e
+	and %00010000	; Isolate nibble index bit (bit 4)
+	jr nz, .reset_desync	; If not 0, this is an error
+	
+	jr .process_nibble
+	
+.reset_desync:
+	; Reset flag was set but nibble index wasn't 0 - this is invalid
+	call Desync
+	ret
+	
+.no_reset:
+	; Normal processing without reset
+	
+.process_nibble:
 	; Extract 4-bit payload from bits 3-0
 	ld a, e
 	and %00001111	; Isolate payload bits (3-0)
@@ -403,11 +423,6 @@ HandleCompletedByte:
 	xor a
 	ld [wMultiplayerReceiveNibbleIdx], a
 	
-	; Check if received byte is a noop ($FF)
-	ld a, [wMultiplayerLastReceivedByte]
-	cp MULTIPLAYER_NOOP_BYTE
-	jr z, .received_noop
-	
 	; Store byte in receive package
 	ld a, [wMultiplayerReceiveByteIdx]
 	ld c, a	; Store byte index in C
@@ -426,12 +441,6 @@ HandleCompletedByte:
 	; Check if we've completed a full package
 	cp MULTIPLAYER_PACKAGE_SIZE
 	jr z, .package_complete
-	ret
-	
-.received_noop:
-	; Received noop byte - reset to start of new package
-	xor a
-	ld [wMultiplayerReceiveByteIdx], a
 	ret
 	
 .package_complete:
@@ -505,9 +514,8 @@ AdvanceToNextByte:
 	jr z, .no_package	; If no package, just return
 	
 	; Check if we've completed the entire package
-	; +1 to account for the initial noop that signals the start of a package
 	ld a, [wMultiplayerSendByteIdx]  ; Re-load the incremented value
-	cp MULTIPLAYER_PACKAGE_SIZE + 1
+	cp MULTIPLAYER_PACKAGE_SIZE
 	ret c	; Return if package not complete yet
 	
 	; Package complete! Reset state and call completion handler
@@ -519,7 +527,7 @@ AdvanceToNextByte:
 
 .no_package:
 	; No package to send, but byte index was already incremented
-	; This allows continuous noop transmission when no package is buffered
+	; This allows continuous transmission when no package is buffered
 	ret
 
 ; Handle completion of entire package transmission
@@ -556,8 +564,16 @@ PrepareNextNibble:
 	or d
 	ld d, a
 	
-	; Bit 5: Unused (always 0)
-	; Already 0 from initialization
+	; Bit 5: Reset bit - set if this is the first nibble of a new package
+	call ShouldSetResetBit
+	and 1
+	add a, a
+	add a, a
+	add a, a
+	add a, a
+	add a, a	; Shift to bit 5
+	or d
+	ld d, a
 	
 	; Bit 4: Nibble index (0=high, 1=low)
 	ld a, [wMultiplayerSendNibbleIdx]
@@ -579,24 +595,49 @@ PrepareNextNibble:
 	ld a, d
 	ret
 
-; Get the current 4-bit payload nibble to send
-; Returns the nibble from either noop byte or buffered package
-; Output: A = 4-bit nibble (bits 3-0 only)
-; Destroys: A, B, C, H, L
-GetCurrentPayloadNibble:
-	; Check if we're sending noop (byte index 0) or package data
-	ld a, [wMultiplayerSendByteIdx]
-	and a
-	jr z, .send_noop
+; Check if we should set the reset bit (start of new package)
+; Output: A = 1 if reset bit should be set, 0 otherwise
+; Destroys: A
+ShouldSetResetBit:
+	; Reset bit should be set if:
+	; 1. We have a buffered package
+	; 2. We're at byte index 0 (start of package)
+	; 3. We're at nibble index 0 (high nibble)
 	
 	; Check if we have a buffered package
 	ld a, [wMultiplayerHasBufferedPackage]
 	and a
-	jr z, .send_noop	; No package, send noop
+	jr z, .no_reset	; No package = no reset
 	
-	; Get byte from buffered package (byte index 1-8 maps to array index 0-7)
+	; Check if we're at the start of the package (byte 0, nibble 0)
 	ld a, [wMultiplayerSendByteIdx]
-	dec a	; Convert to 0-based index
+	and a
+	jr nz, .no_reset	; Not byte 0 = no reset
+	
+	ld a, [wMultiplayerSendNibbleIdx]
+	and a
+	jr nz, .no_reset	; Not nibble 0 = no reset
+	
+	; All conditions met - set reset bit
+	ld a, 1
+	ret
+	
+.no_reset:
+	ld a, 0
+	ret
+
+; Get the current 4-bit payload nibble to send
+; Returns the nibble from either buffered package or any value if no package
+; Output: A = 4-bit nibble (bits 3-0 only)
+; Destroys: A, B, C, H, L
+GetCurrentPayloadNibble:
+	; Check if we have a buffered package
+	ld a, [wMultiplayerHasBufferedPackage]
+	and a
+	jr z, .no_package	; No package, send any value
+	
+	; Get byte from buffered package
+	ld a, [wMultiplayerSendByteIdx]
 	ld c, a
 	ld b, 0
 	ld hl, wMultiplayerBufferedPackage
@@ -604,10 +645,10 @@ GetCurrentPayloadNibble:
 	ld a, [hl]	; Load the byte
 	jr .extract_nibble
 	
-.send_noop:
-	; Send noop byte
-	ld a, [wMultiplayerStaticNoopByte]
-	; Fall through to extract_nibble
+.no_package:
+	; No package to send - send any value (it doesn't matter)
+	; The reset flag will signal the start of actual package data
+	ld a, $00	; Send zeros when no package
 	
 .extract_nibble:
 	; A now contains the source byte
