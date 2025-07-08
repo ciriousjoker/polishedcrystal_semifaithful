@@ -14,6 +14,11 @@ SECTION "Frame Multiplayer", ROMX
 ; Bit 5: Reset - 1 to signal start of new package (resets receiver indices)
 ; Bit 4: Nibble Index - 0=High nibble, 1=Low nibble  
 ; Bits 3-0: Payload nibble (4 bits)
+;
+; Protocol Notes:
+; - When no package is being sent, nibble index stays at 0 and reset flag stays set
+; - Send state only advances when transmitting real packages, not "filler" nibbles
+; - Reset flag can ONLY be set when nibble index is 0 (prevents invalid combinations)
 
 DEF MULTIPLAYER_PACKAGE_SIZE EQU 8
 DEF MULTIPLAYER_IDLE_FRAMES EQU 10 ; 5 * 60fps -> ~5s
@@ -157,7 +162,13 @@ MultiplayerSendReceiveNibble::
 	; Handle the received nibble
 	call HandleReceivedNibble
 
-	; Advance send state after successful reception
+	; Only advance send state if we're actually sending a real package
+	; Don't advance when just sending "filler" nibbles with reset flag
+	ld a, [wMultiplayerHasBufferedPackage]
+	and a
+	jr z, .send_nibble	; No package = don't advance state
+	
+	; We have a real package - advance send state after successful reception
 	call AdvanceSendState
 	jr .send_nibble
 
@@ -420,10 +431,6 @@ HandleReceivedNibble:
 ; Handle a completed byte (both nibbles received)
 ; Destroys: A, B, C, D, H, L
 HandleCompletedByte:
-	; Reset nibble index for next byte
-	xor a
-	ld [wMultiplayerReceiveNibbleIdx], a
-	
 	; Store byte in receive package
 	ld a, [wMultiplayerReceiveByteIdx]
 	ld c, a	; Store byte index in C

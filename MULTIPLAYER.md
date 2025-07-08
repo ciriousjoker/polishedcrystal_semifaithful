@@ -97,8 +97,11 @@ The following table demonstrates a full transmission of a 3-byte package between
 **Notes:**
 - V (Valid) is always 0
 - M (Master/Slave): 1 for master, 0 for slave  
-- R (Reset): 1 only for the first nibble of a new package
+- R (Reset): 1 only for the first nibble of a new package (when nibble index = 0)
 - N (Nibble): 0 for high nibble, 1 for low nibble
 - Data: 4-bit payload nibble
 
-The reset flag eliminates the need for separate noop bytes, making the protocol even more efficient.
+**Reset Flag Rules:**
+- Reset flag can ONLY be set when nibble index is 0 (prevents invalid combinations)
+- When reset flag is received, receiver immediately resets indices and validates nibble index is 0
+- Reset flag handling occurs BEFORE nibble index validation to prevent desyncs
