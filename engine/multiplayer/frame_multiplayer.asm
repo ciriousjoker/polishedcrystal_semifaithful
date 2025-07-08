@@ -39,8 +39,8 @@ MultiplayerInitialize::
 	xor a
 	ldh [rSC], a ; Clear serial control register.
 
-  ld a, 1
-  ld [wMultiplayerIsEnabled], a
+	ld a, 1
+	ld [wMultiplayerIsEnabled], a
 	ret
 
 ; Queue a package for transmission
@@ -125,20 +125,20 @@ MultiplayerSendReceiveNibble::
 	; Read received byte from serial buffer and store in E for reuse
 	ldh a, [rSB]
 	ld e, a
-	
+
 	; Check if SB is floating ($FF indicates no connection)
 	cp $FF
-	jp z, .restart_own_package
-	
+	jr z, .restart_own_package
+
 	; Check if bit 7 is set (invalid - should always be 0)
 	bit 7, a
-	jp nz, .restart_own_package
-	
+	jr nz, .restart_own_package
+
 	; Check if we received our own nibble FIRST (before duplicate detection)
-	call IfSBContainsOwnNibble
-	jr z, .cleanup  ; If our own nibble, ignore it completely
-	
+	call AssertRemoteNibble
+
 	; Store new rSB value for future duplicate detection (only remote nibbles)
+  ; TODO: This is unnecessary, there is no duplicate detection in this protocol
 	ld hl, wMultiplayerLastReceivedRSB
 	ld [hl], e
 	
@@ -154,10 +154,10 @@ MultiplayerSendReceiveNibble::
 .process_new_nibble:
 	; First check for reset flag and handle it BEFORE nibble index validation
 	call HandleResetFlag
-	
+
 	; Now check if N (nibble index) bit mismatches expected nibble type
 	call IfNibbleIndexMismatchesExpected
-	jp z, .restart_their_package
+	jr z, .restart_their_package
 
 	; Handle the received nibble
 	call HandleReceivedNibble
@@ -172,113 +172,82 @@ MultiplayerSendReceiveNibble::
 	call AdvanceSendState
 	jr .send_nibble
 
-; .resync_seq:
-; 	; Resend the exact same byte to trigger duplicate detection on the other side
-; 	call ResendExactSameByte
-; 	jr .start_transmission
-
 .restart_own_package:
-	; Complete desync detected - reset all state variables to initial values
-	; This is for when we detect our own connection issues (floating line, invalid bits)
+	; Other cartridge told us to restart our package, so we do that.
 	
 	; Reset send state variables to initial values
 	xor a
-	ld [wMultiplayerSendNibbleIdx], a       ; 0 = send high nibble
-	ld [wMultiplayerSendByteIdx], a         ; 0 = send noop byte
-	
+	ld [wMultiplayerSendNibbleIdx], a
+	ld [wMultiplayerSendByteIdx], a
+
 	; Force detection of next packet by setting last received to invalid value
 	ld a, $FF
 	ld [wMultiplayerLastReceivedRSB], a
-	
-	; Continue to send_nibble - we'll start sending noop + nibble 0, etc.
+
 	jr .send_nibble
 
 .restart_their_package:
-	; Their package is out of sync - send restart signal once
-	; This is for when we detect their nibble/chunk indices are wrong
+	; Received nibble index mismatches the expected one,
+  ; so we tell them to restart their package.
 
 	; Reset our own receive indices since we're out of sync with them
 	xor a
-	ld [wMultiplayerReceiveNibbleIdx], a    ; 0 = expect high nibble
-	ld [wMultiplayerReceiveByteIdx], a      ; 0 = expect first byte
-	
+	ld [wMultiplayerReceiveNibbleIdx], a
+	ld [wMultiplayerReceiveByteIdx], a
+
 	; Force detection of next packet by setting last received to invalid value
 	ld a, $FF
 	ld [wMultiplayerLastReceivedRSB], a
-	
-	; Send restart signal (0xFF) to tell remote side to restart
+
+	; Set the invalid flag to force the other side to restart
 	ld a, %10000000
 	ldh [rSB], a
 	jr .start_transmission
 
 .send_nibble:
-	; Prepare the next nibble to send
 	call PrepareNextNibble
-	
-	; Send the prepared nibble via serial
 	call SendNibble
 
 .start_transmission:
-	; Both master and slave need to set rSC for transfer to work
+	; NOTE:
+  ; Both master and slave need to set rSC's bit 7 for the transfer to occur
 	ld a, [wMultiplayerIsMaster]
 	and a
 	jr z, .slave_transmission
-	
+
 	; We are master - start the serial transmission with internal clock
 	ld a, %10000011	; Bit 7=1 (start transfer), Bit 0=1 (internal clock)
 	ldh [rSC], a
 	jr .cleanup
-	
-.slave_transmission:
-	; We are slave - prepare for transmission with external clock
-	ld a, %10000010	; Bit 7=1 (start transfer), Bit 0=0 (external clock)
-	ldh [rSC], a
-	jr .cleanup
 
+.slave_transmission:
+	; We are slave - use external clock
+	ld a, %10000010
+	ldh [rSC], a
 .cleanup:
 	pop de
 	pop bc
 	pop hl
 	ret
 
-; Check if received byte contains our own nibble (echoed back)
+; Assert that we did NOT receive our own nibble (i.e., master should NOT see master bit, slave should NOT see slave bit)
 ; Input: E = received byte from rSB
-; Output: Z flag set if we received our own nibble, clear if it's from remote
-; TODO: This should never actually be necessary. Maybe crash if it happens?
-IfSBContainsOwnNibble:
-  ; Extract Master/Slave bit (bit 6) from received byte
-  ld a, e
-  and %01000000  ; Isolate bit 6
-  ld b, a  ; Store received M/S bit in B
-  
-  ; Get our current role and shift to bit 6 position
-  ld a, [wMultiplayerIsMaster]
-  and a
-  jr z, .we_are_slave
-  
-  ; We are master, so our M/S bit should be 1 (bit 6 set)
-  ld a, %01000000
-  jr .compare
-    
-.we_are_slave:
-  ; We are slave, so our M/S bit should be 0 (bit 6 clear)
-  ld a, %00000000
-
-.compare:
-  ; Compare our expected M/S bit with received M/S bit
-  cp b
-  jr z, .own_nibble  ; Z flag set if same (our own nibble)
-  
-  ; Different M/S bit - this is a remote nibble (normal case)
-  ; Clear Z flag to indicate remote nibble
-  or 1
-  ret
-
-.own_nibble:
-  call Desync
-  ; Z flag is already set from the cp instruction
-  ; Return with Z flag set to indicate own nibble
-  ret
+; If the bit matches our role, desync immediately.
+; TODO: This crash has never occurred, might be removed for performance.
+AssertRemoteNibble:
+	ld a, [wMultiplayerIsMaster]
+	add a, a
+	add a, a
+	add a, a
+	add a, a
+	add a, a
+	add a, a
+	xor e
+	bit 6, a
+	jr nz, .ok	; If bit 6 is different, this is a remote nibble (normal)
+	call Desync	; If bit 6 is the same, protocol error
+.ok
+	ret
 
 ; Check if nibble index bit mismatches expected nibble type
 ; Input: E = received byte from rSB
@@ -297,37 +266,28 @@ IfNibbleIndexMismatchesExpected:
 	; We expect low nibble (wReceiveNibbleIdx=1), so nibble index bit should be 1
 	ld a, %00010000
 	jr .compare
-    
+
 .expect_high_nibble:
-	; We expect high nibble (wReceiveNibbleIdx=0), so nibble index bit should be 0
-	ld a, %00000000
-    
+	xor a
 .compare:
-	; Compare expected nibble index bit with received nibble index bit
 	cp b
-	jr z, .match	; Jump if they match (correct nibble)
-	
-	; call Desync
+	jr z, .match
+
 	; Mismatch - set Z flag and return
-	xor a	; Set Z flag
+	xor a
 	ret
-    
+
 .match:
 	; Match - clear Z flag and return
-	or 1	; Clear Z flag
+	or 1
 	ret
 
-
-
-Desync:
-	; H/L bit mismatch - desync error!
-	ld a, ERR_MULTIPLAYER_DESYNC
-	jmp Crash
 
 ; Check if enough frames have passed since the last transmission.
 ; Input: None
 ; Output: Z flag set if ready for transmission, clear if not ready yet
 ; Destroys: A
+; TODO: Conditionally call this based on a hardcoded compile flag
 IfIsReady:
 	; Increment frame counter
 	ld a, [wMultiplayerFrameCounter]
@@ -436,11 +396,11 @@ HandleCompletedByte:
 	ld c, a	; Store byte index in C
 	ld b, 0
 	ld hl, wMultiplayerReceivedPackage
-	add hl, bc	; HL now points to correct byte in ram
-	
+	add hl, bc ; HL now points to correct byte in ram
+
 	ld a, [wMultiplayerLastReceivedByte]
 	ld [hl], a	; Store the byte
-	
+
 	; Increment byte index
 	inc c
 	ld a, c
@@ -484,7 +444,6 @@ MultiplayerOnPackageReceived:
 ; Progresses through: nibble -> byte -> package
 ; Destroys: A, B, C
 AdvanceSendState:
-	; Advance to next nibble
 	call AdvanceToNextNibble
 	ret
 
@@ -496,7 +455,7 @@ AdvanceToNextNibble:
 	ld a, [wMultiplayerSendNibbleIdx]
 	inc a
 	ld [wMultiplayerSendNibbleIdx], a
-	
+
 	; Check if we've completed a byte (sent both nibbles)
 	cp 2
 	ret c	; Return if we haven't completed a byte yet
@@ -544,11 +503,6 @@ AdvanceToNextByte:
 OnPackageTransmissionComplete:
 	; Try to move queued package to buffered if available
 	call MultiplayerCopyQueuedPackageToSendBufferIfPossible
-	
-	; ld a, ERR_EGG_SPECIES
-	; jmp Crash
-
-	; TODO: Add any other completion logic here (e.g., notify game logic)
 	ret
 
 ; Prepare the next nibble for transmission
@@ -657,8 +611,8 @@ GetCurrentPayloadNibble:
 .no_package:
 	; No package to send - send any value (it doesn't matter)
 	; The reset flag will signal the start of actual package data
-	ld a, $00	; Send zeros when no package
-	
+	xor a
+
 .extract_nibble:
 	; A now contains the source byte
 	; Extract nibble based on wMultiplayerSendNibbleIdx
@@ -687,3 +641,7 @@ SendNibble:
 	ldh [rSB], a
 	ret
 
+Desync:
+  ; Something went catastrophically wrong in the multiplayer protocol.
+	ld a, ERR_MULTIPLAYER_DESYNC
+	jmp Crash
