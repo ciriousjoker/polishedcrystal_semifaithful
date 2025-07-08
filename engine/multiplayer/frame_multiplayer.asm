@@ -147,8 +147,10 @@ MultiplayerSendReceiveNibble::
 ; 	jr .send_chunk
 
 .process_new_nibble:
-	; Normal processing of new nibble
-	; Check if N (nibble index) bit mismatches expected nibble type
+	; First check for reset flag and handle it BEFORE nibble index validation
+	call HandleResetFlag
+	
+	; Now check if N (nibble index) bit mismatches expected nibble type
 	call IfNibbleIndexMismatchesExpected
 	jp z, .restart_their_package
 
@@ -353,21 +355,35 @@ MultiplayerVBlankHandler::
 	call MultiplayerSendReceiveNibble
 	ret
 
+; Handle reset flag in received nibble
+; Input: E = received byte from rSB  
+; Destroys: A
+HandleResetFlag:
+	; Check if this nibble has the reset flag (bit 5)
+	ld a, e
+	and %00100000	; Isolate reset bit (bit 5)
+	ret z	; No reset flag, return
+	
+	; Reset flag is set - validate that nibble index is 0
+	ld a, e
+	and %00010000	; Isolate nibble index bit (bit 4)
+	jr nz, .reset_desync	; If not 0, this is an error
+	
+	; Valid reset - reset receive indices
+	xor a
+	ld [wMultiplayerReceiveByteIdx], a      ; Reset to start of package
+	ld [wMultiplayerReceiveNibbleIdx], a    ; Reset to high nibble
+	ret
+	
+.reset_desync:
+	; Reset flag was set but nibble index wasn't 0 - this is invalid
+	call Desync
+	ret
+
 ; Process a received nibble and assemble it into bytes/packages
 ; Input: E = received byte from rSB  
 ; Destroys: A, B, C, D, H, L
 HandleReceivedNibble:
-	; Check if this nibble has the reset flag (bit 5)
-	ld a, e
-	and %00100000	; Isolate reset bit (bit 5)
-	jr z, .process_nibble
-	
-	; Reset flag is set - reset receive indices and validate nibble index
-	xor a
-	ld [wMultiplayerReceiveByteIdx], a      ; Reset to start of package
-	ld [wMultiplayerReceiveNibbleIdx], a    ; Reset to high nibble
-	
-.process_nibble:
 	; Extract 4-bit payload from bits 3-0
 	ld a, e
 	and %00001111	; Isolate payload bits (3-0)
@@ -584,16 +600,16 @@ PrepareNextNibble:
 ; Output: A = 1 if reset bit should be set, 0 otherwise
 ; Destroys: A
 ShouldSetResetBit:
-	; Reset bit should be set if:
+	; Reset bit should ONLY be set if:
 	; - No package is being sent, OR
-	; - We're at the first nibble of a package (SendByte == 0 && SendNibble == 0)
+	; - We're at nibble 0 of a package (reset can only be set with nibble index 0)
 	
 	; Check if we have a buffered package
 	ld a, [wMultiplayerHasBufferedPackage]
 	and a
 	jr z, .set_reset	; No package = always set reset
 	
-	; We have a package - check if we're at the very first nibble
+	; We have a package - only set reset for nibble 0 of first byte
 	ld a, [wMultiplayerSendByteIdx]
 	and a
 	jr nz, .clear_reset	; Not byte 0 = clear reset
@@ -603,7 +619,7 @@ ShouldSetResetBit:
 	and a
 	jr nz, .clear_reset	; Not nibble 0 = clear reset
 	
-	; We're at byte 0, nibble 0 = first nibble of package
+	; We're at byte 0, nibble 0 = set reset (nibble index will be 0)
 .set_reset:
 	ld a, 1
 	ret
