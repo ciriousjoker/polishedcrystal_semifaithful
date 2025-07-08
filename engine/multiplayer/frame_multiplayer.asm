@@ -310,7 +310,7 @@ IfReceivedInvalidAck:
 	cp b
 	jr z, .valid_ack  ; Jump if ACKs match (valid)
 	
-  call Desync
+  ; call Desync
 	xor a  ; Set Z flag
 	ret
 
