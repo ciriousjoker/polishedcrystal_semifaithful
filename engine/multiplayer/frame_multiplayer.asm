@@ -21,7 +21,7 @@ SECTION "Frame Multiplayer", ROMX
 ; - Reset flag can ONLY be set when nibble index is 0 (prevents invalid combinations)
 
 DEF MULTIPLAYER_PACKAGE_SIZE EQU 8
-DEF MULTIPLAYER_IDLE_FRAMES EQU 10 ; 5 * 60fps -> ~5s
+DEF MULTIPLAYER_IDLE_FRAMES EQU 1 ; 5 * 60fps -> ~5s
 
 ; MultiplayerInitialize:
 ; Purpose: Initializes all multiplayer-related RAM variables and hardware registers to a clean state.
@@ -225,13 +225,13 @@ MultiplayerSendReceiveNibble::
 	jr z, .slave_transmission
 	
 	; We are master - start the serial transmission with internal clock
-	ld a, %10000001	; Bit 7=1 (start transfer), Bit 0=1 (internal clock)
+	ld a, %10000011	; Bit 7=1 (start transfer), Bit 0=1 (internal clock)
 	ldh [rSC], a
 	jr .cleanup
 	
 .slave_transmission:
 	; We are slave - prepare for transmission with external clock
-	ld a, %10000000	; Bit 7=1 (start transfer), Bit 0=0 (external clock)
+	ld a, %10000010	; Bit 7=1 (start transfer), Bit 0=0 (external clock)
 	ldh [rSC], a
 	jr .cleanup
 
