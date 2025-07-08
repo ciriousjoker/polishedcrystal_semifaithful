@@ -206,7 +206,7 @@ MultiplayerSendReceiveNibble::
 
 .send_nibble:
 	call PrepareNextNibble
-	call SendNibble
+	ldh [rSB], a
 
 .start_transmission:
 	; NOTE:
@@ -253,33 +253,27 @@ AssertRemoteNibble:
 ; Input: E = received byte from rSB
 ; Output: Z flag set if nibble index mismatches (desync), clear if matches
 IfNibbleIndexMismatchesExpected:
-	; Extract nibble index bit (bit 4) from received byte
+	; Move received nibble index (bit 4 of E) to bit 0
 	ld a, e
-	and %00010000	; Isolate bit 4 (nibble index bit)
-	ld b, a	; Store received nibble index bit in B
+	swap a
+	ld b, a ; Store swapped byte in B
 	
-	; Get expected nibble index (0=high nibble expected, 1=low nibble expected)
+	; Load expected nibble index (0 or 1)
 	ld a, [wMultiplayerReceiveNibbleIdx]
-	and a
-	jr z, .expect_high_nibble
 	
-	; We expect low nibble (wReceiveNibbleIdx=1), so nibble index bit should be 1
-	ld a, %00010000
-	jr .compare
-
-.expect_high_nibble:
-	xor a
-.compare:
-	cp b
-	jr z, .match
-
-	; Mismatch - set Z flag and return
-	xor a
-	ret
-
-.match:
-	; Match - clear Z flag and return
-	or 1
+	; Compare expected index (in A) with received index (in B).
+	; The result of the comparison will be in bit 0 of A.
+	; (bit 0 of [w...Idx]) XOR (bit 0 of swapped E)
+	xor b
+	
+	; Isolate the result bit. A is 0 if they matched, 1 if they mismatched.
+	; This sets the Z flag if A is 0 (a match).
+	and 1
+	
+	; We want the opposite: Z set for mismatch, clear for match.
+	; `dec a` flips the Z flag in this specific case.
+	dec a ; If A was 0 (match), it becomes 255 (Z=0).
+	      ; If A was 1 (mismatch), it becomes 0 (Z=1).
 	ret
 
 
@@ -316,38 +310,25 @@ MultiplayerVBlankHandler::
 	and a
 	ret z
 	
-	; We don't need maximum performance here,
-  ; so we throttle the transmission rate a bit.
-  ; This makes desyncs less likely and should improve the fps.
+  ; TODO: We should probably put this behind a compile flag
+  ; to enable throttling only conditionally.
 	call IfIsReady
 	ret nz
-	
-	; Call frame-based multiplayer functions
-	call MultiplayerSendReceiveNibble
-	ret
+	jp MultiplayerSendReceiveNibble
 
 ; Handle reset flag in received nibble
 ; Input: E = received byte from rSB  
 ; Destroys: A
 HandleResetFlag:
-	; Check if this nibble has the reset flag (bit 5)
-	ld a, e
-	and %00100000	; Isolate reset bit (bit 5)
-	ret z	; No reset flag, return
-	
-	; Reset flag is set - validate that nibble index is 0
-	ld a, e
-	and %00010000	; Isolate nibble index bit (bit 4)
-	jr nz, .reset_desync	; If not 0, this is an error
-	
-	; Valid reset - reset receive indices
+	bit 5, e
+	ret z
+	bit 4, e
+	jr nz, .reset_desync
 	xor a
-	ld [wMultiplayerReceiveByteIdx], a      ; Reset to start of package
-	ld [wMultiplayerReceiveNibbleIdx], a    ; Reset to high nibble
+	ld [wMultiplayerReceiveByteIdx], a
+	ld [wMultiplayerReceiveNibbleIdx], a
 	ret
-	
 .reset_desync:
-	; Reset flag was set but nibble index wasn't 0 - this is invalid
 	call Desync
 	ret
 
@@ -437,15 +418,13 @@ MultiplayerOnPackageReceived:
 	rst ByteFill
 	
 	; TODO: Process the package in wMultiplayerPackageToExecute
-	call PrintTextLazy
-	ret
+	jp PrintTextLazy
 
 ; Advance send state machine after successful reception
 ; Progresses through: nibble -> byte -> package
 ; Destroys: A, B, C
 AdvanceSendState:
-	call AdvanceToNextNibble
-	ret
+	jp AdvanceToNextNibble
 
 ; Advance to next nibble after completing current nibble
 ; Progresses nibble state and checks for completed bytes/packages
@@ -463,8 +442,7 @@ AdvanceToNextNibble:
 	; Reset nibble index and advance to next byte
 	xor a
 	ld [wMultiplayerSendNibbleIdx], a
-	call AdvanceToNextByte
-	ret
+	jp AdvanceToNextByte
 
 ; Advance to next byte after completing current byte
 ; Progresses byte state and checks for completed packages
@@ -489,8 +467,7 @@ AdvanceToNextByte:
 	xor a
 	ld [wMultiplayerSendByteIdx], a
 	ld [wMultiplayerHasBufferedPackage], a
-	call OnPackageTransmissionComplete
-	ret
+	jp OnPackageTransmissionComplete
 
 .no_package:
 	; No package to send, but byte index was already incremented
@@ -502,8 +479,7 @@ AdvanceToNextByte:
 ; Destroys: A, H, L
 OnPackageTransmissionComplete:
 	; Try to move queued package to buffered if available
-	call MultiplayerCopyQueuedPackageToSendBufferIfPossible
-	ret
+	jp MultiplayerCopyQueuedPackageToSendBufferIfPossible
 
 ; Prepare the next nibble for transmission
 ; Builds the complete 8-bit transmission byte with metadata and payload
@@ -633,13 +609,7 @@ GetCurrentPayloadNibble:
 	and %00001111
 	ret
 
-; Send the prepared nibble via serial communication
-; Input: A = byte to send
-; Destroys: A
-SendNibble:
-	; Store byte in serial buffer
-	ldh [rSB], a
-	ret
+
 
 Desync:
   ; Something went catastrophically wrong in the multiplayer protocol.
