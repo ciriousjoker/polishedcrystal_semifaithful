@@ -129,13 +129,13 @@ MultiplayerSendReceiveNibble::
 	ldh a, [rSB]
 	ld e, a
 	
-	; Check for duplicates (emulator speed mismatch tolerance)
-	; Compare with last received rSB value to detect duplicates
-	; Since SEQ bit always flips, adjacent chunks can never be identical,
-	; making full rSB comparison safe for duplicate detection
-	ld hl, wMultiplayerLastReceivedRSB
-	cp [hl]
-	jr z, .cleanup  ; If same as last received, ignore this duplicate
+	; ; Check for duplicates (emulator speed mismatch tolerance)
+	; ; Compare with last received rSB value to detect duplicates
+	; ; Since SEQ bit always flips, adjacent chunks can never be identical,
+	; ; making full rSB comparison safe for duplicate detection
+	; ld hl, wMultiplayerLastReceivedRSB
+	; cp [hl]
+	; jr z, .cleanup  ; If same as last received, ignore this duplicate
 	
 	; Store new rSB value for future duplicate detection
 	ld [hl], a
@@ -657,18 +657,19 @@ AdvanceToNextNibble:
 ; Progresses byte state and checks for completed packages
 ; Destroys: A, B, C
 AdvanceToNextByte:
+	; Always increment byte index when completing a byte
+	ld a, [wMultiplayerSendByteIdx]
+	inc a
+	ld [wMultiplayerSendByteIdx], a
+	
 	; Check if we have a buffered package to send
 	ld a, [wMultiplayerHasBufferedPackage]
 	and a
 	jr z, .no_package	; If no package, just return
 	
-	; Increment byte index
-	ld a, [wMultiplayerSendByteIdx]
-	inc a
-	ld [wMultiplayerSendByteIdx], a
-	
 	; Check if we've completed the entire package
 	; +1 to account for the initial noop that signals the start of a package
+	ld a, [wMultiplayerSendByteIdx]  ; Re-load the incremented value
 	cp MULTIPLAYER_PACKAGE_SIZE + 1
 	ret c	; Return if package not complete yet
 	
@@ -680,7 +681,8 @@ AdvanceToNextByte:
 	ret
 
 .no_package:
-	; No package to send, just return
+	; No package to send, but byte index was already incremented
+	; This allows continuous noop transmission when no package is buffered
 	ret
 
 ; Handle completion of entire package transmission
