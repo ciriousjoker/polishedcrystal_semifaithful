@@ -1,12 +1,12 @@
 ; Toggle master/slave status when start menu is opened
 BecomeMultiplayerMaster::
-	ld a, [wMultiplayerIsMaster]
-	xor 1
-	ld [wMultiplayerIsMaster], a
-	
 	; Initialize multiplayer system
 	farcall MultiplayerInitialize
 	
+	ld a, [wMultiplayerIsMaster]
+	xor 1
+	ld [wMultiplayerIsMaster], a
+
 	; Show debug info about role change
 	call OpenText
 	ld a, [wMultiplayerIsMaster]

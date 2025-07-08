@@ -239,6 +239,8 @@ MultiplayerSendReceiveNibble::
 ; Input: E = received byte from rSB
 ; If the bit matches our role, desync immediately.
 ; TODO: This crash has never occurred, might be removed for performance.
+; NOTE: This apparently only happens sometimes when the role is switched from slave to master,
+; probably mid-transmission.
 AssertRemoteNibble:
 	ld a, [wMultiplayerIsMaster]
 	add a, a
