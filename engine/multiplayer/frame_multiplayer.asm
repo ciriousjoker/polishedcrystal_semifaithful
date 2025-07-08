@@ -182,17 +182,34 @@ MultiplayerSendReceiveNibble::
 	jr .send_chunk
 
 .restart_package:
-  ; reset send byte counter
-  ; NOTE: Use compiler constants for the initial values
-  ; reset wMultiplayerReceiveNibbleIdx to initial value
-  ; reset wMultiplayerReceiveChunkIdx to initial value
-  ; reset wMultiplayerReceiveByteIdx to initial value
-  ; reset wMultiplayerNextSeqToSend to initial value
-  ; reset wMultiplayerNextAckToSend to initial value
-  ; reset wMultiplayerSendNibbleIdx to initial value
-  ; reset wMultiplayerSendChunkIdx to initial value
-  ; reset wMultiplayerSendByteIdx to initial value
-  ; reset wMultiplayerLastReceivedRSB to $FF (force detection of next packet)
+; 	; Complete desync detected - reset all state variables to initial values
+; 	; Let the other side detect the mismatch through normal validation
+	
+; 	; Reset receive state variables to initial values
+; 	xor a
+; 	ld [wMultiplayerReceiveNibbleIdx], a    ; 0 = expect high nibble
+; 	ld [wMultiplayerReceiveChunkIdx], a     ; 0 = expect high chunk  
+; 	ld [wMultiplayerReceiveByteIdx], a      ; 0 = expect first byte
+	
+; 	; Reset send state variables to initial values
+; 	ld [wMultiplayerSendNibbleIdx], a       ; 0 = send high nibble
+; 	ld [wMultiplayerSendChunkIdx], a        ; 0 = send high chunk
+; 	ld [wMultiplayerSendByteIdx], a         ; 0 = send noop byte
+	
+; 	; Reset sequence/ACK variables to initial values  
+; 	ld [wMultiplayerNextSeqToSend], a       ; 0 = initial sequence
+; 	ld [wMultiplayerNextAckToSend], a       ; 0 = initial ACK
+	
+; 	; Force detection of next packet by setting last received to invalid value
+; 	ld a, $FF
+; 	ld [wMultiplayerLastReceivedRSB], a
+
+; 	; Send restart signal (0xFF has bit 7=1, will trigger restart on remote side)
+; 	ld a, %10000000
+; 	ldh [rSB], a
+	
+; 	; Continue to send_chunk - we'll start sending noop + chunk 0, nibble 0, etc.
+; 	jr .send_chunk
 
 .send_chunk:
 	; Prepare the next chunk to send
