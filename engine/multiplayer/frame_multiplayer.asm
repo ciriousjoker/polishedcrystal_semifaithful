@@ -132,11 +132,11 @@ MultiplayerSendReceiveNibble::
 	
 	; Check if SB is floating ($FF indicates no connection)
 	cp $FF
-	jp z, .restart_package
+	jp z, .restart_own_package
 	
 	; Check if bit 7 is set (invalid - should always be 0)
 	bit 7, a
-	jp nz, .restart_package
+	jp nz, .restart_own_package
 	
 	; Check if we received our own chunk FIRST (before duplicate detection)
 	call IfSBContainsOwnChunk
@@ -163,11 +163,15 @@ MultiplayerSendReceiveNibble::
 	; Normal processing of new chunk
 	; Check if H/L bit mismatches expected nibble type
 	call IfNibbleIndexMismatchesExpected
-	jp z, .restart_package
+	jp z, .restart_their_package
 
 	; Check if C (chunk index) bit mismatches expected chunk type  
 	call IfChunkIndexMismatchesExpected
-	jp z, .restart_package
+	jp z, .restart_their_package
+
+	; Check if received ACK is invalid (they didn't acknowledge our data properly)
+	call IfReceivedInvalidAck
+	jp z, .restart_own_package  ; Invalid ACK = restart our own transmission
 
 	; Update sequence/acknowledgment variables
 	call UpdateSequenceBit
@@ -181,35 +185,44 @@ MultiplayerSendReceiveNibble::
 	call AdvanceSendState
 	jr .send_chunk
 
-.restart_package:
-; 	; Complete desync detected - reset all state variables to initial values
-; 	; Let the other side detect the mismatch through normal validation
+.restart_own_package:
+	; Complete desync detected - reset all state variables to initial values
+	; This is for when we detect our own connection issues (floating line, invalid bits)
 	
-; 	; Reset receive state variables to initial values
-; 	xor a
-; 	ld [wMultiplayerReceiveNibbleIdx], a    ; 0 = expect high nibble
-; 	ld [wMultiplayerReceiveChunkIdx], a     ; 0 = expect high chunk  
-; 	ld [wMultiplayerReceiveByteIdx], a      ; 0 = expect first byte
+	; Reset send state variables to initial values
+  xor a
+	ld [wMultiplayerSendNibbleIdx], a       ; 0 = send high nibble
+	ld [wMultiplayerSendChunkIdx], a        ; 0 = send high chunk
+	ld [wMultiplayerSendByteIdx], a         ; 0 = send noop byte
 	
-; 	; Reset send state variables to initial values
-; 	ld [wMultiplayerSendNibbleIdx], a       ; 0 = send high nibble
-; 	ld [wMultiplayerSendChunkIdx], a        ; 0 = send high chunk
-; 	ld [wMultiplayerSendByteIdx], a         ; 0 = send noop byte
+	; Reset ACK variable to initial value
+	ld [wMultiplayerNextAckToSend], a       ; 0 = initial ACK
 	
-; 	; Reset sequence/ACK variables to initial values  
-; 	ld [wMultiplayerNextSeqToSend], a       ; 0 = initial sequence
-; 	ld [wMultiplayerNextAckToSend], a       ; 0 = initial ACK
+	; Force detection of next packet by setting last received to invalid value
+	ld a, $FF
+	ld [wMultiplayerLastReceivedRSB], a
 	
-; 	; Force detection of next packet by setting last received to invalid value
-; 	ld a, $FF
-; 	ld [wMultiplayerLastReceivedRSB], a
+	; Continue to send_chunk - we'll start sending noop + chunk 0, nibble 0, etc.
+	jr .send_chunk
 
-; 	; Send restart signal (0xFF has bit 7=1, will trigger restart on remote side)
-; 	ld a, %10000000
-; 	ldh [rSB], a
+.restart_their_package:
+	; Their package is out of sync - send restart signal once
+	; This is for when we detect their nibble/chunk indices are wrong
 	
-; 	; Continue to send_chunk - we'll start sending noop + chunk 0, nibble 0, etc.
-; 	jr .send_chunk
+	; Reset our own receive indices since we're out of sync with them
+	xor a
+	ld [wMultiplayerReceiveNibbleIdx], a    ; 0 = expect high nibble
+	ld [wMultiplayerReceiveChunkIdx], a     ; 0 = expect high chunk  
+	ld [wMultiplayerReceiveByteIdx], a      ; 0 = expect first byte
+	
+	; Force detection of next packet by setting last received to invalid value
+	ld a, $FF
+	ld [wMultiplayerLastReceivedRSB], a
+	
+	; Send restart signal (0xFF) to tell remote side to restart
+	ld a, %10000000
+	ldh [rSB], a
+	jr .start_transmission
 
 .send_chunk:
 	; Prepare the next chunk to send
