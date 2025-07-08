@@ -18,9 +18,6 @@ wMultiplayerPackageToExecute:: ds 8 ; Complete received package ready for proces
 ; Send state variables
 wMultiplayerSendByteIdx:: db        ; Current byte being sent (0 for noop, 1-8 for the package bytes)
 wMultiplayerSendNibbleIdx:: db      ; Current nibble being sent (0=high, 1=low)
-wMultiplayerSendChunkIdx:: db       ; Current chunk being sent (0=high, 1=low)
-wMultiplayerNextSeqToSend:: db      ; Next sequence bit to send (0/1). Is always a flipped version of the last sent Seq bit. On Ack failure, resets to 0.
-wMultiplayerNextAckToSend:: db      ; Next ACK bit to send (0/1). Is always a flipped version of the last received Seq bit. On Ack failure, resets to 0.
 
 ; Frame timing
 wMultiplayerFrameCounter:: db       ; Frame counter for transmission timing (0-255, wraps around)
@@ -28,12 +25,7 @@ wMultiplayerFrameCounter:: db       ; Frame counter for transmission timing (0-2
 ; Receive state variables
 wMultiplayerReceiveByteIdx:: db     ; Current byte being received (0-7)
 wMultiplayerReceiveNibbleIdx:: db   ; Expected nibble idx to be received (0=high, 1=low). If the incoming nibble is not the expected one, we resync.
-wMultiplayerReceiveChunkIdx:: db    ; Expected chunk idx to be received (0=low, 1=high). If the incoming chunk is not the expected one, we resync.
 wMultiplayerLastReceivedByte:: db   ; Temporary storage for byte being assembled
-wMultiplayerLastReceivedNibble:: db ; Temporary storage for nibble being assembled from chunks
-
-; TODO: Seems unnecessary, remove?
-; wMultiplayerLastReceivedSeq:: db    ; Last received sequence bit (0/1).
 
 ; Duplicate detection state
 wMultiplayerLastReceivedRSB:: db    ; Last received rSB value for duplicate detection

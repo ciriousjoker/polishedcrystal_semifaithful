@@ -10,17 +10,15 @@ SECTION "Frame Multiplayer", ROMX
 
 ; SB Register bit layout (7 6 5 4 3 2 1 0):
 ; Bit 7: Valid - Always 0 to differentiate from floating line (0xFF)
-; Bit 6: SeqOut - Toggle bit for sequence control. Toggled each frame if AckIn matched SeqOut.
-; Bit 5: AckOut - Flipped version of the last received SeqIn (ie we predict the happy path and wait for sync if it fails).
-; Bit 4: Master/Slave - 1 if master, 0 if slave (used to avoid interpreting own chunks as received ones)
-; Bit 3: Nibble Index - 0=High nibble, 1=Low nibble  
-; Bit 2: Chunk Index - 0=High chunk (bits 3-2), 1=Low chunk (bits 1-0)
-; Bits 1-0: Payload chunk (2 bits)
+; Bit 6: Master/Slave - 1 if master, 0 if slave (used to avoid interpreting own chunks as received ones)
+; Bit 5: Unused - Always 0
+; Bit 4: Nibble Index - 0=High nibble, 1=Low nibble  
+; Bits 3-0: Payload nibble (4 bits)
 
 DEF MULTIPLAYER_PACKAGE_SIZE EQU 8
 DEF MULTIPLAYER_IDLE_FRAMES EQU 10 ; 5 * 60fps -> ~5s
 DEF MULTIPLAYER_NOOP_BYTE EQU $FF  ; Use 0xFF as a noop (which also is the package start marker).
-                                   ; It's transferred across 4 chunks.
+                                   ; It's transferred across 2 nibbles (high and low).
 
 ; MultiplayerInitialize:
 ; Purpose: Initializes all multiplayer-related RAM variables and hardware registers to a clean state.
@@ -108,7 +106,6 @@ MultiplayerCopyQueuedPackageToSendBufferIfPossible::
 	xor a
 	ld [wMultiplayerSendByteIdx], a
 	ld [wMultiplayerSendNibbleIdx], a
-	ld [wMultiplayerSendChunkIdx], a
 	
 	ret
 
@@ -138,25 +135,16 @@ MultiplayerSendReceiveNibble::
 	bit 7, a
 	jp nz, .restart_own_package
 	
-	; Check if we received our own chunk FIRST (before duplicate detection)
-	call IfSBContainsOwnChunk
-	jr z, .cleanup  ; If our own chunk, ignore it completely
+	; Check if we received our own nibble FIRST (before duplicate detection)
+	call IfSBContainsOwnNibble
+	jr z, .cleanup  ; If our own nibble, ignore it completely
 	
-	; ; Check if sequence bits mismatch and we should resend
-	; call IfReceivedInvalidSeq
-	; jr z, .resync_seq
-
-	; ; Now check for duplicates (only for remote chunks)
-	; call IfIsDuplicate
-	; jr z, .handle_duplicate
-	; ; jr z, .cleanup  ; If our own chunk, ignore it completely
-	
-	; Store new rSB value for future duplicate detection (only remote chunks)
+	; Store new rSB value for future duplicate detection (only remote nibbles)
 	ld hl, wMultiplayerLastReceivedRSB
 	ld [hl], e
 	
-	; Normal processing - new chunk from remote
-	jr .process_new_chunk
+	; Normal processing - new nibble from remote
+	jr .process_new_nibble
 
 ; .handle_duplicate:
 ; 	; Handle duplicate chunk from remote side
@@ -164,31 +152,18 @@ MultiplayerSendReceiveNibble::
 ; 	call PrepareChunkToResend
 ; 	jr .send_chunk
 
-.process_new_chunk:
-	; Normal processing of new chunk
-	; Check if H/L bit mismatches expected nibble type
+.process_new_nibble:
+	; Normal processing of new nibble
+	; Check if N (nibble index) bit mismatches expected nibble type
 	call IfNibbleIndexMismatchesExpected
 	jp z, .restart_their_package
 
-	; Check if C (chunk index) bit mismatches expected chunk type  
-	call IfChunkIndexMismatchesExpected
-	jp z, .restart_their_package
+	; Handle the received nibble
+	call HandleReceivedNibble
 
-	; ; Check if received ACK is invalid (they didn't acknowledge our data properly)
-	; call IfReceivedInvalidAck
-	; jp z, .restart_own_package  ; Invalid ACK = restart our own transmission
-
-	; Update sequence/acknowledgment variables
-	; call UpdateSequenceBit
-	; call UpdateAckBit
-
-	; Handle the received chunk
-	call HandleReceivedChunk
-
-	; Advance send state after successful acknowledgment
-	; Only advances if the ACK validates that the remote side received our chunk
+	; Advance send state after successful reception
 	call AdvanceSendState
-	jr .send_chunk
+	jr .send_nibble
 
 ; .resync_seq:
 ; 	; Resend the exact same byte to trigger duplicate detection on the other side
@@ -200,29 +175,24 @@ MultiplayerSendReceiveNibble::
 	; This is for when we detect our own connection issues (floating line, invalid bits)
 	
 	; Reset send state variables to initial values
-  xor a
+	xor a
 	ld [wMultiplayerSendNibbleIdx], a       ; 0 = send high nibble
-	ld [wMultiplayerSendChunkIdx], a        ; 0 = send high chunk
 	ld [wMultiplayerSendByteIdx], a         ; 0 = send noop byte
-	
-	; Reset ACK variable to initial value
-	ld [wMultiplayerNextAckToSend], a       ; 0 = initial ACK
 	
 	; Force detection of next packet by setting last received to invalid value
 	ld a, $FF
 	ld [wMultiplayerLastReceivedRSB], a
 	
-	; Continue to send_chunk - we'll start sending noop + chunk 0, nibble 0, etc.
-	jr .send_chunk
+	; Continue to send_nibble - we'll start sending noop + nibble 0, etc.
+	jr .send_nibble
 
 .restart_their_package:
 	; Their package is out of sync - send restart signal once
 	; This is for when we detect their nibble/chunk indices are wrong
-	
+
 	; Reset our own receive indices since we're out of sync with them
 	xor a
 	ld [wMultiplayerReceiveNibbleIdx], a    ; 0 = expect high nibble
-	ld [wMultiplayerReceiveChunkIdx], a     ; 0 = expect high chunk  
 	ld [wMultiplayerReceiveByteIdx], a      ; 0 = expect first byte
 	
 	; Force detection of next packet by setting last received to invalid value
@@ -234,12 +204,12 @@ MultiplayerSendReceiveNibble::
 	ldh [rSB], a
 	jr .start_transmission
 
-.send_chunk:
-	; Prepare the next chunk to send
-	call PrepareNextChunk
+.send_nibble:
+	; Prepare the next nibble to send
+	call PrepareNextNibble
 	
-	; Send the prepared chunk via serial
-	call SendChunk
+	; Send the prepared nibble via serial
+	call SendNibble
 
 .start_transmission:
 	; Both master and slave need to set rSC for transfer to work
@@ -264,130 +234,52 @@ MultiplayerSendReceiveNibble::
 	pop hl
 	ret
 
-; Flip the next sequence bit to send
-; We ALWAYS flip the sequence bit, so the remote side can detect if we sent a new package,
-; even if it was otherwise identical to the last one (e.g. we resend a nibble that was lost).
-UpdateSequenceBit:
-	ld a, [wMultiplayerNextSeqToSend]
-	xor 1
-	ld [wMultiplayerNextSeqToSend], a
-	ret
-
-; Set next ACK to send based on received sequence bit
+; Check if received byte contains our own nibble (echoed back)
 ; Input: E = received byte from rSB
-UpdateAckBit:
-	ld a, e
-	and %01000000	; Extract SEQ bit (bit 6)
-	rrca
-	rrca
-	rrca
-	rrca
-	rrca
-	rrca	; Shift to bit 0
-	xor 1	; Flip it
-	ld [wMultiplayerNextAckToSend], a
-	ret
-
-; Check if the received rSB value is a duplicate of the last received value
-; Input: E = received byte from rSB
-; Output: Z flag set if duplicate, clear if not duplicate
-; Destroys: A, H, L
-IfIsDuplicate:
-	; Compare with last received rSB value to detect duplicates
-	ld hl, wMultiplayerLastReceivedRSB
-	ld a, [hl]
-	cp e  ; Compare with received byte
-	ret   ; Z flag will be set if duplicate, clear if not
-
-; Prepare chunk for retransmission after duplicate detection
-; Flips the SEQ bit and sets up for resending current chunk
-; Destroys: A
-PrepareChunkToResend:
-	; For duplicates, flip SEQ bit to indicate retransmission
-	ld a, [wMultiplayerNextSeqToSend]
-	xor 1  ; Flip the bit for retransmission
-	ld [wMultiplayerNextSeqToSend], a
-	ret
-
-; Check if received rSB has an invalid ACK bit
-; Must be called before wMultiplayerNextSeqToSend is flipped for the current package
-; Input:
-;   - E = received byte from rSB
-;   - wMultiplayerNextSeqToSend (unmodified, ie before flipping it for the current package)
-; Output: Z flag set if ACK is invalid, clear if valid
-IfReceivedInvalidAck:
-	; Extract ACK bit (bit 5) from E and shift to bit 0
-	ld a, e
-	and %00100000
-	rrca
-	rrca
-	rrca
-	rrca
-	rrca	; Shift to bit 0
-	ld b, a  ; Store received ACK in B
-
-  ; The received ACK must match the last sent SEQ directly
-	ld a, [wMultiplayerNextSeqToSend]
-	
-	; Compare with received ACK
-	cp b
-	jr z, .valid_ack  ; Jump if ACKs match (valid)
-	
-  ; call Desync
-	xor a  ; Set Z flag
-	ret
-
-.valid_ack:
-	; Valid ACK - clear Z flag and return
-	or 1   ; Clear Z flag
-	ret
-
-; Check if received byte contains our own chunk (echoed back)
-; Input: E = received byte from rSB
-; Output: Z flag set if we received our own chunk, clear if it's from remote
+; Output: Z flag set if we received our own nibble, clear if it's from remote
 ; TODO: This should never actually be necessary. Maybe crash if it happens?
-IfSBContainsOwnChunk:
-  ; Extract Master/Slave bit (bit 4) from received byte
+IfSBContainsOwnNibble:
+  ; Extract Master/Slave bit (bit 6) from received byte
   ld a, e
-  and %00010000  ; Isolate bit 4
+  and %01000000  ; Isolate bit 6
   ld b, a  ; Store received M/S bit in B
   
-  ; Get our current role and shift to bit 4 position
+  ; Get our current role and shift to bit 6 position
   ld a, [wMultiplayerIsMaster]
   and a
   jr z, .we_are_slave
   
-  ; We are master, so our M/S bit should be 1 (bit 4 set)
-  ld a, %00010000
+  ; We are master, so our M/S bit should be 1 (bit 6 set)
+  ld a, %01000000
   jr .compare
     
 .we_are_slave:
-  ; We are slave, so our M/S bit should be 0 (bit 4 clear)
+  ; We are slave, so our M/S bit should be 0 (bit 6 clear)
   ld a, %00000000
     
 .compare:
   ; Compare our expected M/S bit with received M/S bit
   cp b
-  jr z, .own_chunk  ; Z flag set if same (our own chunk)
+  jr z, .own_nibble  ; Z flag set if same (our own nibble)
   
-  ; Different M/S bit - this is a remote chunk (normal case)
-  ; Clear Z flag to indicate remote chunk
+  ; Different M/S bit - this is a remote nibble (normal case)
+  ; Clear Z flag to indicate remote nibble
   or 1
   ret
 
-.own_chunk:
+.own_nibble:
   ; call Desync
   ; Z flag is already set from the cp instruction
-  ; Return with Z flag set to indicate own chunk
+  ; Return with Z flag set to indicate own nibble
   ret
 
 ; Check if nibble index bit mismatches expected nibble type
 ; Input: E = received byte from rSB
 ; Output: Z flag set if nibble index mismatches (desync), clear if matches
 IfNibbleIndexMismatchesExpected:
-	; Extract nibble index bit (bit 3) from received byte
+	; Extract nibble index bit (bit 4) from received byte
 	ld a, e
-	and %00001000	; Isolate bit 3 (nibble index bit)
+	and %00010000	; Isolate bit 4 (nibble index bit)
 	ld b, a	; Store received nibble index bit in B
 	
 	; Get expected nibble index (0=high nibble expected, 1=low nibble expected)
@@ -396,7 +288,7 @@ IfNibbleIndexMismatchesExpected:
 	jr z, .expect_high_nibble
 	
 	; We expect low nibble (wReceiveNibbleIdx=1), so nibble index bit should be 1
-	ld a, %00001000
+	ld a, %00010000
 	jr .compare
     
 .expect_high_nibble:
@@ -418,41 +310,7 @@ IfNibbleIndexMismatchesExpected:
 	or 1	; Clear Z flag
 	ret
 
-; Check if chunk index bit mismatches expected chunk type
-; Input: E = received byte from rSB
-; Output: Z flag set if chunk index mismatches (desync), clear if matches
-IfChunkIndexMismatchesExpected:
-	; Extract chunk index bit (bit 2) from received byte
-	ld a, e
-	and %00000100	; Isolate bit 2 (chunk index bit)
-	ld b, a	; Store received chunk index bit in B
-	
-	; Get expected chunk index (0=low chunk expected, 1=high chunk expected)
-	ld a, [wMultiplayerReceiveChunkIdx]
-	and a
-	jr z, .expect_low_chunk
-	
-	; We expect high chunk (wReceiveChunkIdx=1), so chunk index bit should be 1
-	ld a, %00000100
-	jr .compare_chunk
-    
-.expect_low_chunk:
-	; We expect low chunk (wReceiveChunkIdx=0), so chunk index bit should be 0
-	ld a, %00000000
-    
-.compare_chunk:
-	; Compare expected chunk index bit with received chunk index bit
-	cp b
-	jr z, .chunk_match	; Jump if they match (correct chunk)
-	
-	; Mismatch - set Z flag and return
-	xor a	; Set Z flag
-	ret
-    
-.chunk_match:
-	; Match - clear Z flag and return
-	or 1	; Clear Z flag
-	ret
+
 
 Desync:
 	; H/L bit mismatch - desync error!
@@ -501,110 +359,41 @@ MultiplayerVBlankHandler::
 	call MultiplayerSendReceiveNibble
 	ret
 
-; Process a received chunk and assemble it into nibbles/bytes/packages
+; Process a received nibble and assemble it into bytes/packages
 ; Input: E = received byte from rSB  
 ; Destroys: A, B, C, D, H, L
-HandleReceivedChunk:
-	; Store the received chunk in the correct position
-	call StoreReceivedChunk
-	
-	; Increment chunk index
-	ld a, [wMultiplayerReceiveChunkIdx]
-	inc a
-	ld [wMultiplayerReceiveChunkIdx], a
-	
-	; Check if we've received both chunks of a nibble (high and low)
-	cp 2
-	ret c	; Return if we haven't completed a nibble yet
-	
-	; We've completed a nibble, handle it
-	call HandleCompletedNibble
-	ret
-
-; Store received chunk in wMultiplayerLastReceivedNibble
-; Input: E = received byte from rSB
-; Destroys: A, B
-StoreReceivedChunk:
-	; Extract the payload chunk (bits 1-0)
+HandleReceivedNibble:
+	; Extract 4-bit payload from bits 3-0
 	ld a, e
-	and %00000011
-	ld b, a	; Store chunk in B
+	and %00001111	; Isolate payload bits (3-0)
 	
-	; Check which chunk position we're expecting
-	ld a, [wMultiplayerReceiveChunkIdx]
-	and a
-	jr z, .store_high_chunk
-	
-	; Store as low chunk (bits 1-0)
-	ld a, [wMultiplayerLastReceivedNibble]
-	and %11111100	; Clear low chunk (bits 1-0)
-	or b	; Combine with new low chunk
-	ld [wMultiplayerLastReceivedNibble], a
-	ret
-	
-.store_high_chunk:
-	; Store as high chunk (bits 3-2)
-	ld a, [wMultiplayerLastReceivedNibble]
-	and %11110011	; Clear high chunk
-	ld c, a
-	ld a, b
-	add a, a
-	add a, a	; Shift chunk to high position (bits 3-2)
-	or c	; Combine with existing nibble
-	ld [wMultiplayerLastReceivedNibble], a
-	ret
-
-; Handle a completed nibble (both chunks received)
-; Destroys: A, B, C, D, H, L
-HandleCompletedNibble:
-	; Reset chunk index for next nibble
-	xor a
-	ld [wMultiplayerReceiveChunkIdx], a
-	
-	; Store nibble in correct position of current byte
-	call StoreReceivedNibble
-	
-	; Increment nibble index
-	ld a, [wMultiplayerReceiveNibbleIdx]
-	inc a
-	ld [wMultiplayerReceiveNibbleIdx], a
-	
-	; Check if we've received both nibbles (high and low)
-	cp 2
-	ret c	; Return if we haven't completed a byte yet
-	
-	; We've completed a byte, handle it
-	call HandleCompletedByte
-	ret
-
-; Store received nibble in wMultiplayerLastReceivedByte
-; Input: Uses wMultiplayerLastReceivedNibble (assembled from chunks)
-; Destroys: A, B
-StoreReceivedNibble:
-	; Get the completed nibble
-	ld a, [wMultiplayerLastReceivedNibble]
-	ld b, a	; Store nibble in B
-	
-	; Check which nibble position we're expecting
+	; Check which nibble we're receiving (high or low)
+	ld b, a	; Store payload in B
 	ld a, [wMultiplayerReceiveNibbleIdx]
 	and a
 	jr z, .store_high_nibble
 	
-	; Store as low nibble (bits 3-0)
+	; Low nibble - combine with stored high nibble
 	ld a, [wMultiplayerLastReceivedByte]
-	and %11110000	; Clear low nibble
-	or b	; Set low nibble
+	and %11110000	; Keep high nibble
+	or b	; Combine with low nibble
 	ld [wMultiplayerLastReceivedByte], a
-	ret
+	
+	; Complete byte received - handle it
+	call HandleCompletedByte
+	jr .advance_nibble
 	
 .store_high_nibble:
-	; Store as high nibble (bits 7-4)
+	; High nibble - store in upper 4 bits
 	ld a, b
-	add a, a
-	add a, a
-	add a, a
-	add a, a	; Shift nibble to high position
+	swap a	; Move to high nibble position
 	ld [wMultiplayerLastReceivedByte], a
+	
+.advance_nibble:
+	; Advance to next nibble
+	ld a, [wMultiplayerReceiveNibbleIdx]
+	xor 1	; Toggle between 0 and 1
+	ld [wMultiplayerReceiveNibbleIdx], a
 	ret
 
 ; Handle a completed byte (both nibbles received)
@@ -614,7 +403,7 @@ HandleCompletedByte:
 	xor a
 	ld [wMultiplayerReceiveNibbleIdx], a
 	
-	; Check if received byte is a noop ($81)
+	; Check if received byte is a noop ($FF)
 	ld a, [wMultiplayerLastReceivedByte]
 	cp MULTIPLAYER_NOOP_BYTE
 	jr z, .received_noop
@@ -674,23 +463,11 @@ MultiplayerOnPackageReceived:
 	call PrintTextLazy
 	ret
 
-; Advance send state machine after successful ACK
-; Only called when the remote side has acknowledged our last chunk
-; Progresses through: chunk -> nibble -> byte -> package
+; Advance send state machine after successful reception
+; Progresses through: nibble -> byte -> package
 ; Destroys: A, B, C
 AdvanceSendState:
-	; Increment chunk index
-	ld a, [wMultiplayerSendChunkIdx]
-	inc a
-	ld [wMultiplayerSendChunkIdx], a
-	
-	; Check if we've completed a nibble (sent both chunks)
-	cp 2
-	ret c	; Return if we haven't completed a nibble yet
-	
-	; Reset chunk index and advance to next nibble
-	xor a
-	ld [wMultiplayerSendChunkIdx], a
+	; Advance to next nibble
 	call AdvanceToNextNibble
 	ret
 
@@ -758,17 +535,17 @@ OnPackageTransmissionComplete:
 	; TODO: Add any other completion logic here (e.g., notify game logic)
 	ret
 
-; Prepare the next chunk for transmission
+; Prepare the next nibble for transmission
 ; Builds the complete 8-bit transmission byte with metadata and payload
 ; Output: A = prepared byte ready for rSB
 ; Destroys: A, B, C, D, H, L
-PrepareNextChunk:
+PrepareNextNibble:
 	; Start with bit 7 = 0 (valid bit)
 	ld a, 0
 	ld d, a	; D will accumulate the final byte
 	
-	; Bit 6: SEQ bit
-	ld a, [wMultiplayerNextSeqToSend]
+	; Bit 6: Master/Slave bit
+	ld a, [wMultiplayerIsMaster]
 	and 1
 	add a, a
 	add a, a
@@ -779,19 +556,11 @@ PrepareNextChunk:
 	or d
 	ld d, a
 	
-	; Bit 5: ACK bit  
-	ld a, [wMultiplayerNextAckToSend]
-	and 1
-	add a, a
-	add a, a
-	add a, a
-	add a, a
-	add a, a	; Shift to bit 5
-	or d
-	ld d, a
+	; Bit 5: Unused (always 0)
+	; Already 0 from initialization
 	
-	; Bit 4: Master/Slave bit
-	ld a, [wMultiplayerIsMaster]
+	; Bit 4: Nibble index (0=high, 1=low)
+	ld a, [wMultiplayerSendNibbleIdx]
 	and 1
 	add a, a
 	add a, a
@@ -800,26 +569,9 @@ PrepareNextChunk:
 	or d
 	ld d, a
 	
-	; Bit 3: Nibble index (0=high, 1=low)
-	ld a, [wMultiplayerSendNibbleIdx]
-	and 1
-	add a, a
-	add a, a
-	add a, a	; Shift to bit 3
-	or d
-	ld d, a
-	
-	; Bit 2: Chunk index (0=high, 1=low)
-	ld a, [wMultiplayerSendChunkIdx]
-	and 1
-	add a, a
-	add a, a	; Shift to bit 2
-	or d
-	ld d, a
-	
-	; Bits 1-0: Payload chunk (2 bits from current byte/nibble/chunk)
-	call GetCurrentPayloadChunk
-	and %00000011	; Ensure only 2 bits
+	; Bits 3-0: Payload nibble (4 bits from current byte/nibble)
+	call GetCurrentPayloadNibble
+	and %00001111	; Ensure only 4 bits
 	or d
 	ld d, a
 	
@@ -827,11 +579,11 @@ PrepareNextChunk:
 	ld a, d
 	ret
 
-; Get the current 2-bit payload chunk to send
-; Returns the chunk from either noop byte or buffered package
-; Output: A = 2-bit chunk (bits 1-0 only)
+; Get the current 4-bit payload nibble to send
+; Returns the nibble from either noop byte or buffered package
+; Output: A = 4-bit nibble (bits 3-0 only)
 ; Destroys: A, B, C, H, L
-GetCurrentPayloadChunk:
+GetCurrentPayloadNibble:
 	; Check if we're sending noop (byte index 0) or package data
 	ld a, [wMultiplayerSendByteIdx]
 	and a
@@ -850,14 +602,14 @@ GetCurrentPayloadChunk:
 	ld hl, wMultiplayerBufferedPackage
 	add hl, bc	; HL points to current byte
 	ld a, [hl]	; Load the byte
-	jr .extract_chunk
+	jr .extract_nibble
 	
 .send_noop:
 	; Send noop byte
 	ld a, [wMultiplayerStaticNoopByte]
-	; Fall through to extract_chunk
+	; Fall through to extract_nibble
 	
-.extract_chunk:
+.extract_nibble:
 	; A now contains the source byte
 	; Extract nibble based on wMultiplayerSendNibbleIdx
 	ld b, a	; Save original byte
@@ -868,108 +620,20 @@ GetCurrentPayloadChunk:
 	; Low nibble (bits 3-0)
 	ld a, b
 	and %00001111
-	jr .extract_chunk_from_nibble
+	ret
 	
 .high_nibble:
 	; High nibble (bits 7-4), shift to low position
 	ld a, b
-	rrca
-	rrca
-	rrca
-	rrca
+	swap a
 	and %00001111
-	
-.extract_chunk_from_nibble:
-	; A now contains the 4-bit nibble
-	; Extract chunk based on wMultiplayerSendChunkIdx
-	ld b, a	; Save nibble
-	ld a, [wMultiplayerSendChunkIdx]
-	and a
-	jr z, .high_chunk
-	
-	; Low chunk (bits 1-0)
-	ld a, b
-	and %00000011
-	ret
-	
-.high_chunk:
-	; High chunk (bits 3-2), shift to low position
-	ld a, b
-	rrca
-	rrca
-	and %00000011
 	ret
 
-; Send the prepared chunk via serial communication
+; Send the prepared nibble via serial communication
 ; Input: A = byte to send
 ; Destroys: A
-SendChunk:
+SendNibble:
 	; Store byte in serial buffer
 	ldh [rSB], a
 	ret
 
-; Check if received sequence bit mismatches our own sequence bit
-; If mismatch, the side with SEQ=0 resends the exact same byte to trigger duplicate detection
-; Input: E = received byte from rSB
-; Output: Z flag set if sequences mismatch and we should resend, clear if sequences match or we shouldn't resend
-; Destroys: A, B
-IfReceivedInvalidSeq:
-	; Extract SEQ bit (bit 6) from received byte
-	ld a, e
-	and %01000000	; Isolate bit 6 (sequence bit)
-	rrca
-	rrca
-	rrca
-	rrca
-	rrca
-	rrca	; Shift to bit 0
-	ld b, a	; Store received SEQ in B
-	
-	; Get our current sequence bit
-	ld a, [wMultiplayerNextSeqToSend]
-	and 1	; Ensure only bit 0
-	
-	; Compare sequences
-	cp b
-	jr nz, .sequences_mismatch
-	
-	; Sequences match - clear Z flag and return
-	or 1
-	ret
-	
-.sequences_mismatch:
-	; Sequences don't match - check if we should resend
-	; Only the side with SEQ=0 should resend to trigger duplicate detection
-	ld a, [wMultiplayerNextSeqToSend]
-	and 1
-	jr nz, .we_have_seq_1
-	
-	; We have SEQ=0, so we should resend the exact same byte
-	; Set Z flag to indicate we should resend
-	xor a
-	ret
-	
-.we_have_seq_1:
-	; We have SEQ=1, so we should NOT resend
-	; Clear Z flag to indicate normal processing
-	or 1
-	ret
-
-; Resend the exact same byte without any modifications
-; This is used when sequence bits are mismatched and we need to trigger duplicate detection
-; Destroys: A
-ResendExactSameByte:
-	; Ensure our SEQ bit is 0 before resending (only SEQ=0 side should resend)
-	xor a
-	ld [wMultiplayerNextSeqToSend], a  ; Force SEQ to 0
-
-  ; Set ACK to match the sequence we expect from them
-	; If we're sending SEQ=0, we expect them to send SEQ=1, so we should ACK=1
-	ld a, 1
-	ld [wMultiplayerNextAckToSend], a  ; Force ACK to 1
-
-	; Reconstruct the byte with SEQ=0 from current state
-	call PrepareNextChunk
-	; Don't call UpdateSequenceBit - keep SEQ at 0 for the resend
-	call SendChunk
-	ret
