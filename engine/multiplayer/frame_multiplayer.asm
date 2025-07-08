@@ -129,18 +129,6 @@ MultiplayerSendReceiveNibble::
 	ldh a, [rSB]
 	ld e, a
 	
-	; ; Check for duplicates (emulator speed mismatch tolerance)
-	; ; Compare with last received rSB value to detect duplicates
-	; ; Since SEQ bit always flips, adjacent chunks can never be identical,
-	; ; making full rSB comparison safe for duplicate detection
-	; ld hl, wMultiplayerLastReceivedRSB
-	; cp [hl]
-	; jr z, .cleanup  ; If same as last received, ignore this duplicate
-	
-	; Store new rSB value for future duplicate detection
-	ld [hl], a
-	
-  ; NOTE: This isnt necessary, checking bit 7 is enough to detect floating line.
 	; Check if SB is floating ($FF indicates no connection)
 	cp $FF
 	jp z, .restart_package
@@ -149,14 +137,29 @@ MultiplayerSendReceiveNibble::
 	bit 7, a
 	jp nz, .restart_package
 	
-	; Check if we received our own chunk (should not happen in normal operation)
+	; Check if we received our own chunk FIRST (before duplicate detection)
 	call IfSBContainsOwnChunk
-	jr z, .cleanup  ; If same as last sent, ignore it and do nothing
+	jr z, .cleanup  ; If our own chunk, ignore it completely
+	
+	; Now check for duplicates (only for remote chunks)
+	call IfIsDuplicate
+	jr z, .handle_duplicate
+	
+	; Store new rSB value for future duplicate detection (only remote chunks)
+	ld hl, wMultiplayerLastReceivedRSB
+	ld [hl], e
+	
+	; Normal processing - new chunk from remote
+	jr .process_new_chunk
 
-	; ; Check if received ACK bit is invalid
-	; call IfReceivedInvalidAck
-	; jp z, .restart_package
+.handle_duplicate:
+	; Handle duplicate chunk from remote side
+	; (We already know it's not our own chunk from the check above)
+	call PrepareChunkToResend
+	jr .send_chunk
 
+.process_new_chunk:
+	; Normal processing of new chunk
 	; Check if H/L bit mismatches expected nibble type
 	call IfNibbleIndexMismatchesExpected
 	jp z, .restart_package
@@ -242,6 +245,27 @@ UpdateAckBit:
 	rrca	; Shift to bit 0
 	xor 1	; Flip it
 	ld [wMultiplayerNextAckToSend], a
+	ret
+
+; Check if the received rSB value is a duplicate of the last received value
+; Input: E = received byte from rSB
+; Output: Z flag set if duplicate, clear if not duplicate
+; Destroys: A, H, L
+IfIsDuplicate:
+	; Compare with last received rSB value to detect duplicates
+	ld hl, wMultiplayerLastReceivedRSB
+	ld a, [hl]
+	cp e  ; Compare with received byte
+	ret   ; Z flag will be set if duplicate, clear if not
+
+; Prepare chunk for retransmission after duplicate detection
+; Flips the SEQ bit and sets up for resending current chunk
+; Destroys: A
+PrepareChunkToResend:
+	; For duplicates, flip SEQ bit to indicate retransmission
+	ld a, [wMultiplayerNextSeqToSend]
+	xor 1  ; Flip the bit for retransmission
+	ld [wMultiplayerNextSeqToSend], a
 	ret
 
 ; Check if received rSB has an invalid ACK bit
