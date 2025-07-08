@@ -484,55 +484,73 @@ OnPackageTransmissionComplete:
 	jp MultiplayerCopyQueuedPackageToSendBufferIfPossible
 
 ; Prepare the next nibble for transmission
-; Builds the complete 8-bit transmission byte with metadata and payload
 ; Output: A = prepared byte ready for rSB
-; Destroys: A, B, C, D, H, L
+; Destroys: A, B, C, H, L
 PrepareNextNibble:
-	; Start with bit 7 = 0 (valid bit)
-	ld a, 0
-	ld d, a	; D will accumulate the final byte
+	; === Part 1: Get the 4-bit payload and store it in B ===
+	ld a, [wMultiplayerHasBufferedPackage]
+	and a
+	jr z, .no_package
 	
-	; Bit 6: Master/Slave bit
-	ld a, [wMultiplayerIsMaster]
-	and 1
-	add a, a
-	add a, a
-	add a, a
-	add a, a
-	add a, a
-	add a, a	; Shift to bit 6
-	or d
-	ld d, a
-	
-	; Bit 5: Reset bit - set if this is the first nibble of a new package
-	call ShouldSetResetBit
-	and 1
-	add a, a
-	add a, a
-	add a, a
-	add a, a
-	add a, a	; Shift to bit 5
-	or d
-	ld d, a
-	
-	; Bit 4: Nibble index (0=high, 1=low)
+	; We have a package, get the correct byte from the buffer.
+	ld a, [wMultiplayerSendByteIdx]
+	ld c, a
+	ld b, 0
+	ld hl, wMultiplayerBufferedPackage
+	add hl, bc      ; HL points to the current byte in the package
+	ld a, [hl]      ; Load the byte
+	jr .extract_nibble
+
+.no_package:
+	; No package, payload is irrelevant (will be 0).
+	xor a
+
+.extract_nibble:
+	; A contains the full source byte. Extract the correct nibble.
+	ld c, a
 	ld a, [wMultiplayerSendNibbleIdx]
-	and 1
-	add a, a
-	add a, a
-	add a, a
-	add a, a	; Shift to bit 4
-	or d
-	ld d, a
+	and a
+	jr z, .get_high_nibble
+
+.get_low_nibble:
+	; Extract low nibble (bits 3-0)
+	ld a, c
+	and %00001111
+	jr .loaded_payload
+
+.get_high_nibble:
+	; Extract high nibble (bits 7-4) and shift it down
+	ld a, c
+	swap a
+	and %00001111
+
+.loaded_payload:
+	; The 4-bit payload (%0000PPPP) is now in A. Save it in B.
+	ld b, a
+
+	; === Part 2: Build the metadata and combine with the payload ===
+	; Start with Bit 6: Master/Slave bit
+	ld a, [wMultiplayerIsMaster]
+	rlca            ; A = %000000M0
+	ld c, a         ; Store intermediate result in C
+
+	; OR in Bit 5: Reset bit
+	call ShouldSetResetBit ; A = %0000000R
+	or c            ; A = %000000MR
+
+	; OR in Bit 4: Nibble Index bit
+	rlca            ; A = %00000MR0
+	ld c, a         ; Store intermediate result in C
+	ld a, [wMultiplayerSendNibbleIdx] ; A = %0000000I
+	or c            ; A = %00000MRI
+
+	; We now have the metadata nibble in the lower 4 bits of A.
+	; Shift it to the upper 4 bits.
+	swap a          ; A = %0MRI0000
+
+	; Finally, combine with the payload we saved in B.
+	or b            ; A = %0MRIPPPP
 	
-	; Bits 3-0: Payload nibble (4 bits from current byte/nibble)
-	call GetCurrentPayloadNibble
-	and %00001111	; Ensure only 4 bits
-	or d
-	ld d, a
-	
-	; Return prepared byte in A
-	ld a, d
 	ret
 
 ; Check if we should set the reset bit (start of new package)
@@ -565,50 +583,6 @@ ShouldSetResetBit:
 	
 .clear_reset:
 	ld a, 0
-	ret
-
-; Get the current 4-bit payload nibble to send
-; Returns the nibble from either buffered package or any value if no package
-; Output: A = 4-bit nibble (bits 3-0 only)
-; Destroys: A, B, C, H, L
-GetCurrentPayloadNibble:
-	; Check if we have a buffered package
-	ld a, [wMultiplayerHasBufferedPackage]
-	and a
-	jr z, .no_package	; No package, send any value
-	
-	; Get byte from buffered package
-	ld a, [wMultiplayerSendByteIdx]
-	ld c, a
-	ld b, 0
-	ld hl, wMultiplayerBufferedPackage
-	add hl, bc	; HL points to current byte
-	ld a, [hl]	; Load the byte
-	jr .extract_nibble
-	
-.no_package:
-	; No package to send - send any value (it doesn't matter)
-	; The reset flag will signal the start of actual package data
-	xor a
-
-.extract_nibble:
-	; A now contains the source byte
-	; Extract nibble based on wMultiplayerSendNibbleIdx
-	ld b, a	; Save original byte
-	ld a, [wMultiplayerSendNibbleIdx]
-	and a
-	jr z, .high_nibble
-	
-	; Low nibble (bits 3-0)
-	ld a, b
-	and %00001111
-	ret
-	
-.high_nibble:
-	; High nibble (bits 7-4), shift to low position
-	ld a, b
-	swap a
-	and %00001111
 	ret
 
 
