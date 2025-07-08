@@ -600,29 +600,30 @@ PrepareNextNibble:
 ; Destroys: A
 ShouldSetResetBit:
 	; Reset bit should be set if:
-	; 1. We have a buffered package
-	; 2. We're at byte index 0 (start of package)
-	; 3. We're at nibble index 0 (high nibble)
+	; - No package is being sent, OR
+	; - We're at the first nibble of a package (SendByte == 0 && SendNibble == 0)
 	
 	; Check if we have a buffered package
 	ld a, [wMultiplayerHasBufferedPackage]
 	and a
-	jr z, .no_reset	; No package = no reset
+	jr z, .set_reset	; No package = always set reset
 	
-	; Check if we're at the start of the package (byte 0, nibble 0)
+	; We have a package - check if we're at the very first nibble
 	ld a, [wMultiplayerSendByteIdx]
 	and a
-	jr nz, .no_reset	; Not byte 0 = no reset
+	jr nz, .clear_reset	; Not byte 0 = clear reset
 	
+	; We're at byte 0 - check if we're at nibble 0
 	ld a, [wMultiplayerSendNibbleIdx]
 	and a
-	jr nz, .no_reset	; Not nibble 0 = no reset
+	jr nz, .clear_reset	; Not nibble 0 = clear reset
 	
-	; All conditions met - set reset bit
+	; We're at byte 0, nibble 0 = first nibble of package
+.set_reset:
 	ld a, 1
 	ret
 	
-.no_reset:
+.clear_reset:
 	ld a, 0
 	ret
 
