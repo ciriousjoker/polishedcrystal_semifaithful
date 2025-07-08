@@ -284,24 +284,21 @@ IfNibbleIndexMismatchesExpected:
 ; Destroys: A
 ; TODO: Conditionally call this based on a hardcoded compile flag
 IfIsReady:
-	; Increment frame counter
+	; Decrement frame counter
 	ld a, [wMultiplayerFrameCounter]
-	inc a
+	dec a
 	ld [wMultiplayerFrameCounter], a
 	
-	; Check if counter reached transmission threshold
-	cp MULTIPLAYER_IDLE_FRAMES
-	jr c, .not_ready
+	; If the counter is not zero yet, we are not ready.
+	; The 'dec a' instruction clears the Z flag if the result is non-zero.
+	ret nz
 	
-	; Reset counter and signal ready
-	xor a
+	; The counter has reached zero, so we are ready.
+	; Reset the counter to the threshold value.
+	ld a, MULTIPLAYER_IDLE_FRAMES
 	ld [wMultiplayerFrameCounter], a
-	; Z flag is already set from 'xor a'
-	ret
 	
-.not_ready:
-	; Clear Z flag to indicate not ready
-	or 1
+	; The Z flag is already set from the 'dec a' instruction that resulted in zero.
 	ret
 
 ; VBlank interrupt handler for multiplayer
