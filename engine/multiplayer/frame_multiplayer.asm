@@ -18,8 +18,9 @@ SECTION "Frame Multiplayer", ROMX
 ; Bits 1-0: Payload chunk (2 bits)
 
 DEF MULTIPLAYER_PACKAGE_SIZE EQU 8
-DEF MULTIPLAYER_IDLE_FRAMES EQU 300 ; 5 * 60fps -> ~5s
-DEF MULTIPLAYER_NOOP_BYTE EQU $0F  ; Use 0x0F (0b00001111) as noop - bit 7 is 0
+DEF MULTIPLAYER_IDLE_FRAMES EQU 10 ; 5 * 60fps -> ~5s
+DEF MULTIPLAYER_NOOP_BYTE EQU $FF  ; Use 0xFF as a noop (which also is the package start marker).
+                                   ; It's transferred across 4 chunks.
 
 ; MultiplayerInitialize:
 ; Purpose: Initializes all multiplayer-related RAM variables and hardware registers to a clean state.
