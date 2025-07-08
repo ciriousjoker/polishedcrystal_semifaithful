@@ -338,34 +338,29 @@ HandleResetFlag:
 HandleReceivedNibble:
 	; Extract 4-bit payload from bits 3-0
 	ld a, e
-	and %00001111	; Isolate payload bits (3-0)
-	
-	; Check which nibble we're receiving (high or low)
-	ld b, a	; Store payload in B
+	and %00001111
+	ld b, a
+
 	ld a, [wMultiplayerReceiveNibbleIdx]
 	and a
 	jr z, .store_high_nibble
-	
+
 	; Low nibble - combine with stored high nibble
 	ld a, [wMultiplayerLastReceivedByte]
-	and %11110000	; Keep high nibble
-	or b	; Combine with low nibble
+	or b
 	ld [wMultiplayerLastReceivedByte], a
-	
-	; Complete byte received - handle it
 	call HandleCompletedByte
 	jr .advance_nibble
-	
+
 .store_high_nibble:
 	; High nibble - store in upper 4 bits
 	ld a, b
-	swap a	; Move to high nibble position
+	swap a
 	ld [wMultiplayerLastReceivedByte], a
-	
+
 .advance_nibble:
-	; Advance to next nibble
 	ld a, [wMultiplayerReceiveNibbleIdx]
-	xor 1	; Toggle between 0 and 1
+	xor 1
 	ld [wMultiplayerReceiveNibbleIdx], a
 	ret
 
