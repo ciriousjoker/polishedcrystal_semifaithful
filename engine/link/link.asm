@@ -1305,12 +1305,12 @@ ExitLinkCommunications:
 	call GetCGBLayout
 	call ApplyAttrAndTilemapInVBlank
 	xor a
-	ldh [rSB], a
+	; ldh [rSB], a
 	ldh [hSerialSend], a
 	ld a, 1
-	ldh [rSC], a
+	; ldh [rSC], a
 	ld a, START_TRANSFER_INTERNAL_CLOCK
-	ldh [rSC], a
+	; ldh [rSC], a
 	vc_hook ExitLinkCommunications_ret
 	ret
 
@@ -1804,27 +1804,27 @@ WaitForOtherPlayerToExit:
 	ld a, CONNECTION_NOT_ESTABLISHED
 	ldh [hSerialConnectionStatus], a
 	xor a
-	ldh [rSB], a
+	; ldh [rSB], a
 	ldh [hSerialReceive], a
 	ld a, $1
-	ldh [rSC], a
+	; ldh [rSC], a
 	ld a, START_TRANSFER_INTERNAL_CLOCK
-	ldh [rSC], a
+	; ldh [rSC], a
 	ld c, 3
 	call DelayFrames
 	xor a
-	ldh [rSB], a
+	; ldh [rSB], a
 	ldh [hSerialReceive], a
 	xor a ; redundant?
-	ldh [rSC], a
+	; ldh [rSC], a
 	ld a, START_TRANSFER_EXTERNAL_CLOCK
-	ldh [rSC], a
+	; ldh [rSC], a
 	ld c, 3
 	call DelayFrames
 	xor a
-	ldh [rSB], a
+	; ldh [rSB], a
 	ldh [hSerialReceive], a
-	ldh [rSC], a
+	; ldh [rSC], a
 	ld c, 3
 	call DelayFrames
 	ld a, CONNECTION_NOT_ESTABLISHED
@@ -1863,16 +1863,16 @@ Special_WaitForLinkedFriend:
 	and a
 	jr z, .no_link_action
 	ld a, $2
-	ldh [rSB], a
+	; ldh [rSB], a
 	xor a
 	ldh [hSerialReceive], a
 	xor a ; redundant?
-	ldh [rSC], a
+	; ldh [rSC], a
 	ld a, START_TRANSFER_EXTERNAL_CLOCK
 	vc_hook Link_fake_connection_status
 	vc_assert hSerialConnectionStatus == $ffcb, \
 		"hSerialConnectionStatus is no longer located at 00:ffcb."
-	ldh [rSC], a
+	; ldh [rSC], a
 	call DelayFrame
 	call DelayFrame
 	call DelayFrame
@@ -1891,13 +1891,13 @@ Special_WaitForLinkedFriend:
 	ld a, CONNECTION_NOT_ESTABLISHED
 	ldh [hSerialConnectionStatus], a
 	ld a, $2
-	ldh [rSB], a
+	; ldh [rSB], a
 	xor a
 	ldh [hSerialReceive], a
 	xor a ; redundant?
-	ldh [rSC], a
+	; ldh [rSC], a
 	ld a, START_TRANSFER_EXTERNAL_CLOCK
-	ldh [rSC], a
+	; ldh [rSC], a
 	ld hl, wLinkTimeoutFrames
 	dec [hl]
 	jr nz, .not_done
@@ -1907,11 +1907,11 @@ Special_WaitForLinkedFriend:
 
 .not_done
 	ld a, $1
-	ldh [rSB], a
+	; ldh [rSB], a
 	ld a, $1
-	ldh [rSC], a
+	; ldh [rSC], a
 	ld a, START_TRANSFER_INTERNAL_CLOCK
-	ldh [rSC], a
+	; ldh [rSC], a
 	call DelayFrame
 	jr .loop
 
@@ -2103,16 +2103,16 @@ PrepareForLinkTransfers:
 	xor a
 	ldh [hSerialSend], a
 	inc a
-	ldh [rSC], a
+	; ldh [rSC], a
 	ld a, START_TRANSFER_INTERNAL_CLOCK
-	ldh [rSC], a
+	; ldh [rSC], a
 	call DelayFrame
 	xor a
 	ldh [hSerialSend], a
 	inc a
-	ldh [rSC], a
+	; ldh [rSC], a
 	ld a, START_TRANSFER_INTERNAL_CLOCK
-	ldh [rSC], a
+	; ldh [rSC], a
 
 .player_1:
 	ld e, MUSIC_NONE
@@ -2425,10 +2425,10 @@ Link_ResetSerialRegistersAfterLinkClosure:
 	ld a, CONNECTION_NOT_ESTABLISHED
 	ldh [hSerialConnectionStatus], a
 	ld a, $2
-	ldh [rSB], a
+	; ldh [rSB], a
 	xor a
 	ldh [hSerialReceive], a
-	ldh [rSC], a
+	; ldh [rSC], a
 	ret
 
 Special_FailedLinkToPast:
@@ -2587,9 +2587,9 @@ Serial_ExchangeByte::
 	cp USING_INTERNAL_CLOCK
 	jr nz, .loop
 	ld a, $1
-	ldh [rSC], a
+	; ldh [rSC], a
 	ld a, START_TRANSFER_INTERNAL_CLOCK
-	ldh [rSC], a
+	; ldh [rSC], a
 
 .loop
 	ldh a, [hSerialReceivedNewData]

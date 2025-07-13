@@ -5,8 +5,8 @@ _Init::
 	ldh [rRP], a
 	ldh [rSCX], a
 	ldh [rSCY], a
-	ldh [rSB], a
-	ldh [rSC], a
+	; ldh [rSB], a
+	; ldh [rSC], a
 	ldh [rWX], a
 	ldh [rWY], a
 	ldh [rBGP], a

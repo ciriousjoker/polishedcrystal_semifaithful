@@ -117,11 +117,11 @@ CheckCancelPrint:
 	ld a, $16 ; cancel
 	ld [wPrinterOpcode], a
 	ld a, $88
-	ldh [rSB], a
+	; ldh [rSB], a
 	ld a, (0 << rSC_ON) | (1 << rSC_CLOCK)
-	ldh [rSC], a
+	; ldh [rSC], a
 	ld a, (1 << rSC_ON) | (1 << rSC_CLOCK)
-	ldh [rSC], a
+	; ldh [rSC], a
 .loop2
 	ld a, [wPrinterOpcode]
 	and a

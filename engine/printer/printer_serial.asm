@@ -4,8 +4,8 @@ Printer_StartTransmission:
 	xor a
 	rst ByteFill
 	xor a
-	ldh [rSB], a
-	ldh [rSC], a
+	; ldh [rSB], a
+	; ldh [rSC], a
 	ld [wPrinterOpcode], a
 	ld hl, wPrinterConnectionOpen
 	set PRINTER_CONNECTION_OPEN, [hl]
@@ -255,11 +255,11 @@ Printer_WaitHandshake:
 	ld a, $1
 	ld [wPrinterOpcode], a
 	ld a, $88
-	ldh [rSB], a
+	; ldh [rSB], a
 	ld a, (0 << rSC_ON) | (1 << rSC_CLOCK)
-	ldh [rSC], a
+	; ldh [rSC], a
 	ld a, (1 << rSC_ON) | (1 << rSC_CLOCK)
-	ldh [rSC], a
+	; ldh [rSC], a
 	ret
 
 Printer_CopyPacket:
@@ -567,11 +567,11 @@ Printer_Send0x08:
 	jmp Printer_NextInstruction
 
 Printer_SerialSend:
-	ldh [rSB], a
+	; ldh [rSB], a
 	ld a, (0 << rSC_ON) | (1 << rSC_CLOCK)
-	ldh [rSC], a
+	; ldh [rSC], a
 	ld a, (1 << rSC_ON) | (1 << rSC_CLOCK)
-	ldh [rSC], a
+	; ldh [rSC], a
 	ret
 
 AskSerial::
@@ -600,14 +600,14 @@ AskSerial::
 
 ; handshake
 	ld a, $88
-	ldh [rSB], a
+	; ldh [rSB], a
 
 ; switch to internal clock
 	ld a, (0 << rSC_ON) | (1 << rSC_CLOCK)
-	ldh [rSC], a
+	; ldh [rSC], a
 
 ; start transfer
 	ld a, (1 << rSC_ON) | (1 << rSC_CLOCK)
-	ldh [rSC], a
+	; ldh [rSC], a
 
 	ret

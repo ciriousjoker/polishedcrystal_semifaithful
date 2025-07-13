@@ -18,16 +18,16 @@ Serial::
 	ldh [hSerialReceive], a
 
 	ldh a, [hSerialSend]
-	ldh [rSB], a
+	; ldh [rSB], a
 
 	ldh a, [hSerialConnectionStatus]
 	cp USING_INTERNAL_CLOCK
 	jr z, .player2
 
 	xor a
-	ldh [rSC], a
+	; ldh [rSC], a
 	ld a, START_TRANSFER_EXTERNAL_CLOCK
-	ldh [rSC], a
+	; ldh [rSC], a
 	jr .player2
 
 .init_player_number
@@ -44,7 +44,7 @@ Serial::
 	jr z, ._player2
 
 	xor a
-	ldh [rSB], a
+	; ldh [rSB], a
 	ld a, $3
 	ldh [rDIV], a
 
@@ -54,14 +54,14 @@ Serial::
 	jr nz, .wait_bit_7
 
 	xor a
-	ldh [rSC], a
+	; ldh [rSC], a
 	ld a, START_TRANSFER_EXTERNAL_CLOCK
-	ldh [rSC], a
+	; ldh [rSC], a
 	jr .player2
 
 ._player2
 	xor a
-	ldh [rSB], a
+	; ldh [rSB], a
 
 .player2
 	ld a, $1
@@ -105,9 +105,9 @@ LinkTransfer::
 	cp USING_INTERNAL_CLOCK
 	jr nz, .player_1
 	ld a, $1
-	ldh [rSC], a
+	; ldh [rSC], a
 	ld a, START_TRANSFER_INTERNAL_CLOCK
-	ldh [rSC], a
+	; ldh [rSC], a
 
 .player_1
 	call .Receive
@@ -135,7 +135,7 @@ LinkDataReceived::
 	cp USING_INTERNAL_CLOCK
 	ret nz
 	ld a, $1
-	ldh [rSC], a
+	; ldh [rSC], a
 	ld a, START_TRANSFER_INTERNAL_CLOCK
-	ldh [rSC], a
+	; ldh [rSC], a
 	ret
