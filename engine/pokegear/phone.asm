@@ -1,4 +1,5 @@
 PokegearPhone_Init:
+	call PokegearPhone_UpdateFriendContact
 	ld hl, wJumptableIndex
 	inc [hl]
 	xor a
@@ -296,6 +297,20 @@ PokegearPhone_CountSetBits:
 	ld hl, wPhoneList
 	ld b, wPhoneListEnd - wPhoneList
 	jmp CountSetBits
+
+PokegearPhone_UpdateFriendContact:
+	ld a, [wMultiplayerHasOtherTrainerName]
+	and a
+	jr z, .RemoveFriend
+
+	ld c, PHONE_MULTIPLAYER_FRIEND
+	call AddPhoneNumber
+	ret
+
+.RemoveFriend:
+	ld c, PHONE_MULTIPLAYER_FRIEND
+	call DelCellNum
+	ret
 
 PokegearPhoneContactSubmenu:
 	call PokegearPhone_GetCellNumber

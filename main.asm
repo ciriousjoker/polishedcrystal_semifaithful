@@ -385,6 +385,7 @@ INCLUDE "engine/phone/scripts/hangups_2.asm"
 INCLUDE "engine/phone/scripts/reminders_2.asm"
 INCLUDE "engine/phone/scripts/bike_shop.asm"
 INCLUDE "engine/phone/buena_phone_scripts.asm"
+INCLUDE "engine/phone/scripts/multiplayer_friend.asm"
 INCLUDE "engine/events/trainer_scripts.asm"
 
 
@@ -754,4 +755,6 @@ INCLUDE "engine/menus/lure_menu.asm"
 
 SECTION "Multiplayer System", ROMX
 
+INCLUDE "engine/multiplayer/frame_multiplayer.asm"
 INCLUDE "engine/multiplayer/multiplayer.asm"
+INCLUDE "engine/events/multiplayer.asm"

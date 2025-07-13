@@ -19,7 +19,7 @@ PhoneContacts:
 	phone SCHOOLBOY,    JACK1,                 NATIONAL_PARK,             %1111, JackPhoneScript1,    %1111, JackPhoneScript2
 	phone POKEFANF,     BEVERLY1,              NATIONAL_PARK,             %1111, BeverlyPhoneScript1, %1111, BeverlyPhoneScript2
 	phone SAILOR,       HUEY1,                 OLIVINE_LIGHTHOUSE_2F,     %1111, HueyPhoneScript1,    %1111, HueyPhoneScript2
-	phone TRAINER_NONE, PHONE_00,              N_A,                       %0000, UnusedPhoneScript,   %0000, UnusedPhoneScript
+	phone TRAINER_NONE, PHONECONTACT_FRIEND,   PLAYERS_HOUSE_1F,                       %1111, MultiplayerFriendScript, %0000, UnusedPhoneScript
 	phone TRAINER_NONE, PHONE_00,              N_A,                       %0000, UnusedPhoneScript,   %0000, UnusedPhoneScript
 	phone COOLTRAINERM, GAVEN1,                ROUTE_26,                  %1111, GavenPhoneScript1,   %1111, GavenPhoneScript2
 	phone COOLTRAINERF, BETH1,                 ROUTE_26,                  %1111, BethPhoneScript1,    %1111, BethPhoneScript2

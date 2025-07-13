@@ -11,10 +11,6 @@
 	const STARTMENUITEM_QUIT     ; 8
 
 StartMenu::
-
-	; Become multiplayer master when start menu is opened
-	farcall BecomeMultiplayerMaster
-
 	call ClearWindowData
 	call BackupSprites
 	call ClearSpritesUnderStartMenu
@@ -361,6 +357,9 @@ StartMenu_Pokedex:
 
 StartMenu_Pokegear:
 	call FadeToMenu
+  ; Opening the Pokegear will attempt to connect to the other player
+  ; in the background.
+	farcall MultiplayerInitializeConnection
 	farcall InitPokegearPalettes
 	farcall PokeGear
 	ld a, [wDefaultSpawnpoint]

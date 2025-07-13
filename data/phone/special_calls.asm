@@ -20,4 +20,5 @@ SpecialPhoneCallList:
 	specialcall SpecialCallOnlyWhenOutside, PHONE_LYRA, LyraPhoneScript2          ; SPECIALCALL_FIRSTBADGE
 	specialcall SpecialCallOnlyWhenOutside, PHONE_BILL, BillPhoneScript2          ; SPECIALCALL_SECONDBADGE
 	specialcall SpecialCallOnlyWhenOutside, PHONE_LYRA, LyraPhoneScript2          ; SPECIALCALL_LYRASEGG
+  specialcall SpecialCallWhereverYouAre,  PHONE_MULTIPLAYER_FRIEND, MultiplayerFriendCallScript ; SPECIALCALL_MULTIPLAYER_FRIEND
 	assert_table_length NUM_SPECIALCALLS

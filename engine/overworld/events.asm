@@ -101,11 +101,15 @@ HandleMap:
 	call CheckPlayerState
 	farcall DoOverworldWeather
 	farcall PrintTextLazyExecute
-	
-	; Process any pending multiplayer data marked from VBlank
-	; farcall ProcessPendingMultiplayerData
-	
+	call MultiplayerExecutePackageLazily
+	jr c, .domultiplayerscript
+
 	xor a
+	ret
+
+.domultiplayerscript
+	ld a, -1
+	scf
 	ret
 
 MapEvents:
@@ -978,7 +982,9 @@ CountStep:
 	; Increase the EXP of (both) DayCare Pokemon by 1.
 	farcall DayCareStep
 
-  farcall MultiplayerSendPlayerMovement
+  ; Send multiplayer movement data
+  call SendPlayerMovementData
+	jr c, .doscript
 
 	; Every four steps, deal damage to all Poisoned Pokemon
 	ld hl, wPoisonStepCount
@@ -1493,3 +1499,131 @@ DoBikeStep::
 INCLUDE "engine/overworld/landmarks.asm"
 INCLUDE "engine/overworld/stone_table.asm"
 INCLUDE "engine/overworld/scripting.asm"
+
+; Send player movement data via multiplayer
+SendPlayerMovementData:
+	; Only send if we have actual movement
+	ld a, [wPlayerStepFlags]
+	bit PLAYERSTEP_STOP_F, a
+	ret z
+	
+	; Create movement package
+	ld hl, wMultiplayerTempPackage
+	ld bc, MULTIPLAYER_MAX_PACKAGE_SIZE
+	xor a
+	rst ByteFill
+	ld hl, wMultiplayerTempPackage
+	
+	; Byte 0: Package type
+	ld a, MULTIPLAYER_PKG_SEND_POSITION
+	ld [hli], a
+	
+	; Byte 1: Player X coordinate
+	ld a, [wPlayerMapX]
+	ld [hli], a
+	
+	; Byte 2: Player Y coordinate
+	ld a, [wPlayerMapY]
+	ld [hli], a
+	
+	; Byte 3: Player direction
+	ld a, [wPlayerDirection]
+	ld [hli], a
+	
+	; Byte 4: Player state
+	ld a, [wPlayerState]
+	ld [hli], a
+	
+	; Byte 5: Map group
+	ld a, [wMapGroup]
+	ld [hli], a
+	
+	; Byte 6: Map number
+	ld a, [wMapNumber]
+	ld [hli], a
+
+	; Byte 7: Checksum (unused for now)
+	ld a, $00
+	ld [hli], a
+	
+	; Queue the package
+	ld hl, wMultiplayerTempPackage
+	farcall MultiplayerQueuePackage
+	ret
+
+MultiplayerExecutePackageLazily::
+	ld a, [wMultiplayerHasPackageToExecuteLazily]
+	and a
+	ret z
+
+	; Now, handle the package.
+	ld hl, wMultiplayerPackageToExecuteLazily
+	ld a, [hl]
+	cp MULTIPLAYER_PKG_PHONECALL
+	jr z, .handle_phonecall
+	cp MULTIPLAYER_PKG_SEND_POSITION
+	jr z, .handle_player_state
+
+	ret
+
+.handle_player_state:
+	; ; Copy the player state to the dedicated RAM location
+	; ld hl, wMultiplayerPackageToExecuteLazily + 1
+	; ld de, wMultiplayerOtherPlayerState
+	; ld bc, 7
+	; rst CopyBytes
+
+	; ; ; Update the NPC state
+	; ; ld a, [wMultiplayerOtherPlayerState + 5] ; map group
+	; ; cp GROUP_OAKS_LAB
+	; ; jr nz, .mark_package_as_executed
+	; ; ld a, [wMultiplayerOtherPlayerState + 6] ; map number
+	; ; cp MAP_OAKS_LAB
+	; ; jr nz, .mark_package_as_executed
+
+	; ; We are in the same map, so update the NPC
+	; ld a, 2 ; Professor Oak
+	; ldh [hLastTalked], a
+	; call GetMapObject
+
+	; ld hl, wMultiplayerOtherPlayerState
+	; ld a, [hli] ; x
+	; ld [bc], a
+	; inc bc
+	; ld a, [hli] ; y
+	; ld [bc], a
+	; inc bc
+	; ld a, [hli] ; direction
+	; ld [bc], a
+	; inc bc
+	; ld a, [hli] ; state
+	; ld [bc], a
+	; ld a, BANK(TestScript)
+	; ld hl, TestScript
+	; call CallScript
+	; scf
+
+	jr .mark_package_as_executed
+
+.handle_phonecall:
+	; Check if another special call is already pending.
+	ld a, [wSpecialPhoneCallID]
+	and a
+	ret nz ; If so, do nothing and try again next frame.
+
+	ld a, SPECIALCALL_MULTIPLAYER_FRIEND
+	ld [wSpecialPhoneCallID], a
+  jr .mark_package_as_executed
+
+.mark_package_as_executed:
+	xor a
+	ld [wMultiplayerHasPackageToExecuteLazily], a
+	ret
+
+; TestScript:
+; 	applymovement_nonblocking 1, .WalkInMovement
+;   end
+
+; .WalkInMovement:
+; 	step_left
+; 	step_end

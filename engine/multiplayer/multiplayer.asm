@@ -1,47 +1,32 @@
-; Toggle master/slave status when start menu is opened
-BecomeMultiplayerMaster::
+; Become master if not already master or a forced slave.
+MultiplayerInitializeConnection::
+	; If we are a forced slave, we cannot become master.
+	ld a, [wMultiplayerIsForcedSlave]
+	and a
+	ret nz
+
+	; If we are already master, do nothing.
 	ld a, [wMultiplayerIsMaster]
-	xor 1
-	ld [wMultiplayerIsMaster], a
-	
+	and a
+	ret nz
+
 	; Initialize multiplayer system
 	farcall MultiplayerInitialize
 	
-	; Show debug info about role change
-	call OpenText
-	ld a, [wMultiplayerIsMaster]
-	and a
-	ld hl, .BecameMasterText
-	jr nz, .show_role
-	ld hl, .BecameSlaveText
-.show_role:
-	call PrintText
-	call CloseText
-	ret
+	; We are becoming master.
+	ld a, 1
+	ld [wMultiplayerIsMaster], a
 
-.BecameMasterText:
-	text "DEBUG: Now MASTER"
-	done
+	; Send a package to the other player to inform them.
+	; Prepare package
+	ld hl, wMultiplayerTempPackage
+	ld bc, MULTIPLAYER_MAX_PACKAGE_SIZE
+	xor a
+	rst ByteFill
 
-.BecameSlaveText:
-	text "DEBUG: Now SLAVE"
-	done
+	ld a, MULTIPLAYER_PKG_INIT
+	ld [wMultiplayerTempPackage], a
 
-MultiplayerSendPlayerMovement::
-	push hl
-	push bc
-	push de
-
-	call OpenText
-	ld hl, .StepText
-	call PrintText
-	call CloseText
-
-	pop de
-	pop bc
-	pop hl
-	ret
-
-.StepText:
-	text "Step taken!"
-	done
+	; Queue package
+	ld hl, wMultiplayerTempPackage
+	jp MultiplayerQueuePackage

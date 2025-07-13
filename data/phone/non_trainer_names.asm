@@ -7,6 +7,7 @@ NonTrainerCallerNames:
 	dw .bill
 	dw .elm
 	dw .lyra
+	dw .multiplayer_friend
 	dw .buena
 	assert_table_length NUM_NONTRAINER_PHONECONTACTS + 1
 
@@ -27,6 +28,9 @@ NonTrainerCallerNames:
 .lyra:
 	text  "Lyra:"
 	next1 "   <PK><MN> Trainer"
+	done
+.multiplayer_friend:
+	text "Friend:"
 	done
 .buena:
 	text  "Buena:"

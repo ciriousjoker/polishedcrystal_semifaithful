@@ -186,6 +186,9 @@ VBlank0::
 .noDelay2
 	call Joypad
 	
+	; Process multiplayer frame communication
+	farcall MultiplayerVBlankHandler
+	
 	; ; Process multiplayer data (simple home bank version)
 	; call ProcessMultiplayerDataHome
 	; fallthrough
