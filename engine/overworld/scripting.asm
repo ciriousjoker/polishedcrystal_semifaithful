@@ -275,6 +275,7 @@ RunScriptCommand:
 	dw Script_givebadge                  ; d8
 	dw Script_setquantity                ; d9
 	dw Script_pluralize                  ; da
+	dw Script_applymovement_nonblocking  ; db
 	assert_table_length NUM_EVENT_COMMANDS
 
 GetScriptWordDE::
@@ -2762,4 +2763,14 @@ Pluralize:
 	pop af
 	pop hl
 	ld [hl], a
+	ret
+
+Script_applymovement_nonblocking:
+	call GetScriptByte
+	ld c, a
+
+	call GetScriptWord
+	ldh a, [hScriptBank]
+	ld b, a
+	call GetMovementData
 	ret

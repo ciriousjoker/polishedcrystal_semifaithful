@@ -1399,4 +1399,11 @@ MACRO pluralize
 	dw \1 ; pointer
 ENDM
 
+	const applymovement_nonblocking_command
+MACRO applymovement_nonblocking
+	db applymovement_nonblocking_command
+	db \1 ; person
+	dw \2 ; data
+ENDM
+
 DEF NUM_EVENT_COMMANDS EQU const_value

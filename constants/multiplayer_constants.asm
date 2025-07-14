@@ -1,7 +1,7 @@
 ; Multiplayer protocol constants
 
 DEF MULTIPLAYER_MAX_PACKAGE_SIZE EQU 9
-DEF MULTIPLAYER_IDLE_FRAMES EQU 10 ; 5 * 60fps -> ~5s
+DEF MULTIPLAYER_IDLE_FRAMES EQU 1 ; 5 * 60fps -> ~5s
 
 const_def
   ; Critical packages. Cannot be removed from the queue.

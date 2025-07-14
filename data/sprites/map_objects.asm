@@ -55,4 +55,5 @@ SpriteMovementData::
 	sprite_movement_data SPRITEMOVEFN_TINY_WINDOWS,          DOWN,   OBJECT_ACTION_TINY_WINDOWS,     $8e,    $02,    %0000 ; SPRITEMOVEDATA_TINY_WINDOWS
 	sprite_movement_data SPRITEMOVEFN_STANDING,              UP,     OBJECT_ACTION_STAND,            $8e,    $02,    %0000 ; SPRITEMOVEDATA_PLACEHOLDER_UP
 	sprite_movement_data SPRITEMOVEFN_MICROPHONE,            LEFT,   OBJECT_ACTION_MICROPHONE,       $0c,    LOW_PRIORITY,    %0000 ; SPRITEMOVEDATA_MICROPHONE
+  sprite_movement_data SPRITEMOVEFN_NO_COLLISION,          DOWN,   OBJECT_ACTION_STAND,            $82,    $02,    %0000 ; SPRITEMOVEDATA_NO_COLLISION
 	assert_table_length NUM_SPRITEMOVEDATA

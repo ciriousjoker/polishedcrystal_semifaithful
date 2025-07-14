@@ -579,6 +579,7 @@ endr
 	dw .MovementAlolanExeggutor      ; SPRITEMOVEFN_ALOLAN_EXEGGUTOR
 	dw .MovementTinyWindows          ; SPRITEMOVEFN_TINY_WINDOWS
 	dw .MovementMicrophone          ; SPRITEMOVEFN_MICROPHONE
+	dw .Standing                     ; SPRITEMOVEFN_NO_COLLISION
 	assert_table_length NUM_SPRITEMOVEFN
 
 .RandomWalkY:

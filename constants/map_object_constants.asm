@@ -166,6 +166,7 @@ DEF MAPOBJECT_SCREEN_HEIGHT EQU (SCREEN_HEIGHT / 2) + 2
 	const SPRITEMOVEDATA_TINY_WINDOWS         ; 2d
 	const SPRITEMOVEDATA_PLACEHOLDER_UP       ; 2e
 	const SPRITEMOVEDATA_MICROPHONE           ; 2f
+	const SPRITEMOVEDATA_NO_COLLISION         ; 30
 DEF NUM_SPRITEMOVEDATA EQU const_value
 
 ; StepFunction_FromMovement.Pointers indexes (see engine/overworld/map_objects.asm)
@@ -203,6 +204,7 @@ DEF NUM_SPRITEMOVEDATA EQU const_value
 	const SPRITEMOVEFN_ALOLAN_EXEGGUTOR      ; 1e
 	const SPRITEMOVEFN_TINY_WINDOWS          ; 1f
 	const SPRITEMOVEFN_MICROPHONE            ; 20
+	const SPRITEMOVEFN_NO_COLLISION          ; 21
 DEF NUM_SPRITEMOVEFN EQU const_value
 
 ; _HandleStepType.StepTypesJumptable indexes (see engine/overworld/map_objects.asm)

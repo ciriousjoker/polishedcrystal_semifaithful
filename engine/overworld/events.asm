@@ -86,6 +86,7 @@ EnterMap:
 	jmp DeleteSavedMusic
 
 HandleMap:
+
 	call HandleMapTimeAndJoypad
 	call HandleStoneTable
 	call MapEvents
@@ -102,14 +103,8 @@ HandleMap:
 	farcall DoOverworldWeather
 	farcall PrintTextLazyExecute
 	call MultiplayerExecutePackageLazily
-	jr c, .domultiplayerscript
 
 	xor a
-	ret
-
-.domultiplayerscript
-	ld a, -1
-	scf
 	ret
 
 MapEvents:
@@ -1506,26 +1501,26 @@ SendPlayerMovementData:
 	ld a, [wPlayerStepFlags]
 	bit PLAYERSTEP_STOP_F, a
 	ret z
-	
+
 	; Create movement package
 	ld hl, wMultiplayerTempPackage
 	ld bc, MULTIPLAYER_MAX_PACKAGE_SIZE
 	xor a
 	rst ByteFill
 	ld hl, wMultiplayerTempPackage
-	
+
 	; Byte 0: Package type
 	ld a, MULTIPLAYER_PKG_SEND_POSITION
 	ld [hli], a
-	
+
 	; Byte 1: Player X coordinate
 	ld a, [wPlayerMapX]
 	ld [hli], a
-	
+
 	; Byte 2: Player Y coordinate
 	ld a, [wPlayerMapY]
 	ld [hli], a
-	
+
 	; Byte 3: Player direction
 	ld a, [wPlayerDirection]
 	ld [hli], a
@@ -1567,43 +1562,87 @@ MultiplayerExecutePackageLazily::
 	ret
 
 .handle_player_state:
-	; ; Copy the player state to the dedicated RAM location
-	; ld hl, wMultiplayerPackageToExecuteLazily + 1
-	; ld de, wMultiplayerOtherPlayerState
-	; ld bc, 7
-	; rst CopyBytes
+	; hl points to wMultiplayerPackageToExecuteLazily
+	inc hl ; hl now points to byte 1 of the package
 
-	; ; ; Update the NPC state
-	; ; ld a, [wMultiplayerOtherPlayerState + 5] ; map group
-	; ; cp GROUP_OAKS_LAB
-	; ; jr nz, .mark_package_as_executed
-	; ; ld a, [wMultiplayerOtherPlayerState + 6] ; map number
-	; ; cp MAP_OAKS_LAB
-	; ; jr nz, .mark_package_as_executed
+	; Unpack X, Y, and Direction
+	ld a, [hli] ; a = X, hl points to byte 2
+	ld d, a
+	ld a, [hli] ; a = Y, hl points to byte 3
+	ld e, a
+	ld a, [hli] ; a = Direction, hl points to byte 4
+	ld c, a
 
-	; ; We are in the same map, so update the NPC
-	; ld a, 2 ; Professor Oak
-	; ldh [hLastTalked], a
-	; call GetMapObject
+	; based on the direction, subtract/add 1 from x & y
+	; so the calculated position + the step in either direction becomes the new position
+	cp OW_LEFT
+	jr z, .inc_x
+	cp OW_RIGHT
+	jr z, .dec_x
+	cp OW_UP
+	jr z, .inc_y
+	cp OW_DOWN
+	jr z, .dec_y
+	jr .coords_updated
+.dec_x:
+	dec d
+	jr .coords_updated
+.inc_x:
+	inc d
+	jr .coords_updated
+.inc_y:
+	inc e
+	jr .coords_updated
+.dec_y:
+	dec e
+.coords_updated:
 
-	; ld hl, wMultiplayerOtherPlayerState
-	; ld a, [hli] ; x
-	; ld [bc], a
-	; inc bc
-	; ld a, [hli] ; y
-	; ld [bc], a
-	; inc bc
-	; ld a, [hli] ; direction
-	; ld [bc], a
-	; inc bc
-	; ld a, [hli] ; state
-	; ld [bc], a
-	; ld a, BANK(TestScript)
-	; ld hl, TestScript
-	; call CallScript
-	; scf
+  push bc
+	ld b, 1 ; object ID
+	farcall CopyDECoordsToMapObject
+  pop bc
+	; ; Update object's direction
+	; ld a, c
+	; ld hl, OBJECT_FACING
+	; add hl, bc
+	; ld [hl], a
 
+	; Select script based on direction
+	ld a, c
+	cp OW_LEFT
+	jr z, .left
+	cp OW_RIGHT
+	jr z, .right
+	cp OW_UP
+	jr z, .up
+	cp OW_DOWN
+	jr z, .down
 	jr .mark_package_as_executed
+
+.left:
+	ld a, BANK(MultiplayerMovementLeftScript)
+	ld hl, MultiplayerMovementLeftScript
+	jr .run_script
+.right:
+	ld a, BANK(MultiplayerMovementRightScript)
+	ld hl, MultiplayerMovementRightScript
+	jr .run_script
+.up:
+	ld a, BANK(MultiplayerMovementUpScript)
+	ld hl, MultiplayerMovementUpScript
+	jr .run_script
+.down:
+	ld a, BANK(MultiplayerMovementDownScript)
+	ld hl, MultiplayerMovementDownScript
+
+.run_script:
+  ; ld a, BANK(MultiplayerMovementLeftScript)
+	; ld hl, MultiplayerMovementLeftScript
+	call CallScript
+	call EnableScriptMode
+	call ScriptEvents
+
+	jr .mark_package_as_executed_with_script
 
 .handle_phonecall:
 	; Check if another special call is already pending.
@@ -1620,10 +1659,55 @@ MultiplayerExecutePackageLazily::
 	ld [wMultiplayerHasPackageToExecuteLazily], a
 	ret
 
-; TestScript:
-; 	applymovement_nonblocking 1, .WalkInMovement
-;   end
+.mark_package_as_executed_with_script:
+	xor a
+	ld [wMultiplayerHasPackageToExecuteLazily], a
+	scf
+	ret
 
-; .WalkInMovement:
-; 	step_left
-; 	step_end
+
+MultiplayerTeleportScript:
+	disappear 1
+	appear 1
+	end
+
+MultiplayerMovementLeftScript:
+	disappear 1
+	appear 1
+	applymovement 1, .MultiplayerMovementLeft
+	end
+
+.MultiplayerMovementLeft:
+	step_left
+	step_end
+
+MultiplayerMovementRightScript:
+	disappear 1
+	appear 1
+	applymovement 1, .MultiplayerMovementRight
+	end
+
+.MultiplayerMovementRight:
+  step_right
+	step_end
+
+MultiplayerMovementUpScript:
+	disappear 1
+	appear 1
+	applymovement 1, .MultiplayerMovementUp
+	end
+
+.MultiplayerMovementUp:
+  step_up
+	step_end
+
+MultiplayerMovementDownScript:
+	disappear 1
+	appear 1
+	applymovement 1, .MultiplayerMovementDown
+	end
+
+.MultiplayerMovementDown:
+  step_down
+	step_end
+

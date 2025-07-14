@@ -24,7 +24,7 @@ MultiplayerPackageLengths:
 		db 1  ; MULTIPLAYER_PKG_INIT
 		db 9  ; MULTIPLAYER_PKG_NAME
 		db 1  ; MULTIPLAYER_PKG_NOOP
-		db 8  ; MULTIPLAYER_PKG_SEND_POSITION
+		db 4  ; MULTIPLAYER_PKG_SEND_POSITION
 		db 1  ; MULTIPLAYER_PKG_PHONECALL
 		; Add more as needed, in the same order as the constants
 
