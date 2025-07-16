@@ -1554,6 +1554,8 @@ MultiplayerExecutePackageLazily::
 	; Now, handle the package.
 	ld hl, wMultiplayerPackageToExecuteLazily
 	ld a, [hl]
+	cp MULTIPLAYER_PKG_GIFT_ITEM
+	jr z, .handle_gift_item
 	cp MULTIPLAYER_PKG_PHONECALL
 	jr z, .handle_phonecall
 	cp MULTIPLAYER_PKG_SEND_POSITION
@@ -1654,6 +1656,17 @@ MultiplayerExecutePackageLazily::
 	ld [wSpecialPhoneCallID], a
   jr .mark_package_as_executed
 
+.handle_gift_item:
+	inc hl ; hl now points to byte 1 of the package, ie the item id
+	ld a, [hl]
+	ld [wCurItem], a
+	ld a, BANK(GiveGiftedItemScript)
+	ld hl, GiveGiftedItemScript
+	call CallScript
+	call EnableScriptMode
+	call ScriptEvents
+	jr .mark_package_as_executed_with_script
+
 .mark_package_as_executed:
 	xor a
 	ld [wMultiplayerHasPackageToExecuteLazily], a
@@ -1711,3 +1724,9 @@ MultiplayerMovementDownScript:
   step_down
 	step_end
 
+GiveGiftedItemScript:
+  opentext
+	readmem wCurItem
+	verbosegiveitem ITEM_FROM_MEM
+  closetext
+	end

@@ -23,6 +23,7 @@ SECTION "Frame Multiplayer", ROMX
 MultiplayerPackageLengths:
 		db 1  ; MULTIPLAYER_PKG_INIT
 		db 9  ; MULTIPLAYER_PKG_NAME
+		db 2  ; MULTIPLAYER_PKG_GIFT_ITEM
 		db 1  ; MULTIPLAYER_PKG_NOOP
 		db 4  ; MULTIPLAYER_PKG_SEND_POSITION
 		db 1  ; MULTIPLAYER_PKG_PHONECALL
@@ -670,6 +671,8 @@ MultiplayerOnPackageReceived:
 	cp MULTIPLAYER_PKG_PHONECALL
 	jr z, .handle_package_lazily
 	cp MULTIPLAYER_PKG_SEND_POSITION
+	jr z, .handle_package_lazily
+	cp MULTIPLAYER_PKG_GIFT_ITEM
 	jr z, .handle_package_lazily
 
 	; Fallback for unknown packages

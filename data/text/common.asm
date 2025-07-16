@@ -2350,6 +2350,16 @@ _CantRegisterText::
 	line "that item."
 	prompt
 
+SECTION "_MultiplayerGiftItemText", ROMX
+_MultiplayerGiftItemText::
+	text "Gave "
+	text_ram wStringBuffer1
+  text_plural
+	line "to "
+	text_ram wStringBuffer2
+	text "!"
+	prompt
+
 SECTION "_AskItemMoveText", ROMX
 _AskItemMoveText::
 	text "Where should this"

@@ -48,7 +48,7 @@ Pack:
 .HandleTMHMSubmenu:
 	ld hl, MenuDataHeader_Use
 	ld de, .Jumptable1
-	jr PackBuildMenu
+	jp PackBuildMenu
 
 .Jumptable1:
 	dw .UseItem
@@ -98,6 +98,11 @@ Pack:
 	cp KEY_ITEM - 1
 	jr z, .HandleKeyItemSubmenu
 
+  ; Check if we're connected to another player.
+	ld a, [wMultiplayerHasOtherTrainerName]
+	and a
+	jr nz, .multiplayer
+
 	farcall CheckItemMenu
 	ld a, [wItemAttributeParamBuffer]
 	and a
@@ -107,9 +112,24 @@ Pack:
 	ld de, Jumptable_UseGiveTossQuit
 	jr PackBuildMenu
 
-.cant_use
+.cant_use:
 	ld hl, MenuDataHeader_GiveToss
 	ld de, Jumptable_GiveTossQuit
+	jr PackBuildMenu
+
+.multiplayer:
+	farcall CheckItemMenu
+	ld a, [wItemAttributeParamBuffer]
+	and a
+	jr z, .cant_use_multiplayer
+
+	ld hl, MenuDataHeader_UseGiveGiftToss
+	ld de, Jumptable_UseGiveGiftTossQuit
+	jr PackBuildMenu
+
+.cant_use_multiplayer:
+	ld hl, MenuDataHeader_GiveGiftToss
+	ld de, Jumptable_GiveGiftTossQuit
 	; fallthrough
 
 PackBuildMenu:
@@ -364,6 +384,48 @@ Jumptable_GiveTossQuit:
 	dw TossMenu
 	dw DoNothing
 
+MenuDataHeader_UseGiveGiftToss:
+	db MENU_BACKUP_TILES
+	menu_coords 13, 1, 19, 11
+	dw .MenuData2
+	db 1 ; default option
+
+.MenuData2:
+	db $c0 ; flags
+	db 5 ; items
+	db "Use@"
+	db "Give@"
+	db "Gift@"
+	db "Toss@"
+	db "Quit@"
+
+Jumptable_UseGiveGiftTossQuit:
+	dw UseItem
+	dw GiveItem
+	dw MultiplayerGiftItem
+	dw TossMenu
+	dw DoNothing
+
+MenuDataHeader_GiveGiftToss:
+	db MENU_BACKUP_TILES
+	menu_coords 13, 3, 19, 11
+	dw .MenuData2
+	db 1 ; default option
+
+.MenuData2:
+	db $c0 ; flags
+	db 4 ; items
+	db "Give@"
+	db "Gift@"
+	db "Toss@"
+	db "Quit@"
+
+Jumptable_GiveGiftTossQuit:
+	dw GiveItem
+	dw MultiplayerGiftItem
+	dw TossMenu
+	dw DoNothing
+
 UseItem:
 	farcall CheckItemMenu
 	ld a, [wItemAttributeParamBuffer]
@@ -405,6 +467,38 @@ UseItem:
 	ld a, PACKSTATE_QUITRUNSCRIPT
 	ld [wJumptableIndex], a
 	ret
+
+MultiplayerGiftItem:
+	; Prepare package
+	ld hl, wMultiplayerTempPackage
+	ld bc, MULTIPLAYER_MAX_PACKAGE_SIZE
+	xor a
+	rst ByteFill
+	ld hl, wMultiplayerTempPackage
+	ld a, MULTIPLAYER_PKG_GIFT_ITEM
+	ld [hli], a
+	ld a, [wCurItem]
+	ld [hli], a
+
+	; Queue package
+	ld hl, wMultiplayerTempPackage
+	farcall MultiplayerQueuePackage
+
+	; Toss one item from the bag
+  ld a, 1
+	ld [wItemQuantityChangeBuffer], a
+  ld hl, wNumItems
+	call TossItem
+
+	; Get the item & player name for the dialog
+	call Pack_GetItemName
+	ld hl, wMultiplayerOtherTrainerName
+	ld de, wStringBuffer2
+	ld bc, PLAYER_NAME_LENGTH
+	rst CopyBytes
+
+	ld hl, Text_MultiplayerGiftSent
+	jmp Pack_PrintTextNoScroll
 
 TossMenu:
 	ld hl, Text_ThrowAwayHowMany
@@ -1428,6 +1522,10 @@ Text_CantRegister:
 Text_MoveItemWhere:
 	; Where should this be moved to?
 	text_far _AskItemMoveText
+	text_end
+
+Text_MultiplayerGiftSent:
+	text_far _MultiplayerGiftItemText
 	text_end
 
 PackInterfaceGFX:
