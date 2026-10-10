@@ -1,7 +1,8 @@
 # Mobile Adapter multiplayer plan
 
 Last updated: 2026-10-10.
-Status: planning and source investigation only. No ROM or server implementation yet.
+Status: planning, source investigation, and reproducible capacity-audit tools.
+No production ROM or server implementation yet.
 Working branch: `mobileadapter`.
 Base commit: `8f3c7e9651e988d876e32a4c7ad9ef1bb76702a8`.
 
@@ -91,6 +92,15 @@ verification in both BGB and DoubleCherryGB and an explicit compatibility
 decision. First measure a minimal driver and reclaim or relocate suitable ROM0
 helpers into ROMX. Fixed-bank callers and interrupted banked code must remain
 valid. Existing `layout.link` placements need deliberate updates.
+
+Follow-up experiments are recorded in [research/FEASIBILITY.md](research/FEASIBILITY.md).
+A disposable assembler/linker experiment relocated three foreground helper files
+through existing far-call entry points and recovered 264 ROM0 bytes. It then
+successfully reserved 256 ROM0 bytes, 8 KiB ROMX, 96 WRAM0 bytes, 1.5 KiB in WRAMX
+bank 2, one HRAM byte, and 128 SRAM bytes simultaneously. This demonstrates a
+plausible initial placement, not runtime correctness or the final driver size.
+Exact results and repeatable tooling live in `research/` and `tools/`. Keep the
+production baseline unchanged until relocation regression tests are available.
 
 The overworld has 13 runtime object structures, including the local player,
 and 21 map object records. Each runtime structure is 34 bytes. Objects starting
@@ -193,9 +203,12 @@ copy to validate adapter transcripts separately from ROM execution.
   switching WRAM banks for every interrupt.
 - Networking starts only when explicitly enabled. Adapter absence leaves normal
   offline gameplay usable and exits the connection attempt with a bounded timeout.
-- Poll presence at an initial target of 5-10 exchanges per second. Measure frame
-  cost and latency before fixing the rate. Movement is locally controlled and
-  immediately visible locally; remote rendering follows snapshots.
+- Target 20 presence exchanges per second in the first latency experiment,
+  subject to measured transfer/frame cost. Publish step starts and progress,
+  not only completed tile positions. Local movement responds immediately;
+  remote rendering uses short interpolation and bounded prediction. Initial
+  goals are local p95 below 200 ms and p95 below 300 ms with each client's server
+  RTT near 100 ms. These are unmeasured acceptance targets, not achieved results.
 - Coalesce unsent movement into the most recent snapshot. Reliable events have
   a separate bounded queue; they must not be silently dropped with movement.
 - The adapter is driven by ROM transfers. Server-side push still requires the
@@ -306,6 +319,26 @@ map. Start with an approved small avatar set and standing/walking states, then
 add surfing, biking, stairs, ledges, weather, palette changes, and large sprites
 after checking their tile budget.
 
+The all-map audit covers 611 assembled maps. Whole-map record counts leave room
+for one/two/three extra runtime structures on 542/528/519 maps respectively,
+excluding additional effects. Initial-window geometry looks less crowded but
+is not a lifetime guarantee: story alternatives, ordinary movement, retained
+`WONT_DELETE` objects, temporary effects, and special tile ranges matter.
+Snowtop Mountain's windows/camera substitute and Cinnabar Volcano's retained
+rocks/boulders are concrete reasons to include capacity management immediately.
+See the report and `research/map-slots.csv` for every map and the audit's limits.
+
+Use a feature-owned replaceability table and temporary suppression mask. Restore
+eligible decoration when visible-peer demand disappears; preserve stable map
+IDs, position/state, event flags, and required script actors. Do not use the
+story-mutating `Script_disappear` command for multiplayer eviction. With twelve
+nonplayer runtime slots, one/two remotes require ordinary demand at most eleven/
+ten; a one-effect reserve lowers that to ten/nine. Special last-slot sprite
+graphics can impose a tighter allocation rule. Define a protected camera/cutscene
+policy and defer rendering if no eligible object can be reclaimed. This policy
+is necessary even for a robust two-player release, although ordinary maps mostly
+fit without hiding NPCs.
+
 Facing interaction uses current map/instance and adjacent coordinates. If
 multiple players overlap the same tile, select a target by ID in a short menu
 instead of always taking the first array entry. The server checks an accepted
@@ -406,6 +439,8 @@ Keep the feature under one root directory named `mobile_adapter`:
 ```text
 mobile_adapter/
   PLAN.md
+  research/             evidence, capacity results, complete map-slot audit
+  tools/                reproducible host-side capacity/audit scripts
   protocol/             versioned schema, vectors, generated-file rules
   rom/
     constants.asm       feature constants and bounded structure layouts
@@ -433,9 +468,10 @@ mobile_adapter/
     scenarios/          two/three-client TCP scenarios and fault injection
 ```
 
-This is a proposed layout; only `PLAN.md` exists now. Source location does not
-determine memory bank. `serial.asm` can be included in a resident section even
-though its file lives under this directory. Generate cross-language constants
+The implementation directories are proposed; planning, research, and audit tools
+exist now. Source location does not determine memory bank. `serial.asm` can be
+included in a resident section even though its file lives under this directory.
+Generate cross-language constants
 from one small schema, or validate synchronized definitions if generation proves
 unnecessarily complex. Commit meaningful shared vectors. Do not vendor the
 entire upstream mobile subsystem or external emulator repositories by default.
@@ -532,6 +568,22 @@ These targets do not exist yet. BGB and DoubleCherryGB manual integration remain
 necessary for actual serial timing, rendering, menu responsiveness, and end-to-end
 battles/trades. The ordinary unit-test command must not start either emulator.
 
+Integration fixtures must be ordinary in-game battery saves loaded by the current
+ROM, followed by boot/Continue and bounded state-driven input phases. Never reuse
+a full CPU/WRAM emulator snapshot across ROM hashes. Preserve or migrate the
+normal save schema, handle frontend-specific RTC data, and resolve test observers
+from the matching current `.sym` instead of fixed addresses. Check semantic ROM
+state, server facts, input-to-visible latency, and native-resolution PNGs at start,
+intermediate movement, and final state. Frame checkpoints should be relative to
+recognized phases, with event/timing conditions for jittered networking.
+
+BGB's documented battery/headless/demo/breakpoint/export options make it a
+compatibility-test candidate; process exit alone does not prove success. A native
+libretro harness for DoubleCherryGB can offer tighter frame control, but its
+inspected system/video-memory accessor indexing requires validation or repair
+before using it as an observer. Neither harness nor save fixtures exist yet.
+The detailed workflow and remaining backend work are in the feasibility report.
+
 ## Milestones and acceptance gates
 
 1. **Memory and adapter proof.** Pin tool/reference versions, implement only the
@@ -602,6 +654,10 @@ temporary references, not dependencies committed into this repository.
 - [x] Identify serial, overworld, phone, link, battle, item, and save integration seams.
 - [x] Distinguish libmobile telephone relay configuration from our TCP game server.
 - [x] Record a multi-player model, feature order, test limits, and durability risks.
+- [x] Demonstrate an initial ROM0/ROMX/RAM reservation with disposable links.
+- [x] Audit all 611 maps and distinguish initial visibility from retained demand.
+- [x] Specify replaceable-decoration policy, latency targets, and battery-save
+  integration-test oracles.
 - [ ] Prove minimum ISP/TCP startup on both adapter implementations, including
   fresh configuration and disabled or irrelevant telephone relay behavior.
 - [ ] Allocate resident serial code and stable RAM with measured budgets and
