@@ -1,0 +1,22 @@
+# Boot, open the main menu, and Continue the raw battery save.
+700 START 10
+1300 START 10
+1500 A 10
+1900 A 5
+2000 A 5
+2100 A 5
+2200 A 5
+2300 A 5
+2400 A 5
+2500 A 5
+2600 A 5
+2700 A 5
+2800 A 5
+2900 A 5
+
+# State-driven developer control: two complete connections, then normal movement.
+ON 3300 wMapStatus=2,wScriptRunning=0,hInMenu=0 SELECT 8
+ON 3300 wMapStatus=2,wScriptRunning=0,hInMenu=0 B 8
+ON 3500 wMobileSuccessCount=1,wMobileOwner=0 SELECT 8
+ON 3500 wMobileSuccessCount=1,wMobileOwner=0 B 8
+ON 3750 wMobileSuccessCount=2,wMobileOwner=0 RIGHT 20

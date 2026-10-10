@@ -65,3 +65,5 @@ bank_ends.txt
 # local tools
 rgbds/
 deploy.sh
+mobile_adapter/build*/
+mobile_adapter/server/target/

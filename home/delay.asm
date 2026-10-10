@@ -46,6 +46,9 @@ MaybeDelayFrame:
 	ldh a, [hVBlankOccurred]
 	and a
 	jr z, DelayFrameHalt
+if DEF(MOBILE_ADAPTER)
+	farcall MobileTick
+endc
 	ret
 
 ConsumeGenericDelay::

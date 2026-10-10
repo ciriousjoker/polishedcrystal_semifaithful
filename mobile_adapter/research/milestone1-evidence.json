@@ -1,0 +1,250 @@
+{
+  "date": "2026-10-10",
+  "scope": "Milestone 1 actual-ROM transport, not completed multiplayer",
+  "layout": {
+    "existing_ram_symbols_checked": 23373,
+    "existing_ram_symbols_changed": {},
+    "resident_bytes": 34,
+    "buffer_bytes": 676,
+    "banked_driver_bytes": 1390,
+    "baseline_rom_sha256": "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e",
+    "baseline_summary": "SUMMARY:\n\tROM0: 16366 bytes used / 18 free\n\tROMX: 2066825 bytes used / 13943 free in 127 banks\n\tSRAM: 30936 bytes used / 1832 free in 4 banks\n\tWRAM0: 3796 bytes used / 300 free\n\tWRAMX: 23760 bytes used / 4912 free in 7 banks\n\tHRAM: 122 bytes used / 5 free",
+    "mobile_rom_sha256": "b8b70f686ed9a747f824eb72b5aad001018d07f7ddbadcad75a402445dab8226",
+    "mobile_summary": "SUMMARY:\n\tROM0: 16382 bytes used / 2 free\n\tROMX: 2068227 bytes used / 12541 free in 127 banks\n\tSRAM: 30936 bytes used / 1832 free in 4 banks\n\tWRAM0: 3830 bytes used / 266 free\n\tWRAMX: 24436 bytes used / 4236 free in 7 banks\n\tHRAM: 122 bytes used / 5 free",
+    "faithful_rom_sha256": "5dc132831c4d72c7e0cd9aad2217868b6ebcea37aa58a1cf9450ba150526b9f7",
+    "faithful_summary": "SUMMARY:\n\tROM0: 16368 bytes used / 16 free\n\tROMX: 2068178 bytes used / 12590 free in 127 banks\n\tSRAM: 30936 bytes used / 1832 free in 4 banks\n\tWRAM0: 3830 bytes used / 266 free\n\tWRAMX: 24436 bytes used / 4236 free in 7 banks\n\tHRAM: 122 bytes used / 5 free"
+  },
+  "pinned_core_revision": "03f58ca3dfb4b716f7e66a0e0467f9e85ef82abb",
+  "pinned_libmobile_revision": "0704f56902f23b7ebf05c82c222e0e145e3140b6",
+  "host_only_rust_tests": 8,
+  "production_asm_contract": "passed",
+  "clippy_warnings_denied": "passed",
+  "transport_hashes": {
+    "rom_sha256": "b8b70f686ed9a747f824eb72b5aad001018d07f7ddbadcad75a402445dab8226",
+    "symbols_sha256": "2444a48ef1bcaf28fb472e41a47aa9c221e94bbad8f9f76bf46b879bfef9a69f",
+    "runner_sha256": "bd818e84e68c8a19194d9da9459221c338d6e7127ea9e7558a5f5e5f720b04e9",
+    "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+    "profile_core_sha256": "e114180335bba6bc0ee6d3a091cc1fdd2971969f3be1b353a5edb1c5f19a29b7",
+    "server_sha256": "e4d3cc50f0541844c4325a3402e3a5a038036e97b02ac058cfe8e427c3dbdfc5"
+  },
+  "transport_battery": {
+    "bytes": 32768,
+    "save_version": 10,
+    "checksums": {
+      "s": 40314,
+      "sBackup": 40314
+    },
+    "sha256": "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400"
+  },
+  "standard_native_game_processes": 14,
+  "scenario_results": [
+    {
+      "case": "reconnect",
+      "frame_calls": 4000,
+      "checkpoints": 21,
+      "successes": 2,
+      "attempts": 2,
+      "error": 0,
+      "serial_owner": 0,
+      "x": 4,
+      "y": 3,
+      "all_guards_165": true,
+      "profile": {
+        "serial_count": 620,
+        "serial_max_cycles": 1716,
+        "serial_total_cycles": 969400,
+        "serial_failures": 0,
+        "serial_lowest_sp": 49342,
+        "tick_count": 3957,
+        "tick_max_cycles": 4008,
+        "tick_total_cycles": 1838828,
+        "tick_failures": 0,
+        "tick_lowest_sp": 49344,
+        "serial_max_frame_cycles": 37592,
+        "serial_normal_speed_count": 0,
+        "serial_bank_switch_completions": 40,
+        "video_frames": 3997,
+        "audio_batches": 3997,
+        "audio_samples": 2937795
+      }
+    },
+    {
+      "case": "three-clients",
+      "frame_calls": 4000,
+      "checkpoints": 11,
+      "successes": 1,
+      "attempts": 1,
+      "error": 0,
+      "serial_owner": 0,
+      "x": 4,
+      "y": 3,
+      "all_guards_165": true
+    },
+    {
+      "case": "three-clients",
+      "frame_calls": 4000,
+      "checkpoints": 11,
+      "successes": 1,
+      "attempts": 1,
+      "error": 0,
+      "serial_owner": 0,
+      "x": 4,
+      "y": 3,
+      "all_guards_165": true
+    },
+    {
+      "case": "three-clients",
+      "frame_calls": 4000,
+      "checkpoints": 11,
+      "successes": 1,
+      "attempts": 1,
+      "error": 0,
+      "serial_owner": 0,
+      "x": 4,
+      "y": 3,
+      "all_guards_165": true
+    },
+    {
+      "case": "split",
+      "frame_calls": 4000,
+      "checkpoints": 11,
+      "successes": 1,
+      "attempts": 1,
+      "error": 0,
+      "serial_owner": 0,
+      "x": 4,
+      "y": 3,
+      "all_guards_165": true
+    },
+    {
+      "case": "bad-magic",
+      "frame_calls": 4000,
+      "checkpoints": 7,
+      "successes": 0,
+      "attempts": 1,
+      "error": 5,
+      "serial_owner": 0,
+      "x": 4,
+      "y": 3,
+      "all_guards_165": true
+    },
+    {
+      "case": "silent",
+      "frame_calls": 4250,
+      "checkpoints": 7,
+      "successes": 0,
+      "attempts": 1,
+      "error": 2,
+      "serial_owner": 0,
+      "x": 4,
+      "y": 3,
+      "all_guards_165": true
+    },
+    {
+      "case": "close",
+      "frame_calls": 4000,
+      "checkpoints": 7,
+      "successes": 0,
+      "attempts": 1,
+      "error": 3,
+      "serial_owner": 0,
+      "x": 4,
+      "y": 3,
+      "all_guards_165": true
+    },
+    {
+      "case": "no-server",
+      "frame_calls": 4000,
+      "checkpoints": 6,
+      "successes": 0,
+      "attempts": 1,
+      "error": 4,
+      "serial_owner": 0,
+      "x": 4,
+      "y": 3,
+      "all_guards_165": true
+    },
+    {
+      "case": "no-adapter",
+      "frame_calls": 4000,
+      "checkpoints": 3,
+      "successes": 0,
+      "attempts": 1,
+      "error": 4,
+      "serial_owner": 0,
+      "x": 4,
+      "y": 3,
+      "all_guards_165": true
+    },
+    {
+      "case": "cancel",
+      "frame_calls": 4000,
+      "checkpoints": 7,
+      "successes": 0,
+      "attempts": 1,
+      "error": 1,
+      "serial_owner": 0,
+      "x": 4,
+      "y": 3,
+      "all_guards_165": true
+    },
+    {
+      "case": "recover",
+      "frame_calls": 4000,
+      "checkpoints": 17,
+      "successes": 1,
+      "attempts": 2,
+      "error": 0,
+      "serial_owner": 0,
+      "x": 4,
+      "y": 3,
+      "all_guards_165": true
+    },
+    {
+      "case": "oversize",
+      "frame_calls": 4000,
+      "checkpoints": 7,
+      "successes": 0,
+      "attempts": 1,
+      "error": 5,
+      "serial_owner": 0,
+      "x": 4,
+      "y": 3,
+      "all_guards_165": true
+    },
+    {
+      "case": "truncated",
+      "frame_calls": 4000,
+      "checkpoints": 7,
+      "successes": 0,
+      "attempts": 1,
+      "error": 3,
+      "serial_owner": 0,
+      "x": 4,
+      "y": 3,
+      "all_guards_165": true
+    }
+  ],
+  "faithful_reconnect": {
+    "rom_sha256": "5dc132831c4d72c7e0cd9aad2217868b6ebcea37aa58a1cf9450ba150526b9f7",
+    "successes": 2
+  },
+  "baseline_regression": {
+    "rom_sha256": "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e",
+    "battery": {
+      "bytes": 32768,
+      "save_version": 10,
+      "checksums": {
+        "s": 40314,
+        "sBackup": 40314
+      },
+      "sha256": "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400"
+    },
+    "stages": [
+      "create",
+      "continue",
+      "move"
+    ]
+  },
+  "artifact_root": "/Volumes/Storage/Cache/mobileadapter/m1-complete"
+}

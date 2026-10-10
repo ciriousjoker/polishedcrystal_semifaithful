@@ -42,6 +42,13 @@ MODIFIERS := $(MODIFIERS)-faithful
 RGBASMFLAGS += -DFAITHFUL
 COPYRIGHT += F
 endif
+ifeq ($(filter mobile,$(MAKECMDGOALS)),mobile)
+ifneq ($(filter vc pocket debug monochrome noir hgss huffman,$(MAKECMDGOALS)),)
+$(error Mobile Adapter currently supports standard and faithful GBC builds)
+endif
+MODIFIERS := $(MODIFIERS)-mobile
+RGBASMFLAGS += -DMOBILE_ADAPTER
+endif
 ifeq ($(filter monochrome,$(MAKECMDGOALS)),monochrome)
 MODIFIERS := $(MODIFIERS)-monochrome
 RGBASMFLAGS += -DMONOCHROME
@@ -73,6 +80,11 @@ Q := @
 RGBASMFLAGS += -DHUFFMAN
 endif
 
+ifeq ($(filter mobile,$(MAKECMDGOALS)),mobile)
+MOBILE_OBJ_DIR := mobile_adapter/build$(MODIFIERS)
+MOBILE_MKDIR = @mkdir -p $(dir $@)
+endif
+
 rom_obj := \
 	main.o \
 	home.o \
@@ -96,15 +108,23 @@ rom_obj := \
 
 crystal_obj    := $(rom_obj:.o=.o)
 crystal_vc_obj := $(rom_obj:.o=_vc.o)
+ifdef MOBILE_OBJ_DIR
+crystal_obj := $(addprefix $(MOBILE_OBJ_DIR)/,$(rom_obj))
+endif
 
 .SUFFIXES:
-.PHONY: clean tidy crystal faithful pocket debug monochrome freespace tools bsp huffman vc
+.PHONY: clean tidy crystal faithful mobile pocket debug monochrome freespace tools bsp huffman vc test-mobile-host
 .PRECIOUS: %.2bpp %.1bpp
 .SECONDARY:
 .DEFAULT_GOAL: crystal
 
 crystal: $$(ROM_NAME).$$(EXTENSION)
 faithful: crystal
+mobile: crystal
+MOBILE_CARGO ?= cargo
+test-mobile-host:
+	$(MOBILE_CARGO) test --locked --manifest-path mobile_adapter/server/Cargo.toml
+	python3 mobile_adapter/tools/test_asm_contracts.py --rgbds "$(or $(RGBDS),./)"
 monochrome: crystal
 noir: crystal
 hgss: crystal
@@ -146,6 +166,7 @@ preinclude_deps := includes.asm $(shell tools/scan_includes includes.asm)
 
 define DEP
 $1: $2 $$(shell tools/scan_includes $2) $(preinclude_deps) | rgbdscheck.o
+	$$(MOBILE_MKDIR)
 	$Q$$(RGBASM) $$(RGBASMFLAGS) -o $$@ $$<
 endef
 
@@ -155,7 +176,7 @@ $1: $2 $$(shell tools/scan_includes $2) $(preinclude_deps) | rgbdscheck.o
 endef
 
 ifeq (,$(filter clean tidy tools,$(MAKECMDGOALS)))
-$(foreach obj, $(crystal_obj), $(eval $(call DEP,$(obj),$(obj:.o=.asm))))
+$(foreach obj, $(crystal_obj), $(eval $(call DEP,$(obj),$(patsubst $(MOBILE_OBJ_DIR)/%,%,$(obj:.o=.asm)))))
 $(foreach obj, $(crystal_vc_obj), $(eval $(call VCDEP,$(obj),$(obj:_vc.o=.asm))))
 endif
 
@@ -258,6 +279,15 @@ gfx/title/crystal.2bpp: tools/gfx += --interleave --png=$<
 
 gfx/title/version.2bpp: Makefile tools/fine_print.c
 	$Qtools/fine_print -e 20 '$(COPYRIGHT)' $@
+
+ifdef MOBILE_OBJ_DIR
+# Keep variant title generation from contaminating the disabled standard build.
+gfx/title/version.2bpp: COPYRIGHT = @$(shell date '+%Y') $(AUTHOR) v$(VERSION)
+$(MOBILE_OBJ_DIR)/main.o: $(MOBILE_OBJ_DIR)/title-version.2bpp.lzp
+$(MOBILE_OBJ_DIR)/title-version.2bpp: Makefile tools/fine_print.c
+	@mkdir -p $(dir $@)
+	$Qtools/fine_print -e 20 '$(COPYRIGHT)' $@
+endif
 
 gfx/title/suicune_unowns.2bpp: RGBGFXFLAGS += --unique-tiles --nb-tiles 127,127 --base-tiles 0,128
 gfx/title/suicune_unowns.tilemap: RGBGFXFLAGS += --unique-tiles --nb-tiles 127,127 --base-tiles 0,128

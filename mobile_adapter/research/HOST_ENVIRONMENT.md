@@ -214,7 +214,8 @@ assertions. It is not the full future acceptance harness. Add bounded state-driv
 phases, intermediate render snapshots, real-time pacing, server transcripts,
 concurrent clients, and disconnect/fault injection as multiplayer is developed.
 Fast offline startup is useful, but accelerated emulation must not be used to
-claim socket latency because the adapter uses host wall time. Separate emulator
+claim socket latency: the pinned adapter uses emulated CPU clocks for its
+timeouts while actual sockets use host time. Separate emulator
 processes can connect through their embedded libmobile to the same local Rust
 TCP listener; they do not need a separate BGB bridge or RetroArch netplay.
 
@@ -236,3 +237,12 @@ relocating any existing helpers. Results and limitations are in
 Production feature code is still absent. Keep the new module gated, centralize
 feature code/data, and prove the disabled build's exact upstream hash. Execute
 and measure the real banked ISR before relying on this layout.
+
+## Implemented transport acceptance
+
+Milestone 1 now implements the state-driven/paced frontend, intermediate PNG
+checkpoints, actual-ROM Rust TCP exchange, independent clients, fault injection
+and optional read-only CPU profiling. The commands and support matrix are in
+[../README.md](../README.md); measured results are in [MILESTONE_1.md](MILESTONE_1.md).
+The earlier boot/save probe and build hashes above remain historical evidence.
+The native core revision and its behavior remain unchanged.

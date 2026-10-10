@@ -1,8 +1,8 @@
 # Mobile Adapter multiplayer plan
 
 Last updated: 2026-10-10.
-Status: planning, capacity probes, and verified native emulator automation.
-No production ROM or server implementation yet.
+Status: milestone 1 complete. Next: milestone 2, three-player lobbies and live
+overworld presence. See research/MILESTONE_1.md for measured acceptance evidence.
 Working branch: `mobileadapter`.
 Base commit: `8f3c7e9651e988d876e32a4c7ad9ef1bb76702a8`.
 
@@ -785,6 +785,11 @@ publication, or external deployment. Only then is the agreed project complete.
 
 ## Execution policy and current blockers
 
+Implementation started at the user's request. Keep milestone 1 open until the
+actual-game TCP exchange, failure/reconnect scenarios, disabled-build hash,
+resource measurements, and interrupt/bank checks have passed. Current changes
+and results must be recorded here before context compaction or stopping work.
+
 No additional emulator installation, Rosetta, Wine, BGB, cloud account, or desktop
 app is required to start implementation. Tooling availability is established;
 the first unproven gate is the real game's asynchronous adapter/TCP path and its
@@ -845,21 +850,45 @@ in `research/HOST_ENVIRONMENT.md`; they are not vendored into this branch.
 - [x] Audit all 611 maps and distinguish initial visibility from retained demand.
 - [x] Specify replaceable-decoration policy, latency targets, and battery-save
   integration-test oracles.
-- [ ] Prove minimum ISP/TCP startup on native DoubleCherryGB, including
+- [x] Prove minimum ISP/TCP startup on native DoubleCherryGB, including
   fresh configuration and disabled or irrelevant telephone relay behavior.
-- [ ] Extend the native frontend with bounded state-driven phases, intermediate
+- [x] Extend the native frontend with bounded state-driven phases, intermediate
   render checkpoints, real-time pacing, and server fault injection for features.
-- [ ] Allocate resident serial code and stable RAM with measured budgets and
+- [x] Allocate resident serial code and stable RAM with measured budgets and
   audit bank/interrupt safety.
-- [ ] Freeze the first binary schema and response-credit/chunking rules only
-  after the transport experiment.
+- [x] Freeze transport-v1 framing and bounded single-request echo reassembly
+  after the actual-ROM experiment. Add lobby message credits/chunking in milestone 2.
 - [ ] Resolve crowding behavior, map-instance rules, and avatar allocation.
 - [ ] Design safe foreground service points through menus, saves, and battles.
 - [ ] Specify journal placement, save compatibility, and client crash recovery
   before coding any inventory-changing multiplayer feature.
 
-Next concrete implementation step: milestone 1, a minimal actual-game adapter
-connection with a feature build and small Rust loopback endpoint, extending the
-native harness to observe it at real speed. The five milestones above define
-completion of the agreed project. Continue using this worktree and branch;
-do not create another branch or PR.
+Next concrete implementation step: milestone 2. Add compatibility negotiation,
+server-assigned player IDs and generations, bounded lobby/presence queues, the
+ROM's online controls and two-entry peer table. Establish a sparse-map two-player
+presence demonstration before crowded-map allocation and the final three-player
+acceptance. Continue using this worktree and branch; do not create another branch
+or PR. Milestone 1 is complete, not the full multiplayer deliverable.
+
+## Milestone 1 implementation checkpoint
+
+Completed 2026-10-10. The production game connects through native DoubleCherryGB
+and embedded libmobile to the Rust server, checks an echo, disconnects and
+reconnects. Final standard acceptance passes 14 native processes across 12
+scenarios, plus faithful reconnect and disabled Save/Continue regression.
+Host-only tests pass without an emulator. No upstream helper relocation or
+mapper change was needed. New use: 16 bytes ROM0, 1,402 bytes ROMX, 34 bytes
+WRAM0 and 676 bytes WRAMX bank 2; all 23,373 compared existing RAM symbols retain
+their addresses. Disabled standard hash still matches exactly. A read-only
+profiling core measured 620 serial interrupts, zero preservation failures and
+190-byte observed stack headroom. Future UI/battle paths need their own scenarios.
+
+Read [README.md](README.md) for commands, [research/MILESTONE_1.md](research/MILESTONE_1.md)
+for budgets/limits and [protocol/transport-v1.md](protocol/transport-v1.md) for the
+wire contract. Raw final artifacts are under
+`/Volumes/Storage/Cache/mobileadapter/m1-complete/`; the baseline battery regression
+is under `m1-baseline-regression/`. Use the normal core for functional acceptance
+and `build/doublecherry-profile-v2/` only for optional observation. Do not install
+Rosetta/Wine/BGB. The adapter timeout callbacks use emulated CPU clocks; actual
+sockets use host time. Developer Select+B runs the proof only in a safe idle
+map state and consumes that chord to avoid the ordinary registered-item script.

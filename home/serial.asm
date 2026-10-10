@@ -6,6 +6,15 @@ Serial::
 	push bc
 	push af
 
+if DEF(MOBILE_ADAPTER)
+	ld a, [wMobileOwner]
+	and a
+	jr z, .legacy
+	farcall MobileSerialIRQ
+	jr .end
+.legacy
+endc
+
 	ld a, [wPrinterConnectionOpen]
 	bit PRINTER_CONNECTION_OPEN, a
 	jr nz, .printer

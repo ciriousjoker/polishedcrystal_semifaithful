@@ -1,4 +1,7 @@
 Printer_StartTransmission:
+if DEF(MOBILE_ADAPTER)
+	farcall MobileYieldSerial
+endc
 	ld hl, wGameboyPrinterRAM
 	ld bc, wGameboyPrinterRAMEnd - wGameboyPrinterRAM
 	xor a

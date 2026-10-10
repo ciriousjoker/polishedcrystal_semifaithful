@@ -325,7 +325,8 @@ to the first corresponding rendered pixels in client B, not merely socket RTT.
 Run two and three clients with walking, running, biking, warps, NPC-heavy maps,
 menus, jitter, disconnects, and explicitly labeled one-way/round-trip delay.
 Keep live network tests at real speed; uncontrolled fast-forward invalidates
-wall-clock polling and timeout measurements.
+real socket-latency measurements. The pinned adapter timeout callbacks use
+emulated CPU clocks; accelerated emulation changes their relation to socket time.
 
 ## Integration tests: battery saves, symbols, and explicit oracles
 
@@ -488,3 +489,11 @@ Repository source anchors include `constants/map_object_constants.asm`,
 `engine/overworld/scripting.asm`, `data/sprites/map_objects.asm`,
 `data/sprites/facings.asm`, the dense maps above, and
 `engine/events/bug_contest/contest.asm:Special_SelectRandomBugContestContestants`.
+
+## Implementation evidence after feasibility work
+
+Milestone 1 is implemented. [MILESTONE_1.md](MILESTONE_1.md) supersedes the earlier
+capacity-only experiments for actual transport placement and timing, and
+[../README.md](../README.md) gives the distinct host-only and native integration
+commands. All research reservations above remain illustrative: later avatar,
+interaction, battle and journal sizes must be measured as implemented.

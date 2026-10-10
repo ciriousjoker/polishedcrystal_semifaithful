@@ -741,3 +741,7 @@ INCLUDE "audio/music/printer.asm"
 SECTION "LureMenu", ROMX
 
 INCLUDE "engine/menus/lure_menu.asm"
+
+if DEF(MOBILE_ADAPTER)
+INCLUDE "mobile_adapter/rom/adapter.asm"
+endc

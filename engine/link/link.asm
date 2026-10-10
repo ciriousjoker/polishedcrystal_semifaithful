@@ -1,4 +1,7 @@
 LinkCommunications:
+if DEF(MOBILE_ADAPTER)
+	farcall MobileYieldSerial
+endc
 	call ClearBGPalettes
 	ld c, 80
 	call DelayFrames
@@ -1860,6 +1863,9 @@ Special_SetBitsForBattleRequest:
 	ret
 
 Special_WaitForLinkedFriend:
+if DEF(MOBILE_ADAPTER)
+	farcall MobileYieldSerial
+endc
 	ld a, [wPlayerLinkAction]
 	and a
 	jr z, .no_link_action

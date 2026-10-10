@@ -391,7 +391,11 @@ TitleLogoGFX:
 INCBIN "gfx/title/logo.2bpp.lzp"
 
 TitleVersionGFX:
-INCBIN "gfx/title/version.2bpp.lzp"
+if DEF(MOBILE_ADAPTER)
+	mobile_title_version
+else
+	INCBIN "gfx/title/version.2bpp.lzp"
+endc
 
 TitleCrystalGFX:
 INCBIN "gfx/title/crystal.2bpp.lzp"

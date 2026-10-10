@@ -1,0 +1,9 @@
+[package]
+name = "mobile-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+mobile-protocol = { path = "../protocol" }
+tokio.workspace = true

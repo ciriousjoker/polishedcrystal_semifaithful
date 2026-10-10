@@ -81,3 +81,7 @@ INCLUDE "constants/trainer_data_constants.asm"
 INCLUDE "constants/type_constants.asm"
 INCLUDE "constants/weather_constants.asm"
 INCLUDE "constants/printer_constants.asm"
+
+if DEF(MOBILE_ADAPTER)
+INCLUDE "mobile_adapter/rom/constants.asm"
+endc
