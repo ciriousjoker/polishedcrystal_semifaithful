@@ -1,0 +1,48 @@
+{
+  "schema_version": 2,
+  "strategy": "banked-isr",
+  "baseline_commit": "196b7f63ea0d7f2e7d0d3ed4708e618f803b06a5",
+  "baseline_rom_sha256": "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e",
+  "rgbasm_version": "rgbasm v1.0.4",
+  "baseline": [
+    "ROM0: 16366 bytes used / 18 free",
+    "ROMX: 2066825 bytes used / 13943 free in 127 banks",
+    "SRAM: 30936 bytes used / 1832 free in 4 banks",
+    "WRAM0: 3796 bytes used / 300 free",
+    "WRAMX: 23760 bytes used / 4912 free in 7 banks",
+    "HRAM: 122 bytes used / 5 free"
+  ],
+  "after_source_experiment": [
+    "ROM0: 16378 bytes used / 6 free",
+    "ROMX: 2066826 bytes used / 13942 free in 127 banks",
+    "SRAM: 30936 bytes used / 1832 free in 4 banks",
+    "WRAM0: 3892 bytes used / 204 free",
+    "WRAMX: 23760 bytes used / 4912 free in 7 banks",
+    "HRAM: 122 bytes used / 5 free"
+  ],
+  "after_experiment_and_reservation": [
+    "ROM0: 16378 bytes used / 6 free",
+    "ROMX: 2075018 bytes used / 5750 free in 127 banks",
+    "SRAM: 31064 bytes used / 1704 free in 4 banks",
+    "WRAM0: 3892 bytes used / 204 free",
+    "WRAMX: 25296 bytes used / 3376 free in 7 banks",
+    "HRAM: 123 bytes used / 4 free"
+  ],
+  "moved_files": [],
+  "reservations_bytes": {
+    "ROM0": 0,
+    "ROMX": 8192,
+    "WRAM0": 96,
+    "WRAMX_bank_2": 1536,
+    "HRAM": 1,
+    "SRAM_bank_1": 128
+  },
+  "resident_dispatch_bytes": 12,
+  "validation": "Both experimental object sets assembled and linked successfully. No emulator execution or timing test.",
+  "limitations": [
+    "The ROM contains inert capacity placeholders and is not a playable implementation.",
+    "The banked-ISR experiment proves placement only; dispatch cycle cost, stack depth, and interrupt/bank safety are not measured.",
+    "Reservations are an illustrative budget, not measured sizes of an implemented driver.",
+    "This experiment uses the matching standard baseline build, not every build variant."
+  ]
+}

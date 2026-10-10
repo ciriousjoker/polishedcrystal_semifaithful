@@ -1,0 +1,93 @@
+{
+  "checked_date": "2026-10-10",
+  "host": {
+    "os": "macOS",
+    "version": "27.0.1",
+    "build": "26A434",
+    "architecture": "arm64"
+  },
+  "source_base_commit": "8f3c7e9651e988d876e32a4c7ad9ef1bb76702a8",
+  "branch": "mobileadapter",
+  "cache_directory": "/Volumes/Storage/Cache/mobileadapter",
+  "versions": {
+    "rgbds_default": "1.0.1",
+    "rgbds_feature_build": "1.0.4",
+    "rustc": "1.85.0",
+    "cargo": "1.85.0",
+    "bgb_download": "1.6.6"
+  },
+  "external_revisions": {
+    "libmobile": "0704f56902f23b7ebf05c82c222e0e145e3140b6",
+    "libmobile-bgb": "4dfc19f69a8ccb6f2ada55e49765419f76d03e2c",
+    "doublecherry": "03f58ca3dfb4b716f7e66a0e0467f9e85ef82abb"
+  },
+  "hashes": {
+    "baseline_rom_sha256": "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e",
+    "rgbds_archive_sha256": "62d1669bbe3b2bf2cfc2e72076d3c8c00fc023a9cc15d458f0c723bd9d0312c4",
+    "bgb_archive_sha256": "38b97e4496ad85106f59c87a6b0386b7405fbebb3bccc90650279762bd10478c",
+    "doublecherry_build_patch_sha256": "723802f7ecd4f893ea6ca65c5c5aa68d6e8b63c8999c2e89600c0fcafcb8253a"
+  },
+  "verified": [
+    "standard_rom_rebuild_and_official_hash",
+    "native_rust_binary_and_temporary_unit_test",
+    "libmobile_static_build_and_install",
+    "native_bgb_bridge_build_and_help",
+    "native_doublecherry_build_and_dlopen",
+    "three_separate_headless_baseline_boots",
+    "temporary_offline_cargo_test"
+  ],
+  "native_boot_probe": {
+    "frame_calls_per_process": 1200,
+    "start_button_calls": [
+      700,
+      709
+    ],
+    "video_callbacks_per_process": 1198,
+    "final_dimensions": [
+      160,
+      144
+    ],
+    "final_color_count": 22,
+    "mobile_adapter_option": "enabled after loading",
+    "title_screen_visually_checked": true,
+    "separate_config_directories": true,
+    "network_exchange_tested": false,
+    "runs": [
+      {
+        "instance": "a",
+        "exit_code": 0,
+        "ppm_sha256": "8647388415cca86927cf73e09952643cf2d52140cb6748db9fb38cc556749eee"
+      },
+      {
+        "instance": "b",
+        "exit_code": 0,
+        "ppm_sha256": "8647388415cca86927cf73e09952643cf2d52140cb6748db9fb38cc556749eee"
+      },
+      {
+        "instance": "c",
+        "exit_code": 0,
+        "ppm_sha256": "8647388415cca86927cf73e09952643cf2d52140cb6748db9fb38cc556749eee"
+      }
+    ]
+  },
+  "not_available": {
+    "wine": "not installed",
+    "macos_rosetta": "Intel execution fails with Bad CPU type; no installation receipt",
+    "bgb_execution": "not attempted without Wine"
+  },
+  "not_yet_verified": [
+    "BGB baseline boot through Wine on macOS 27",
+    "BGB bridge byte exchange on Darwin",
+    "Mobile Adapter ISP/TCP startup",
+    "banked serial ISR runtime and timing",
+    "multiplayer behavior",
+    "faithful build variant"
+  ],
+  "wine_cask": {
+    "version": "11.0_1",
+    "disabled": true,
+    "disable_date": "2026-09-01",
+    "disable_reason": "fails_gatekeeper_check"
+  },
+  "system_changes": "No Rosetta, Wine, VM, or container installed; native dependencies and downloads are isolated in the cache."
+}

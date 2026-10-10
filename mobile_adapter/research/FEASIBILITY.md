@@ -7,9 +7,9 @@ test design. No production ROM feature or Rust server is implemented here.
 
 ## Findings and decisions
 
-- There is a demonstrated path to resident code space without changing the
-  cartridge mapper: a disposable link experiment recovered 264 ROM0 bytes.
-  A simultaneous initial mobile budget fits. Runtime safety is still untested.
+- A 12-byte resident dispatch fits without moving existing helpers or changing
+  the cartridge mapper. A simultaneous initial mobile budget fits. Prefer this
+  fork-friendly design; interrupt runtime and timing safety remain untested.
 - Two additional ordinary avatars look practical in normal overworld scenes.
   Neither one nor two free runtime slots are guaranteed throughout every map,
   story state, effect, and movement history. Use a capacity-aware allocator from
@@ -21,15 +21,59 @@ test design. No production ROM feature or Rust server is implemented here.
   addresses from its own symbols. Check state, timing, and intermediate rendered
   frames; a final screenshot or a successful process exit alone is insufficient.
 
-## Memory: measured capacity experiment
+## Memory: measured capacity experiments
 
 The baseline contains only 18 free ROM0 bytes, 13,943 free ROMX bytes, and 300
 free WRAM0 bytes. ROMX bank `$7f` has a contiguous 13,926-byte tail. WRAMX bank 2
 has a contiguous 2,837-byte tail at `$d4eb..$dfff`. These are linker holes,
 not idle UNION members that can be borrowed while networking is active.
 
+### Preferred experiment: small dispatch and banked handler
+
+The user prioritizes minimal changes to upstream game code. No helper was moved
+in the actual game sources during either experiment. The earlier relocation
+occurred only in disposable temporary assembly files.
+
+`tools/probe_memory.py --strategy banked-isr` demonstrates an alternative:
+after the existing Serial interrupt's register saves, add a WRAM0 ownership
+check, branch to the existing serial path when inactive, and otherwise `farcall`
+an adapter handler in ROMX. Return through the existing register restores and
+`reti`. The added dispatch occupies exactly 12 ROM0 bytes, leaving six free.
+The original helper implementations and serial logic remain in place. A
+one-byte banked `ret` is only a placement placeholder, not a functioning driver.
+
+The same simultaneous data/ROMX reservations still link:
+
+| Region | Reservation | Remaining free space |
+| --- | ---: | ---: |
+| ROM0 | 12-byte dispatch, no extra resident placeholder | 6 bytes |
+| ROMX bank `$7f` | 8,192 bytes plus one-byte handler placeholder | 5,750 bytes across ROMX |
+| WRAM0 | 96 bytes | 204 bytes |
+| WRAMX bank 2 | 1,536 bytes | 1,301 bytes in bank 2 |
+| HRAM | 1 byte | 4 bytes |
+| SRAM bank 1 | 128 bytes | 1,244 bytes in bank 1 |
+
+Exact results are in `memory-banked-isr-probe.json`, reproduced with RGBDS 1.0.4
+and the exact baseline ROM hash. This removes helper relocation as an initial
+requirement. It does not prove the complete driver fits or executes correctly.
+The existing printer interrupt already uses a banked `farcall`, which is a
+useful integration precedent, not a serial throughput proof.
+
+Keep production dispatch under a feature flag and its implementation under
+`mobile_adapter/`. Add only narrow includes/hooks to existing source and build
+files. A disabled feature build must reproduce the upstream ROM hash. Maintain
+an explicit hook list and compile-time budgets to make upstream changes visible.
+Foreground protocol work belongs in ROMX; the interrupt must perform bounded
+byte handling, preserve ROM/WRAM banks and registers, and avoid waits or `ei`.
+Measure banked dispatch cycles, stack headroom, maximum serial rate, and effects
+on VBlank/audio before accepting this strategy. Six spare bytes also mean future
+upstream ROM0 growth could break the feature build; fail explicitly and revisit
+the driver rather than silently moving maintainer code.
+
+### Comparison experiment: helper relocation
+
 `tools/probe_memory.py` reads an already built baseline without editing its
-source or objects. It creates temporary assembly files, moves the implementations
+source or objects. With `--strategy helper-relocation`, it creates temporary assembly files and moves the implementations
 from these files into ROMX bank `$7f`, and preserves their global entry points
 in ROM0 using `farcall` and `ret` trampolines:
 
@@ -59,8 +103,8 @@ Exact results, baseline hash, and assembler version are in `memory-probe.json`.
 This is a placement proof for an illustrative budget, not proof that every
 planned feature fits within 8 KiB or that the relocated code executes correctly.
 
-The intended allocation is a short serial ISR and bank ownership state in ROM0
-and WRAM0, plus bounded packet buffers, reassembly, and two peer records in the
+The intended allocation is a small serial dispatch in ROM0, a handler in ROMX,
+and ownership state in WRAM0, plus bounded packet buffers, reassembly, and two peer records in the
 dedicated bank-2 tail. A 1,536-byte budget can illustrate two 272-byte adapter
 buffers, two 64-byte peer records, and 864 remaining bytes for framing/session
 state and queues. These are ceilings to refine against an implemented protocol.
@@ -87,8 +131,9 @@ uses `StackCallInBankA`; trainer helpers also switch banks or expose implicit-ba
 script pointers. Resident bank-switching machinery and interrupt paths must stay
 valid. The three experiment candidates still need register/bank/timing regression
 tests, especially BCD output with text delays and music backup/restore. Extra
-far-call stack depth and execution cost must be measured. Start with selective
-relocation and tight budgets; do not assume a larger MBC3 ROM is an easy fix.
+far-call stack depth and execution cost must be measured. Keep relocation as a
+fallback requiring a concrete justification, and prefer the small dispatch
+experiment above. Do not assume a larger MBC3 ROM is an easy fix.
 
 ## Maps: every assembled map audited
 
@@ -383,15 +428,24 @@ python3 mobile_adapter/tools/audit_map_slots.py \
   --output mobile_adapter/research
 python3 mobile_adapter/tools/probe_memory.py \
   --build-dir /path/to/baseline \
+  --strategy helper-relocation \
   --output mobile_adapter/research/memory-probe.json
+
+python3 mobile_adapter/tools/probe_memory.py \
+  --build-dir /path/to/baseline \
+  --strategy banked-isr \
+  --output mobile_adapter/research/memory-banked-isr-probe.json
 ```
 
 Use a matching checkout, objects, map, ROM, and SYM; the tools target this baseline's
-record/build formats. The local run used RGBDS 1.0.1 and the already verified ROM
+record/build formats. The initial local run used RGBDS 1.0.1 and the already verified ROM
 SHA-256 `314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e`.
-Reproduction on the repository-required RGBDS 1.0.4 and faithful build is a
-separate adoption gate. No game emulator or multiplayer latency benchmark was
-run for this investigation.
+Both memory strategies have since been reproduced with RGBDS 1.0.4 and the
+matching standard build; the recorded JSON now uses schema version 2. The
+faithful variant remains a separate adoption gate. No emulator execution of
+either capacity-placeholder ROM or multiplayer latency benchmark has occurred.
+The separate native baseline boot smoke and host setup are recorded in
+[HOST_ENVIRONMENT.md](HOST_ENVIRONMENT.md).
 
 Primary external references:
 

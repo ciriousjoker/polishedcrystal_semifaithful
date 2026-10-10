@@ -1,7 +1,9 @@
 {
-  "baseline_commit": "8f3c7e9651e988d876e32a4c7ad9ef1bb76702a8",
+  "schema_version": 2,
+  "strategy": "helper-relocation",
+  "baseline_commit": "196b7f63ea0d7f2e7d0d3ed4708e618f803b06a5",
   "baseline_rom_sha256": "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e",
-  "rgbasm_version": "rgbasm v1.0.1",
+  "rgbasm_version": "rgbasm v1.0.4",
   "baseline": [
     "ROM0: 16366 bytes used / 18 free",
     "ROMX: 2066825 bytes used / 13943 free in 127 banks",
@@ -10,7 +12,7 @@
     "WRAMX: 23760 bytes used / 4912 free in 7 banks",
     "HRAM: 122 bytes used / 5 free"
   ],
-  "after_helper_relocation": [
+  "after_source_experiment": [
     "ROM0: 16102 bytes used / 282 free",
     "ROMX: 2067179 bytes used / 13589 free in 127 banks",
     "SRAM: 30936 bytes used / 1832 free in 4 banks",
@@ -18,7 +20,7 @@
     "WRAMX: 23760 bytes used / 4912 free in 7 banks",
     "HRAM: 122 bytes used / 5 free"
   ],
-  "after_relocation_and_reservation": [
+  "after_experiment_and_reservation": [
     "ROM0: 16358 bytes used / 26 free",
     "ROMX: 2075371 bytes used / 5397 free in 127 banks",
     "SRAM: 31064 bytes used / 1704 free in 4 banks",
@@ -39,6 +41,7 @@
     "HRAM": 1,
     "SRAM_bank_1": 128
   },
+  "resident_dispatch_bytes": 0,
   "validation": "Both experimental object sets assembled and linked successfully. No emulator execution or timing test.",
   "limitations": [
     "The ROM contains inert capacity placeholders and is not a playable implementation.",

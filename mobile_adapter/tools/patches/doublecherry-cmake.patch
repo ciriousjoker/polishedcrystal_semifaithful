@@ -1,0 +1,17 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 0580a31..6c9d6e7 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -172,4 +172,10 @@ execute_process(
+         OUTPUT_VARIABLE GIT_HASH
+         OUTPUT_STRIP_TRAILING_WHITESPACE
+ )
+-add_definitions(-DBUILD_VERSION="${GIT_HASH}")
+\ No newline at end of file
++add_definitions(-DBUILD_VERSION="${GIT_HASH}")
++# Complete the libretro-common file helpers required by the macOS link.
++target_sources(DoubleCherryGB PRIVATE
++    ${CORE_DIR}/extern/libretro-common/file/file_path_io.c
++    ${CORE_DIR}/extern/libretro-common/file/retro_dirent.c
++    ${CORE_DIR}/extern/libretro-common/encodings/encoding_utf.c
++)

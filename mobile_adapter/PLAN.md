@@ -1,7 +1,7 @@
 # Mobile Adapter multiplayer plan
 
 Last updated: 2026-10-10.
-Status: planning, source investigation, and reproducible capacity-audit tools.
+Status: planning, source investigation, capacity probes, and native host tools.
 No production ROM or server implementation yet.
 Working branch: `mobileadapter`.
 Base commit: `8f3c7e9651e988d876e32a4c7ad9ef1bb76702a8`.
@@ -28,6 +28,9 @@ requested. Commit completed changes locally. Do not use the GitHub plugin.
 - Support battle challenges, Pokemon trades, and gifts of ordinary items.
 - Keep new adapter and multiplayer code together under `mobile_adapter/` as far
   as practical. Engine hooks elsewhere are expected.
+- Treat this as a maintainable fork with minimal upstream changes. Prefer small
+  conditional hooks and feature-owned tables. Do not relocate existing helpers
+  as the default solution to the ROM0 limit.
 - Normal Rust unit tests and assembly contract checks must run without starting
   a Game Boy emulator. Be precise about what those checks actually verify.
 - A desktop app, hosted deployment, unrestricted lobby sizes, and battles with
@@ -64,9 +67,9 @@ No calendar estimate is justified before the serial and memory experiments.
 
 ## Verified baseline and resource limits
 
-The base commit built successfully with `make -j4` using local RGBDS 1.0.1.
-The repository and CI request RGBDS 1.0.4. The 2 MiB standard ROM nevertheless
-matches the official development asset for this exact commit.
+The base commit built successfully with local RGBDS 1.0.1 and was rebuilt with
+the repository-required RGBDS 1.0.4. Both 2 MiB standard ROMs match the official
+development asset for this exact source commit.
 
 ```text
 SHA-256: 314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e
@@ -76,7 +79,7 @@ Measured from the baseline linker map, rather than estimated:
 
 | Region | Free bytes | Consequence |
 | --- | ---: | --- |
-| ROM0 | 18 | A new interrupt handler will require reclaiming resident code space. |
+| ROM0 | 18 | A 12-byte dispatch hook fits; keep the handler in ROMX and measure interrupt cost. |
 | ROMX, across 127 banks | 13,943 | Most banks are full; total free bytes do not imply arbitrary placement. |
 | ROM, total | 13,961 | Importing Crystal's complete mobile subsystem is not a practical starting point. |
 | WRAM0 | 300 | Keep resident IRQ state small. |
@@ -89,18 +92,28 @@ Measured from the baseline linker map, rather than estimated:
 `Makefile` currently selects `MBC3+TIMER+RAM+BATTERY`. Do not assume that increasing
 ROM size is a harmless fix. Any mapper or extended bank support change requires
 verification in both BGB and DoubleCherryGB and an explicit compatibility
-decision. First measure a minimal driver and reclaim or relocate suitable ROM0
-helpers into ROMX. Fixed-bank callers and interrupted banked code must remain
-valid. Existing `layout.link` placements need deliberate updates.
+decision. First measure a minimal banked handler with a small resident dispatch.
+Fixed-bank callers and interrupted banked code must remain valid. Keep new
+sections and memory definitions feature-owned, with only the required includes
+and conditional hooks in existing engine files.
 
 Follow-up experiments are recorded in [research/FEASIBILITY.md](research/FEASIBILITY.md).
-A disposable assembler/linker experiment relocated three foreground helper files
-through existing far-call entry points and recovered 264 ROM0 bytes. It then
-successfully reserved 256 ROM0 bytes, 8 KiB ROMX, 96 WRAM0 bytes, 1.5 KiB in WRAMX
-bank 2, one HRAM byte, and 128 SRAM bytes simultaneously. This demonstrates a
-plausible initial placement, not runtime correctness or the final driver size.
-Exact results and repeatable tooling live in `research/` and `tools/`. Keep the
-production baseline unchanged until relocation regression tests are available.
+The preferred disposable experiment adds a 12-byte dispatch after Serial's
+existing register saves and calls a banked placeholder through `farcall`. It
+leaves six ROM0 bytes free without moving any existing helper. Simultaneous
+reservations of 8 KiB ROMX, 96 WRAM0 bytes, 1.5 KiB WRAMX bank 2, one HRAM byte,
+and 128 SRAM bytes still link. No production game source was changed. This
+proves placement only; handler size, stack use, bank safety, and serial timing
+remain adoption gates. The earlier 264-byte helper-relocation experiment is
+retained as comparison evidence, not the preferred architecture.
+
+Host readiness and exact rebuild commands are in
+[research/HOST_ENVIRONMENT.md](research/HOST_ENVIRONMENT.md). A native ARM64
+DoubleCherryGB core now boots the baseline in three independent headless
+processes with its Mobile Adapter option enabled. The libmobile library and
+BGB bridge are built natively. BGB itself is downloaded but remains untested
+because Wine and working macOS Rosetta are absent. This boot probe does not
+prove an ISP/TCP exchange or multiplayer behavior.
 
 The overworld has 13 runtime object structures, including the local player,
 and 21 map object records. Each runtime structure is 34 bytes. Objects starting
@@ -616,14 +629,15 @@ The detailed workflow and remaining backend work are in the feasibility report.
    transactions, full parties, and backup saves behave correctly.
 
 Revisit the memory budget at every milestone. If the minimal adapter plus
-presence cannot fit safely, resolve code relocation/resource/mapper choices
+presence cannot fit safely, resolve feature size and resource choices
 before continuing into battles and trades. Do not assume the complete original
 Crystal mobile code can be pasted into this ROM.
 
 ## Evidence and external references
 
-Investigated on 2026-10-10. External source checkouts used for investigation are
-temporary references, not dependencies committed into this repository.
+Investigated on 2026-10-10. Pinned external source checkouts and host builds are
+cached outside the repository. Their revisions and rebuild steps are documented
+in `research/HOST_ENVIRONMENT.md`; they are not vendored into this branch.
 
 - [libmobile](https://github.com/REONTeam/libmobile/tree/0704f56902f23b7ebf05c82c222e0e145e3140b6):
   `commands.h`, `commands.c`, `mobile.h`, `serial.c`, `mobile.c`. Verified command
@@ -655,11 +669,16 @@ temporary references, not dependencies committed into this repository.
 - [x] Distinguish libmobile telephone relay configuration from our TCP game server.
 - [x] Record a multi-player model, feature order, test limits, and durability risks.
 - [x] Demonstrate an initial ROM0/ROMX/RAM reservation with disposable links.
+- [x] Demonstrate a 12-byte resident dispatch without relocating existing helpers.
+- [x] Rebuild the exact baseline hash with RGBDS 1.0.4.
+- [x] Build libmobile, the BGB bridge, and a native DoubleCherryGB core.
+- [x] Boot three independent native emulator processes through a headless probe.
 - [x] Audit all 611 maps and distinguish initial visibility from retained demand.
 - [x] Specify replaceable-decoration policy, latency targets, and battery-save
   integration-test oracles.
 - [ ] Prove minimum ISP/TCP startup on both adapter implementations, including
   fresh configuration and disabled or irrelevant telephone relay behavior.
+- [ ] Run BGB compatibility tests after Wine and working macOS Rosetta are available.
 - [ ] Allocate resident serial code and stable RAM with measured budgets and
   audit bank/interrupt safety.
 - [ ] Freeze the first binary schema and response-credit/chunking rules only

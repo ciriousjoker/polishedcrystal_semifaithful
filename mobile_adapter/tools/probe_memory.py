@@ -2,8 +2,8 @@
 """Run a disposable assembly/link capacity experiment, never a playable ROM.
 
 Requires a built, matching baseline checkout. Original source and build files
-are read only. The scratch objects preserve public ROM0 entry points with far
-call trampolines while relocating three foreground helper files into ROMX.
+are read only. Compare helper relocation with a small banked-ISR dispatch hook
+that leaves existing helper implementations in their original sections.
 """
 
 import argparse
@@ -31,17 +31,35 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build-dir", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--strategy", choices=("helper-relocation", "banked-isr"),
+                        default="helper-relocation")
     args = parser.parse_args()
     root = args.build_dir.resolve()
     assert (root / "polishedcrystal-3.2.3.gbc").exists(), "Build the baseline first"
     makefile = (root / "Makefile").read_text()
     objects = re.search(r"rom_obj := (.*?)\n\n", makefile, re.S)[1].replace("\\", "").split()
     assert all((root / obj).exists() for obj in objects)
-    moved_files = ["home/item.asm", "home/print_bcd.asm", "home/restore_music.asm"]
+    moved_files = (["home/item.asm", "home/print_bcd.asm", "home/restore_music.asm"]
+                   if args.strategy == "helper-relocation" else [])
     with tempfile.TemporaryDirectory(prefix="mobileadapter-memory-") as directory:
         scratch = Path(directory)
         home = (root / "home.asm").read_text()
         banked = ['SECTION "Mobile Memory Probe Helpers", ROMX, BANK[$7f]']
+        if args.strategy == "banked-isr":
+            serial = (root / "home/serial.asm").read_text()
+            anchor = "\tld a, [wPrinterConnectionOpen]"
+            assert serial.count(anchor) == 1
+            serial = serial.replace(anchor, """\tld a, [ProbeResidentCapacity]
+\tand a
+\tjr z, .legacy
+\tfarcall Probe_MobileSerialHandler
+\tjr .end
+.legacy
+""" + anchor)
+            (scratch / "serial.asm").write_text(serial)
+            home = home.replace('INCLUDE "home/serial.asm"',
+                                'INCLUDE "' + str(scratch / "serial.asm") + '"')
+            banked.append("Probe_MobileSerialHandler::\n\tret")
         for relative in moved_files:
             source = (root / relative).read_text()
             names = re.findall(r"^(\w+)::?", source, re.M)
@@ -63,14 +81,23 @@ def main():
                  "-o", str(scratch / (name + ".gbc")), *objects_to_link], root)
             return read_summary(scratch / (name + ".map"))
 
-        relocated = link("relocated", [*link_objects, str(scratch / "helpers.o")])
-        (scratch / "budget.asm").write_text('''
-SECTION "Mobile IRQ Capacity Probe", ROM0
-ProbeIRQCapacity:: ds 256
-SECTION "Mobile ROM Capacity Probe", ROMX, BANK[$7f]
-ProbeProtocolCapacity:: ds 8192
+        # The banked hook references the resident reservation even in the
+        # first link, so reserve its state alongside the hook.
+        resident = """
 SECTION "Mobile Resident Capacity Probe", WRAM0
 ProbeResidentCapacity:: ds 96
+"""
+        if args.strategy == "banked-isr":
+            (scratch / "resident.asm").write_text(resident)
+            run(["rgbasm", "-o", str(scratch / "resident.o"), str(scratch / "resident.asm")], root)
+            link_objects.append(str(scratch / "resident.o"))
+        relocated = link("modified", [*link_objects, str(scratch / "helpers.o")])
+        resident_rom_bytes = 256 if moved_files else 0
+        resident_rom = ("SECTION \"Mobile IRQ Capacity Probe\", ROM0\n"
+                        "ProbeIRQCapacity:: ds 256\n" if moved_files else "")
+        (scratch / "budget.asm").write_text(resident_rom + (resident if moved_files else "") + '''
+SECTION "Mobile ROM Capacity Probe", ROMX, BANK[$7f]
+ProbeProtocolCapacity:: ds 8192
 SECTION "Mobile Buffer Capacity Probe", WRAMX, BANK[2]
 ProbeBufferCapacity:: ds 1536
 SECTION "Mobile Owner Capacity Probe", HRAM
@@ -81,18 +108,23 @@ ProbeJournalCapacity:: ds 128
         run(["rgbasm", "-o", str(scratch / "budget.o"), str(scratch / "budget.asm")], root)
         reserved = link("reserved", [*link_objects, str(scratch / "helpers.o"), str(scratch / "budget.o")])
         report = {
+            "schema_version": 2,
+            "strategy": args.strategy,
             "baseline_commit": run(["git", "rev-parse", "HEAD"], root).strip(),
             "baseline_rom_sha256": hashlib.sha256((root / "polishedcrystal-3.2.3.gbc").read_bytes()).hexdigest(),
             "rgbasm_version": run(["rgbasm", "--version"], root).strip(),
             "baseline": read_summary(root / "polishedcrystal-3.2.3.map"),
-            "after_helper_relocation": relocated,
-            "after_relocation_and_reservation": reserved,
+            "after_source_experiment": relocated,
+            "after_experiment_and_reservation": reserved,
             "moved_files": moved_files,
-            "reservations_bytes": {"ROM0": 256, "ROMX": 8192, "WRAM0": 96, "WRAMX_bank_2": 1536, "HRAM": 1, "SRAM_bank_1": 128},
+            "reservations_bytes": {"ROM0": resident_rom_bytes, "ROMX": 8192, "WRAM0": 96, "WRAMX_bank_2": 1536, "HRAM": 1, "SRAM_bank_1": 128},
+            "resident_dispatch_bytes": 12 if args.strategy == "banked-isr" else 0,
             "validation": "Both experimental object sets assembled and linked successfully. No emulator execution or timing test.",
             "limitations": [
                 "The ROM contains inert capacity placeholders and is not a playable implementation.",
-                "Relocated foreground helpers need register/bank/timing regression tests before adoption.",
+                ("Relocated foreground helpers need register/bank/timing regression tests before adoption."
+                 if moved_files else
+                 "The banked-ISR experiment proves placement only; dispatch cycle cost, stack depth, and interrupt/bank safety are not measured."),
                 "Reservations are an illustrative budget, not measured sizes of an implemented driver.",
                 "This experiment uses the matching standard baseline build, not every build variant.",
             ],
