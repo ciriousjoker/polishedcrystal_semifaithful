@@ -3,6 +3,7 @@ import ipaddress
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import dev_session as session
 
@@ -60,6 +61,66 @@ class DeploymentContracts(unittest.TestCase):
             result = (root / "retroarch.cfg").read_text()
             self.assertIn('audio_volume = "-26.0206"', result)
             self.assertAlmostEqual(10 ** (-26.0206 / 20), .05, places=6)
+
+    def test_core_marker_invalidates_after_core_or_app_replacement(self):
+        with tempfile.TemporaryDirectory() as folder:
+            core = Path(folder) / "core.so"
+            core.write_bytes(b"first core")
+            details = "versionCode=1 minSdk=16\nfirstInstallTime=2026-10-10 12:00\nlastUpdateTime=2026-10-10 12:00\n"
+            record = session.core_install_record(core, "com.retroarch", details)
+            self.assertEqual(record, session.core_install_record(core, "com.retroarch", details))
+            core.write_bytes(b"second core")
+            self.assertNotEqual(record, session.core_install_record(core, "com.retroarch", details))
+            core.write_bytes(b"first core")
+            self.assertNotEqual(record, session.core_install_record(core, "com.retroarch", details.replace("versionCode=1", "versionCode=2")))
+            self.assertNotEqual(record, session.core_install_record(core, "com.retroarch", details.replace("lastUpdateTime=2026-10-10 12:00", "lastUpdateTime=2026-10-10 13:00")))
+            with self.assertRaises(ValueError):
+                session.core_install_record(core, "com.retroarch", "")
+
+    def test_adapter_status_does_not_claim_a_server_connection(self):
+        self.assertEqual(session.frontend_status("[Mobile] Adapter initialized\n"),
+                         {"adapter": True, "state": False})
+        self.assertEqual(session.frontend_status("Auto-loading save state from x succeeded.\n"),
+                         {"adapter": False, "state": True})
+        self.assertEqual(session.frontend_status("Auto-loading save state from x failed.\n"),
+                         {"adapter": False, "state": False})
+
+    def test_server_labels_are_derived_from_peer_ip(self):
+        for peer, expected in (("192.168.2.25", "mac"), ("192.168.2.23", "android"), ("192.168.2.99", "unknown")):
+            line = f"CLIENT_CONNECTED session=1 peer={peer}:12345\n"
+            self.assertEqual(session.labelled_server_line(line, "192.168.2.25", "192.168.2.23"),
+                             line.rstrip() + f" client={expected}\n")
+        echo = "ECHO session=1 sequence=1 bytes=4\n"
+        self.assertEqual(session.labelled_server_line(echo, "192.168.2.25"), echo)
+
+    def test_android_launch_stops_app_and_uses_one_explicit_game_intent(self):
+        class Device:
+            package = "com.retroarch"
+            root = "/storage/emulated/0/Download/polishedcrystal_mobile_adapter"
+            calls = []
+
+            def shell(self, *command):
+                self.calls.append(command)
+                return "[Mobile] Adapter initialized\nAuto-loading save state from x succeeded.\n"
+
+            def exists(self, path):
+                return True
+
+        device = Device()
+        intent = session.android_intent(device.package, device.root)
+        with patch("builtins.print"):
+            session.launch_android(device, intent)
+        self.assertEqual(device.calls[0], ("am", "force-stop", "com.retroarch"))
+        starts = [command for command in device.calls if command[:2] == ("am", "start")]
+        self.assertEqual(len(starts), 1)
+        self.assertEqual(starts[0][starts[0].index("-f") + 1], "0x10008000")
+        self.assertIn("com.retroarch/com.retroarch.browser.retroactivity.RetroActivityFuture", starts[0])
+        self.assertNotIn("CoreSideloadActivity", " ".join(starts[0]))
+        extras = {starts[0][i + 1]: starts[0][i + 2] for i, item in enumerate(starts[0]) if item == "--es"}
+        self.assertEqual(extras, {
+            "ROM": device.root + "/polishedcrystal-mobile.gbc",
+            "LIBRETRO": "/data/data/com.retroarch/cores/DoubleCherryGB_libretro.so",
+            "CONFIGFILE": device.root + "/retroarch.cfg"})
 
 
 if __name__ == "__main__":

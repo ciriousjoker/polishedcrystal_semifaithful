@@ -23,6 +23,29 @@ right Shift + Z runs the milestone 1 transport proof. The terminal should show
 `ECHO session=... sequence=... bytes=4`. On Android use the corresponding
 Select and B touch controls together. Release before repeating the test.
 
+The terminal distinguishes local adapter readiness from real server sessions:
+
+```text
+ANDROID ADAPTER ready; fresh start state loaded. Server connection requires Select+B.
+CLIENT_CONNECTED session=1 peer=192.168.2.23:51000 client=android
+ECHO session=1 sequence=1 bytes=4
+ECHO_REPLY session=1 sequence=1 bytes=4
+CLIENT_DISCONNECTED session=1 peer=192.168.2.23:51000 reason=closed client=android
+```
+
+This is an example; session numbers and source ports vary. `CLIENT_CONNECTED`
+means the server accepted an actual TCP socket. `ECHO` means a valid ROM request
+arrived, and `ECHO_REPLY` means the response was written to that socket. It does
+not prove the ROM accepted the response. Mac/Android labels are inferred from
+their source IPs, not authenticated player identities. Unexpected peers are
+marked `unknown`; protocol errors and timeouts produce `SESSION_ERROR`.
+
+Milestone 1 opens a short-lived connection only when Select+B is pressed in the
+idle overworld, then deliberately closes it after the echo. The emulator's
+Mobile Adapter notification merely describes initializing the local libmobile
+peripheral. No automatic login, persistent lobby or remote player rendering is
+implemented yet. Seeing no other avatar is expected at this milestone.
+
 ## Android files and direct start
 
 ADB must list one authorized device. Enable USB debugging and accept the Mac's
@@ -60,15 +83,30 @@ Previous `.srm` files are backed up in the host cache's `dev-session/backups`.
 Only this workflow's named files and game-specific settings are replaced. Other
 files in the Download folder and other RetroArch games are preserved.
 
-The script force-stops RetroArch before updating, installs the pinned Android core
-through RetroArch's own core sideload activity, stages the files, and launches
+The script force-stops RetroArch before updating, stages the files, and launches
 `RetroActivityFuture` with explicit `ROM`, `LIBRETRO` and `CONFIGFILE` extras.
-Its configuration auto-loads the newly generated state. After the command, the
+These are the activity and string extras used by ES-DE's
+[RetroArch discovery rules](https://gitlab.com/es-de/emulationstation-de/-/blob/master/resources/systems/android/es_find_rules.xml)
+and [Android launch configuration](https://gitlab.com/es-de/emulationstation-de/-/blob/master/resources/systems/android/es_systems.xml).
+It stops the app again immediately before the one game launch, clears its previous
+task and waits for the requested activity. Normal launches never open an installer.
+The server is listening before either playable client can test connectivity.
+Its configuration auto-loads the newly generated state. The script checks a fresh
+Android log for adapter initialization and successful state loading, reporting
+failure in the terminal if this cannot be confirmed. After the command, the
 game is open on the phone; no launcher tap or manual Continue is required.
 For a separately created ROM shortcut, always select the custom installed core
 `/data/data/<package>/cores/DoubleCherryGB_libretro.so`. The script also writes
 per-game overrides/options and a separate playlist fixing that core selection.
 Your shortcut can keep pointing at the stable ROM path after every update.
+
+The pinned core is already installed on the configured Pixel. Its SHA-256 and
+app installation identity are recorded in `.core-install.json` in the test
+folder. If this core changes or RetroArch is replaced, the command requests an
+explicit `--reinstall-core` run. That opt-in installation uses RetroArch's core
+sideload activity and needs an extra brief start. If you manually remove or
+replace this core, use the same flag once. No automatic installer restart is
+part of the normal command.
 
 For diagnosis, the exact generated direct-start ADB command is in the host
 cache's `dev-session/android/launch-adb.txt`. Android frontend logs are in the
@@ -84,7 +122,8 @@ Keep the terminal open while testing. Ctrl+C stops the server and this Mac game
 instance. Stop the previous session before rerunning the command or the automatic
 integration suite. The command refuses to kill another process using its port.
 `--mac-only` runs without Android; `--prepare-only` prepares artifacts without
-starting the Mac GUI or server.
+starting the games or server. Only explicitly requesting `--reinstall-core`
+opens the Android installer in preparation mode.
 
 Verified on 2026-10-10 with native Apple M2 macOS and a real Pixel 9 Pro using
 ARM64 RetroArch 1.19.1. Both platforms booted their regenerated states. Separate
@@ -94,6 +133,10 @@ error and completed a subsequent tile step. Repeated complete ADB deployment run
 also verified updating the same stable paths and backing up the previous save.
 The pinned Android core was built with NDK 29.0.14206865, API 23, static C++ runtime
 and embedded libmobile. It needs only Android's system libc/libm/libdl libraries.
+The logging follow-up verified both actual source IPs in the new server logs,
+successful reply acceptance and movement in both ROMs. The Pixel's one-intent
+start also confirmed adapter initialization and fresh state loading. Host cache
+`dev-session/log-proof` contains the server log and symbol results.
 
 Host-only deployment checks:
 

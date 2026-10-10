@@ -74,6 +74,8 @@ pub async fn serve_connection<S: AsyncRead + AsyncWrite + Unpin>(
             frame.sequence,
             frame.payload.len()
         );
+        let sequence = frame.sequence;
+        let payload_bytes = frame.payload.len();
         let mut bytes = Frame {
             kind: ECHO_REPLY,
             ..frame
@@ -102,7 +104,10 @@ pub async fn serve_connection<S: AsyncRead + AsyncWrite + Unpin>(
                     tokio::time::sleep(Duration::from_millis(15)).await;
                 }
             }
-            TestFault::None => stream.write_all(&bytes).await?,
+            TestFault::None => {
+                stream.write_all(&bytes).await?;
+                println!("ECHO_REPLY session={session} sequence={sequence} bytes={payload_bytes}");
+            }
         }
     }
 }

@@ -60,14 +60,18 @@ fn main() -> io::Result<()> {
             let permits = Arc::new(Semaphore::new(16));
             let mut sequence = 0u64;
             loop {
-                let (stream, _) = listener.accept().await?;
+                let (stream, peer) = listener.accept().await?;
                 let permit = match permits.clone().try_acquire_owned() {
                     Ok(permit) => permit,
-                    Err(_) => continue,
+                    Err(_) => {
+                        println!("CLIENT_REJECTED peer={peer} reason=capacity");
+                        continue;
+                    }
                 };
                 stream.set_nodelay(true)?;
                 sequence += 1;
                 let session = sequence;
+                println!("CLIENT_CONNECTED session={session} peer={peer}");
                 let connection_fault = if session <= fault_count {
                     fault
                 } else {
@@ -75,8 +79,16 @@ fn main() -> io::Result<()> {
                 };
                 tokio::spawn(async move {
                     let _permit = permit;
-                    if let Err(error) = serve_connection(stream, session, connection_fault).await {
-                        eprintln!("SESSION_ERROR session={session} error={error}");
+                    match serve_connection(stream, session, connection_fault).await {
+                        Ok(()) => println!(
+                            "CLIENT_DISCONNECTED session={session} peer={peer} reason=closed"
+                        ),
+                        Err(error) => {
+                            eprintln!("SESSION_ERROR session={session} peer={peer} error={error}");
+                            println!(
+                                "CLIENT_DISCONNECTED session={session} peer={peer} reason=error"
+                            );
+                        }
                     }
                 });
             }

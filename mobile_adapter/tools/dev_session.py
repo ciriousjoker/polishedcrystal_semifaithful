@@ -32,7 +32,8 @@ CORE_REVISION = "03f58ca3dfb4b716f7e66a0e0467f9e85ef82abb"
 
 def run(command, **kwargs):
     kwargs.setdefault("timeout", 120)
-    return subprocess.run([str(part) for part in command], check=True, **kwargs)
+    kwargs.setdefault("check", True)
+    return subprocess.run([str(part) for part in command], **kwargs)
 
 
 def output(command):
@@ -171,6 +172,41 @@ def verify_idle(path):
         require(state.get(name) == expected, f"Start-state preparation failed: {name}")
 
 
+def core_install_record(core, package, details):
+    # App replacement invalidates the installation marker even for the same core.
+    installation = {}
+    for key in ("versionCode", "firstInstallTime", "lastUpdateTime"):
+        match = re.search(r"^\s*" + key + r"=([^\n]+)", details, re.M)
+        require(match is not None, f"Cannot identify RetroArch installation: {key}")
+        installation[key] = match.group(1).strip()
+    return {"schema": 1, "package": package, "installation": installation,
+            "core_sha256": hashlib.sha256(core.read_bytes()).hexdigest()}
+
+
+def frontend_status(log):
+    return {"adapter": "[Mobile] Adapter initialized" in log,
+            "state": bool(re.search(r"Auto-loading save state from .* succeeded\.", log))}
+
+
+def labelled_server_line(line, address, android_address=None):
+    match = re.search(r"\bpeer=([^\s:]+):\d+", line)
+    if match:
+        peer = match.group(1)
+        label = "mac" if peer == address else "android" if peer == android_address else "unknown"
+        return line.rstrip() + f" client={label}\n"
+    return line
+
+
+def android_intent(package, target):
+    # ES-DE uses this activity with CONFIGFILE, LIBRETRO and ROM string extras.
+    # Clear the previous task; -W waits for the one requested launch to complete.
+    return ["am", "start", "-W", "-f", "0x10008000", "-n",  # NEW_TASK | CLEAR_TASK
+            f"{package}/com.retroarch.browser.retroactivity.RetroActivityFuture",
+            "--es", "CONFIGFILE", target + "/retroarch.cfg", "--es", "LIBRETRO",
+            f"/data/data/{package}/cores/DoubleCherryGB_libretro.so",
+            "--es", "ROM", target + f"/{NAME}.gbc"]
+
+
 def mac_profile(args, runner, seed, address):
     root = args.cache / "dev-session/mac"
     profile(root, root)
@@ -215,6 +251,7 @@ class Android:
                 "Install official ARM64 RetroArch and open it once; pass --package if both versions are installed")
         require("arm64-v8a" in self.shell("getprop", "ro.product.cpu.abilist"), "This prepared core requires ARM64 Android")
         details = self.shell("dumpsys", "package", self.package)
+        self.package_details = details
         require("primaryCpuAbi=arm64-v8a" in details, "Use the ARM64 RetroArch APK for this core")
         self.root = args.android_dir.rstrip("/")
         require(self.root.startswith("/storage/emulated/0/") and ".." not in self.root.split("/"),
@@ -233,7 +270,6 @@ class Android:
 
 
 def deploy(args, device, mac, seed, core, runner):
-    device.shell("am", "force-stop", device.package)
     root = args.cache / "dev-session/android"
     root.mkdir(parents=True, exist_ok=True)
     existing = f"/storage/emulated/0/Android/data/{device.package}/files/retroarch.cfg"
@@ -267,19 +303,36 @@ def deploy(args, device, mac, seed, core, runner):
     device.call("pull", temporary + "/start.json", root / "start.json", stdout=subprocess.DEVNULL)
     verify_idle(root / "start.json")
     device.call("pull", temporary + "/start.state", root / f"{NAME}.state.auto", stdout=subprocess.DEVNULL)
-    # Use RetroArch's own exported installer to copy the core into private storage.
-    device.shell("am", "start", "-n", f"{device.package}/com.retroarch.browser.debug.CoreSideloadActivity",
-                 "--es", "LIBRETRO", temporary + "/DoubleCherryGB_libretro.so")
-    deadline = time.monotonic() + 20
-    while time.monotonic() < deadline:
-        activities = device.shell("dumpsys", "activity", "activities")
-        if re.search(r"(?:mResumedActivity|topResumedActivity).*" + re.escape(device.package)
-                     + r"/.*RetroActivityFuture", activities):
-            break
-        time.sleep(0.2)
+    install = core_install_record(core, device.package, device.package_details)
+    stamp = target + "/.core-install.json"
+    previous = None
+    if device.exists(stamp):
+        try:
+            previous = json.loads(device.shell("cat", stamp))
+        except ValueError:
+            pass
+    require(args.reinstall_core or previous == install,
+            "Android core installation is missing or changed; run once with --reinstall-core to install it explicitly")
+    if args.reinstall_core:
+        print("ANDROID CORE: explicit installation requested; RetroArch briefly opens for installation.", flush=True)
+        # Use RetroArch's own exported installer to copy the core into private storage.
+        device.shell("am", "start", "-n", f"{device.package}/com.retroarch.browser.debug.CoreSideloadActivity",
+                     "--es", "LIBRETRO", temporary + "/DoubleCherryGB_libretro.so")
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline:
+            activities = device.shell("dumpsys", "activity", "activities")
+            if re.search(r"(?:mResumedActivity|topResumedActivity).*" + re.escape(device.package)
+                         + r"/.*RetroActivityFuture", activities):
+                break
+            time.sleep(0.2)
+        else:
+            raise ValueError("RetroArch core installation did not complete; open RetroArch once and check its storage permissions")
+        device.shell("am", "force-stop", device.package)
+        (root / ".core-install.json").write_text(json.dumps(install, indent=2) + "\n")
+        device.shell("mkdir", "-p", target)
+        device.call("push", root / ".core-install.json", stamp, stdout=subprocess.DEVNULL)
     else:
-        raise ValueError("RetroArch core installation did not complete; open RetroArch once and check its storage permissions")
-    device.shell("am", "force-stop", device.package)
+        print("ANDROID CORE: using installed core; no installer activity will be opened.", flush=True)
     # Only replace our named files. Other files in the user's test folder stay.
     device.shell("mkdir", "-p", device.root)
     device.shell("mkdir", "-p", device.root + "/system")
@@ -310,18 +363,39 @@ def deploy(args, device, mac, seed, core, runner):
         "core_path": f"/data/data/{device.package}/cores/DoubleCherryGB_libretro.so",
         "core_name": "DoubleCherryGB", "crc32": "00000000|crc", "db_name": ""}]}, indent=2) + "\n")
     device.call("push", playlist, target + "/" + playlist.name, stdout=subprocess.DEVNULL)
-    launch = ["am", "start", "-n", f"{device.package}/com.retroarch.browser.retroactivity.RetroActivityFuture",
-              "--es", "CONFIGFILE", target + "/retroarch.cfg", "--es", "LIBRETRO",
-              f"/data/data/{device.package}/cores/DoubleCherryGB_libretro.so",
-              "--es", "ROM", target + f"/{NAME}.gbc"]
+    launch = android_intent(device.package, target)
     (root / "launch-adb.txt").write_text(shlex.join([device.adb, "-s", device.serial, "shell", shlex.join(launch)]) + "\n")
-    device.shell(*launch)
-    print(f"ANDROID READY: RetroArch launched {target}/{NAME}.gbc with its fresh auto-start state.", flush=True)
+    print(f"ANDROID PREPARED: {target}/{NAME}.gbc with its fresh auto-start state.", flush=True)
+    return launch
 
 
-def start(args, mac, address):
+def launch_android(device, launch):
+    logfile = device.root + "/retroarch.log"
+    # Remove only our previous session's log so it cannot fake a successful start.
+    device.shell("am", "force-stop", device.package)
+    device.shell("rm", "-f", logfile)
+    try:
+        device.shell(*launch)
+    except subprocess.CalledProcessError as error:
+        raise ValueError(f"Android intent failed: {(error.stderr or error.stdout or str(error)).strip()}") from error
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        if device.exists(logfile):
+            log = device.shell("tail", "-n", "150", logfile)
+            if all(frontend_status(log).values()):
+                print("ANDROID ADAPTER ready; fresh start state loaded. Server connection requires Select+B.", flush=True)
+                return
+        time.sleep(0.5)
+    result = device.call("shell", "pidof", device.package, capture_output=True, text=True, check=False)
+    alive = result.stdout.strip() if result.returncode == 0 else "none"
+    raise ValueError(f"Android start was not confirmed (pid={alive}); check {logfile}. "
+                     "Use --reinstall-core if the installed core was replaced or removed manually.")
+
+
+def start(args, mac, address, device=None, launch=None):
     server = REPO / "mobile_adapter/server/target/debug/mobile-server"
     children = []
+    stopped = threading.Event()
     log = (mac / "play.log").open("w")
     try:
         process = subprocess.Popen([str(server), "--bind", f"{address}:{PORT}"],
@@ -330,19 +404,35 @@ def start(args, mac, address):
         ready = process.stdout.readline().strip()
         require(ready == f"READY {address}:{PORT}", f"Server failed to start: {ready}")
         print(f"SERVER tcp://{address}:{PORT} (fixed port {PORT})", flush=True)
+        android_address = None
+        if device:
+            route = device.shell("ip", "-4", "route", "get", address)
+            match = re.search(r"\bsrc\s+(\S+)", route)
+            android_address = match.group(1) if match else None
+            print(f"CLIENT ADDRESSES mac={address} android={android_address or 'unknown'} (labels by source IP)", flush=True)
         def forward():
             for line in process.stdout:
-                print(line, end="", flush=True)
+                print(labelled_server_line(line, address, android_address), end="", flush=True)
         threading.Thread(target=forward, daemon=True).start()
         children.append(subprocess.Popen([str(args.frontend), "-v", "-c", str(mac / "retroarch.cfg"),
             "-L", str(args.cache / "build/doublecherry/DoubleCherryGB_libretro.dylib"),
             str(mac / f"roms/{NAME}.gbc")], stdout=log, stderr=subprocess.STDOUT))
+        def watch_mac():
+            while not stopped.wait(0.5):
+                if frontend_status((mac / "play.log").read_text(errors="replace"))["adapter"]:
+                    print("MAC ADAPTER ready; server connection requires right Shift+Z (Select+B).", flush=True)
+                    return
+        threading.Thread(target=watch_mac, daemon=True).start()
+        if device:
+            launch_android(device, launch)
         print("MAC READY: arrows, A=X, B=Z, Select=right Shift. Select+B tests transport.", flush=True)
+        print("MILESTONE 1: each test opens a TCP session, exchanges an echo and disconnects. Remote avatars are not implemented yet.", flush=True)
         print("Press Ctrl+C here to stop this server and Mac game instance.", flush=True)
         while all(child.poll() is None for child in children):
             time.sleep(0.25)
         require(all(child.returncode in (None, 0) for child in children), "Server or Mac frontend exited with an error; see play.log")
     finally:
+        stopped.set()
         for child in reversed(children):
             if child.poll() is None:
                 child.terminate()
@@ -360,6 +450,7 @@ def main():
     parser.add_argument("--interface", help="Network interface to use instead of the default route")
     parser.add_argument("--serial", help="ADB device serial when several devices are connected")
     parser.add_argument("--package", choices=PACKAGES)
+    parser.add_argument("--reinstall-core", action="store_true", help="Explicitly install the Android core; normal starts never open its installer")
     parser.add_argument("--mac-only", action="store_true", help="Prepare/start Mac without an Android device")
     parser.add_argument("--prepare-only", action="store_true", help="Prepare artifacts without starting the server or GUI")
     parser.add_argument("--cache", type=Path, default=CACHE)
@@ -371,12 +462,15 @@ def main():
     require(sys.platform == "darwin", "This launcher is for the configured native macOS host")
     require(args.frontend.is_file(), "RetroArch frontend missing; pass --frontend")
     address = server_address(args)
-    try:
-        with socket.socket() as check:
-            check.bind((address, PORT))
-    except OSError as error:
-        raise ValueError(f"Port {PORT} is in use; stop the previous session with Ctrl+C before updating") from error
+    if not args.prepare_only:
+        try:
+            with socket.socket() as check:
+                check.bind((address, PORT))
+        except OSError as error:
+            raise ValueError(f"Port {PORT} is in use; stop the previous session with Ctrl+C before updating") from error
     device = None if args.mac_only else Android(args)
+    if device:
+        device.shell("am", "force-stop", device.package)
     (args.cache / "dev-session").mkdir(parents=True, exist_ok=True)
     print(f"Preparing current build for tcp://{address}:{PORT} ...", flush=True)
     run(["make", "-j4", "mobile", f"RGBDS={args.cache}/rgbds-1.0.4/"], cwd=REPO)
@@ -384,12 +478,13 @@ def main():
     runner = native_tools(args)
     seed = fixture(args, runner)
     mac = mac_profile(args, runner, seed, address)
+    launch = None
     if device:
         core, android_runner = native_tools(args, android=True)
-        deploy(args, device, mac, seed, core, android_runner)
+        launch = deploy(args, device, mac, seed, core, android_runner)
     print(f"Prepared ROM + battery save + fresh start snapshot: {mac}", flush=True)
     if not args.prepare_only:
-        start(args, mac, address)
+        start(args, mac, address, device, launch)
 
 
 if __name__ == "__main__":

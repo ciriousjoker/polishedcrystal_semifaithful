@@ -16,6 +16,25 @@ app is wanted or produced. Verified on native M2 macOS and a physical Pixel 9 Pr
 both clients completed adapter TCP echo through the Mac's LAN IPv4 and continued
 movement. See MANUAL_TESTING.md for commands, prerequisites and limitations.
 
+Manual workflow follow-up: terminal logs now separate local adapter readiness
+from server CLIENT_CONNECTED / ECHO / ECHO_REPLY / CLIENT_DISCONNECTED events,
+including peer IP and source-IP-based Mac/Android labels. The Android launcher
+validates a fresh frontend log. Per user correction, normal Android commands
+force-stop the app, publish the files, then launch the game exactly once using
+ES-DE's RetroActivityFuture component and ROM/LIBRETRO/CONFIGFILE extras. The
+previous task is cleared. Automatic core sideloading is disabled because it
+caused an unwanted open/close cycle. Explicit --reinstall-core remains for core
+updates; a SHA-256 plus app-installation marker detects when this is needed.
+The normal game connection remains a Select+B-triggered short-lived echo;
+there are no automatic joins, persistent lobbies or remote avatars until M2.
+Follow-up verification: eight host deployment tests and nine Rust tests passed,
+including a real CLI logging test. On the Pixel, the force-stop plus one explicit
+intent loaded the fresh state and initialized the adapter. Separate native Mac
+and Pixel ROM probes exercised the new server on an isolated test port; both
+produced connect/request/reply/disconnect logs, accepted the echo and moved.
+Evidence: host cache dev-session/log-proof/{server.log,mac.json,android.json}.
+Always regenerate snapshots for the exact test ROM, including endpoint changes.
+
 This document is the persistent working memory for the project. Keep decisions,
 evidence, unresolved questions, and the next concrete step current as work
 continues. Communicate findings directly to the user in German; repository
