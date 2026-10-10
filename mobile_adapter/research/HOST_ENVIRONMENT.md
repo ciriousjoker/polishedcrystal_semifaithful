@@ -3,6 +3,11 @@
 Checked: 2026-10-10. Host: Apple Silicon, macOS 27.0.1 (26A434), ARM64.
 Branch: `mobileadapter`. No production game source was changed in this setup.
 
+Decision: use native DoubleCherryGB as the primary emulator. The user explicitly
+rejects Rosetta installation. Wine and BGB are not prerequisites or acceptance
+gates. This host can execute the development and automated test workflow without
+a graphical frontend or manual game input.
+
 ## What works now
 
 | Component | Installed or prepared | Verification |
@@ -13,21 +18,40 @@ Branch: `mobileadapter`. No production game source was changed in this setup.
 | C/C++ toolchain | Xcode clang 21, CMake, pkg-config, make | Built the library, bridge, core, and headless frontend |
 | libmobile | Pinned native static library and headers | CMake build/install succeeded |
 | libmobile-bgb | Pinned native ARM64 `mobile` executable | Build/install and `mobile --help` succeeded |
-| DoubleCherryGB | Pinned native ARM64 libretro core, embedded libmobile | Three separate headless processes booted the baseline and reached the title screen |
+| DoubleCherryGB | Pinned native ARM64 libretro core, embedded libmobile | Three independent boots; automated real Save, fresh Continue, and verified tile movement |
 | BGB | Official 1.6.6 x64 archive downloaded and extracted | PE executable inspected; not executed |
 | Wine | Absent | No Wine executable or installed Wine/CrossOver/Whisky app found |
 | macOS Rosetta | No working installation detected | `arch -x86_64 /usr/bin/true` fails with `Bad CPU type`; no installation receipt |
 
 Native development, assembly/link checks, Rust host tests, and headless ROM
-execution can proceed without Wine. BGB compatibility testing remains unavailable
-until Wine and working macOS Rosetta exist. Neither a Windows VM nor a Linux
-container is required for the intended Wine route.
+integration work without Wine, Rosetta, a VM, or a container. The frontend supplies
+inputs and captures native video. Read-only observers use the current `.sym`
+file and core memory descriptors, avoiding hard-coded runtime addresses and old
+CPU/WRAM snapshots. The normal host unit-test command will not launch an emulator.
 
-The boot probe enables the adapter option but sends no Mobile Adapter commands
-from the unchanged ROM. It proves native emulator availability, not ISP login,
-TCP connectivity, network latency, or multiplayer behavior. There is no Rust
-server crate or feature unit-test suite yet. The Rust tests were temporary
-toolchain checks, not tests of future server behavior.
+Verified end to end by `tools/probe_emulator.py`:
+
+1. Boot the unchanged ROM, select New Game, complete the introduction, and save
+   through the ordinary in-game menu. Export its raw 32-KiB battery SRAM.
+2. Verify save version 10, both 97/127 sentinel pairs, and both game-data checksums.
+3. Start a fresh core process, load that battery file, and Continue to the same
+   map (group 24, number 5) and position (3, 3).
+4. In another fresh process, Continue and complete a one-tile step right to (4, 3).
+   Observe matching player-object coordinates (7, 7) then (8, 7), a changed rendered
+   image, CGB mode, and a zero crash marker. The source battery fixture is unchanged.
+
+All three stages passed without manual input. Logs, raw saves, PNG/PPM images,
+and state results stay in the cache. A machine-readable report with hashes is
+committed as [native-automation-probe.json](native-automation-probe.json).
+These three sequential scenarios supplement the earlier three independent boot
+processes; neither is a connected multiplayer session.
+
+The adapter option is enabled, but the unchanged ROM sends no adapter commands.
+ISP login, TCP connectivity, network latency, serial ISR behavior, and multiplayer
+features are not proven by this probe. There is no Rust server crate or feature
+unit-test suite yet. Earlier Rust tests were temporary toolchain checks.
+The necessary native tools exist; implementing and verifying that transport is
+normal development work, not a reason to install BGB.
 
 ## Cache locations and provenance
 
@@ -49,6 +73,7 @@ Reusable tools and external sources live outside the Git worktree:
   bgb/bgb64.exe
   smoke-libretro
   smoke/a/, smoke/b/, smoke/c/
+  automation-20261010/
 ```
 
 Rust and Cargo are in `/Volumes/Storage/Cache/cargo/bin/`. Worktree:
@@ -110,7 +135,8 @@ cmake --install "$adapter_cache/build/libmobile-bgb"
 The bridge's pinned source rejects Darwin because its POSIX branch is guarded by
 `__unix__`, which Apple clang does not define. The build flag selects that existing
 POSIX branch without modifying its source. Only compilation and CLI startup have
-been verified; a BGB link exchange on Darwin remains a test gate.
+been verified. This bridge is optional historical preparation, not a current
+development prerequisite; its exchange has not been tested.
 
 DoubleCherryGB's pinned CMake list omits three required libretro-common C sources,
 causing undefined symbols on macOS. The small recorded build-list patch adds
@@ -147,7 +173,7 @@ mkdir -p "$adapter_cache/smoke/a"
 
 The frontend makes 1,200 `retro_run` calls, presses Start for calls 700 through
 709 to skip the intro, and leaves the title running. It checks native 160x144
-video, at least 1,100 video callbacks, a nonuniform final image, and that the core
+video, at least 90% of requested video callbacks, a nonuniform final image, and that the core
 queries the enabled adapter option after loading. LCD-off transitions can omit
 callbacks, so callbacks and emulated frame calls are distinct.
 
@@ -157,68 +183,50 @@ Crystal title. Separate system/config directories avoid adapter EEPROM sharing.
 These are three independent boot probes, not a connected three-player session.
 PPM output and a PNG conversion are cached under `smoke/{a,b,c}/`.
 
-This small frontend is the starting point for a native integration harness.
-Later add battery `.sav` import/export, current-symbol state oracles, input
-scripts, transcript capture, and fault injection. Do not reinterpret this smoke
-as coverage of save persistence or interrupt timing. Normal host unit tests
-will continue to run without starting an emulator.
+## Repeat the native save and movement automation
 
-## Optional BGB through Wine
-
-[BGB's manual](https://bgb.bircd.org/manual.html) explicitly lists its x64 build
-as tested with Wine on OS X. That establishes a supported route, not a successful
-test on this particular macOS 27 host.
-
-Wine is a compatibility layer installed as an app. A Wine prefix is an ordinary
-directory containing a simulated C drive and registry. It does not require a
-Windows installation, VM, Docker image, or Linux container. Each BGB process
-still uses an ordinary local socket to the native `mobile` bridge.
-
-For this Apple Silicon host, the currently packaged Intel Wine needs Rosetta.
-[Apple documents Rosetta installation](https://support.apple.com/en-us/102527)
-on macOS 27 and earlier:
+Build the frontend as above, then run this explicit integration command with a
+new output directory (existing directories are refused):
 
 ```sh
-softwareupdate --install-rosetta
+python3 mobile_adapter/tools/probe_emulator.py \
+  --core "$adapter_cache/build/doublecherry/DoubleCherryGB_libretro.dylib" \
+  --runner "$adapter_cache/smoke-libretro" \
+  --output "$adapter_cache/automation-new-run"
 ```
 
-This command was not executed. It asks the user to follow the installation and
-license prompts. The presence of `/Library/Apple/usr/libexec/oah/RosettaLinux`
-alone does not prove macOS Intel binaries can run. Verify afterwards with
-`arch -x86_64 /usr/bin/true`. Apple has announced restricted Rosetta availability
-from macOS 28, so native DoubleCherryGB is preferable for long-lived automation.
+The three processes execute 12,200, 3,500, and 4,200 `retro_run` calls. Each gets
+an isolated system/save/config directory. Battery fixtures are generated from
+scratch using the committed scripts in `tools/fixtures/`; no copyrighted ROM or
+binary save is committed. The command requires the exact baseline ROM hash and
+matching symbols. It runs normal game instructions; the host only imports the
+ordinary SRAM save at boot and observes runtime memory without modifying it.
 
-At the time of this check, [Homebrew's wine-stable cask](https://formulae.brew.sh/cask/wine-stable)
-is disabled, dated 2026-09-01, with reason `fails_gatekeeper_check`. Its old install
-command is therefore not a working setup recipe. The package maintainer offers
-[manual Wine app bundles](https://github.com/Gcenx/macOS_Wine_builds). The stable
-11.0_1 archive recorded by the cask is:
+The frontend accepts `--frames`, `--input`, `--symbols`, `--state-out`,
+`--save-in`, and `--save-out`. Save import requires the exact core SRAM size;
+RTC trailers are rejected. Do not silently import a BGB file with an RTC trailer.
+Current observer layouts are specific to the pinned core: its physical WRAM
+allocation and memory descriptors were audited, and its erroneous generic
+SYSTEM_RAM/VIDEO_RAM accessors are avoided. See the feasibility report.
 
-```text
-https://github.com/Gcenx/macOS_Wine_builds/releases/download/11.0_1/wine-stable-11.0_1-osx64.tar.xz
-SHA-256 b50dc50ec7f41d58b115a6b685d4d1315ba3c797bd3aa0f49213f2703cb82388
-```
+The capability probe uses baseline-specific frame scripts and final semantic
+assertions. It is not the full future acceptance harness. Add bounded state-driven
+phases, intermediate render snapshots, real-time pacing, server transcripts,
+concurrent clients, and disconnect/fault injection as multiplayer is developed.
+Fast offline startup is useful, but accelerated emulation must not be used to
+claim socket latency because the adapter uses host wall time. Separate emulator
+processes can connect through their embedded libmobile to the same local Rust
+TCP listener; they do not need a separate BGB bridge or RetroArch netplay.
 
-That archive was not downloaded or installed here. Manual setup would unpack
-the verified app bundle, put `Wine Stable.app` in Applications, and complete the
-normal macOS first-open approval if requested. Check package runtime dependencies
-if Wine fails to launch; the cask lists GStreamer runtime. Gatekeeper acceptance
-and macOS 27 compatibility remain unverified. Do not globally disable Gatekeeper.
+## BGB status
 
-Once Wine actually runs, use a project-specific prefix and the existing BGB:
-
-```sh
-adapter_wine='/Applications/Wine Stable.app/Contents/Resources/wine/bin/wine'
-WINEPREFIX="$adapter_cache/wine-prefix" "$adapter_wine" --version
-WINEPREFIX="$adapter_cache/wine-prefix" "$adapter_wine" \
-  "$adapter_cache/bgb/bgb64.exe" "$PWD/polishedcrystal-3.2.3.gbc"
-```
-
-These are prospective commands, not commands executed successfully during this
-audit. Before automated acceptance tests, verify BGB baseline boot, its headless
-and demo CLI behavior, and an actual bridge listener exchange. Use separate
-battery saves, adapter configs, and listener ports 8765/8766/8767 for instances
-A/B/C. The future Rust TCP game server is separate from those BGB link ports.
+The earlier audit downloaded official BGB 1.6.6 and built the native bridge.
+BGB was not executed; Wine is absent and Intel macOS execution is unavailable.
+The user has since rejected Rosetta and selected native DoubleCherryGB. No
+Rosetta, Wine, VM, or container was installed. BGB testing is optional future
+work on a compatible external host if explicitly requested. It does not block
+this branch. Previous prospective Rosetta/Wine installation instructions have
+been removed from this plan to reflect that decision.
 
 ## Minimal upstream changes
 

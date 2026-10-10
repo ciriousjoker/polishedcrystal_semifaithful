@@ -34,7 +34,12 @@
     "native_bgb_bridge_build_and_help",
     "native_doublecherry_build_and_dlopen",
     "three_separate_headless_baseline_boots",
-    "temporary_offline_cargo_test"
+    "temporary_offline_cargo_test",
+    "native_scripted_new_game_and_normal_ingame_save",
+    "raw_battery_save_version_sentinels_and_both_checksums",
+    "fresh_process_continue_from_battery",
+    "current_symbol_wram_hram_observation",
+    "completed_tile_movement_and_rendered_output_change"
   ],
   "native_boot_probe": {
     "frame_calls_per_process": 1200,
@@ -76,8 +81,6 @@
     "bgb_execution": "not attempted without Wine"
   },
   "not_yet_verified": [
-    "BGB baseline boot through Wine on macOS 27",
-    "BGB bridge byte exchange on Darwin",
     "Mobile Adapter ISP/TCP startup",
     "banked serial ISR runtime and timing",
     "multiplayer behavior",
@@ -89,5 +92,15 @@
     "disable_date": "2026-09-01",
     "disable_reason": "fails_gatekeeper_check"
   },
-  "system_changes": "No Rosetta, Wine, VM, or container installed; native dependencies and downloads are isolated in the cache."
+  "system_changes": "No Rosetta, Wine, VM, or container installed; native dependencies and downloads are isolated in the cache.",
+  "primary_emulator": "native DoubleCherryGB libretro core, one process per player",
+  "user_decision": {
+    "rosetta_installation": "rejected",
+    "wine_required": false,
+    "bgb_required": false
+  },
+  "native_automation_report": "native-automation-probe.json",
+  "optional_external_targets": [
+    "BGB execution and bridge exchange on a compatible external host, only if requested"
+  ]
 }

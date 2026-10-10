@@ -1,0 +1,17 @@
+# Boot, open the main menu, and Continue the raw battery save.
+700 START 10
+1300 START 10
+1500 A 10
+1900 A 5
+2000 A 5
+2100 A 5
+2200 A 5
+2300 A 5
+2400 A 5
+2500 A 5
+2600 A 5
+2700 A 5
+2800 A 5
+2900 A 5
+# Hold long enough to turn and complete exactly one tile step right.
+3500 RIGHT 20

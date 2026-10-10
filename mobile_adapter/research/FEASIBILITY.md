@@ -346,8 +346,9 @@ The intended scenario workflow is:
 
 1. Prepare small fixtures by actually playing to the required map/story state
    and saving through the normal in-game menu. Record ROM/save-schema revision,
-   map/coordinates, party/items, RTC/time settings, and fixture hash. No fixtures
-   are included in this investigation.
+   map/coordinates, party/items, RTC/time settings, and fixture hash. The native
+   baseline probe now regenerates a player-room save using committed input scripts;
+   the generated binary and screenshots stay in the external cache.
 2. Copy fixtures into fresh per-client directories. Use isolated adapter configs,
    server storage, ports, and identities. Start the current ROM, select Continue,
    and wait for an explicit ready condition before multiplayer inputs.
@@ -381,24 +382,45 @@ avatar was drawn; a correct final picture does not prove the intervening path.
 
 ### Emulator tooling and remaining implementation work
 
-BGB already supports battery loading (`-loadbatt`), link listeners, input demos,
+The primary backend is native DoubleCherryGB. The user rejects Rosetta, so Wine
+and BGB are not prerequisites or acceptance gates for this branch.
+
+BGB supports battery loading (`-loadbatt`), link listeners, input demos,
 headless runs, SYM files, break/watchpoints, and screenshots/state export on exit.
 This gives a practical independent compatibility-test path through libmobile-bgb
-on Windows or a configured Wine host. Normal exit is not a success oracle: a
+on an external compatible host if later requested. Normal exit is not a success oracle: a
 demo ending or debugger break can exit normally. Completion/failure markers
 and captured results must be checked. BGB does not expose a general console
 debugger API in its documented CLI, so do not promise a nonexistent memory-read
 command. Its CLI automation and a custom result reader still need prototyping.
 
-For automated frame-by-frame control, a small native libretro harness around a
-pinned DoubleCherryGB core is promising: supply input callbacks, run frames,
+For automated frame-by-frame control, the native libretro harness around the
+pinned DoubleCherryGB core now works: supply input callbacks, run frames,
 capture video, and isolate each instance in its own process. The inspected core
 exports `retro_run` and SRAM/system/video memory functions. However, its current
 single-game `retro_get_memory_data` uses the memory-type `id` as `v_gb[id]`, and
 `retro_get_memory_size` does likewise. Memory types are not emulator instance
-indices. Do not assume that system/VRAM observation works safely unchanged;
-verify/fix that accessor in the pinned test backend or add a minimal read-only
-observer, and verify bank-to-buffer mapping before reading symbols.
+indices. The frontend avoids those accessors and reads WRAM through the C000
+descriptor supplied by `RETRO_ENVIRONMENT_SET_MEMORY_MAPS`, plus the FF80 HRAM
+descriptor. The pinned CPU uses 4-KiB physical WRAM banks; banked symbol offsets
+are resolved against that buffer. SRAM uses the valid SAVE_RAM (id 0) accessor.
+This was checked against the CPU source and actual save/reload/movement states;
+no runtime observer patch in the core or production ROM is necessary.
+
+`tools/probe_emulator.py` now drives three fresh processes: New Game plus normal
+Save, Continue from the resulting battery file, and Continue plus one tile step
+right. It asserts CGB mode, a zero crash marker, save existence/version, player
+room map and coordinates, agreement between the player object and map position,
+both save sentinels and game-data checksums, and changed rendered output. The
+source fixture is unchanged. It retains logs, per-process state, PPM/PNG images,
+and hashes, with a nonzero result on failure. The ROM retains its official hash.
+
+This is a verified automation capability, not completed multiplayer testing.
+The input timing scripts are restricted to the exact baseline hash. Extend the
+frontend with bounded observation-driven phases and intermediate visual checks
+for production scenarios. Offline startup can run quickly; socket latency tests
+need real-time pacing because the adapter uses host time. Adapter commands,
+ISP login, TCP exchange, ISR timing, and interactions remain acceptance work.
 
 An optional test-only ROM observation block may expose sequence/frame counters,
 readiness, binding records, and a completion marker. Observation must not replace

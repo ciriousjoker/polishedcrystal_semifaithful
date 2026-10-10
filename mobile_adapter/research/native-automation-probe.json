@@ -1,0 +1,114 @@
+{
+  "source_base_commit": "8f3c7e9651e988d876e32a4c7ad9ef1bb76702a8",
+  "expected_core_revision": "03f58ca3dfb4b716f7e66a0e0467f9e85ef82abb",
+  "rom_sha256": "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e",
+  "symbols_sha256": "ee66579bea2f6212559b49cf4beda79316831bc068297f6e3206cc3037a4aca0",
+  "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+  "runner_sha256": "4e320084ca92034e9a0914734b147a9076cb519b800550bdd2e030013c0dc537",
+  "battery": {
+    "bytes": 32768,
+    "save_version": 10,
+    "checksums": {
+      "s": 40196,
+      "sBackup": 40196
+    },
+    "sha256": "53fcbd5a778e944176a38971c9f8d4c0d3dedeb4a5ee5312b77c53dfaabffa9e"
+  },
+  "stages": {
+    "create": {
+      "frame_calls": 12200,
+      "exit_code": 0,
+      "symbols": {
+        "hCGB": 1,
+        "hCrashCode": 0,
+        "hInMenu": 0,
+        "hVBlankCounter": 87,
+        "sBackupCheckValue1": 97,
+        "sBackupCheckValue2": 127,
+        "sCheckValue1": 97,
+        "sCheckValue2": 127,
+        "sChecksum": 40196,
+        "sSaveVersion": 10,
+        "wJumptableIndex": 129,
+        "wMapGroup": 24,
+        "wMapNumber": 5,
+        "wMenuCursorY": 0,
+        "wMenuSelection": 0,
+        "wOptionsMenuIsInitial": 1,
+        "wPlayerMapX": 7,
+        "wPlayerMapY": 7,
+        "wSaveFileExists": 1,
+        "wXCoord": 3,
+        "wYCoord": 3
+      },
+      "input_sha256": "0f2f43dae3c92ec2f81144a3b216590e0d99f88bdb60aa57101f1db19bdbfa38",
+      "ppm_sha256": "f3a59451f4cdd0fa0e5ec938d7a1d83e88395668a1df7ed8b30cfc4f99b4abcc"
+    },
+    "continue": {
+      "frame_calls": 3500,
+      "exit_code": 0,
+      "symbols": {
+        "hCGB": 1,
+        "hCrashCode": 0,
+        "hInMenu": 0,
+        "hVBlankCounter": 148,
+        "sBackupCheckValue1": 97,
+        "sBackupCheckValue2": 127,
+        "sCheckValue1": 97,
+        "sCheckValue2": 127,
+        "sChecksum": 40196,
+        "sSaveVersion": 10,
+        "wJumptableIndex": 130,
+        "wMapGroup": 24,
+        "wMapNumber": 5,
+        "wMenuCursorY": 1,
+        "wMenuSelection": 0,
+        "wOptionsMenuIsInitial": 0,
+        "wPlayerMapX": 7,
+        "wPlayerMapY": 7,
+        "wSaveFileExists": 1,
+        "wXCoord": 3,
+        "wYCoord": 3
+      },
+      "input_sha256": "e4b2b8f0390c9a711f9fb3c81530ba891ef8c34b799ea5a77b9efd001d734768",
+      "ppm_sha256": "dedc4c4678c7e863f325df067b9554e298e83cbe44e247411f5395003cbf79c1"
+    },
+    "move": {
+      "frame_calls": 4200,
+      "exit_code": 0,
+      "symbols": {
+        "hCGB": 1,
+        "hCrashCode": 0,
+        "hInMenu": 0,
+        "hVBlankCounter": 80,
+        "sBackupCheckValue1": 97,
+        "sBackupCheckValue2": 127,
+        "sCheckValue1": 97,
+        "sCheckValue2": 127,
+        "sChecksum": 40196,
+        "sSaveVersion": 10,
+        "wJumptableIndex": 130,
+        "wMapGroup": 24,
+        "wMapNumber": 5,
+        "wMenuCursorY": 1,
+        "wMenuSelection": 0,
+        "wOptionsMenuIsInitial": 0,
+        "wPlayerMapX": 8,
+        "wPlayerMapY": 7,
+        "wSaveFileExists": 1,
+        "wXCoord": 4,
+        "wYCoord": 3
+      },
+      "input_sha256": "a9650d541a44a542aa785d9fee5a2cd51208794fb0b7f3cbd93e9d8ec2cf8722",
+      "ppm_sha256": "c7bcff78e8856d61dcd9bbb2c829f4fd598783f55babafe49ca13689a54c7cb7"
+    }
+  },
+  "passed": true,
+  "network_exchange_tested": false,
+  "limitations": [
+    "Pinned baseline input timings; production scenarios need state-driven phases",
+    "No adapter command exchange, network timing, or multiplayer acceptance coverage",
+    "No RTC trailer import; raw SRAM only",
+    "No CPU/WRAM snapshot loaded"
+  ]
+}

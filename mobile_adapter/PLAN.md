@@ -1,7 +1,7 @@
 # Mobile Adapter multiplayer plan
 
 Last updated: 2026-10-10.
-Status: planning, source investigation, capacity probes, and native host tools.
+Status: planning, capacity probes, and verified native emulator automation.
 No production ROM or server implementation yet.
 Working branch: `mobileadapter`.
 Base commit: `8f3c7e9651e988d876e32a4c7ad9ef1bb76702a8`.
@@ -33,13 +33,16 @@ requested. Commit completed changes locally. Do not use the GitHub plugin.
   as the default solution to the ROM0 limit.
 - Normal Rust unit tests and assembly contract checks must run without starting
   a Game Boy emulator. Be precise about what those checks actually verify.
+- Use native DoubleCherryGB as the primary emulator and integration backend.
+  The user explicitly rejects installing Rosetta. Wine and BGB are not required
+  for development or acceptance; do not install them or leave them as blockers.
 - A desktop app, hosted deployment, unrestricted lobby sizes, and battles with
   more than two participants are later work.
 
-Interpretation: the user said "GBC" when describing an emulator using
-"libmobile.bgb". The likely intended emulator is BGB with `libmobile-bgb`.
-DoubleCherryGB is the second intended adapter implementation. This interpretation
-does not change the requested Game Boy Color ROM target.
+The initial emulator discussion included BGB with `libmobile-bgb`. The current
+decision is DoubleCherryGB with embedded libmobile, running natively on ARM64.
+Keep the ROM's adapter protocol libmobile-compatible. An additional BGB target
+can be considered on another host later if explicitly requested.
 
 ## Feasibility assessment
 
@@ -91,7 +94,7 @@ Measured from the baseline linker map, rather than estimated:
 
 `Makefile` currently selects `MBC3+TIMER+RAM+BATTERY`. Do not assume that increasing
 ROM size is a harmless fix. Any mapper or extended bank support change requires
-verification in both BGB and DoubleCherryGB and an explicit compatibility
+verification in DoubleCherryGB and an explicit compatibility
 decision. First measure a minimal banked handler with a small resident dispatch.
 Fixed-bank callers and interrupted banked code must remain valid. Keep new
 sections and memory definitions feature-owned, with only the required includes
@@ -109,11 +112,12 @@ retained as comparison evidence, not the preferred architecture.
 
 Host readiness and exact rebuild commands are in
 [research/HOST_ENVIRONMENT.md](research/HOST_ENVIRONMENT.md). A native ARM64
-DoubleCherryGB core now boots the baseline in three independent headless
-processes with its Mobile Adapter option enabled. The libmobile library and
-BGB bridge are built natively. BGB itself is downloaded but remains untested
-because Wine and working macOS Rosetta are absent. This boot probe does not
-prove an ISP/TCP exchange or multiplayer behavior.
+DoubleCherryGB core boots the baseline in three independent headless processes.
+The native harness also creates a normal in-game save, loads it through Continue
+in a fresh process, and verifies a completed tile step using current symbols,
+save checksums, and captured video. No game engine changes are needed for these
+observers. The adapter option is enabled, but an ISP/TCP exchange and multiplayer
+behavior remain to be implemented and tested. BGB is not a prerequisite.
 
 The overworld has 13 runtime object structures, including the local player,
 and 21 map object records. Each runtime structure is 34 bytes. Objects starting
@@ -139,18 +143,25 @@ Polished Crystal ROM
   -> other clients through their own TCP sockets
 ```
 
-In BGB there is one extra boundary: BGB's link protocol connects to the separate
+In the optional BGB setup there is one extra boundary: BGB's link protocol connects to the separate
 `libmobile-bgb` process. The Rust game server does not implement BGB's link
 protocol and does not receive raw emulated serial interrupts.
 
 Local setup, with intended game-server port 17423:
 
 ```text
+DoubleCherryGB A/B/C -> built-in libmobile -> 127.0.0.1:17423
+```
+
+One independent core process and separate save/adapter configuration directory
+per player. The Rust server accepts every client on the same listener. This does
+not use RetroArch netplay or the core's multi-Game-Boy cable mode.
+Optional future BGB setup on a compatible external host:
+
+```text
 BGB A, link listener 8765 -> libmobile-bgb A -> 127.0.0.1:17423
 BGB B, link listener 8766 -> libmobile-bgb B -> 127.0.0.1:17423
 BGB C, link listener 8767 -> libmobile-bgb C -> 127.0.0.1:17423
-
-DoubleCherryGB A/B/C -> built-in libmobile -> 127.0.0.1:17423
 ```
 
 Give every BGB bridge a different adapter configuration file using `-c`.
@@ -577,9 +588,12 @@ make mobile                build the adapter-enabled ROM with resource checks
 make test-mobile-rom       optional CPU execution or emulator integration tests
 ```
 
-These targets do not exist yet. BGB and DoubleCherryGB manual integration remains
-necessary for actual serial timing, rendering, menu responsiveness, and end-to-end
-battles/trades. The ordinary unit-test command must not start either emulator.
+These targets do not exist yet. Automated DoubleCherryGB integration will cover
+executed serial logic, modeled timing, rendering, menus, and end-to-end scenarios.
+The baseline automation probe already runs through an explicit Python command;
+see the host report. Add new scenarios with each feature. Human interaction is
+not a prerequisite for running this workflow. The ordinary unit-test command
+must not start an emulator.
 
 Integration fixtures must be ordinary in-game battery saves loaded by the current
 ROM, followed by boot/Continue and bounded state-driven input phases. Never reuse
@@ -590,19 +604,22 @@ state, server facts, input-to-visible latency, and native-resolution PNGs at sta
 intermediate movement, and final state. Frame checkpoints should be relative to
 recognized phases, with event/timing conditions for jittered networking.
 
-BGB's documented battery/headless/demo/breakpoint/export options make it a
-compatibility-test candidate; process exit alone does not prove success. A native
-libretro harness for DoubleCherryGB can offer tighter frame control, but its
-inspected system/video-memory accessor indexing requires validation or repair
-before using it as an observer. Neither harness nor save fixtures exist yet.
-The detailed workflow and remaining backend work are in the feasibility report.
+The native DoubleCherryGB frontend controls inputs, captures video, imports and
+exports raw battery SRAM, and reads current-symbol WRAM/HRAM through published
+memory descriptors. It avoids the pinned core's incorrect system/video-memory
+accessor indexing. `tools/probe_emulator.py` regenerates its save through the
+normal Save menu and verifies a fresh Continue and movement without injecting
+CPU/WRAM snapshots. It checks both game-data checksums and an unchanged input
+fixture. Timings are pinned to the baseline; feature scenarios need state-driven
+phases, intermediate checkpoints, and real-time pacing for socket latency.
+The detailed workflow and remaining work are in the feasibility report.
 
 ## Milestones and acceptance gates
 
 1. **Memory and adapter proof.** Pin tool/reference versions, implement only the
    minimal feature build and asynchronous adapter connection. Measure ISR size,
    RAM, transfer latency, and frame cost. Reach a loopback Rust echo/test endpoint
-   from BGB and DoubleCherryGB with clean configurations. Unsupported adapter,
+   from native DoubleCherryGB with clean configurations. Unsupported adapter,
    timeout, and cancellation must leave offline gameplay usable. Gate: memory
    layout and Internet/TCP path are proven before feature UI work grows.
 2. **Server core and three-client model.** Implement protocol and pure Rust lobby
@@ -673,12 +690,17 @@ in `research/HOST_ENVIRONMENT.md`; they are not vendored into this branch.
 - [x] Rebuild the exact baseline hash with RGBDS 1.0.4.
 - [x] Build libmobile, the BGB bridge, and a native DoubleCherryGB core.
 - [x] Boot three independent native emulator processes through a headless probe.
+- [x] Select DoubleCherryGB as the primary backend; exclude Rosetta/Wine/BGB
+  from current prerequisites at the user's request.
+- [x] Automate New Game, ordinary Save, fresh Continue, symbol observations,
+  checksum validation, and a completed tile step without modifying game code.
 - [x] Audit all 611 maps and distinguish initial visibility from retained demand.
 - [x] Specify replaceable-decoration policy, latency targets, and battery-save
   integration-test oracles.
-- [ ] Prove minimum ISP/TCP startup on both adapter implementations, including
+- [ ] Prove minimum ISP/TCP startup on native DoubleCherryGB, including
   fresh configuration and disabled or irrelevant telephone relay behavior.
-- [ ] Run BGB compatibility tests after Wine and working macOS Rosetta are available.
+- [ ] Extend the native frontend with bounded state-driven phases, intermediate
+  render checkpoints, real-time pacing, and server fault injection for features.
 - [ ] Allocate resident serial code and stable RAM with measured budgets and
   audit bank/interrupt safety.
 - [ ] Freeze the first binary schema and response-credit/chunking rules only
