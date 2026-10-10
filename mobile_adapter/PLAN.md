@@ -921,3 +921,29 @@ and `build/doublecherry-profile-v2/` only for optional observation. Do not insta
 Rosetta/Wine/BGB. The adapter timeout callbacks use emulated CPU clocks; actual
 sockets use host time. Developer Select+B runs the proof only in a safe idle
 map state and consumes that chord to avoid the ordinary registered-item script.
+
+## Android frontend configuration checkpoint
+
+On 2026-10-10 the real Pixel RetroArch frontend revealed a configuration bug that
+headless adapter tests did not cover. Its base configuration had
+`global_core_options = "false"`, selecting an existing
+`DoubleCherryGB/DoubleCherryGB.opt` with the adapter disabled instead of our
+explicit `core_options_path`. Manually loading the ROM worked because the
+game-specific options were enabled in that workflow. The isolated development
+profile now forces `global_core_options = "true"` together with
+`game_specific_options = "false"`; existing global and per-core user files stay
+intact. RetroArch 1.19.1's `runloop_init_core_options_path` confirms this precedence.
+
+Do not infer attachment or network readiness from `[Mobile] Adapter initialized`:
+the core constructs libmobile even when its option is Off. The attachment popup
+is OSD-only and need not appear in logs. Startup validation reports only core
+initialization and successful fresh state loading. Isolated profiles also enable
+core debug logging to preserve actual libmobile protocol evidence.
+
+After the fix, a single force-stop and explicit game intent loaded the fresh
+state. Holding the real GUI's B control while sending Select completed TCP connect
+to `192.168.2.25:17423`, transmitted the transport-v1 `TEST` echo, received its
+matching reply and completed TCP/PPP/session teardown. Raw evidence is in the
+host cache's `dev-session/gui-proof/android-retroarch.log`. Eight host-only
+deployment contracts pass. Keep testing the actual GUI option-loading path as
+well as the headless ROM harness when changing deployment.

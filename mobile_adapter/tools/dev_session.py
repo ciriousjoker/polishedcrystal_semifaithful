@@ -133,6 +133,9 @@ def profile(root, target, base="", android=False, package=None):
         "dcgb_mobile_adatper_device_color": "8", "dcgb_mobile_adatper_use_relay_server": "0"})
     values = {
         "core_options_path": f"{target}/core-options.cfg", "game_specific_options": "false",
+        # An inherited per-core setting otherwise ignores our explicit options
+        # path in favour of DoubleCherryGB/DoubleCherryGB.opt.
+        "global_core_options": "true",
         "savefile_directory": str(target) if android else f"{target}/saves",
         "savestate_directory": str(target) if android else f"{target}/states",
         "system_directory": f"{target}/system", "sort_savefiles_enable": "false",
@@ -142,6 +145,7 @@ def profile(root, target, base="", android=False, package=None):
         "config_save_on_exit": "false", "auto_overrides_enable": "false",
         "auto_remaps_enable": "false", "cheevos_enable": "false", "rewind_enable": "false",
         "run_ahead_enabled": "false", "log_verbosity": "true", "log_to_file": "true",
+        "libretro_log_level": "0",
         "log_to_file_timestamp": "false", "log_dir": str(target),
         "content_history_path": f"{target}/content_history.lpl", "content_history_size": "1",
         "cloud_sync_enable": "false", "cloud_sync_driver": "null",
@@ -184,7 +188,10 @@ def core_install_record(core, package, details):
 
 
 def frontend_status(log):
-    return {"adapter": "[Mobile] Adapter initialized" in log,
+    # The core constructs libmobile even when its emulation option is Off.
+    # Its attachment notification is OSD-only, so initialization is not proof
+    # that the adapter is attached or that the game connected to the server.
+    return {"initialized": "[Mobile] Adapter initialized" in log,
             "state": bool(re.search(r"Auto-loading save state from .* succeeded\.", log))}
 
 
@@ -383,7 +390,7 @@ def launch_android(device, launch):
         if device.exists(logfile):
             log = device.shell("tail", "-n", "150", logfile)
             if all(frontend_status(log).values()):
-                print("ANDROID ADAPTER ready; fresh start state loaded. Server connection requires Select+B.", flush=True)
+                print("ANDROID START confirmed: core initialized; fresh state loaded. Select+B proves the server connection.", flush=True)
                 return
         time.sleep(0.5)
     result = device.call("shell", "pidof", device.package, capture_output=True, text=True, check=False)
@@ -419,8 +426,8 @@ def start(args, mac, address, device=None, launch=None):
             str(mac / f"roms/{NAME}.gbc")], stdout=log, stderr=subprocess.STDOUT))
         def watch_mac():
             while not stopped.wait(0.5):
-                if frontend_status((mac / "play.log").read_text(errors="replace"))["adapter"]:
-                    print("MAC ADAPTER ready; server connection requires right Shift+Z (Select+B).", flush=True)
+                if all(frontend_status((mac / "play.log").read_text(errors="replace")).values()):
+                    print("MAC START confirmed: core initialized; fresh state loaded. Right Shift+Z (Select+B) proves the server connection.", flush=True)
                     return
         threading.Thread(target=watch_mac, daemon=True).start()
         if device:

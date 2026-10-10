@@ -42,7 +42,8 @@ class DeploymentContracts(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             target = "/storage/emulated/0/Download/polishedcrystal_mobile_adapter"
-            base = 'input_overlay = "/existing/touch.cfg"\nvideo_driver = "vulkan"\nsavefile_directory = "/old"\n'
+            base = ('input_overlay = "/existing/touch.cfg"\nvideo_driver = "vulkan"\n'
+                    'savefile_directory = "/old"\nglobal_core_options = "false"\n')
             session.profile(root, target, base, android=True, package="com.retroarch")
             result = (root / "retroarch.cfg").read_text()
             self.assertIn('input_overlay = "/existing/touch.cfg"', result)
@@ -52,6 +53,11 @@ class DeploymentContracts(unittest.TestCase):
             self.assertEqual(result.count("\nsavefile_directory ="), 1)
             self.assertIn('savestate_auto_load = "true"', result)
             self.assertIn('savestate_auto_save = "false"', result)
+            self.assertIn('global_core_options = "true"', result)
+            self.assertNotIn('global_core_options = "false"', result)
+            self.assertIn('game_specific_options = "false"', result)
+            self.assertIn(f'core_options_path = "{target}/core-options.cfg"', result)
+            self.assertIn('libretro_log_level = "0"', result)
             self.assertIn('dcgb_mobile_adatper_enabled = "1"', (root / "core-options.cfg").read_text())
 
     def test_mac_volume_is_five_percent_without_changing_system_volume(self):
@@ -77,13 +83,15 @@ class DeploymentContracts(unittest.TestCase):
             with self.assertRaises(ValueError):
                 session.core_install_record(core, "com.retroarch", "")
 
-    def test_adapter_status_does_not_claim_a_server_connection(self):
+    def test_frontend_status_reports_initialization_without_requiring_osd_in_logs(self):
         self.assertEqual(session.frontend_status("[Mobile] Adapter initialized\n"),
-                         {"adapter": True, "state": False})
+                         {"initialized": True, "state": False})
+        self.assertEqual(session.frontend_status("Mobile Adapter GB plugged in\n"),
+                         {"initialized": False, "state": False})
         self.assertEqual(session.frontend_status("Auto-loading save state from x succeeded.\n"),
-                         {"adapter": False, "state": True})
+                         {"initialized": False, "state": True})
         self.assertEqual(session.frontend_status("Auto-loading save state from x failed.\n"),
-                         {"adapter": False, "state": False})
+                         {"initialized": False, "state": False})
 
     def test_server_labels_are_derived_from_peer_ip(self):
         for peer, expected in (("192.168.2.25", "mac"), ("192.168.2.23", "android"), ("192.168.2.99", "unknown")):
@@ -101,7 +109,8 @@ class DeploymentContracts(unittest.TestCase):
 
             def shell(self, *command):
                 self.calls.append(command)
-                return "[Mobile] Adapter initialized\nAuto-loading save state from x succeeded.\n"
+                return ("[Mobile] Adapter initialized\n"
+                        "Auto-loading save state from x succeeded.\n")
 
             def exists(self, path):
                 return True

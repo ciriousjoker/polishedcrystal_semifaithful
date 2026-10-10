@@ -21,12 +21,13 @@ change macOS system volume. Keyboard controls are arrows, X for A, Z for B,
 Enter for Start and right Shift for Select. In an idle overworld scene,
 right Shift + Z runs the milestone 1 transport proof. The terminal should show
 `ECHO session=... sequence=... bytes=4`. On Android use the corresponding
-Select and B touch controls together. Release before repeating the test.
+Select and B touch controls together: hold B, then press Select while B remains
+held. Release both before repeating the test. Close any dialog first.
 
-The terminal distinguishes local adapter readiness from real server sessions:
+The terminal distinguishes frontend startup from real server sessions:
 
 ```text
-ANDROID ADAPTER ready; fresh start state loaded. Server connection requires Select+B.
+ANDROID START confirmed: core initialized; fresh state loaded. Select+B proves the server connection.
 CLIENT_CONNECTED session=1 peer=192.168.2.23:51000 client=android
 ECHO session=1 sequence=1 bytes=4
 ECHO_REPLY session=1 sequence=1 bytes=4
@@ -42,8 +43,10 @@ marked `unknown`; protocol errors and timeouts produce `SESSION_ERROR`.
 
 Milestone 1 opens a short-lived connection only when Select+B is pressed in the
 idle overworld, then deliberately closes it after the echo. The emulator's
-Mobile Adapter notification merely describes initializing the local libmobile
-peripheral. No automatic login, persistent lobby or remote player rendering is
+Mobile Adapter popup indicates attachment of the local peripheral. The core's
+`Adapter initialized` log appears even if its emulation option is disabled, so
+neither message proves a connection to our server. No automatic login,
+persistent lobby or remote player rendering is
 implemented yet. Seeing no other avatar is expected at this milestone.
 
 ## Android files and direct start
@@ -95,6 +98,11 @@ Its configuration auto-loads the newly generated state. The script checks a fres
 Android log for adapter initialization and successful state loading, reporting
 failure in the terminal if this cannot be confirmed. After the command, the
 game is open on the phone; no launcher tap or manual Continue is required.
+The isolated configuration sets `global_core_options = "true"` and
+`game_specific_options = "false"`, making its explicit `core_options_path`
+authoritative. Without the first setting, an inherited per-core preference can
+silently load `DoubleCherryGB/DoubleCherryGB.opt` with the adapter disabled.
+The user's global RetroArch configuration and per-core options are preserved.
 For a separately created ROM shortcut, always select the custom installed core
 `/data/data/<package>/cores/DoubleCherryGB_libretro.so`. The script also writes
 per-game overrides/options and a separate playlist fixing that core selection.
@@ -111,7 +119,9 @@ part of the normal command.
 For diagnosis, the exact generated direct-start ADB command is in the host
 cache's `dev-session/android/launch-adb.txt`. Android frontend logs are in the
 Download folder's `retroarch.log`; Mac preparation and frontend logs are in
-`dev-session/mac`. The script accepts `--server-ip 192.168.x.y` or
+`dev-session/mac`. Core debug logging is enabled in these isolated profiles,
+including libmobile's TCP connect, outgoing request and incoming reply bytes.
+The script accepts `--server-ip 192.168.x.y` or
 `--interface en6` to override automatic LAN detection. A DHCP change requires
 rerunning the command so both ROM copies get the current address. Port 17423
 does not change.
@@ -137,6 +147,16 @@ The logging follow-up verified both actual source IPs in the new server logs,
 successful reply acceptance and movement in both ROMs. The Pixel's one-intent
 start also confirmed adapter initialization and fresh state loading. Host cache
 `dev-session/log-proof` contains the server log and symbol results.
+
+A subsequent real RetroArch GUI check reproduced the Android adapter being Off
+despite the generated options file specifying On. Enforcing the isolated options
+path fixed the direct-intent launch. After one force-stop and one game intent,
+the real Pixel frontend loaded its fresh state and completed TCP connect, the
+`PC` transport-v1 `TEST` request, its matching echo reply and clean session teardown
+against the running Rust server at `192.168.2.25:17423`. This was tested through
+the running GUI's inputs, not the headless runner. The raw frontend trace is in
+`dev-session/gui-proof/android-retroarch.log` in the host cache. Eight host-only
+contracts passed, including inherited per-core options and the single-intent start.
 
 Host-only deployment checks:
 
