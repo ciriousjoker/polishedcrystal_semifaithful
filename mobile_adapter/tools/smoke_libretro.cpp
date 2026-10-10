@@ -1,7 +1,8 @@
 // Native emulator probe with scripted input, battery saves, and symbol observers.
 // Pinned DoubleCherryGB backend; Python runners own scenario assertions.
 // Build with the pinned core's libretro include directory and run one process
-// per instance. Full CPU/WRAM snapshots are never loaded. Save inputs are read only.
+// per instance. Acceptance tests boot battery saves. Explicit snapshot flags are
+// for regenerating manual-play start states with the current ROM/core only.
 #include <libretro.h>
 #include <dlfcn.h>
 #include <cstdarg>
@@ -262,6 +263,7 @@ int main(int argc, char** argv) {
                      "Options: --frames N --input SCRIPT --symbols SYM --state-out JSON\n"
                      "         --save-in SAV --save-out SAV --adapter 0|1 --pace-from FRAME --trace-out JSONL\n"
                      "         --checkpoint-dir EXISTING_DIRECTORY --profile-out JSON\n"
+                     "         --snapshot-out STATE --snapshot-in STATE (manual-play preparation only)\n"
                      "Input: FRAME BUTTON DURATION, or ON MIN_FRAME SYMBOL=VALUE[,SYMBOL=VALUE] BUTTON DURATION\n";
         return 1;
     }
@@ -272,7 +274,8 @@ int main(int argc, char** argv) {
         if (key != "--frames" && key != "--input" && key != "--symbols" &&
             key != "--state-out" && key != "--save-in" && key != "--save-out" &&
             key != "--adapter" && key != "--pace-from" && key != "--trace-out" &&
-            key != "--checkpoint-dir" && key != "--profile-out") fail("Unknown option: " + key);
+            key != "--checkpoint-dir" && key != "--profile-out" &&
+            key != "--snapshot-out" && key != "--snapshot-in") fail("Unknown option: " + key);
         arguments[key] = argv[i + 1];
     }
     if (arguments.count("--frames")) {
@@ -370,6 +373,15 @@ int main(int argc, char** argv) {
         if (!sram || bytes.size() != sram_size) fail("Expected raw SRAM-sized save without an RTC trailer");
         std::memcpy(sram, bytes.data(), sram_size);
     }
+    if (arguments.count("--snapshot-in")) {
+        std::ifstream file(arguments.at("--snapshot-in"), std::ios::binary);
+        if (!file) fail("Cannot read manual-play snapshot");
+        std::vector<char> bytes((std::istreambuf_iterator<char>(file)), {});
+        auto size = symbol<size_t(*)()>(core, "retro_serialize_size")();
+        if (!size || bytes.size() != size) fail("Snapshot size does not match this core");
+        if (!symbol<bool(*)(const void*, size_t)>(core, "retro_unserialize")(bytes.data(), bytes.size()))
+            fail("Core rejected manual-play snapshot");
+    }
     auto run = symbol<void(*)()>(core, "retro_run");
     std::ofstream trace;
     if (arguments.count("--trace-out")) {
@@ -452,6 +464,24 @@ int main(int argc, char** argv) {
         std::ofstream save(arguments.at("--save-out"), std::ios::binary);
         save.write(reinterpret_cast<const char*>(sram), sram_size);
         if (!save) fail("Cannot write battery save");
+    }
+    if (arguments.count("--snapshot-out")) {
+        // Never snapshot an active Mobile Adapter session: peripheral sockets
+        // are not included in the pinned core's serialization format.
+        auto values = capture(sram, sram_size);
+        for (const auto& expected : std::map<std::string, unsigned>{
+                {"hCGB", 1}, {"hCrashCode", 0}, {"hInMenu", 0},
+                {"wMapStatus", 2}, {"wScriptRunning", 0}, {"wMobileOwner", 0}})
+            if (!values.count(expected.first) || values.at(expected.first) != expected.second)
+                fail("Manual-play snapshot requires idle overworld: " + expected.first);
+        auto size = symbol<size_t(*)()>(core, "retro_serialize_size")();
+        if (!size || size > 16 * 1024 * 1024) fail("Invalid manual-play snapshot size");
+        std::vector<char> bytes(size, 0);
+        if (!symbol<bool(*)(void*, size_t)>(core, "retro_serialize")(bytes.data(), bytes.size()))
+            fail("Core could not serialize manual-play snapshot");
+        std::ofstream file(arguments.at("--snapshot-out"), std::ios::binary);
+        file.write(bytes.data(), bytes.size());
+        if (!file) fail("Cannot write manual-play snapshot");
     }
     if (arguments.count("--state-out")) {
         if (!arguments.count("--symbols")) fail("--state-out requires matching --symbols");

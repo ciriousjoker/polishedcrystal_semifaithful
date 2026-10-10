@@ -6,6 +6,12 @@ The implementation is under `rom/`, the Rust workspace under `server/`, and nati
 acceptance tools under `tools/`. Existing game code has small conditional hooks;
 no existing helper was moved into another ROM bank. No ROM or save is committed.
 
+For manual Mac and Android testing, use the single command in
+[MANUAL_TESTING.md](MANUAL_TESTING.md). It builds and starts the Rust server on
+fixed port 17423, starts the Mac game at 5% volume, updates the phone's stable
+Download files through ADB, and directly starts its game with a freshly generated
+start state. No additional Android app is built or installed.
+
 ## Build and developer proof
 
 Use RGBDS 1.0.4, Rust/Cargo 1.85 or later, and the pinned native DoubleCherryGB

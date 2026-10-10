@@ -6,6 +6,16 @@ overworld presence. See research/MILESTONE_1.md for measured acceptance evidence
 Working branch: `mobileadapter`.
 Base commit: `8f3c7e9651e988d876e32a4c7ad9ef1bb76702a8`.
 
+Manual testing workflow: `python3 mobile_adapter/tools/dev_session.py` now builds
+and starts the local server on fixed TCP port 17423, launches the Mac client at
+5% emulator volume, pushes stable ROM/save/config paths to Android's
+Downloads/polishedcrystal_mobile_adapter and directly launches RetroArch there.
+Every build gets a fresh start snapshot derived from an ordinary in-game save;
+Android generates its own snapshot with the Android core. No Android launcher
+app is wanted or produced. Verified on native M2 macOS and a physical Pixel 9 Pro:
+both clients completed adapter TCP echo through the Mac's LAN IPv4 and continued
+movement. See MANUAL_TESTING.md for commands, prerequisites and limitations.
+
 This document is the persistent working memory for the project. Keep decisions,
 evidence, unresolved questions, and the next concrete step current as work
 continues. Communicate findings directly to the user in German; repository
