@@ -614,41 +614,189 @@ fixture. Timings are pinned to the baseline; feature scenarios need state-driven
 phases, intermediate checkpoints, and real-time pacing for socket latency.
 The detailed workflow and remaining work are in the feasibility report.
 
-## Milestones and acceptance gates
+## Five milestones to complete the agreed project
 
-1. **Memory and adapter proof.** Pin tool/reference versions, implement only the
-   minimal feature build and asynchronous adapter connection. Measure ISR size,
-   RAM, transfer latency, and frame cost. Reach a loopback Rust echo/test endpoint
-   from native DoubleCherryGB with clean configurations. Unsupported adapter,
-   timeout, and cancellation must leave offline gameplay usable. Gate: memory
-   layout and Internet/TCP path are proven before feature UI work grows.
-2. **Server core and three-client model.** Implement protocol and pure Rust lobby
-   state with two/three-client host tests, bounded queues, reconnect, and explicit
-   target IDs. Gate: three clients are distinct; no global other-player state.
-3. **Two-player overworld demonstration.** In a sparse map, show a remote avatar,
-   position/facing, warps, and disconnect cleanup. Keep a two-entry remote table
-   even with only one remote connected. Gate: no blocking gameplay or NPC/script
-   collisions, plus measured sprite/bank budgets.
-4. **Three-player presence and interaction.** Show two peers where resources
-   permit, handle crowding explicitly, select overlapping targets, and exercise
-   crossed invitations. Gate: C remains connected while A and B interact.
-5. **Pokegear calls and common menu.** Ring, accept/decline/busy/expire, restore
-   the screen, and open the same action menu across maps. Gate: calls do not
-   interrupt unsafe scripts or steal an ongoing interaction.
-6. **Battle bridge.** Adapt setup/RNG and ordered actions with safe abort and
-   resynchronization checks. Gate: two-person battles under latency and disconnect,
-   with a third connected lobby member and continued adapter activity.
-7. **Durable transfer foundation and gifts.** Specify and test journal/save
-   recovery before enabling inventory mutation, then deliver allowed bag items.
-   Gate: fault-injected restarts recover consistently on supported clients.
-8. **Pokemon trades.** Add the Polished Crystal-specific schema, party UI,
-   evolution/mail rules, and durable transfer flow. Gate: interrupted and replayed
-   transactions, full parties, and backup saves behave correctly.
+These five milestones supersede the earlier eight-step breakdown. Execute them
+in order on this worktree and branch, with small local commits. Each milestone
+includes its implementation and relevant automated tests; do not defer all
+verification until milestone 5. A checklist item is complete only when its
+acceptance evidence exists. Five milestones are an organization of the work,
+not proof that the full feature already fits or a calendar estimate.
 
-Revisit the memory budget at every milestone. If the minimal adapter plus
-presence cannot fit safely, resolve feature size and resource choices
-before continuing into battles and trades. Do not assume the complete original
-Crystal mobile code can be pasted into this ROM.
+The complete agreed deliverable is the Mobile Adapter-enabled Polished Crystal
+ROM plus a locally runnable Rust server for two or three connected players:
+live overworld presence, adjacent interaction, distance-independent Pokegear
+calls opening the same action menu, two-person battles, Pokemon trades, and
+ordinary-item gifts. Use collections and explicit participant identities from
+the beginning. New desktop apps, cloud deployment, free-text/voice chat, shared
+story progression, unrestricted lobby capacity, and battles with more than two
+participants remain outside the previously agreed scope.
+
+### 1. Working adapter connection, memory ownership, and test foundation
+
+Implement the `MOBILE_ADAPTER` build, feature-owned code/RAM sections, serial
+ownership, bounded asynchronous Mobile Adapter commands, and an initial framed
+protocol. Add the Rust workspace, codec/domain test separation, and a minimal
+TCP endpoint. Connect from the actual game ROM through DoubleCherryGB's embedded
+libmobile to that endpoint, receive a response, disconnect, and reconnect.
+A standalone host library transcript or a synthetic test ROM alone cannot
+satisfy this milestone.
+
+Measure the real driver's ROM/RAM size, dispatch/ISR cycles, stack headroom,
+bank preservation, and frame/audio cost. Keep existing helpers in place. The
+12-byte dispatch and 8-KiB reservation are starting evidence, not a completed
+implementation or a promise that all later UI and transfer logic fits. Establish
+budgets for adapter buffers, peer records, interactions, battle data, and future
+persistent records. Audit their lifetimes through existing menu/battle unions.
+Recheck actual placement and budgets throughout subsequent milestones.
+
+Extend the native frontend with bounded state-driven inputs, intermediate video
+and symbol snapshots, real-time pacing, and isolated config/save directories.
+Provide the distinct host-only and ROM integration commands, adapter transcript
+vectors, and baseline boot/save/reload regression scenarios. Use normal battery
+fixtures and the current build's symbols. Identify all narrow upstream hooks.
+
+**Acceptance:** the feature-enabled game performs a verified loopback TCP
+request/response with a clean adapter configuration and repeated reconnects;
+normal controls remain responsive. Adapter absence, cancellation, bad packets,
+and timeout safely return to offline play. Banks/registers and buffers pass
+runtime checks. The disabled standard ROM reproduces its exact baseline hash;
+existing build variants are checked for build and compatibility effects. No
+helper relocation, mapper change, or borrowing unsafe UNION storage is silently
+introduced to overcome a failed budget. Failed placement/timing is resolved here
+before building substantial feature UI.
+
+### 2. Three-player lobbies and live overworld presence
+
+Expand the Rust server into the lobby/session service with bounded TCP queues,
+explicit player IDs, connection generations, compatibility negotiation, and
+reconnect/resynchronization. Add the ROM's connection/lobby controls, online
+state, two-entry remote peer table, coherent movement snapshots, and avatar
+bindings. Start with a two-player sparse-map demonstration and finish this
+milestone with three actual emulator processes connected to one server.
+
+Handle walking, facing, relevant movement modes, warps, connected-map transitions,
+map-instance differences, and disconnect cleanup. Remote avatars are nonblocking
+and do not execute NPC scripts. Keep story, inventory pickups, encounters, and
+puzzles local. Implement the feature-owned replaceability table and temporary
+NPC suppression/restoration; preserve required actors and story flags.
+
+Use the all-611-map audit to guide capacity checks. Cover the crowded retained-
+object and special-sprite cases dynamically, including Snowtop Mountain and
+Cinnabar Volcano. Audit object slots, VRAM tiles, palettes, and per-scanline OAM.
+Normal supported overworld scenes must actually display both remote players;
+a permanently hidden peer in an ordinary scene is not a completed solution.
+If safe NPC suppression cannot meet that requirement, implement the necessary
+rendering allocation here. Protected cutscenes or resource-critical effects may
+temporarily defer avatars with a defined visible status and roster access; record
+those exceptions explicitly rather than silently dropping maps from coverage.
+
+**Acceptance:** three distinct players can join, move, change maps, leave, and
+reconnect; each sees both peers when sharing the same supported map instance.
+The host model and real three-core scenarios demonstrate bounded queues and no
+single-global-peer assumption. Measured input-to-visible p95 meets the initial
+local target below 200 ms, and the declared test scenario with approximately
+100-ms client/server RTT meets p95 below 300 ms, or the failed target is resolved
+before declaring completion. Static all-map checks and representative dynamic
+crowding/transition scenarios preserve required NPCs, restore suppressed objects,
+and avoid tile/palette corruption.
+
+### 3. Adjacent interaction, Pokegear calls, and the common action menu
+
+Implement target selection for adjacent or overlapping peers, invitations,
+accept/decline/cancel/timeout, online roster, call sound, screen restoration, and
+one shared interaction-menu path. Calls work across map distances. The menu
+routes challenge, trade, and gift actions by explicit player/session IDs; those
+feature bodies are completed in milestones 4 and 5 rather than represented as
+working features at this stage. Talking means this menu flow, as agreed.
+
+Keep the adapter serviced in menus and scripts through safe bounded hooks.
+Queue incoming calls until a safe foreground state, report busy/offline, and
+resolve crossed invitations deterministically. Each player can have one
+exclusive interaction, but lobby membership and the peer collection remain
+independent of the selected interaction partner.
+
+**Acceptance:** facing a peer and calling that same peer both open the same menu
+for the correct ID; calls ring and close/restore their screen correctly. In a
+three-player scenario, simultaneous requests, refusal, cancellation, expiration,
+map changes, and disconnects do not target the wrong player, steal an active
+script, leave a stuck menu, or disconnect the uninvolved third player. Unit and
+emulator scenarios verify intermediate UI states as well as completion.
+
+### 4. Complete two-player battles through the server
+
+Adapt the selected-peer battle setup, party/RNG exchange, and ordered turn
+actions to explicit mobile sessions. Reuse Polished Crystal's existing battle
+mechanics; the Rust server routes and coordinates events rather than becoming
+a second battle simulator. Validate build/gameplay compatibility, sequence
+numbers, readiness, turn progression, and state agreement.
+
+Replace cable-specific waits and mobile error/SoftReset paths with bounded
+network waits, clear cancellation, and safe cleanup. Keep adapter activity and
+busy presence through battle animations; the third player's lobby connection
+and ordinary gameplay continue. Preserve game state according to existing link-
+battle rules and restore a consistent offline state after an aborted session.
+
+**Acceptance:** two selected clients complete a real battle with consistent
+outcomes while a third remains connected and can move. Party setup, supported
+battle mechanics, voluntary exit, latency, duplicate/stale events, disconnects,
+and desynchronization have automated checks. Abort returns both participants to
+usable gameplay without a soft reset or persistent party/inventory damage.
+
+### 5. Safe gifts and Pokemon trades, then complete-project acceptance
+
+Specify and implement the durable client journal and server transaction store
+before enabling inventory mutations. Audit persistent space, main/backup save
+selection, versioning, checksums, and atomic recovery of inventory plus journal
+state. Persist the server's commit/abort decision and make client recovery and
+application idempotent. Define whether recovery resumes or aborts at each phase;
+a disconnect after durable commit must not incorrectly restore the sender's item.
+
+Implement ordinary allowed-item gifts with quantity/capacity checks and recipient
+consent. Implement Pokemon selection, both parties' confirmation, transfer of
+Polished Crystal's full supported Pokemon schema, held items/mail rules, trade
+evolution, last-usable-Pokemon restrictions, animations, and normal saving.
+Exercise transfers between any selected pair while the third remains connected.
+Do not present a disabled action or host-only transfer as a finished ROM feature.
+
+Inject interruption around every durable client/server boundary, reload ordinary
+battery saves, and verify recovery, conservation, and exactly-once application.
+Audit the production frontend's battery-file flush behavior: an in-game SRAM
+write is not by itself proof that the host has persisted that file to disk.
+Document and test the supported restart/power-loss model; stale manual save
+restoration and malicious clients are not economy-integrity guarantees.
+
+Finally run the combined three-client acceptance suite: connect, meet, walk,
+interact, call across maps, battle, gift, trade, disconnect/reconnect, restart the
+server/clients, and recover pending transfers. Recheck memory/frame budgets,
+existing offline saves and game paths, and the disabled-build baseline. Cover the
+supported build matrix and reject incompatible peers; do not silently promise
+compatibility for untested cosmetic/debug/VC variants.
+
+**Acceptance:** every requested action is usable in the actual ROM, not a stub;
+normal supported failures do not lose or duplicate transferred items/Pokemon.
+All required host-only tests and separate native integration scenarios pass.
+Deliver the reproducible ROM/server builds, commands to start the local server
+and independent clients, endpoint/lobby configuration, protocol/setup/test and
+recovery documentation, source pins, and recorded acceptance results. Fresh-
+checkout instructions work using the documented native dependencies. All code
+is committed locally on `mobileadapter`; there is no upstream PR, cloud
+publication, or external deployment. Only then is the agreed project complete.
+
+## Execution policy and current blockers
+
+No additional emulator installation, Rosetta, Wine, BGB, cloud account, or desktop
+app is required to start implementation. Tooling availability is established;
+the first unproven gate is the real game's asynchronous adapter/TCP path and its
+measured memory/interrupt behavior. Full ROM fit, safe crowded-scene rendering,
+and durable transfers remain technical risks to solve, not user permissions or
+already completed work. If an immutable hardware budget conflicts with a stated
+requirement, preserve the measured failure and identify the concrete design
+tradeoff; do not quietly relax the requirement or claim the milestone completed.
+
+Work on this branch, implement and test each vertical slice, update this plan
+with results, and commit it locally. Begin with milestone 1's actual ROM-to-Rust
+round trip. Reuse the verified native harness and feature-owned section layout.
 
 ## Evidence and external references
 
@@ -710,6 +858,8 @@ in `research/HOST_ENVIRONMENT.md`; they are not vendored into this branch.
 - [ ] Specify journal placement, save compatibility, and client crash recovery
   before coding any inventory-changing multiplayer feature.
 
-Next concrete implementation step, when requested: milestone 1, a minimal
-adapter connection proof with a feature build and small loopback endpoint.
-Continue using this worktree and branch; do not create another branch or PR.
+Next concrete implementation step: milestone 1, a minimal actual-game adapter
+connection with a feature build and small Rust loopback endpoint, extending the
+native harness to observe it at real speed. The five milestones above define
+completion of the agreed project. Continue using this worktree and branch;
+do not create another branch or PR.
