@@ -128,6 +128,11 @@ fingerprints and finite script-graph checks gate every mobile build.
   100%, 200%, 300% and 400%.
 - **R2 IMPORTANT:** Try to support arbitrary emulation speeds. If an upper bound
   is necessary, support at least 400%.
+  The speed requirement includes correct remote presentation on normally running
+  recipients when another player fast-forwards. The user accepts degraded local
+  appearance on the fast-forwarding client, including frontend frame-skipping
+  artifacts. This visual exception does not waive P1/P2 frame cadence, bounded
+  processing, validation, save integrity or recovery.
 - **R3 MUST:** Clients handle broken or malicious server packets gracefully.
   Ignore invalid input when safe; abandon an untrustworthy stream locally when
   framing cannot be recovered safely.

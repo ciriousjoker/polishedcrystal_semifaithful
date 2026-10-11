@@ -33,9 +33,11 @@ Do not attribute this total to network RTT or claim a hardware minimum.
 Remote projection currently calls `MobileApproachPixel` separately for X and Y.
 Each call halves a small remaining error, snapping errors larger than 32 pixels.
 A missed right-angle corner can therefore become a diagonal visual shortcut.
-Independent-axis smoothing needs replacement with movement-segment-aware
-presentation, or a bounded snap when the actual corner is unavailable. The ROM
-must not invent traversable paths or delay the local game to reconstruct history.
+The user subsequently clarified that diagonal visual smoothing is acceptable
+in principle and latency reduction has priority. This is visual projection, not
+authoritative collision or a reconstructed movement path. Reassess it after
+profiling latency; a segment-aware renderer is optional, not a new requirement.
+Any history must remain bounded and must not delay the local game.
 
 Next performance work:
 
@@ -43,7 +45,8 @@ Next performance work:
    receipt, receiver poll/commit and actual remote presentation in one measurement.
 2. Reduce avoidable idle-stage and poll delays while retaining bounded processing,
    latest-only queues, fault handling and zero extra native world gaps.
-3. Remove diagonal interpolation artifacts without accepting unbounded history.
+3. Reassess smoothing after latency improvements; retain cheap diagonal visual
+   interpolation if acceptable. Do not require unbounded movement history.
 4. Repeat two/four-client local and hosted latency, 100..400% cadence, malformed
    messages, Save isolation and dense-map tests after changes. Do not promise a
    numerical lower target before profiling it.
@@ -75,9 +78,11 @@ alternative, not a default that silently overrides local visibility priority.
 
 A simple odd/even scheduler can alias with frontend frame skipping at 400% speed:
 a frontend presenting every fourth emulated frame may always sample the same
-phase. Test actual presentation behavior; all-frame headless OAM traces alone
-cannot establish user-visible fairness. Do not assume guaranteed visibility with
-arbitrary external frame dropping.
+phase. The user accepts degraded local appearance when choosing fast-forward,
+so perfect visibility on that fast client is not an acceptance requirement.
+Normally running recipients must still render fair, correct remote figures when
+other players run at 100..400%. Do not infer normal-client presentation fairness
+solely from an all-frame OAM trace.
 
 Temporal OAM admission solves scanline overflow only. Current native runtime has
 13 object records including the local player. A full twelve-NPC map plus three

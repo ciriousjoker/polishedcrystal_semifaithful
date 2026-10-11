@@ -1,5 +1,39 @@
 # Mobile Adapter multiplayer plan
 
+## 2026-10-12: independent remote presentation proposal
+
+Preferred next prototype: keep all three remote actors outside the thirteen
+ordinary object structures, including their visual representation. Network peer
+records already live in private multiplayer WRAM: three fixed 64-byte records
+with identity, map/instance/epoch, position, appearance and presentation state.
+Only the current native visual implementation leases ordinary object structures.
+This proposal replaces that coupling; it does not require rewriting the lobby,
+Bridge or peer identity model.
+
+Expected benefit: normal NPC simulation, scripts and object allocation remain
+intact, and remote actors no longer require eviction/restoration of native NPC
+records. Interaction and optional hitboxes must select validated remote records
+explicitly, without borrowing native object indices. The current lease path stays
+available as a comparison until a replacement passes the existing gates.
+
+Separate records do not expand VRAM, the eight OBJ palettes, forty OAM entries
+or ten hardware objects per scanline. Independent graphics allocation and fair
+whole-figure temporal admission remain necessary. Keep graphics preparation in
+bounded idle work; measure the unavoidable per-frame OAM composition cost. An
+older independent renderer missed the strict cadence gate, so this is a viable
+architecture candidate, not established performance acceptance.
+
+User clarifications: diagonal smoothing is acceptable in principle. First trace
+and reduce avoidable latency; do not require a movement-history redesign merely
+to eliminate diagonals. Fast-forward up to 400% must preserve correct behavior
+on other normally running clients. The fast-forwarding user accepts degraded
+local appearance, including frontend frame-skipping artifacts; this does not
+relax validation, bounded processing, save integrity or ordinary game cadence.
+
+Prototype gates and source references are in
+`research/INDEPENDENT_REMOTE_ACTORS.md`. No renderer implementation changed in
+this follow-up. M2's protected-NPC/scanline rendering blocker remains open.
+
 ## 2026-10-12: local latency and temporal rendering proposal
 
 The user reports delayed remote movement even in Local multiplayer, diagonal
@@ -14,12 +48,13 @@ The active hosted process injects zero delay. A fresh two-core embedded-local
 probe measures p95 163.035 ms from local world motion to remote motion, and
 280.976 ms from input including native turning. Existing native frame cadence
 can be correct while remote movement still lags. Independent X/Y interpolation
-explains diagonal shortcuts and must be addressed in future responsiveness work.
+explains diagonal shortcuts. The later clarification above accepts this visual
+behavior and prioritizes latency reduction.
 
 Temporal whole-figure scheduling is a viable scanline strategy to investigate,
 but does not free native object records, VRAM or palettes. Do not delete the
-reviewed lease policy on that assumption. Account for 100..400% frontend frame
-skipping, whole-figure fairness, effects and maximum absence, along with the
+reviewed lease policy on that assumption. Check whole-figure fairness on normal
+receivers with 100..400% sources, effects and maximum absence, along with the
 existing frame/Save gates. Detailed evidence, limitations and proposed next steps
 are in `research/LOCAL_LATENCY_AND_TEMPORAL_RENDERING.md` and
 `research/local-latency-evidence.json`. Production code and ROM hashes are unchanged.
