@@ -2,7 +2,10 @@
 
 Milestone 2 adds three-player lobbies and live overworld avatars to the tested
 transport foundation. Battles, calls, gifts and trades follow in milestones 3 to 5. The persistent scope and next milestones are in [PLAN.md](PLAN.md).
-Completed acceptance and measured limits are in
+The binding requirements and explicit acceptance gaps are in
+[REQUIREMENTS.md](REQUIREMENTS.md). Strict frame parity remains open; 400% speed,
+priority escape and connected-state restoration without libmobile need additional
+acceptance tests. Historical milestone-2 acceptance and measured limits are in
 [research/MILESTONE_2.md](research/MILESTONE_2.md).
 The implementation is under `rom/`, the Rust workspace under `server/`, and native
 acceptance tools under `tools/`. Existing game code has small conditional hooks;

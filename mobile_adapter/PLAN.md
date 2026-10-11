@@ -1,6 +1,10 @@
 # Mobile Adapter multiplayer plan
 
 Last updated: 2026-10-11.
+Binding requirements: [REQUIREMENTS.md](REQUIREMENTS.md), including the latest
+400% speed target, priority local escape, save independence and compatible
+emulator-state recovery when libmobile is absent. These requirements supersede
+older proposals below. Feasibility boundaries are explicit and are not waivers.
 Status: milestone 1 complete; milestone 2 functionality is implemented, but its
 strict frame-cadence acceptance remains open. Three-player lobbies and live
 overworld presence are tested at 300%/100%/100% emulator speeds. Extra missed
@@ -65,8 +69,9 @@ requested. Commit completed changes locally. Do not use the GitHub plugin.
   closes the call screen, and opens that same interaction menu across any map
   distance. This is a game action, not audio calling.
 - Support battle challenges, Pokemon trades, and gifts of ordinary items.
-- Keep new adapter and multiplayer code together under `mobile_adapter/` as far
-  as practical. Engine hooks elsewhere are expected.
+- Keep all feature assembly under `mobile_adapter/rom`, with only surgical
+  conditional integration hooks elsewhere. Any exception needs explicit human
+  agreement based on evidence of necessity. Tooling may live outside this folder.
 - Treat this as a maintainable fork with minimal upstream changes. Prefer small
   conditional hooks and feature-owned tables. Do not relocate existing helpers
   as the default solution to the ROM0 limit.
@@ -470,7 +475,10 @@ Preserve last-usable-Pokemon rules and trade evolution behavior. Do not reuse
 vanilla Crystal's Pokemon serialization without auditing Polished Crystal's
 changed structures and storage format.
 
-Both operations need a durable protocol before changing either inventory:
+Both operations need a durable protocol before changing either inventory. The
+earlier client-journal proposal below is historical and blocked by the newer
+requirement that `.sav` remain entirely independent of multiplayer. It must not
+be implemented without resolving that conflict with the user:
 
 - Server validates the offer and reserves both participants.
 - Both clients validate current source and destination capacity, write and save
@@ -483,12 +491,14 @@ Both operations need a durable protocol before changing either inventory:
   A timeout after durable commit is not permission to restore the source item.
 - Tests inject crashes around every persistent write on each client and server.
 
-The exact journal layout and save ordering are unresolved and block this feature.
+The recovery architecture and save ordering are unresolved and block this feature.
 `SaveAfterLinkTrade` saves Pokemon data and related checksums; it is not a generic
 bag-plus-network-journal save transaction. Checksum/backup selection on load must
 recover a consistent inventory/journal pair. Existing SRAM contains reserved
-unused save padding worth auditing, in addition to linker-reported free space;
-preserve save sentinels, checksums, backup offsets, and migration behavior.
+unused padding, but using it for multiplayer metadata is no longer an authorized
+design. Preserve save sentinels, checksums, backup offsets, and migration behavior.
+See REQUIREMENTS.md for the conflict between save independence, durable transfer
+recovery and immediate offline continuation.
 
 Promise recovery for supported clients, not cheat prevention. Local save
 restoration, duplicated save files, and a malicious ROM can defeat economic
@@ -502,13 +512,13 @@ Keep the feature under one root directory named `mobile_adapter`:
 ```text
 mobile_adapter/
   PLAN.md
+  REQUIREMENTS.md        binding requirements, feasibility limits, acceptance gaps
   research/             evidence, capacity results, complete map-slot audit
   tools/                reproducible host-side capacity/audit scripts
   protocol/             versioned schema, vectors, generated-file rules
   rom/
     constants.asm       feature constants and bounded structure layouts
     ram.asm             dedicated WRAM/HRAM declarations
-    sram.asm            versioned identity/journal data when needed
     serial.asm          resident ISR portion and serial ownership
     adapter.asm         Mobile Adapter packet/command state machine
     protocol.asm        application framing and bounded reassembly
@@ -556,10 +566,10 @@ entire upstream mobile subsystem or external emulator repositories by default.
 | `home/serial.asm:LinkTransfer`, `engine/battle/core.asm:LinkBattleSendReceiveAction` | Explicit mobile battle action exchange instead of cable nybbles and fixed delays. |
 | `engine/link/link.asm:LinkTrade`, `engine/menus/save.asm:SaveAfterLinkTrade` | Selected-peer trade path and durable completion/recovery. |
 | `home/item.asm`, `engine/items/items.asm` | Existing inventory operations called by gift logic after validation. |
-| `engine/menus/save.asm`, `engine/events/checksave.asm`, `ram/sram.asm` | Safe persistent journal, backup/checksum integration, migration/load recovery. |
+| `engine/menus/save.asm`, `engine/events/checksave.asm`, `ram/sram.asm` | Audit save independence and compatibility; a multiplayer SRAM journal is not authorized. |
 
 Start with a `MOBILE_ADAPTER` build flag and a separate ROM artifact. With the
-feature disabled, the baseline ROM should remain byte-identical where practical.
+feature disabled, the baseline ROM must remain byte-identical.
 Check standard and faithful builds before expanding to cosmetic/debug variants.
 VC/printer/cable compatibility must be explicit, not silently assumed.
 
@@ -786,12 +796,13 @@ usable gameplay without a soft reset or persistent party/inventory damage.
 
 ### 5. Safe gifts and Pokemon trades, then complete-project acceptance
 
-Specify and implement the durable client journal and server transaction store
-before enabling inventory mutations. Audit persistent space, main/backup save
-selection, versioning, checksums, and atomic recovery of inventory plus journal
-state. Persist the server's commit/abort decision and make client recovery and
-application idempotent. Define whether recovery resumes or aborts at each phase;
-a disconnect after durable commit must not incorrectly restore the sender's item.
+First resolve the durability design against REQUIREMENTS.md: independent vanilla
+saves and unrestricted offline continuation conflict with the previous proposed
+client journal. Do not add multiplayer metadata to `.sav` or start inventory
+mutations before a compatible recovery design is demonstrated. Then implement durable
+server decisions and client application/recovery, audit main/backup save selection
+and checksums, and define resume/abort behavior at every phase. A disconnect after
+durable commit must not incorrectly restore the sender's item.
 
 Implement ordinary allowed-item gifts with quantity/capacity checks and recipient
 consent. Implement Pokemon selection, both parties' confirmation, transfer of
@@ -901,11 +912,17 @@ in `research/HOST_ENVIRONMENT.md`; they are not vendored into this branch.
   after the actual-ROM experiment. Add lobby message credits/chunking in milestone 2.
 - [x] Resolve crowding behavior, map-instance rules, and avatar allocation.
 - [x] Complete three-player presence, reconnection and 300% speed acceptance.
-- [ ] Design safe foreground service points through menus, saves, and battles.
-- [ ] Specify journal placement, save compatibility, and client crash recovery
-  before coding any inventory-changing multiplayer feature.
+- [ ] Meet strict native cadence using existing idle time and measured bounded
+  hooks, including the new 400% mixed-speed requirement.
+- [ ] Implement and measure independent priority exit through menus, saves and
+  later battles, including compatible connected states restored without libmobile.
+- [ ] Prove corresponding enabled/disabled save compatibility and equivalent-state
+  byte equality under injected transport failures.
+- [ ] Resolve save independence versus durable inventory recovery before coding
+  any inventory-changing multiplayer feature. A `.sav` journal is not authorized.
 
-Current implementation step: milestone 3. Add explicit target selection,
+Current implementation step: resolve cadence and the new recovery acceptance gaps
+in REQUIREMENTS.md. Milestone 3 remains blocked. Its later scope is target selection,
 invitation/acceptance/cancellation/timeout state and the shared adjacent/call
 interaction menu. Use the existing peer collection and connection generations;
 keep lobby presence independent of the selected action partner. Audit service
@@ -1218,6 +1235,10 @@ also show their correct local and remote figures. The user's manual session
 was left running. No upstream PR/push. Next work remains M3 when requested.
 
 ### Binding project invariants, clarified 2026-10-11
+
+The expanded, current wording and the compatible-savestate clarification are in
+[REQUIREMENTS.md](REQUIREMENTS.md). In particular the required speed target is now
+400%; historical 300% evidence below does not satisfy it.
 
 - All feature assembly stays in mobile_adapter/rom. Existing game assembly may
   contain only surgical conditional integration hooks; do not move existing
