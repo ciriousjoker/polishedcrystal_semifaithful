@@ -38,17 +38,18 @@ DelayFrame::
 
 ; Wait for the next VBlank, halting to conserve battery
 DelayFrameHalt:
+if DEF(MOBILE_ADAPTER)
+	farcall MobileNativeWait
+else
 	halt
 	nop
+endc
 	; fallthrough
 MaybeDelayFrame:
 ; Used in place of DelayFrame for special cases.
 	ldh a, [hVBlankOccurred]
 	and a
 	jr z, DelayFrameHalt
-if DEF(MOBILE_ADAPTER)
-	farcall MobileTick
-endc
 	ret
 
 ConsumeGenericDelay::

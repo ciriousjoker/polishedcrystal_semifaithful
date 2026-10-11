@@ -1,0 +1,5691 @@
+{
+  "version": 2,
+  "policy": "unreferenced-finite-dialogue-graph-only",
+  "generator_sha256": "082dc018c06a045bb7da571d73a1fd51ee12c174a57ce0c5bb1e1abf57991fc4",
+  "source_sha256": {
+    "data/sprites/map_objects.asm": "de256a7e795e8e1d9ff0101a963918cd83e494aadcb0b694dd159981c50610b1",
+    "constants/map_object_constants.asm": "8fc29b55fbaabef128634267a51f3f4b87d95d187c73c0daa5e5fc631879b303",
+    "constants/sprite_constants.asm": "6a8622515d8e7a90c228904d9cc95fb92ab8b8e835d305bf5f8b61343199eaef",
+    "macros/scripts/maps.asm": "d6314c112b2d459492c88a679ce36c5ec6e101c4fe4f96fc968bfa62fa7a01bd",
+    "macros/scripts/events.asm": "3e5bcba2f8075a773aaf56884f31d6cf608a38e2e88944b34137ae17be64f258",
+    "data/sprites/sprites.asm": "f3e24cd7f8dbd26cdfe3fa7639622ee636e951d7e922b03ea598293dfa66d223",
+    "home/map_objects.asm": "9105d7af346170c87b3fb42286c79dc29d4fd5d6a2517a38dbfa1dc158894411",
+    "engine/overworld/overworld.asm": "1143bad59283fa943b8b790a541fac35323e47380a5fa5b4ca2d57cc75de1d14",
+    "maps/OlivinePokeCenter1F.asm": "ff39dc2c30e9d3abf3a26906a8375308325b2d1d0746b6a93d2cfcdb5e369f7c",
+    "maps/OlivineGym.asm": "c238f510712ac3c767d30fe33184bc41861a5f1e2e222070a1d3e357e1378f76",
+    "maps/OlivinePunishmentSpeechHouse.asm": "6360559f59a5b67d01e91bde047f30f9574e1d4965aa27bb81e870c998e026ec",
+    "maps/OlivineCafe.asm": "b4e7fe6aac3a3e9e12125066347342de3f755182fee69872d370846a5a17199d",
+    "maps/OlivineMart.asm": "c9708318389aaefe409cfe651df2524dc7e69d67fbfec3a20c7c943af6390728",
+    "maps/Route38EcruteakGate.asm": "7a9e0b740e334130f716737d5a6c7a23253a11169bfad3845a0ff3a1d23c3c2e",
+    "maps/Route39Barn.asm": "56df35276b7a6de509947721692da70203a0a58d40560071bb01b66afeea1960",
+    "maps/Route39.asm": "1d8f984532668bdd7831a199ff33517581c79ebdb95d7ddc84cb5290c46c666a",
+    "maps/OlivineCity.asm": "163b3f62c2d1d7410b1543a97746ba62f7852c0ac4e2a2bc4fa038ef3316cc39",
+    "maps/Route35CoastSouth.asm": "fb5bd345ac2b145ab097de37f78280581b7a0a161d854104b89cd172d86e71eb",
+    "maps/MahoganyRedGyaradosSpeechHouse.asm": "6a9d43bdd3ad5235f01987c95ba09eca584a4a9c53b6dd06553f050e299c42ad",
+    "maps/MahoganyGym.asm": "8eb9e5fbaacc268f17a9ed0a5c79033bf4410455ed179da6c4a6812682951fe0",
+    "maps/MahoganyPokeCenter1F.asm": "023f83f5f502015d46eb1bee30b813546beb5e917fd31480fd2b34d79fca9f42",
+    "maps/Route42EcruteakGate.asm": "e1d726bc44da477c37ad88640d80b5a19214314bc2d8662be6668a6b3daab9e2",
+    "maps/Route42.asm": "312d9542d7311630b407b4bf66f7cb22222469cf7919ff58dd06d0ba242cca42",
+    "maps/MahoganyTown.asm": "2b3bafe0fc8a047ee538b5102b514468e8372b4c16b1cefe90b06067be940642",
+    "maps/Route43MahoganyGate.asm": "bbc911eff35145ff4c58e2b75ad4d53a322de2b940e22095da6cc8285d3ad550",
+    "maps/LakeOfRage.asm": "bf43676a205a8218af75b4c97e188b3a1c583acd2d09c2bb7a69c54e14c8c5c0",
+    "maps/SproutTower1F.asm": "819d674e46be215dc03a2ee60d4449ee8125bc4225c99b6e4b7f629a36a08921",
+    "maps/TinTower1F.asm": "d2b93b5d50ea3eaebe33ea6e0a7e0e3bd0f28cdacb30d3113dea05e8d95b4279",
+    "maps/BurnedTower1F.asm": "90589e95c80fefddbe4fb7e066f6ba4cb64e4df6bc886bd5aeab000267eece57",
+    "maps/NationalPark.asm": "d9a80398213d1716395c3cafd8bf4bcb9c3a00312e48e5550dbca085b8146488",
+    "maps/NationalParkBugContest.asm": "98b4b064ae35fe6769cbf32e4cbf24303448a97ca7086bf34b9b3b2431ed725f",
+    "maps/RadioTower1F.asm": "a09384c65567cb9293fbd84b8e6b2f447e6108b16d7e3061f7fa27bc80b3f301",
+    "maps/RadioTower2F.asm": "b63a950e2103056410cb0055148541bb48706bed60edbb4b0520349e27208e1b",
+    "maps/RadioTower3F.asm": "6f0cb9b943378349065530c85fa03907871016335382bc79eee6c73e4f27cd65",
+    "maps/RadioTower4F.asm": "57cec0cb6876a13c0311ca2821d24a35fea4b716704c95ffa083fdf9c0640cdf",
+    "maps/RadioTower5F.asm": "4f4e5dba4f9b6cc793d3856e55deea7b463a9351ce81d673b11304d69ef6ce3e",
+    "maps/OlivineLighthouse1F.asm": "5a1dff47e9f0a9a7ddd2c96dec0aeb844684476ccce88fc7993a7a1ba221b43d",
+    "maps/TeamRocketBaseB3F.asm": "fe8f361bea2b06aa731bdb6a2e06bf8c9df24cc02791ec1c369e2db794807a8b",
+    "maps/GoldenrodUndergroundEntrances.asm": "cc5ef36893bc150f70aae55d2526168028e4bca9a7445aeb9fcfb6d6eb6dc657",
+    "maps/GoldenrodDeptStoreB1F.asm": "f1f5bf01da5ae94e91abb06987c90d23210114273694d13d107c660f435d98cc",
+    "maps/IcePathB2FMahoganySide.asm": "58c2618b6be5ec831fd8871a800c4c294205f364f29899993be3561d7f3588a5",
+    "maps/DragonShrine.asm": "514b60878224eee7a0548ce933070f65f6316d19341ac042d763f1e5192a60cf",
+    "maps/DiglettsCave.asm": "6f35c499103071114f12cd37ee7af0abf1fa5e51981faed656ff58da9ff43a99",
+    "maps/MountMoonB1F.asm": "fb6ba482401cdb7aa955359c30bf93e940d2a2d47d4ef23ddeaa7f6c4e00acd8",
+    "maps/EcruteakCity.asm": "2cde8eb77cfee6ebd1729e3360515e18db90709fe3b907d768ff38d79fadab6b",
+    "maps/EcruteakHouse.asm": "1dfb01b9f4ab6e1756c99a97b28157a8289eca91ea67f4fd7f1105e1101e15fd",
+    "maps/WiseTriosRoom.asm": "ec5d13845671d33d65edc456c860db9a4b49f14575343c3dde5af7fba724e51b",
+    "maps/EcruteakPokeCenter1F.asm": "f4657877ff2811c2886a52c624a850ef8eb38af313c880af751b287a3a514a70",
+    "maps/EcruteakLugiaSpeechHouse.asm": "dee429a49990f01e94113dc8ebbf0b877f91567ed82d3e9eb7c5c47097eb1ded",
+    "maps/DanceTheatre.asm": "4fa5891dd0981dabe9ad9e3467820db1896e0b5227842d095c9a3b8719a4b4d2",
+    "maps/EcruteakMart.asm": "1c6547174e8c48de7e0bb80e3a89dc848ad0c03fe73096d3cea0bd7d6401e9eb",
+    "maps/EcruteakGym.asm": "3ca765bf0e9fccc20b8574f71a200c89cd32fc37ac897950eb07239ddd03a0e4",
+    "maps/Route36RuinsOfAlphGate.asm": "0ed4c494cedfe95e470f97ea8f8554056e0d7d7d82ca549f828c7b4e73dee7dc",
+    "maps/Route36VioletGate.asm": "fd3db318e4bfec5460e9f3977b47f7cf6af8f2fe394c4a8d43357c6e06fa62cf",
+    "maps/EcruteakCherishBallHouse.asm": "02010b7a3defbe6dcf26d29e83e16d5de2bfa73b47c04957f2b1a50531f0016a",
+    "maps/BlackthornGym1F.asm": "152146334a0320a1710dac631a7cf57a5e8d3e037df9665eec632f9e482a2d37",
+    "maps/BlackthornDragonSpeechHouse.asm": "41e8097e4c5a880f48b5b816e3703a881a9930bd40099a5b236d5a90965193ab",
+    "maps/BlackthornMart.asm": "5770fd162d44c269a2ca8403fdcd021453269c04413616ede8ef2e16b9b52ad8",
+    "maps/BlackthornPokeCenter1F.asm": "12fe4b520cba24073cafd70f42be37aeeed2948d0db3c159498a401e30ec96e9",
+    "maps/Route46.asm": "ca6e4f09e821866be5220fad4ffa10dde1f8b77d524d6ee21c9109cb11116d48",
+    "maps/BlackthornCity.asm": "fbfbab2322ab794f3d0a70b30b86e982a7201523d41f8c28781dbde2b2eae609",
+    "maps/CinnabarPokeCenter1F.asm": "71bbad1f8093f2a670023326f1787ed70af389d2ea061b0931302275d84ec1c4",
+    "maps/Route19.asm": "66c22488939f9d17b266778c9a21a5e62504c25a9ea8edf335899a2f84cba205",
+    "maps/UragaChannelWest.asm": "7217f6ddd5df350b14a239a8004fe10a1e1988119df82089b60145703c66fb6c",
+    "maps/PokemonMansionB1F.asm": "971e47891a68933347ef06a2e906a1f16f705d4cd586e956866a0943fe898b2f",
+    "maps/CeruleanPoliceStation.asm": "4c7b105ef0f042d972c8981f759169bf7e0158d25745c13446925668cc28902d",
+    "maps/CeruleanTradeSpeechHouse.asm": "7323581563c26de2d858199bfd603fd09acda5fad7d1bfc67e6eee668a95b3cf",
+    "maps/CeruleanPokeCenter1F.asm": "15a7bab2915bfde2b37bc067dd7d248116b131772d5b985cf6a912c605b19fcf",
+    "maps/CeruleanGym.asm": "c68f49b5e3e35b792b2dec59a5379a9a608331a1cdac4b10129fc22f3df9e0f9",
+    "maps/CeruleanMart.asm": "eee82c10d75e412cbb4e54f5a1d8e4e34eeac397d52aa51e2d6ba3d0be73d227",
+    "maps/Route10PokeCenter1F.asm": "0aed6aefe53b124b759e1330e945c202b746a050aa46eef9d23be19983c2d825",
+    "maps/PowerPlant.asm": "1cce49b838aef63d428cb79f47e918d5734fab22406384384b01a08ea1368ef2",
+    "maps/Route4.asm": "ea65a7363bb3f16c2ae52432291818b861306b2f0e9c2178f8df27c932a4a2d0",
+    "maps/Route25.asm": "9aa67310cf8ff49d169bb7921526ff8a8b0e5ef16b4209d3b56444127c5d36d1",
+    "maps/CeruleanCity.asm": "a36e19b51901497fc43d76a2e40c8cdfce0656bfb5c3d7411f5cabf78f07edc3",
+    "maps/CeruleanBikeShop.asm": "573f9c61bf625d90bfcf386a573aef12a5f7d8a00e4d1a60cab18d94b2d4e1f2",
+    "maps/CeruleanCoupleHouse.asm": "ea18978aa278b75cce4a1e3349e04fd3eab3a855ae6b7a10cf650164a7b4ff61",
+    "maps/CeruleanWaterShowSpeechHouse.asm": "9b218a240f6a3f79e200d4050696955c028b125ff007ce63ab866d2a46de980a",
+    "maps/AzaleaPokeCenter1F.asm": "62c52f0f8c76f7763ded8be20522b91d8333633451b2ecaeee9b5c3a53768025",
+    "maps/AzaleaMart.asm": "08cce68c1bd78c738ee4afd8e6e08f8f7dc2887b76a4397147eda40afd310208",
+    "maps/KurtsHouse.asm": "19b4fb1dbf7d180b724d968e7bc134710f2653401ee515d6934ab758d6abae20",
+    "maps/AzaleaGym.asm": "966f97dcd44be46ff5c59635e435c41dcbed4bebf4c5b7b45e03c3d5d715cb79",
+    "maps/AzaleaTown.asm": "ec574fb792b75287311df64251c7be27eff6d60da04f1ff5ccf1593d2669707b",
+    "maps/BattleTower1F.asm": "b1b633cf1c0bd8df47d29ec3026cd6587aae6475711f924486f841317cde7bf6",
+    "maps/BattleTower2F.asm": "cbab9f887623428aef6eca277b9b8fcca4e3e830090240026e67893ea2654415",
+    "maps/Route40BattleTowerGate.asm": "ac829c9d1c5ccf39058aa3b95695a3279fe3670351ce6f7e9528d1a16b1b6a22",
+    "maps/BattleTowerOutside.asm": "be5435056bd95c74c6a21ca9e5cb1d2a2dc26ab5e9e6e4722ccc76a1ad53abd6",
+    "maps/Route40.asm": "408479bb27e25f80da4e667b1383c73badae47d2597600067d82b21015fc57c9",
+    "maps/Route32Coast.asm": "207b0cd6e7faf6150afb8df21069e32d432856d6030b49f215bd1b47b1a54157",
+    "maps/VioletCity.asm": "82520c66053ba9c9472d6d20f014a8c3999c48d3ba913cc5cf8990e3a5f9b466",
+    "maps/VioletMart.asm": "753af7e8004f8bcf7a4508c095cf8d4b7dba370a30554fff90e84dac17db3625",
+    "maps/VioletGym.asm": "c55e3597108de9cca10ca5a1e836436a877b4739844f0d8766489e0295aee88e",
+    "maps/EarlsPokemonAcademy.asm": "40ceafd8f5355a873a52bdd8e6eabb76f528a2bbee46569059095a9e0aee521c",
+    "maps/VioletNicknameSpeechHouse.asm": "e172c59c926f6f7c0d508f47ea0dd7593e9255c03d334fb790aef383b3b47f59",
+    "maps/VioletPokeCenter1F.asm": "adaca7a0cd2b0f18b902dbc640def35e6e87cfba1b2ad5b60602ac3b1e43476d",
+    "maps/Route32RuinsOfAlphGate.asm": "91a7ab7f491c1c5f7061e73a199f1359335a3cf8d82cd9d3e8518d0b1aaf628c",
+    "maps/Route32PokeCenter1F.asm": "8c2e914658636af757c030e80aa6d1001bdbcb51478332995b0074ec0e8daa80",
+    "maps/StormyBeach.asm": "538b78204370a32198b92a9f4cfc93221985cc5c01f743d80f8952704ad2c104",
+    "maps/MurkySwamp.asm": "83d23db6895bb9b2fea4779a141c006b75c9dad415088df92be4f42bf2c222ee",
+    "maps/GoldenrodCity.asm": "62f54f7170df1ccf27daa81444c0ef907516383f1df635364642ea337b307976",
+    "maps/GoldenrodGym.asm": "a6ba8c8ef5324d24705ee1cb77cda9eb7ccaa010c3a2d47937d2a68c714edefe",
+    "maps/GoldenrodHappinessRater.asm": "cfe6174d6a64ffd6a8cb13184bfbd66f834abb5fb5d5fd6d1bc15b783ff4ad74",
+    "maps/GoldenrodBillsHouse.asm": "7eb365820ab091b483c5c1120fc0a369ea72e613da8c281ca1f40c128661d027",
+    "maps/GoldenrodMagnetTrainStation.asm": "45c53c459c2b77c56c2fbf7e189107c368d230fec9308cb93e20e3ec27be9d80",
+    "maps/GoldenrodFlowerShop.asm": "0417b7d63e5864060ba6f5a17348896fe0205f3a6d32573bd45e1e9d2b521ce9",
+    "maps/GoldenrodPPSpeechHouse.asm": "8011a2cbf3b9f5b37a1d679f7d4adc0c7f7652ae8ae861e619932d07360d23ad",
+    "maps/GoldenrodDeptStore1F.asm": "f2afb36a9eb36f50f6485184aa87a5e686f7323b8f6a9add9cf9362e559d118d",
+    "maps/GoldenrodDeptStore2F.asm": "19001ed00f47a0a01a9d904ce81307bbc95cbc028309e1c4de9772803f870d05",
+    "maps/GoldenrodDeptStore3F.asm": "5f1809bffe68cbc5a1c34ee3537f358fe343f215af38504d0586ef38d808c5f1",
+    "maps/GoldenrodDeptStore4F.asm": "9a25ad71403977de377db6be2b1ad53ba4c8030964503dba671fab0990b8db34",
+    "maps/GoldenrodDeptStore5F.asm": "58425ecc63751883ac7ff7a871f0c44587c701da6d46a18b5a3a1413dd72c666",
+    "maps/GoldenrodDeptStore6F.asm": "f0790d589b4a2dbaa79fe1022f9c9f9dbc6bfed791a520c37b552bb4b16a8707",
+    "maps/GoldenrodDeptStoreRoof.asm": "544d28f1112c17137c30f1d96efb6f52f45fb68b1f196aec075ca11f11206cea",
+    "maps/GoldenrodGameCorner.asm": "6c2b10e1684722489291f7a3c7fd7c85da2536ec51257960bb5a7ddfe9accbc4",
+    "maps/GoldenrodPokecomCenter1F.asm": "3b841216be402ec3f06d638a5e6006ac06f8aa4ab37d0ac2576163cfd7fd169e",
+    "maps/GoldenrodPokecomCenterOffice.asm": "248b032f621fcbc9d8c6fb36dd779fc5d94139f0d6b85909aee24f7758bfe311",
+    "maps/IlexForestAzaleaGate.asm": "c4ec1d43007a71592b0788eb74eda5a762912a148613d9a39cc4b53cb46b5d52",
+    "maps/Route34IlexForestGate.asm": "8cdd9d5bbdd7613a98534ad2210516d2de0796d0e436ff4fc18318d7c6fa560f",
+    "maps/GoldenrodHoneyHouse.asm": "a503ae1cf2f83b82d11c7f38b2eebf2765b38f677ca5ab6a333d08c535f7f6c6",
+    "maps/GoldenrodNetBallHouse.asm": "b6e0c6e3d67602720aa30799eadfbe74a4902cd70f18c76e057d43138ed12c61",
+    "maps/GoldenrodBandHouse.asm": "a7e232dfa2eb461271788a9aa760c37fa285a8f0e87f66c9991ede6d5994d675",
+    "maps/GoldenrodMuseum1F.asm": "fe52f044be595f7c14aa1ff878ac6096a6a96111941ca979a043117ad50159e0",
+    "maps/GoldenrodMuseum2F.asm": "5ba59a198e7403af98eed0b96f0655e510b77eb21d78331b2ed80953acafb31c",
+    "maps/MagnetTunnelInside.asm": "2b9e7ce839e22c589e326f15840b723cd9642d5deb8d99a862e9db99894137a8",
+    "maps/Route6.asm": "9f993ada40d23555b97e38ab929caa7a7d6e7a0a3c7f090bd7d3b0c2e4d754a0",
+    "maps/VermilionCity.asm": "f0a45e91b54efa97c4f980b951cc0160b5256185ae19cb34bd8f60b64785b631",
+    "maps/VermilionHouseFishingSpeechHouse.asm": "55f0ac2014455d84ae8cf1bda3b9fbc9cc5ed21720cc5c12e4f868ca707b0572",
+    "maps/VermilionPokeCenter1F.asm": "326fa0d2401471c5fe720973644b6a1141bd447918b0d55446dfb4113229df9d",
+    "maps/PokemonFanClub.asm": "8fefc47bf758507c632b5663dc3c0fe677a892b321fe4208ff4e0055ad687711",
+    "maps/VermilionMagnetTrainSpeechHouse.asm": "8b1c9d115035acf86b4282ba3a0c68a4f0d2bffcd66380de3db72c3f171bfcfd",
+    "maps/VermilionMart.asm": "5141345855dc1dc3c6a8d85b94c3f640d6fa9b8baea3a09a31e62cac5c5244a7",
+    "maps/VermilionHouseDiglettsCaveSpeechHouse.asm": "f69d9cc1ee56d132f2c598f95b8f712ceba4a37bb259eb9cc6f0dd1fbe7d0769",
+    "maps/VermilionGym.asm": "07ed6f39950fd6dc79ceed91655698f831409979fc50547d5edc2392576bebf0",
+    "maps/Route6SaffronGate.asm": "acc9ddff15b1e255c888c50bb4c9effc1497f2d6379594233011c23348f11052",
+    "maps/Route11Gate.asm": "fdd50f461ba46cf34b8f80db55faf3c0999517266142d6e0032c1255daf453fc",
+    "maps/VermilionPollutionSpeechHouse.asm": "435eaebc1ec1d4b19ae75932d067605c8fc810211f9ccc8f218b596de980f214",
+    "maps/VermilionSSAnneSpeechHouse.asm": "d664afaf28e99567973d013f9df6525341759219bce7462a871ed9c6c5edca8d",
+    "maps/BattleFactoryBattleRoom.asm": "be27f1e67ccb75e46fcbe34a3fa2c0699427fe2364f0bc16b2a035a096ecf42d",
+    "maps/PalletTown.asm": "164ab2108f03f14c401a229edb5988bdade3fbde8f46976b1edaeef1bf29abac",
+    "maps/OaksLab.asm": "1d0e2943133e6d938587acdbd18e4841a7223990e180a2c803729316b6e32c5e",
+    "maps/Route2North.asm": "543df1d6362c5f2225a51602426359d2c8dbe88caf2be1297be6cc74d8569a43",
+    "maps/Route3PokeCenter1F.asm": "90cbdc4fcd74fff9232a0ff813d94217303152caaea939828aab15306dfff101",
+    "maps/PewterCity.asm": "42aa5add353ac7d50b78003c88f81d763f4d7c62aba8baad308d10d6aed6858b",
+    "maps/PewterNidoranSpeechHouse.asm": "0acd34222026036c029a1ce47d88789ab1079e9bb6fb2f0b7b298b4eb97af023",
+    "maps/PewterGym.asm": "ad91e87992830404d0a42cbc192e3fdc5dc3c55646f03c4a58eceb19154889fc",
+    "maps/PewterMart.asm": "c52e2ad2248ad6dd110e7b9e8637b37d102e0755efae33bbf386c2f930a5c8a1",
+    "maps/PewterPokeCenter1F.asm": "f3b6b10f74b88779327be46419d88a46eb96ce2a7aedabf7c0da38f2599a2970",
+    "maps/PewterSnoozeSpeechHouse.asm": "16d91d482607e38ad1a2ca95aa7a37cec8ca94fd518d52895202c84f745b7c77",
+    "maps/PewterMuseumOfScience1F.asm": "c23256d178f317a0e525fa3e0b2d6416a410800d313484c64c2a2329dd8e3053",
+    "maps/PewterMuseumOfScience2F.asm": "88d9d29cba8257d4e8bb89462324d0e6098d451f53932bdeff63612a007cc22b",
+    "maps/OlivinePort.asm": "9ba7e5d9da911c3a8bd26f806b3f99067ec0aeef1a6d95f40dbad1736723eaef",
+    "maps/VermilionPort.asm": "74d5879d9883843fea506399e0de67ee7d7b5dfdf1dc71492d28ab1237212ef3",
+    "maps/FastShip1F.asm": "6b25ba464b55cbc8442c0bdafb1dcf7f13a8cfe80b094a4f047d4e17ea7b6325",
+    "maps/FastShipCabins_SE_SSE_CaptainsCabin.asm": "d67088277517819057207e3b4fa760f365ac8f68299320a9984d0dde2bbb147d",
+    "maps/MountMoonGiftShop.asm": "e972f64c74da9dcfd33a1cf552f362d45ee111ffe2ad7189c66076af8305cfdb",
+    "maps/Route22.asm": "abd43f0c50b6e5c46d6f8baf2b2a5831716c0a509eb2f8970891c3fb9bddbba4",
+    "maps/IndigoPlateauPokecenter1F.asm": "16df2da7991fcc34ec76f262bc36d15c08774b2fcbbadb80913bdd85b6988022",
+    "maps/Route12South.asm": "914eda65861a1588cf4535d444af382660e7bde4abafc83474c186d670e1f56c",
+    "maps/FuchsiaCity.asm": "97aecee5c2daadccbe73aed686b0026e7123ef171d3d23eca97d3be37107f139",
+    "maps/FuchsiaMart.asm": "7d4bd9c403f5d890c8251b58710d3b94267fe9f78a970eb442882055dc8ef1db",
+    "maps/FuchsiaGym.asm": "6c2aebff43fb004cfc6013071b3643af4eec8942487bd1f38c54d7edec832814",
+    "maps/FuchsiaBillSpeechHouse.asm": "b721ceacf94273163e41acb60946f3eff12d518ff8c2ddbb66014d395397b825",
+    "maps/FuchsiaPokeCenter1F.asm": "3ca48a271b9572f91dc28bde059aaab12290dd805c44edaef82319917653e1a0",
+    "maps/SafariZoneFuchsiaGate.asm": "8c5252329d37250233cf04055ef057c95935b6b4b7718ac5c004672a653d7016",
+    "maps/Route12Gate.asm": "1b6417302988c66f1bb692e5fc97145a1aac22ce69e62757abc7eddca26204ac",
+    "maps/Route15FuchsiaGate.asm": "5b74844b3b6368050378fc2728022dcff9e0e4598689d9654d6a6b85238f6fd6",
+    "maps/Route19FuchsiaGate.asm": "0e4a7ec6199d2a57ae161469b5354c680744d315fcf48ac3622999961608b4e5",
+    "maps/LuckyIsland.asm": "76dba1899f2661ba4bc3aa7579ddbebe548aed146c329000eecd2b1814b0903b",
+    "maps/FuchsiaAquarium1F.asm": "786bf217e74fa88f582dcca83f974fa120867674d3743c1f40d14f3a802f1558",
+    "maps/FuchsiaAquarium2F.asm": "d8e3adc5606dd9dfe9b77ba39192aeba0c3bf5f49859fa8e6fe271a7388bc539",
+    "maps/Route8.asm": "1f656db1274a8a01194785d90c97b8d992a758610a3b0a409b6d2bb5291ff913",
+    "maps/Route8SaffronGate.asm": "9eee16708c0c225f086f4bf7e5527572b04b1a67ed49d7158ba5d345a98196a8",
+    "maps/LavenderTown.asm": "45b12c922a7d548b8b084d1fe7b29f6b6fb7be17ba031b193fbbbea848e025c4",
+    "maps/LavenderPokeCenter1F.asm": "e81b316dd31d7cde32fbd2709910f0b23a8fa3c0bbb9cc3944cf4866111a9c96",
+    "maps/MrFujisHouse.asm": "ab7958cff0e4c0f438d8062553577ee4d0b971ac486ae4adb5d052e6ed438f91",
+    "maps/LavenderTownSpeechHouse.asm": "9006fbddcb5efcf7f2b1421ff25c1d8801d83b6cf809435a11d00952a50a1564",
+    "maps/LavenderMart.asm": "a5d19d2d59aca6840b2a34cde3d04150331743cc44274450b0d3a19f6490f785",
+    "maps/SoulHouse.asm": "44b275b2814558209decd2484762f1f2533e37986bb0726effedb7b076eca01b",
+    "maps/LavRadioTower1F.asm": "410482462ef0332068bc9f6b5e2c5fbf5b4ddb2b6d4edf295f89ce395510bf28",
+    "maps/SilverCavePokeCenter1F.asm": "298f9a7c7f38fdf13750bff834a617ea3a248f3c64ad606602ccc77ce6fdf1d9",
+    "maps/Route28FamousSpeechHouse.asm": "1f25b881846f578ab10f273b81aceadacc4f03b4d1feffb94a672b699a6c86e5",
+    "maps/SeagallopFerryShamoutiGate.asm": "345f3be637813bf8e1bcc2eb39f96cc555dfe82f5aa2da912976ef16cd01d192",
+    "maps/PokeCenter2F.asm": "10e9425208a3ddf0fd5f6c011d3ecf558fd22d86749850e5c69fac1644dd2a4c",
+    "maps/Route17South.asm": "3817de49187481955e5a164f661a5e2493149dcb2641870a10032c7802da758a",
+    "maps/CeladonCity.asm": "910f1d1ca88f6e78bc7ea6e1eaf91827b4bff0522da03276dc82dd6ba996ca7a",
+    "maps/CeladonDeptStore1F.asm": "04f28bb6166a7bd199e42ec62561fa3bf1381b78cd3e9f17b93bce4636ab4311",
+    "maps/CeladonDeptStore2F.asm": "a472ab381f9ab5b7e647a2ddb5641de721d9ffdc5c52206e4629ea02fc9d2692",
+    "maps/CeladonDeptStore3F.asm": "984a4571ffc7bc710df6e379f8f85ad177cdb99dd0b391e9da64ade4a5f562dc",
+    "maps/CeladonDeptStore4F.asm": "b7425f73f12b3f4b17a72f9f9b4e8213759336e2833b8fd2e7f6d846e25a577a",
+    "maps/CeladonDeptStore5F.asm": "75359acac367a8006c30db79c83c5724ff3148d08ef755be501ed6ce6390e6fb",
+    "maps/CeladonDeptStoreRoof.asm": "71eba540f3e681b32499fab4067076af64bed1244431d824df090918be5b35f6",
+    "maps/CeladonMansion1F.asm": "b2dcf6e6eb097d42f3a40aee7e776338fdfeb6e57d19aeb4eb21b24855152a2d",
+    "maps/CeladonMansion3F.asm": "2785d9567b2619a870c5110638ebf605470fd5028b495007e41be7feb0dd3133",
+    "maps/CeladonMansionRoof.asm": "cfd6805953a0f44324cbdf1831131c5f65cc43a11c0fb2a7b9522aac7f3a7238",
+    "maps/CeladonPokeCenter1F.asm": "cbc90fde82af078272eba26dd284a23d77595a869829c6311d555bcbbcc7252d",
+    "maps/CeladonGameCorner.asm": "25226103a306941b218683bc2fbfd5f969b248a9849e32c0d8b5c6dd11e55604",
+    "maps/CeladonGameCornerPrizeRoom.asm": "7d191769e206e2ae188d239a117e52e393988954160b454d86303ef68ed7b53d",
+    "maps/CeladonCafe.asm": "3344e292413c63f3059e6386fbc295573cf4851d3fd0b43563248b503ac79647",
+    "maps/CeladonChiefHouse.asm": "391819dd0064fb66d1b2f34d447869251fa4647d5959ea61ba9fd6bab5bb105b",
+    "maps/CeladonHotel1F.asm": "59e2574ba929c99a932e255caf680e64b8633ec332175a32b2526556b28578eb",
+    "maps/CeladonHotel2F.asm": "c782ff28e53a290859634349e88057b52674dd050439e0b2b96b6bba461d0c5c",
+    "maps/CeladonHotelRoom1.asm": "c40304361b901f8b8f3e1e9a085da701f5949522901e8e3c478fe827fca9935c",
+    "maps/CeladonHotelRoom3.asm": "c56daa8003de63528c473af99901a564494ee51075f98bc4235d3e37cc81921c",
+    "maps/CeladonHotelPool.asm": "7106db6638fa9cc8f7f42b62fa3e1524327d5bb6313851cad66390b5f6b4bcb4",
+    "maps/Route16FuchsiaSpeechHouse.asm": "136c4d874af33a7311e2e7e05bd946074a1bfa063f42e20ef4ad4a8e1334a7b7",
+    "maps/Route16Gate.asm": "db84747556fe0d1e97520cd59da1133919d5e5c1fb3bcb6a42d107bb03aeb270",
+    "maps/Route7SaffronGate.asm": "cc5963a5e400837709e53ca706dc885b0c352f7084a0dd7529402d901145a2c5",
+    "maps/CeladonHomeDecorStore1F.asm": "5cdcdff896730351947b5c2115ab605819221294bfe13f7fd5c0e10a2e1c56e9",
+    "maps/CeladonHomeDecorStore2F.asm": "a4a0709718b54f4c4e5e2c7483578f2373332c7da2b22c09792ca2bcbb70e790",
+    "maps/CeladonHomeDecorStore3F.asm": "597057460cb5c3661f4cb837b9cd402a5aa797c663f2838ace4134ef7a8acbb4",
+    "maps/CeladonHomeDecorStore4F.asm": "2a2dbbe03ebd69cca78d61c7a615b3edbfd1f4f5c6e096080f32faa991ce256f",
+    "maps/CeladonUniversity1F.asm": "aec9a48d4e204a1d6fff929aba2bbf5b31076b95921775e19037658cee7f8c6e",
+    "maps/CeladonUniversity2F.asm": "0879bab497ab0e9ac65f48cc5d428cee7d0b973b08a6a069053b475b1255e950",
+    "maps/CeladonUniversityLibrary1F.asm": "1f33caf52a1c65fa82061a48a4c1d6e2800e99bf7775b2bce9cab7f90a257598",
+    "maps/CeladonUniversityLibrary2F.asm": "131d20c9ad50e3fadb3efadd3840aa33513e5b0f392f201ad46f4a67722e0aab",
+    "maps/CeladonUniversityWestwoodsOffice.asm": "3660e731b5a18652cfcf222147cc5fbfd37eb796489248e9ce0219c1aa4e968a",
+    "maps/CeladonUniversityWillowsOffice.asm": "126ba106f7e9c3b0a30192a48dcc6085bbd3133e60378b8ef0ae62ff3a8de6c8",
+    "maps/CeladonUniversityLounge.asm": "58718f548bc3b51d8af53b732c57859b4756ee811e01cf78013cd72e819955f5",
+    "maps/CeladonUniversityCafeteria.asm": "73d76ed491882946e31127bdc8b3f57bef1e22a39898f55acc7593bfe204aace",
+    "maps/CeladonUniversityHyperTestRoom.asm": "5aa99263bbc9d55e2b91baf81e59eb5ffef8aa22bdaf370a59216cd3fd2cdd56",
+    "maps/CeladonUniversityPool.asm": "469d1cc03e5f14ba3bcb9249c6a06019a158f847356fb43f14e2a266751f91b0",
+    "maps/CeladonUniversityClassroom1.asm": "534fc70924d404309e63f5246246b2cd1369dba5c172b7db8671fc094c0a7e19",
+    "maps/CeladonUniversityClassroom2.asm": "0ca2eaf1a80f3b7a0a4584cab68421bc54c9adf6ec15a6ee466fe547ae1efcd6",
+    "maps/CeladonUniversityClassroom3.asm": "083012f0ba9d038f21816fb7d2d7dd813c510173e2d7477a71141db66d72e6da",
+    "maps/CeladonUniversityClassroom4.asm": "5206df013cb928271e5d8d37cfe55a907b453d47a06a422f3cb4f7f2012c739c",
+    "maps/CeladonOldManSpeechHouse.asm": "855ddd1b11bab6bd0ed3bd5e76f41feea542e6845feae06dde20a7cbb3d56ba3",
+    "maps/CeladonDevelopmentSpeechHouse.asm": "7eb9be9f1a102fcd0e0bde8a5ca8f4e4c2c97c6b0ce4c3e457dca774c9b86045",
+    "maps/CianwoodCity.asm": "26fa76a217bed4389225ad7b22de3e693d52cd2b73a5373390866ebda1951bb8",
+    "maps/CianwoodGym.asm": "e96d0b79c873cb6fd5b561cb6fce4138cd61b72457d65f885a51638d6a3aecf6",
+    "maps/CianwoodPokeCenter1F.asm": "09a44d8375a6200db5132d7982bd85bb9025db5dd78000dcffa330abe220b992",
+    "maps/CianwoodLugiaSpeechHouse.asm": "df627fe60cd4c6b53508d43b8ea00ed306384ac8bcc862807fbf9feddb524e09",
+    "maps/ViridianCity.asm": "5b59d51bcb0bf3ada8bafab07d0db71a069350622c894cd737e30a1c052d0cf7",
+    "maps/ViridianGym.asm": "388f8f52a0d57b95db43f3d6dc705115d80f8ff8ccfe7606caa92cb5938bf22e",
+    "maps/ViridianNicknameSpeechHouse.asm": "8bad1aa98a12d4a7e963b381c2733d32778ad29774c351840cee66a83d931c7f",
+    "maps/ViridianSchoolHouse.asm": "61810cb57288acf27878f843531db25310d5af10ac16b98ea62d188d465772b8",
+    "maps/TrainerHouse1F.asm": "b47b50db94695fe1fdac6c4c62449f6e10264a85578f5c0ed9d9dffd2aa0e050",
+    "maps/TrainerHouseB1F.asm": "2f0db55069de90137f60cef0f7eb4f592795915612ca0292f0e660c513f213b1",
+    "maps/ViridianMart.asm": "96376ac2a0b6fc9250e19217a6b5a06ac7c3002f31c4c5f239ae1343d52e2c90",
+    "maps/ViridianPokeCenter1F.asm": "837c5304b0c31098c61195f837901617d06ea74e0ea23c9d0c15499aa9c2a6ac",
+    "maps/Route2Gate.asm": "3043d05e5da3c5f4f151583c8632125c4af5580d4af403b657d6306d00367475",
+    "maps/PokemonLeagueGate.asm": "5400117453d74d30baf5a917395e23a2ef30b99474bf9519a5f3bc1bc1018688",
+    "maps/ViridianForestViridianGate.asm": "39fa7b826832049bbcabb1f47f151044f0d429ebfae4f532c8fe32a18986402a",
+    "maps/ViridianForestPewterGate.asm": "a944ce99be81a4e315e00b2f0f25da5f09e6f80faf4a5671b029076507667690",
+    "maps/Route1ViridianGate.asm": "eabadcdb060ef04ec6a943f671a9eca4c4d4ed7ec024e6db3648243cba26f68b",
+    "maps/Route29.asm": "c1055fb03408f9f0687df797ba2f56f5c5523ab14ebaa9c0d9ca72796e792828",
+    "maps/NewBarkTown.asm": "c2f14b40e0b813ada9c209dc58995b8d6c16605b946f3d5d1c4e9c9d5e167dad",
+    "maps/PlayersNeighborsHouse.asm": "4f05a38f4f68d1089f144d6cb40635012d5c8bb2e4e56890a48d3e64ea2d959e",
+    "maps/LyrasHouse2F.asm": "77c1249253658f5787ae4bec0044d4f9596bc5ee08eb532168d46857a649ca68",
+    "maps/ElmsHouse.asm": "d168ac87e7c207b3f59c33ac4ff67084c377b3ad7d94570a0b58bc637ca61ac3",
+    "maps/Route2946Gate.asm": "d535cde9ae7384753d5c249de72502df116993958ca640edc65727a43045fa08",
+    "maps/FightingDojo.asm": "58afbf12098ac2d8f1d42681be0eb17a370dd0de98e214b1399271a9baee7572",
+    "maps/SaffronGym.asm": "7000cdd166f7f0240f35d2040baba82c22054639db357579c9aba39284f749b2",
+    "maps/SaffronMart.asm": "587a1c2d7474cce71001cfcb28c7790b9163f1f50f894cff362ecb9ccc5841c7",
+    "maps/SaffronPokeCenter1F.asm": "d6f4313067955dfe581579e1cb29db09744fc86dce330e5c797fb7f572fb0d64",
+    "maps/SaffronTrainStation.asm": "ff103923e646e96bb840fc9d7b52ef45cfdec9f05f2ce928b325ab8db8df8ebd",
+    "maps/SilphCo1F.asm": "15d9661cbaf6364682021cac301209ac842dfa9c692c0798e59a7a21353d2889",
+    "maps/SilphCo2F.asm": "53762f00eb713304ef143ee2b37112bd3d2331106be9ef80f6723688158c668f",
+    "maps/SilphCo3F.asm": "e237f33c3a3ce2ed837ced2ebdb82f7c7fcbb3309bcae4d78864763dcbc63eea",
+    "maps/CopycatsHouse1F.asm": "19aa644a05adcac195795dcd537529f0f19bc321b7fec0a71cf533692b44cfa9",
+    "maps/CopycatsHouse2F.asm": "9b79c577f39f4101f86379a07bc00aa257d1f77ada4c6f8da7d53f7ea91d0467",
+    "maps/Route5.asm": "0a5825ed5a2b3cd38abcaf4b079dca367ceda7846df828706762d29251302a9c",
+    "maps/Route5SaffronCityGate.asm": "8b45c8757e40c87112a58d0364691c9e03bb4ac8e02bf738dfefd4aafe744a1e",
+    "maps/Route5CleanseTagSpeechHouse.asm": "b1a63a26e09bb3e5ce4e2d1d2e80115a5d343354846069b69ee649c8e297349b",
+    "maps/SaffronBookSpeechHouse.asm": "0b176b9d29dd171c64087ad2f7bfb74dbb061e42041505ce7d546e01b006c2d7",
+    "maps/SaffronOrreSpeechHouse.asm": "dba4003bd48bbe42e90d863167cc81c6e17269aa61fd6338b4a91ec100586eb3",
+    "maps/SaffronRichSpeechHouse.asm": "81cbed04db48587f8b64912a4802bd838beed1bdf98682854f5b276d5f8d2ad8",
+    "maps/Route30.asm": "e5af44206494cca99ae4fd1c9da94bbcbba9188f4a74902076f07182181a0026",
+    "maps/Route31.asm": "0fc74be221e217ca6e3c7b125b7bc8fbc3633f8f250b41e75ce9cd721ecaeac7",
+    "maps/CherrygroveBay.asm": "9c37acd3e9dfa9cf5fde9853caf8926540bf2b07fd8028975f01a3770ce12a4b",
+    "maps/CherrygroveCity.asm": "5f0c501e9e142fdf16d11ba97a20f1d55af475fda492fde9a1e8bb3a13c13c8d",
+    "maps/CherrygroveMart.asm": "44575b384b03f5edf3e78f0095aa8ca430700fe413ee36409e11df96de77f06d",
+    "maps/CherrygrovePokeCenter1F.asm": "b9429dbb061984a6fcdf07ca4130b0f7d3ea8c4e01856ed18981380c51ede4db",
+    "maps/CherrygroveGymSpeechHouse.asm": "3c2829ba331d2874f3b28d5c6387d654c7730767d12fde23a1539fac565061b9",
+    "maps/GuideGentsHouse.asm": "15296dbde168a246910115f86fe26af8092edff14478ac816ea6d541e8cf548d",
+    "maps/CherrygroveEvolutionSpeechHouse.asm": "936113ffc59eac91dc9d43bc616fbb8a0e1367a6d0116658057be28b16703b2f",
+    "maps/Route31VioletGate.asm": "8f8aa423b2e799cc32cca47adf89d9be5bd1373cced95e59bf815bae6cef04bb",
+    "maps/CliffEdgeGate.asm": "55ad56c3bc118103b9b14ba9d7d5b67b1b1798515e8e9a7c304e672cb40da284",
+    "maps/CliffCave.asm": "94d948562f9ef09fe21f01ac25c2d687f30cb70fc328dd84feaf1dd4773e61d2",
+    "maps/Route47.asm": "5d662a361f3c03afd341122071a56e872dd430f8256009553e3601a0b239e9e1",
+    "maps/YellowForestGate.asm": "65a03c5e80ee148712b6ebf4a3e70d0f91c7cc2fa07ae840a50d58c2b431ea8a",
+    "maps/YellowForest.asm": "58fa21a0cdeb139de31d34be9b825a6faa4c2f0372af9642123da55542e33c58",
+    "maps/DimCave2F.asm": "457dc8c805575c3c5c1e109430e1fe21b242ea8a1eba1bf48eea6a33a2f275b6",
+    "maps/DimCave3F.asm": "20af75175efa9bdd1a9f1e964ce530496a864586fdd72fe71483015a5a018e2e",
+    "maps/DimCave4F.asm": "2006b7b863ca3ee5043820906466358d8e7d0da10dd90cf7a58cb4ef39d069a2",
+    "maps/GoldenrodHarbor.asm": "8560552f76f96078a02d9f697fb7872006236be770af5ca752c171a6c80c6863",
+    "maps/GoldenrodHarborGate.asm": "d32afc1e1f9f1a853a0790fd51938826cecc7fbec91ac60bef695f02991cde4f",
+    "maps/RuinsOfAlphOutside.asm": "a44218c4e50caf31b4c1815ed6c246b3dc6b18e2ebcc41851fd899f97e37f58c",
+    "maps/RuinsOfAlphKabutoChamber.asm": "cfd3e959deae0b973a85b3d95d3d7003b57ca92bbc3c0cca940badab8dcebc23",
+    "maps/RuinsOfAlphInnerChamber.asm": "44ec60c0d49d0ce6d0a7550292dc93be1931948b11415f61d54b9166be13ef39",
+    "maps/ShamoutiIsland.asm": "6cd962f5ed0d4f1e9efa180bd094b4cb2c2051bb017310b312e102853ab2f3ae",
+    "maps/WarmBeach.asm": "ae2e0aba963e33d0a53d5e1c200630c58928d86364e45320c627deac4d2d36ab",
+    "maps/ShamoutiCoast.asm": "97e62a950be44b6bddab9f507ddf074c2ee022aff2acb4a4975d84b02860570b",
+    "maps/RockyBeach.asm": "2ee782f2f5d0a5ef90dd7becc143e957936c6d2a7debbfb462a63f0fc6821d84",
+    "maps/NoisyForest.asm": "debd72714d2f63eb0432008cbc388528593e9477c943934772ab399dea5363dd",
+    "maps/ShamoutiHotel1F.asm": "b7b2c82b1b67a9aacb39ef3a3ee844d425bf6e61c5f223bbfa5816e2cc9b55d5",
+    "maps/BeautifulBeachVilla.asm": "90510f365599252950c9f2deed82f713483ce94b1dae0d20f98005fdf064f100",
+    "maps/WarmBeachHouse.asm": "1064dcc294da6e0f0ecfcf47d05f79ef9f245f139612f970e343aa907b022c70",
+    "maps/ValenciaIsland.asm": "15175601065c6b52ba4691c58944685189f8ca99cd049420544d13f75f910bc3",
+    "maps/Route49.asm": "63348ab0be4226649d2b3e5e8c9af6171df452015928a04ea1a3fd0d4c50223d",
+    "maps/IvysHouse.asm": "94af8fcfc35b41d36298993b0acabeb44e577f6b46b2feb82955e7edb4af2b7d",
+    "maps/ValenciaHouse.asm": "b5c88ca23bd601dd34f07b8ed5aab832896defa02520876b4e69af6cebdc87d5",
+    "maps/ValenciaPort.asm": "fcae476da18a42d9968ae4e304f212d67941f9af46193871d3eae2cae29ce459",
+    "maps/SinjohRuinsHouse.asm": "b6d984a897487627574c41bca17b1d380a2b461109b341cd2d31a6dc9b2a64b8",
+    "maps/SaffronCity.asm": "0a654fde433b302d82360f9077c86a45213b39f5f2003fab376d54b1e0410f37",
+    "maps/ShamoutiShrineRuins.asm": "5815cd6c923b79fbb5608111a1675c164018ba24a3c31c6d7f4e573061c687d9",
+    "maps/RuggedRoadNorth.asm": "51f44de14c59d1a15ab6eb6eeb1e04a99bc14f5212fe3e95154152c427e3cd82",
+    "maps/RuggedRoadSouth.asm": "297b535b739375baf6d254dbb3753e1181acf4372e5d0118e739135a41e27244",
+    "maps/SnowtopMountainOutside.asm": "3642e84957c06e090dcce0929e2eb4c39bbaeb9528cfef2b40f7713f84e5487b",
+    "maps/EcruteakShrineOutside.asm": "3a869834ea1731fe9e1cd548d700c68b8b1ea15fab258316c6d1a4c56b1603b0",
+    "maps/EcruteakShrineInside.asm": "df1b437bd8b37795fa4c1c97c091e9485886979c2ea2637cb6c39af3492044bb",
+    "maps/CeruleanCape.asm": "fa5f3fe6ab22f65730576c4ef8ebb897715d56e90d626744e9a940ab279b0cc5",
+    "maps/Route36.asm": "feac4b9f8d6602dd94bfc82a1e39691c42a15fb1e3f428e044d8b05e41ced9c2",
+    "macros/data.asm": "6d5488536507da08228882be789a926b26417300394c4ec82882f048f74efa2d",
+    "data/maps/maps.asm": "fb30834a55b06062432425f5cb288cf9c33f9b7a7ab9e944095115b493595b24",
+    "constants/map_constants.asm": "edff8dbad5ba05dc87ba5381c8dbde3f23d56413bf59c0c4b921e0c81c84bbae",
+    "home/header.asm": "e12419f1ef33c223c91492866f8bc0a64139d8f4772ce491be15cae6bee625bb"
+  },
+  "unreferenced_constants": [
+    "BATTLEFACTORYBATTLEROOM_RECEPTIONIST",
+    "CELADONGAMECORNER_FISHING_GURU",
+    "CELADONGAMECORNER_GRAMPS",
+    "CELADONGAMECORNER_GYM_GUY",
+    "CELADONGAMECORNER_POKEFAN_F",
+    "CELADONGAMECORNER_POKEFAN_M",
+    "CELADONGAMECORNER_RECEPTIONIST",
+    "WISETRIOSROOM_ELDER2"
+  ],
+  "maps": [
+    {
+      "map": "OlivinePokeCenter1F",
+      "group": 1,
+      "number": 1,
+      "objects": 5,
+      "approved_indices": [
+        4,
+        5
+      ]
+    },
+    {
+      "map": "OlivineGym",
+      "group": 1,
+      "number": 2,
+      "objects": 4,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "OlivineTimsHouse",
+      "group": 1,
+      "number": 3,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "OlivinePunishmentSpeechHouse",
+      "group": 1,
+      "number": 4,
+      "objects": 2,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "OlivineGoodRodHouse",
+      "group": 1,
+      "number": 5,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "OlivineCafe",
+      "group": 1,
+      "number": 6,
+      "objects": 7,
+      "approved_indices": [
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    },
+    {
+      "map": "OlivineMart",
+      "group": 1,
+      "number": 7,
+      "objects": 3,
+      "approved_indices": [
+        2,
+        3
+      ]
+    },
+    {
+      "map": "Route38EcruteakGate",
+      "group": 1,
+      "number": 8,
+      "objects": 2,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "Route39Barn",
+      "group": 1,
+      "number": 9,
+      "objects": 5,
+      "approved_indices": [
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "map": "Route39Farmhouse",
+      "group": 1,
+      "number": 10,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "Route38",
+      "group": 1,
+      "number": 11,
+      "objects": 7,
+      "approved_indices": []
+    },
+    {
+      "map": "Route39",
+      "group": 1,
+      "number": 12,
+      "objects": 17,
+      "approved_indices": [
+        5,
+        6,
+        7,
+        8,
+        12,
+        13
+      ]
+    },
+    {
+      "map": "OlivineCity",
+      "group": 1,
+      "number": 13,
+      "objects": 15,
+      "approved_indices": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        12,
+        13
+      ]
+    },
+    {
+      "map": "Route35CoastNorth",
+      "group": 1,
+      "number": 14,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "Route35CoastSouth",
+      "group": 1,
+      "number": 15,
+      "objects": 12,
+      "approved_indices": [
+        12
+      ]
+    },
+    {
+      "map": "OlivineCityRoute35CoastDual",
+      "group": 1,
+      "number": 16,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "MahoganyRedGyaradosSpeechHouse",
+      "group": 2,
+      "number": 1,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "MahoganyGym",
+      "group": 2,
+      "number": 2,
+      "objects": 7,
+      "approved_indices": [
+        7
+      ]
+    },
+    {
+      "map": "MahoganyPokeCenter1F",
+      "group": 2,
+      "number": 3,
+      "objects": 4,
+      "approved_indices": [
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "map": "Route42EcruteakGate",
+      "group": 2,
+      "number": 4,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "Route42",
+      "group": 2,
+      "number": 5,
+      "objects": 13,
+      "approved_indices": [
+        6,
+        7
+      ]
+    },
+    {
+      "map": "Route44",
+      "group": 2,
+      "number": 6,
+      "objects": 12,
+      "approved_indices": []
+    },
+    {
+      "map": "MahoganyTown",
+      "group": 2,
+      "number": 7,
+      "objects": 4,
+      "approved_indices": [
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "map": "LakeOfRageHiddenPowerHouse",
+      "group": 2,
+      "number": 8,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "LakeOfRageMagikarpHouse",
+      "group": 2,
+      "number": 9,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "Route43MahoganyGate",
+      "group": 2,
+      "number": 10,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "Route43Gate",
+      "group": 2,
+      "number": 11,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "Route43",
+      "group": 2,
+      "number": 12,
+      "objects": 13,
+      "approved_indices": []
+    },
+    {
+      "map": "LakeOfRage",
+      "group": 2,
+      "number": 13,
+      "objects": 19,
+      "approved_indices": [
+        4,
+        9,
+        10,
+        11
+      ]
+    },
+    {
+      "map": "SproutTower1F",
+      "group": 3,
+      "number": 1,
+      "objects": 7,
+      "approved_indices": [
+        2,
+        3,
+        5
+      ]
+    },
+    {
+      "map": "SproutTower2F",
+      "group": 3,
+      "number": 2,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "SproutTower3F",
+      "group": 3,
+      "number": 3,
+      "objects": 7,
+      "approved_indices": []
+    },
+    {
+      "map": "TinTower1F",
+      "group": 3,
+      "number": 4,
+      "objects": 10,
+      "approved_indices": [
+        8,
+        10
+      ]
+    },
+    {
+      "map": "TinTower2F",
+      "group": 3,
+      "number": 5,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "TinTower3F",
+      "group": 3,
+      "number": 6,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "TinTower4F",
+      "group": 3,
+      "number": 7,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "TinTower5F",
+      "group": 3,
+      "number": 8,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "TinTower6F",
+      "group": 3,
+      "number": 9,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "TinTower7F",
+      "group": 3,
+      "number": 10,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "TinTower8F",
+      "group": 3,
+      "number": 11,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "TinTower9F",
+      "group": 3,
+      "number": 12,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "TinTower10F",
+      "group": 3,
+      "number": 13,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "BurnedTower1F",
+      "group": 3,
+      "number": 14,
+      "objects": 9,
+      "approved_indices": [
+        6
+      ]
+    },
+    {
+      "map": "BurnedTowerB1F",
+      "group": 3,
+      "number": 15,
+      "objects": 9,
+      "approved_indices": []
+    },
+    {
+      "map": "NationalPark",
+      "group": 3,
+      "number": 16,
+      "objects": 16,
+      "approved_indices": [
+        1,
+        2,
+        4,
+        7,
+        8
+      ]
+    },
+    {
+      "map": "NationalParkBugContest",
+      "group": 3,
+      "number": 17,
+      "objects": 12,
+      "approved_indices": [
+        1,
+        2,
+        3,
+        4,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "map": "Route35NationalParkGate",
+      "group": 3,
+      "number": 18,
+      "objects": 4,
+      "approved_indices": []
+    },
+    {
+      "map": "Route36NationalParkGate",
+      "group": 3,
+      "number": 19,
+      "objects": 12,
+      "approved_indices": []
+    },
+    {
+      "map": "RadioTower1F",
+      "group": 3,
+      "number": 20,
+      "objects": 7,
+      "approved_indices": [
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "map": "RadioTower2F",
+      "group": 3,
+      "number": 21,
+      "objects": 12,
+      "approved_indices": [
+        2,
+        3,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "map": "RadioTower3F",
+      "group": 3,
+      "number": 22,
+      "objects": 7,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "RadioTower4F",
+      "group": 3,
+      "number": 23,
+      "objects": 7,
+      "approved_indices": [
+        2,
+        4
+      ]
+    },
+    {
+      "map": "RadioTower5F",
+      "group": 3,
+      "number": 24,
+      "objects": 6,
+      "approved_indices": [
+        5
+      ]
+    },
+    {
+      "map": "UnionCave1F",
+      "group": 3,
+      "number": 25,
+      "objects": 10,
+      "approved_indices": []
+    },
+    {
+      "map": "UnionCaveB1FNorth",
+      "group": 3,
+      "number": 26,
+      "objects": 5,
+      "approved_indices": []
+    },
+    {
+      "map": "UnionCaveB1FSouth",
+      "group": 3,
+      "number": 27,
+      "objects": 14,
+      "approved_indices": []
+    },
+    {
+      "map": "UnionCaveB2F",
+      "group": 3,
+      "number": 28,
+      "objects": 7,
+      "approved_indices": []
+    },
+    {
+      "map": "SlowpokeWellEntrance",
+      "group": 3,
+      "number": 29,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "SlowpokeWellB1F",
+      "group": 3,
+      "number": 30,
+      "objects": 9,
+      "approved_indices": []
+    },
+    {
+      "map": "SlowpokeWellB2F",
+      "group": 3,
+      "number": 31,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "OlivineLighthouse1F",
+      "group": 3,
+      "number": 32,
+      "objects": 2,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "OlivineLighthouse2F",
+      "group": 3,
+      "number": 33,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "OlivineLighthouse3F",
+      "group": 3,
+      "number": 34,
+      "objects": 5,
+      "approved_indices": []
+    },
+    {
+      "map": "OlivineLighthouse4F",
+      "group": 3,
+      "number": 35,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "OlivineLighthouse5F",
+      "group": 3,
+      "number": 36,
+      "objects": 5,
+      "approved_indices": []
+    },
+    {
+      "map": "OlivineLighthouse6F",
+      "group": 3,
+      "number": 37,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "MahoganyMart1F",
+      "group": 3,
+      "number": 38,
+      "objects": 6,
+      "approved_indices": []
+    },
+    {
+      "map": "TeamRocketBaseB1F",
+      "group": 3,
+      "number": 39,
+      "objects": 6,
+      "approved_indices": []
+    },
+    {
+      "map": "TeamRocketBaseB2F",
+      "group": 3,
+      "number": 40,
+      "objects": 14,
+      "approved_indices": []
+    },
+    {
+      "map": "TeamRocketBaseB3F",
+      "group": 3,
+      "number": 41,
+      "objects": 14,
+      "approved_indices": [
+        9
+      ]
+    },
+    {
+      "map": "IlexForest",
+      "group": 3,
+      "number": 42,
+      "objects": 15,
+      "approved_indices": []
+    },
+    {
+      "map": "GoldenrodUnderground",
+      "group": 3,
+      "number": 43,
+      "objects": 13,
+      "approved_indices": []
+    },
+    {
+      "map": "GoldenrodUndergroundSwitchRoom",
+      "group": 3,
+      "number": 44,
+      "objects": 9,
+      "approved_indices": []
+    },
+    {
+      "map": "GoldenrodUndergroundEntrances",
+      "group": 3,
+      "number": 45,
+      "objects": 5,
+      "approved_indices": [
+        1,
+        2,
+        3,
+        5
+      ]
+    },
+    {
+      "map": "GoldenrodDeptStoreB1F",
+      "group": 3,
+      "number": 46,
+      "objects": 8,
+      "approved_indices": [
+        5,
+        7,
+        8
+      ]
+    },
+    {
+      "map": "GoldenrodUndergroundWarehouse",
+      "group": 3,
+      "number": 47,
+      "objects": 7,
+      "approved_indices": []
+    },
+    {
+      "map": "MountMortar1FOutside",
+      "group": 3,
+      "number": 48,
+      "objects": 4,
+      "approved_indices": []
+    },
+    {
+      "map": "MountMortar1FInside",
+      "group": 3,
+      "number": 49,
+      "objects": 10,
+      "approved_indices": []
+    },
+    {
+      "map": "MountMortar2FInside",
+      "group": 3,
+      "number": 50,
+      "objects": 7,
+      "approved_indices": []
+    },
+    {
+      "map": "MountMortarB1F",
+      "group": 3,
+      "number": 51,
+      "objects": 8,
+      "approved_indices": []
+    },
+    {
+      "map": "IcePath1F",
+      "group": 3,
+      "number": 52,
+      "objects": 5,
+      "approved_indices": []
+    },
+    {
+      "map": "IcePathB1F",
+      "group": 3,
+      "number": 53,
+      "objects": 7,
+      "approved_indices": []
+    },
+    {
+      "map": "IcePathB2FMahoganySide",
+      "group": 3,
+      "number": 54,
+      "objects": 6,
+      "approved_indices": [
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "map": "IcePathB2FBlackthornSide",
+      "group": 3,
+      "number": 55,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "IcePathB3F",
+      "group": 3,
+      "number": 56,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "WhirlIslandNW",
+      "group": 3,
+      "number": 57,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "WhirlIslandNE",
+      "group": 3,
+      "number": 58,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "WhirlIslandSW",
+      "group": 3,
+      "number": 59,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "WhirlIslandCave",
+      "group": 3,
+      "number": 60,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "WhirlIslandSE",
+      "group": 3,
+      "number": 61,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "WhirlIslandB1F",
+      "group": 3,
+      "number": 62,
+      "objects": 6,
+      "approved_indices": []
+    },
+    {
+      "map": "WhirlIslandB2F",
+      "group": 3,
+      "number": 63,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "WhirlIslandLugiaChamber",
+      "group": 3,
+      "number": 64,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "SilverCaveRoom1",
+      "group": 3,
+      "number": 65,
+      "objects": 4,
+      "approved_indices": []
+    },
+    {
+      "map": "SilverCaveRoom2",
+      "group": 3,
+      "number": 66,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "SilverCaveRoom3",
+      "group": 3,
+      "number": 67,
+      "objects": 9,
+      "approved_indices": []
+    },
+    {
+      "map": "SilverCaveItemRooms",
+      "group": 3,
+      "number": 68,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "DarkCaveVioletEntrance",
+      "group": 3,
+      "number": 69,
+      "objects": 11,
+      "approved_indices": []
+    },
+    {
+      "map": "DarkCaveBlackthornEntrance",
+      "group": 3,
+      "number": 70,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "DragonsDen1F",
+      "group": 3,
+      "number": 71,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "DragonsDenB1F",
+      "group": 3,
+      "number": 72,
+      "objects": 13,
+      "approved_indices": []
+    },
+    {
+      "map": "DragonShrine",
+      "group": 3,
+      "number": 73,
+      "objects": 5,
+      "approved_indices": [
+        4,
+        5
+      ]
+    },
+    {
+      "map": "TohjoFalls",
+      "group": 3,
+      "number": 74,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "GiovannisCave",
+      "group": 3,
+      "number": 75,
+      "objects": 5,
+      "approved_indices": []
+    },
+    {
+      "map": "DiglettsCave",
+      "group": 3,
+      "number": 76,
+      "objects": 8,
+      "approved_indices": [
+        6,
+        7
+      ]
+    },
+    {
+      "map": "MountMoon1F",
+      "group": 3,
+      "number": 77,
+      "objects": 10,
+      "approved_indices": []
+    },
+    {
+      "map": "MountMoonB1F",
+      "group": 3,
+      "number": 78,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "MountMoonB2F",
+      "group": 3,
+      "number": 79,
+      "objects": 11,
+      "approved_indices": []
+    },
+    {
+      "map": "UndergroundPath",
+      "group": 3,
+      "number": 80,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "RockTunnel1F",
+      "group": 3,
+      "number": 81,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "RockTunnelB1F",
+      "group": 3,
+      "number": 82,
+      "objects": 6,
+      "approved_indices": []
+    },
+    {
+      "map": "RockTunnel2F",
+      "group": 3,
+      "number": 83,
+      "objects": 15,
+      "approved_indices": []
+    },
+    {
+      "map": "VictoryRoad1F",
+      "group": 3,
+      "number": 84,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "VictoryRoad2F",
+      "group": 3,
+      "number": 85,
+      "objects": 6,
+      "approved_indices": []
+    },
+    {
+      "map": "VictoryRoad3F",
+      "group": 3,
+      "number": 86,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "Route37",
+      "group": 4,
+      "number": 1,
+      "objects": 9,
+      "approved_indices": []
+    },
+    {
+      "map": "EcruteakCity",
+      "group": 4,
+      "number": 2,
+      "objects": 14,
+      "approved_indices": [
+        1,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "map": "EcruteakHouse",
+      "group": 4,
+      "number": 3,
+      "objects": 4,
+      "approved_indices": [
+        3,
+        4
+      ]
+    },
+    {
+      "map": "WiseTriosRoom",
+      "group": 4,
+      "number": 4,
+      "objects": 6,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "EcruteakPokeCenter1F",
+      "group": 4,
+      "number": 5,
+      "objects": 6,
+      "approved_indices": [
+        3,
+        6
+      ]
+    },
+    {
+      "map": "EcruteakLugiaSpeechHouse",
+      "group": 4,
+      "number": 6,
+      "objects": 2,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "DanceTheatre",
+      "group": 4,
+      "number": 7,
+      "objects": 10,
+      "approved_indices": [
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "map": "EcruteakMart",
+      "group": 4,
+      "number": 8,
+      "objects": 3,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "EcruteakGym",
+      "group": 4,
+      "number": 9,
+      "objects": 7,
+      "approved_indices": [
+        7
+      ]
+    },
+    {
+      "map": "EcruteakItemfinderHouse",
+      "group": 4,
+      "number": 10,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "Route36RuinsOfAlphGate",
+      "group": 4,
+      "number": 11,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "Route36VioletGate",
+      "group": 4,
+      "number": 12,
+      "objects": 2,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "ValeriesHouse",
+      "group": 4,
+      "number": 13,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "EcruteakCherishBallHouse",
+      "group": 4,
+      "number": 14,
+      "objects": 2,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "EcruteakDestinyKnotHouse",
+      "group": 4,
+      "number": 15,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "BlackthornGym1F",
+      "group": 5,
+      "number": 1,
+      "objects": 5,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "BlackthornGym2F",
+      "group": 5,
+      "number": 2,
+      "objects": 8,
+      "approved_indices": []
+    },
+    {
+      "map": "BlackthornDragonSpeechHouse",
+      "group": 5,
+      "number": 3,
+      "objects": 2,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "BlackthornEmysHouse",
+      "group": 5,
+      "number": 4,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "BlackthornMart",
+      "group": 5,
+      "number": 5,
+      "objects": 4,
+      "approved_indices": [
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "map": "BlackthornPokeCenter1F",
+      "group": 5,
+      "number": 6,
+      "objects": 5,
+      "approved_indices": [
+        4
+      ]
+    },
+    {
+      "map": "MoveDeletersHouse",
+      "group": 5,
+      "number": 7,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "Route45",
+      "group": 5,
+      "number": 8,
+      "objects": 15,
+      "approved_indices": []
+    },
+    {
+      "map": "Route46",
+      "group": 5,
+      "number": 9,
+      "objects": 8,
+      "approved_indices": [
+        5
+      ]
+    },
+    {
+      "map": "BlackthornCity",
+      "group": 5,
+      "number": 10,
+      "objects": 12,
+      "approved_indices": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        11,
+        12
+      ]
+    },
+    {
+      "map": "CinnabarPokeCenter1F",
+      "group": 6,
+      "number": 1,
+      "objects": 3,
+      "approved_indices": [
+        2,
+        3
+      ]
+    },
+    {
+      "map": "SeafoamIslands1F",
+      "group": 6,
+      "number": 2,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "SeafoamGym",
+      "group": 6,
+      "number": 3,
+      "objects": 8,
+      "approved_indices": []
+    },
+    {
+      "map": "SeafoamIslandsB1F",
+      "group": 6,
+      "number": 4,
+      "objects": 8,
+      "approved_indices": []
+    },
+    {
+      "map": "SeafoamIslandsB2F",
+      "group": 6,
+      "number": 5,
+      "objects": 4,
+      "approved_indices": []
+    },
+    {
+      "map": "SeafoamIslandsB3F",
+      "group": 6,
+      "number": 6,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "SeafoamIslandsB4F",
+      "group": 6,
+      "number": 7,
+      "objects": 5,
+      "approved_indices": []
+    },
+    {
+      "map": "Route19",
+      "group": 6,
+      "number": 8,
+      "objects": 13,
+      "approved_indices": [
+        11
+      ]
+    },
+    {
+      "map": "Route20",
+      "group": 6,
+      "number": 9,
+      "objects": 13,
+      "approved_indices": []
+    },
+    {
+      "map": "Route21",
+      "group": 6,
+      "number": 10,
+      "objects": 14,
+      "approved_indices": []
+    },
+    {
+      "map": "UragaChannelWest",
+      "group": 6,
+      "number": 11,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "CinnabarIsland",
+      "group": 6,
+      "number": 12,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "CinnabarVolcano1F",
+      "group": 6,
+      "number": 13,
+      "objects": 14,
+      "approved_indices": []
+    },
+    {
+      "map": "CinnabarVolcanoB1F",
+      "group": 6,
+      "number": 14,
+      "objects": 6,
+      "approved_indices": []
+    },
+    {
+      "map": "CinnabarVolcanoB2F",
+      "group": 6,
+      "number": 15,
+      "objects": 4,
+      "approved_indices": []
+    },
+    {
+      "map": "PokemonMansion1F",
+      "group": 6,
+      "number": 16,
+      "objects": 6,
+      "approved_indices": []
+    },
+    {
+      "map": "PokemonMansionB1F",
+      "group": 6,
+      "number": 17,
+      "objects": 6,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "CinnabarLab",
+      "group": 6,
+      "number": 18,
+      "objects": 11,
+      "approved_indices": []
+    },
+    {
+      "map": "ScaryCave1F",
+      "group": 6,
+      "number": 19,
+      "objects": 13,
+      "approved_indices": []
+    },
+    {
+      "map": "ScaryCaveB1F",
+      "group": 6,
+      "number": 20,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "ScaryCaveShipwreck",
+      "group": 6,
+      "number": 21,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "Route19BeachHouse",
+      "group": 6,
+      "number": 22,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "CeruleanGymBadgeSpeechHouse",
+      "group": 7,
+      "number": 1,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "CeruleanPoliceStation",
+      "group": 7,
+      "number": 2,
+      "objects": 3,
+      "approved_indices": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "map": "CeruleanTradeSpeechHouse",
+      "group": 7,
+      "number": 3,
+      "objects": 4,
+      "approved_indices": [
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "map": "CeruleanPokeCenter1F",
+      "group": 7,
+      "number": 4,
+      "objects": 3,
+      "approved_indices": [
+        3
+      ]
+    },
+    {
+      "map": "CeruleanGym",
+      "group": 7,
+      "number": 5,
+      "objects": 8,
+      "approved_indices": [
+        8
+      ]
+    },
+    {
+      "map": "CeruleanMart",
+      "group": 7,
+      "number": 6,
+      "objects": 3,
+      "approved_indices": [
+        2,
+        3
+      ]
+    },
+    {
+      "map": "Route10PokeCenter1F",
+      "group": 7,
+      "number": 7,
+      "objects": 4,
+      "approved_indices": [
+        3,
+        4
+      ]
+    },
+    {
+      "map": "PowerPlant",
+      "group": 7,
+      "number": 8,
+      "objects": 7,
+      "approved_indices": [
+        4,
+        5,
+        7
+      ]
+    },
+    {
+      "map": "BillsHouse",
+      "group": 7,
+      "number": 9,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "Route4",
+      "group": 7,
+      "number": 10,
+      "objects": 11,
+      "approved_indices": [
+        8,
+        9,
+        11
+      ]
+    },
+    {
+      "map": "Route24",
+      "group": 7,
+      "number": 11,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "Route25",
+      "group": 7,
+      "number": 12,
+      "objects": 13,
+      "approved_indices": [
+        12
+      ]
+    },
+    {
+      "map": "CeruleanCity",
+      "group": 7,
+      "number": 13,
+      "objects": 8,
+      "approved_indices": [
+        3,
+        4,
+        6,
+        7
+      ]
+    },
+    {
+      "map": "CeruleanCave1F",
+      "group": 7,
+      "number": 14,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "CeruleanCave2F",
+      "group": 7,
+      "number": 15,
+      "objects": 4,
+      "approved_indices": []
+    },
+    {
+      "map": "CeruleanCaveB1F",
+      "group": 7,
+      "number": 16,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "CeruleanBikeShop",
+      "group": 7,
+      "number": 17,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "CeruleanBerryPowderHouse",
+      "group": 7,
+      "number": 18,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "CeruleanCoupleHouse",
+      "group": 7,
+      "number": 19,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "CeruleanWaterShowSpeechHouse",
+      "group": 7,
+      "number": 20,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "AzaleaPokeCenter1F",
+      "group": 8,
+      "number": 1,
+      "objects": 5,
+      "approved_indices": [
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "map": "CharcoalKiln",
+      "group": 8,
+      "number": 2,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "AzaleaMart",
+      "group": 8,
+      "number": 3,
+      "objects": 5,
+      "approved_indices": [
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "map": "KurtsHouse",
+      "group": 8,
+      "number": 4,
+      "objects": 5,
+      "approved_indices": [
+        5
+      ]
+    },
+    {
+      "map": "AzaleaGym",
+      "group": 8,
+      "number": 5,
+      "objects": 11,
+      "approved_indices": [
+        6
+      ]
+    },
+    {
+      "map": "Route33",
+      "group": 8,
+      "number": 6,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "AzaleaTown",
+      "group": 8,
+      "number": 7,
+      "objects": 14,
+      "approved_indices": [
+        3,
+        5,
+        6,
+        7,
+        12,
+        13
+      ]
+    },
+    {
+      "map": "BattleTower1F",
+      "group": 9,
+      "number": 1,
+      "objects": 9,
+      "approved_indices": [
+        7,
+        8,
+        9
+      ]
+    },
+    {
+      "map": "BattleTower2F",
+      "group": 9,
+      "number": 2,
+      "objects": 13,
+      "approved_indices": [
+        8,
+        9,
+        10,
+        11,
+        12
+      ]
+    },
+    {
+      "map": "BattleTowerBattleRoom",
+      "group": 9,
+      "number": 3,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "BattleTowerElevator",
+      "group": 9,
+      "number": 4,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "BattleTowerHallway",
+      "group": 9,
+      "number": 5,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "Route40BattleTowerGate",
+      "group": 9,
+      "number": 6,
+      "objects": 3,
+      "approved_indices": [
+        1,
+        3
+      ]
+    },
+    {
+      "map": "BattleTowerOutside",
+      "group": 9,
+      "number": 7,
+      "objects": 7,
+      "approved_indices": [
+        2,
+        3,
+        4,
+        6,
+        7
+      ]
+    },
+    {
+      "map": "Route40",
+      "group": 9,
+      "number": 8,
+      "objects": 13,
+      "approved_indices": [
+        6,
+        7
+      ]
+    },
+    {
+      "map": "Route32",
+      "group": 10,
+      "number": 1,
+      "objects": 18,
+      "approved_indices": []
+    },
+    {
+      "map": "Route32Coast",
+      "group": 10,
+      "number": 2,
+      "objects": 15,
+      "approved_indices": [
+        12
+      ]
+    },
+    {
+      "map": "VioletCity",
+      "group": 10,
+      "number": 3,
+      "objects": 12,
+      "approved_indices": [
+        2,
+        3,
+        4,
+        5,
+        7,
+        8
+      ]
+    },
+    {
+      "map": "VioletMart",
+      "group": 10,
+      "number": 4,
+      "objects": 3,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "VioletGym",
+      "group": 10,
+      "number": 5,
+      "objects": 5,
+      "approved_indices": [
+        5
+      ]
+    },
+    {
+      "map": "EarlsPokemonAcademy",
+      "group": 10,
+      "number": 6,
+      "objects": 6,
+      "approved_indices": [
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    {
+      "map": "VioletNicknameSpeechHouse",
+      "group": 10,
+      "number": 7,
+      "objects": 4,
+      "approved_indices": [
+        1,
+        2,
+        4
+      ]
+    },
+    {
+      "map": "VioletPokeCenter1F",
+      "group": 10,
+      "number": 8,
+      "objects": 6,
+      "approved_indices": [
+        3,
+        5,
+        6
+      ]
+    },
+    {
+      "map": "VioletOnixTradeHouse",
+      "group": 10,
+      "number": 9,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "Route32RuinsOfAlphGate",
+      "group": 10,
+      "number": 10,
+      "objects": 3,
+      "approved_indices": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "map": "Route32PokeCenter1F",
+      "group": 10,
+      "number": 11,
+      "objects": 4,
+      "approved_indices": [
+        3
+      ]
+    },
+    {
+      "map": "Route32CoastHouse",
+      "group": 10,
+      "number": 12,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "MagnetTunnelEast",
+      "group": 10,
+      "number": 13,
+      "objects": 4,
+      "approved_indices": []
+    },
+    {
+      "map": "VioletOutskirts",
+      "group": 10,
+      "number": 14,
+      "objects": 7,
+      "approved_indices": []
+    },
+    {
+      "map": "VioletOutskirtsHouse",
+      "group": 10,
+      "number": 15,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "Route34",
+      "group": 11,
+      "number": 1,
+      "objects": 14,
+      "approved_indices": []
+    },
+    {
+      "map": "Route34Coast",
+      "group": 11,
+      "number": 2,
+      "objects": 8,
+      "approved_indices": []
+    },
+    {
+      "map": "DayCare",
+      "group": 11,
+      "number": 3,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "StormyBeach",
+      "group": 11,
+      "number": 4,
+      "objects": 11,
+      "approved_indices": [
+        6
+      ]
+    },
+    {
+      "map": "MurkySwamp",
+      "group": 11,
+      "number": 5,
+      "objects": 15,
+      "approved_indices": [
+        9
+      ]
+    },
+    {
+      "map": "GoldenrodCity",
+      "group": 11,
+      "number": 6,
+      "objects": 16,
+      "approved_indices": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "map": "GoldenrodGym",
+      "group": 11,
+      "number": 7,
+      "objects": 7,
+      "approved_indices": [
+        7
+      ]
+    },
+    {
+      "map": "GoldenrodBikeShop",
+      "group": 11,
+      "number": 8,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "GoldenrodHappinessRater",
+      "group": 11,
+      "number": 9,
+      "objects": 3,
+      "approved_indices": [
+        2,
+        3
+      ]
+    },
+    {
+      "map": "GoldenrodBillsHouse",
+      "group": 11,
+      "number": 10,
+      "objects": 3,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "GoldenrodMagnetTrainStation",
+      "group": 11,
+      "number": 11,
+      "objects": 3,
+      "approved_indices": [
+        2,
+        3
+      ]
+    },
+    {
+      "map": "GoldenrodFlowerShop",
+      "group": 11,
+      "number": 12,
+      "objects": 3,
+      "approved_indices": [
+        3
+      ]
+    },
+    {
+      "map": "GoldenrodPPSpeechHouse",
+      "group": 11,
+      "number": 13,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "GoldenrodNameRater",
+      "group": 11,
+      "number": 14,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "GoldenrodDeptStore1F",
+      "group": 11,
+      "number": 15,
+      "objects": 4,
+      "approved_indices": [
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "map": "GoldenrodDeptStore2F",
+      "group": 11,
+      "number": 16,
+      "objects": 5,
+      "approved_indices": [
+        3,
+        4
+      ]
+    },
+    {
+      "map": "GoldenrodDeptStore3F",
+      "group": 11,
+      "number": 17,
+      "objects": 3,
+      "approved_indices": [
+        2,
+        3
+      ]
+    },
+    {
+      "map": "GoldenrodDeptStore4F",
+      "group": 11,
+      "number": 18,
+      "objects": 4,
+      "approved_indices": [
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "map": "GoldenrodDeptStore5F",
+      "group": 11,
+      "number": 19,
+      "objects": 6,
+      "approved_indices": [
+        4,
+        5
+      ]
+    },
+    {
+      "map": "GoldenrodDeptStore6F",
+      "group": 11,
+      "number": 20,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "GoldenrodDeptStoreElevator",
+      "group": 11,
+      "number": 21,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "GoldenrodDeptStoreRoof",
+      "group": 11,
+      "number": 22,
+      "objects": 8,
+      "approved_indices": [
+        2,
+        3,
+        4,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "map": "GoldenrodGameCorner",
+      "group": 11,
+      "number": 23,
+      "objects": 12,
+      "approved_indices": [
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ]
+    },
+    {
+      "map": "GoldenrodPokecomCenter1F",
+      "group": 11,
+      "number": 24,
+      "objects": 13,
+      "approved_indices": [
+        3,
+        4,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ]
+    },
+    {
+      "map": "GoldenrodPokecomCenterOffice",
+      "group": 11,
+      "number": 25,
+      "objects": 8,
+      "approved_indices": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    },
+    {
+      "map": "IlexForestAzaleaGate",
+      "group": 11,
+      "number": 26,
+      "objects": 3,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "Route34IlexForestGate",
+      "group": 11,
+      "number": 27,
+      "objects": 4,
+      "approved_indices": [
+        3,
+        4
+      ]
+    },
+    {
+      "map": "Route35GoldenrodGate",
+      "group": 11,
+      "number": 28,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "GoldenrodHoneyHouse",
+      "group": 11,
+      "number": 29,
+      "objects": 2,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "GoldenrodNetBallHouse",
+      "group": 11,
+      "number": 30,
+      "objects": 2,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "GoldenrodBandHouse",
+      "group": 11,
+      "number": 31,
+      "objects": 3,
+      "approved_indices": [
+        2,
+        3
+      ]
+    },
+    {
+      "map": "GoldenrodMuseum1F",
+      "group": 11,
+      "number": 32,
+      "objects": 7,
+      "approved_indices": [
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    },
+    {
+      "map": "GoldenrodMuseum2F",
+      "group": 11,
+      "number": 33,
+      "objects": 4,
+      "approved_indices": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "map": "MagnetTunnelWest",
+      "group": 11,
+      "number": 34,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "MagnetTunnelInside",
+      "group": 11,
+      "number": 35,
+      "objects": 11,
+      "approved_indices": [
+        5,
+        6,
+        7
+      ]
+    },
+    {
+      "map": "Route6",
+      "group": 12,
+      "number": 1,
+      "objects": 9,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "Route11",
+      "group": 12,
+      "number": 2,
+      "objects": 12,
+      "approved_indices": []
+    },
+    {
+      "map": "VermilionCity",
+      "group": 12,
+      "number": 3,
+      "objects": 15,
+      "approved_indices": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        10
+      ]
+    },
+    {
+      "map": "VermilionHouseFishingSpeechHouse",
+      "group": 12,
+      "number": 4,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "VermilionPokeCenter1F",
+      "group": 12,
+      "number": 5,
+      "objects": 4,
+      "approved_indices": [
+        2,
+        3
+      ]
+    },
+    {
+      "map": "PokemonFanClub",
+      "group": 12,
+      "number": 6,
+      "objects": 6,
+      "approved_indices": [
+        3,
+        5,
+        6
+      ]
+    },
+    {
+      "map": "VermilionMagnetTrainSpeechHouse",
+      "group": 12,
+      "number": 7,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "VermilionMart",
+      "group": 12,
+      "number": 8,
+      "objects": 3,
+      "approved_indices": [
+        2,
+        3
+      ]
+    },
+    {
+      "map": "VermilionHouseDiglettsCaveSpeechHouse",
+      "group": 12,
+      "number": 9,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "VermilionGym",
+      "group": 12,
+      "number": 10,
+      "objects": 10,
+      "approved_indices": [
+        10
+      ]
+    },
+    {
+      "map": "Route6SaffronGate",
+      "group": 12,
+      "number": 11,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "Route6UndergroundPathEntrance",
+      "group": 12,
+      "number": 12,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "Route11Gate",
+      "group": 12,
+      "number": 13,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "Route11Gate2F",
+      "group": 12,
+      "number": 14,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "VermilionPollutionSpeechHouse",
+      "group": 12,
+      "number": 15,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "VermilionSSAnneSpeechHouse",
+      "group": 12,
+      "number": 16,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "BattleFactory1F",
+      "group": 12,
+      "number": 17,
+      "objects": 5,
+      "approved_indices": []
+    },
+    {
+      "map": "BattleFactoryHallway",
+      "group": 12,
+      "number": 18,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "BattleFactoryBattleRoom",
+      "group": 12,
+      "number": 19,
+      "objects": 2,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "Route1",
+      "group": 13,
+      "number": 1,
+      "objects": 5,
+      "approved_indices": []
+    },
+    {
+      "map": "PalletTown",
+      "group": 13,
+      "number": 2,
+      "objects": 4,
+      "approved_indices": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "map": "RedsHouse1F",
+      "group": 13,
+      "number": 3,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "RedsHouse2F",
+      "group": 13,
+      "number": 4,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "BluesHouse1F",
+      "group": 13,
+      "number": 5,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "BluesHouse2F",
+      "group": 13,
+      "number": 6,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "OaksLab",
+      "group": 13,
+      "number": 7,
+      "objects": 6,
+      "approved_indices": [
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    {
+      "map": "Route2North",
+      "group": 14,
+      "number": 1,
+      "objects": 6,
+      "approved_indices": [
+        6
+      ]
+    },
+    {
+      "map": "Route3",
+      "group": 14,
+      "number": 2,
+      "objects": 12,
+      "approved_indices": []
+    },
+    {
+      "map": "Route3PokeCenter1F",
+      "group": 14,
+      "number": 3,
+      "objects": 4,
+      "approved_indices": [
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "map": "PewterCity",
+      "group": 14,
+      "number": 4,
+      "objects": 8,
+      "approved_indices": [
+        1,
+        3
+      ]
+    },
+    {
+      "map": "PewterNidoranSpeechHouse",
+      "group": 14,
+      "number": 5,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "PewterGym",
+      "group": 14,
+      "number": 6,
+      "objects": 4,
+      "approved_indices": [
+        4
+      ]
+    },
+    {
+      "map": "PewterMart",
+      "group": 14,
+      "number": 7,
+      "objects": 3,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "PewterPokeCenter1F",
+      "group": 14,
+      "number": 8,
+      "objects": 5,
+      "approved_indices": [
+        2,
+        4,
+        5
+      ]
+    },
+    {
+      "map": "PewterSnoozeSpeechHouse",
+      "group": 14,
+      "number": 9,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "PewterMuseumOfScience1F",
+      "group": 14,
+      "number": 10,
+      "objects": 5,
+      "approved_indices": [
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "map": "PewterMuseumOfScience2F",
+      "group": 14,
+      "number": 11,
+      "objects": 5,
+      "approved_indices": [
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "map": "OlivinePort",
+      "group": 15,
+      "number": 1,
+      "objects": 8,
+      "approved_indices": [
+        3,
+        4,
+        6,
+        7
+      ]
+    },
+    {
+      "map": "VermilionPort",
+      "group": 15,
+      "number": 2,
+      "objects": 3,
+      "approved_indices": [
+        3
+      ]
+    },
+    {
+      "map": "FastShip1F",
+      "group": 15,
+      "number": 3,
+      "objects": 4,
+      "approved_indices": [
+        3,
+        4
+      ]
+    },
+    {
+      "map": "FastShipCabins_NNW_NNE_NE",
+      "group": 15,
+      "number": 4,
+      "objects": 8,
+      "approved_indices": []
+    },
+    {
+      "map": "FastShipCabins_SW_SSW_NW",
+      "group": 15,
+      "number": 5,
+      "objects": 5,
+      "approved_indices": []
+    },
+    {
+      "map": "FastShipCabins_SE_SSE_CaptainsCabin",
+      "group": 15,
+      "number": 6,
+      "objects": 11,
+      "approved_indices": [
+        4
+      ]
+    },
+    {
+      "map": "FastShipB1F",
+      "group": 15,
+      "number": 7,
+      "objects": 13,
+      "approved_indices": []
+    },
+    {
+      "map": "MountMoonSquare",
+      "group": 15,
+      "number": 8,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "MountMoonGiftShop",
+      "group": 15,
+      "number": 9,
+      "objects": 4,
+      "approved_indices": [
+        3,
+        4
+      ]
+    },
+    {
+      "map": "TinTowerRoof",
+      "group": 15,
+      "number": 10,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "Route22",
+      "group": 16,
+      "number": 1,
+      "objects": 2,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "Route23North",
+      "group": 16,
+      "number": 2,
+      "objects": 4,
+      "approved_indices": []
+    },
+    {
+      "map": "Route23South",
+      "group": 16,
+      "number": 3,
+      "objects": 5,
+      "approved_indices": []
+    },
+    {
+      "map": "IndigoPlateau",
+      "group": 16,
+      "number": 4,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "IndigoPlateauPokecenter1F",
+      "group": 16,
+      "number": 5,
+      "objects": 8,
+      "approved_indices": [
+        7,
+        8
+      ]
+    },
+    {
+      "map": "Route26",
+      "group": 16,
+      "number": 6,
+      "objects": 11,
+      "approved_indices": []
+    },
+    {
+      "map": "Route27",
+      "group": 16,
+      "number": 7,
+      "objects": 12,
+      "approved_indices": []
+    },
+    {
+      "map": "Route28",
+      "group": 16,
+      "number": 8,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "WillsRoom",
+      "group": 16,
+      "number": 9,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "KogasRoom",
+      "group": 16,
+      "number": 10,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "BrunosRoom",
+      "group": 16,
+      "number": 11,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "KarensRoom",
+      "group": 16,
+      "number": 12,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "LancesRoom",
+      "group": 16,
+      "number": 13,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "HallOfFame",
+      "group": 16,
+      "number": 14,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "BellchimeTrail",
+      "group": 16,
+      "number": 15,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "Route12South",
+      "group": 17,
+      "number": 1,
+      "objects": 13,
+      "approved_indices": [
+        9
+      ]
+    },
+    {
+      "map": "Route13",
+      "group": 17,
+      "number": 2,
+      "objects": 13,
+      "approved_indices": []
+    },
+    {
+      "map": "Route14",
+      "group": 17,
+      "number": 3,
+      "objects": 13,
+      "approved_indices": []
+    },
+    {
+      "map": "Route15",
+      "group": 17,
+      "number": 4,
+      "objects": 12,
+      "approved_indices": []
+    },
+    {
+      "map": "Route18East",
+      "group": 17,
+      "number": 5,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "FuchsiaCity",
+      "group": 17,
+      "number": 6,
+      "objects": 15,
+      "approved_indices": [
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "map": "FuchsiaMart",
+      "group": 17,
+      "number": 7,
+      "objects": 3,
+      "approved_indices": [
+        2,
+        3
+      ]
+    },
+    {
+      "map": "FuchsiaGym",
+      "group": 17,
+      "number": 8,
+      "objects": 6,
+      "approved_indices": [
+        6
+      ]
+    },
+    {
+      "map": "FuchsiaBillSpeechHouse",
+      "group": 17,
+      "number": 9,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "FuchsiaSafariBallHouse",
+      "group": 17,
+      "number": 10,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "FuchsiaPokeCenter1F",
+      "group": 17,
+      "number": 11,
+      "objects": 4,
+      "approved_indices": [
+        3,
+        4
+      ]
+    },
+    {
+      "map": "SafariZoneWardensHome",
+      "group": 17,
+      "number": 12,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "SafariZoneFuchsiaGate",
+      "group": 17,
+      "number": 13,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "Route12Gate",
+      "group": 17,
+      "number": 14,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "Route12Gate2F",
+      "group": 17,
+      "number": 15,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "Route15FuchsiaGate",
+      "group": 17,
+      "number": 16,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "Route15FuchsiaGate2F",
+      "group": 17,
+      "number": 17,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "Route19FuchsiaGate",
+      "group": 17,
+      "number": 18,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "Route12SuperRodHouse",
+      "group": 17,
+      "number": 19,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "LuckyIsland",
+      "group": 17,
+      "number": 20,
+      "objects": 13,
+      "approved_indices": [
+        13
+      ]
+    },
+    {
+      "map": "Route14LuckyIslandDual",
+      "group": 17,
+      "number": 21,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "FuchsiaAquarium1F",
+      "group": 17,
+      "number": 22,
+      "objects": 13,
+      "approved_indices": [
+        8,
+        9,
+        10,
+        11,
+        12,
+        13
+      ]
+    },
+    {
+      "map": "FuchsiaAquarium2F",
+      "group": 17,
+      "number": 23,
+      "objects": 11,
+      "approved_indices": [
+        9,
+        10,
+        11
+      ]
+    },
+    {
+      "map": "Route8",
+      "group": 18,
+      "number": 1,
+      "objects": 15,
+      "approved_indices": [
+        14,
+        15
+      ]
+    },
+    {
+      "map": "Route8SaffronGate",
+      "group": 18,
+      "number": 2,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "Route10South",
+      "group": 18,
+      "number": 3,
+      "objects": 4,
+      "approved_indices": []
+    },
+    {
+      "map": "Route12North",
+      "group": 18,
+      "number": 4,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "LavenderTown",
+      "group": 18,
+      "number": 5,
+      "objects": 8,
+      "approved_indices": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "map": "LavenderPokeCenter1F",
+      "group": 18,
+      "number": 6,
+      "objects": 4,
+      "approved_indices": [
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "map": "MrFujisHouse",
+      "group": 18,
+      "number": 7,
+      "objects": 5,
+      "approved_indices": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "map": "LavenderTownSpeechHouse",
+      "group": 18,
+      "number": 8,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "LavenderNameRater",
+      "group": 18,
+      "number": 9,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "LavenderMart",
+      "group": 18,
+      "number": 10,
+      "objects": 3,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "SoulHouse",
+      "group": 18,
+      "number": 11,
+      "objects": 5,
+      "approved_indices": [
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "map": "SoulHouseB1F",
+      "group": 18,
+      "number": 12,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "SoulHouseB2F",
+      "group": 18,
+      "number": 13,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "SoulHouseB3F",
+      "group": 18,
+      "number": 14,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "LavRadioTower1F",
+      "group": 18,
+      "number": 15,
+      "objects": 5,
+      "approved_indices": [
+        1,
+        2,
+        3,
+        5
+      ]
+    },
+    {
+      "map": "LavRadioTower2F",
+      "group": 18,
+      "number": 16,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "LavRadioTower3F",
+      "group": 18,
+      "number": 17,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "LavRadioTower4F",
+      "group": 18,
+      "number": 18,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "LavRadioTower5F",
+      "group": 18,
+      "number": 19,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "HauntedRadioTower2F",
+      "group": 18,
+      "number": 20,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "HauntedRadioTower3F",
+      "group": 18,
+      "number": 21,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "HauntedRadioTower4F",
+      "group": 18,
+      "number": 22,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "HauntedRadioTower5F",
+      "group": 18,
+      "number": 23,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "HauntedRadioTower6F",
+      "group": 18,
+      "number": 24,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "Route16West",
+      "group": 18,
+      "number": 25,
+      "objects": 10,
+      "approved_indices": []
+    },
+    {
+      "map": "SilverCaveOutside",
+      "group": 19,
+      "number": 1,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "SilverCavePokeCenter1F",
+      "group": 19,
+      "number": 2,
+      "objects": 3,
+      "approved_indices": [
+        3
+      ]
+    },
+    {
+      "map": "Route28FamousSpeechHouse",
+      "group": 19,
+      "number": 3,
+      "objects": 2,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "NavelRockOutside",
+      "group": 19,
+      "number": 4,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "NavelRockInside",
+      "group": 19,
+      "number": 5,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "NavelRockRoof",
+      "group": 19,
+      "number": 6,
+      "objects": 5,
+      "approved_indices": []
+    },
+    {
+      "map": "FarawayIslandNorth",
+      "group": 19,
+      "number": 7,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "FarawayIslandSouth",
+      "group": 19,
+      "number": 8,
+      "objects": 7,
+      "approved_indices": []
+    },
+    {
+      "map": "FarawayJungle",
+      "group": 19,
+      "number": 9,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "SeagallopFerryVermilionGate",
+      "group": 19,
+      "number": 10,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "SeagallopFerryNavelGate",
+      "group": 19,
+      "number": 11,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "SeagallopFerryShamoutiGate",
+      "group": 19,
+      "number": 12,
+      "objects": 2,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "PokeCenter2F",
+      "group": 20,
+      "number": 1,
+      "objects": 3,
+      "approved_indices": [
+        3
+      ]
+    },
+    {
+      "map": "TradeCenter",
+      "group": 20,
+      "number": 2,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "Colosseum",
+      "group": 20,
+      "number": 3,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "HiddenTreeGrotto",
+      "group": 20,
+      "number": 4,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "HiddenCaveGrotto",
+      "group": 20,
+      "number": 5,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "Route7",
+      "group": 21,
+      "number": 1,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "Route16East",
+      "group": 21,
+      "number": 2,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "Route17North",
+      "group": 21,
+      "number": 3,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "Route17South",
+      "group": 21,
+      "number": 4,
+      "objects": 12,
+      "approved_indices": [
+        9
+      ]
+    },
+    {
+      "map": "Route18West",
+      "group": 21,
+      "number": 5,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "UragaChannelEast",
+      "group": 21,
+      "number": 6,
+      "objects": 5,
+      "approved_indices": []
+    },
+    {
+      "map": "CeladonCity",
+      "group": 21,
+      "number": 7,
+      "objects": 15,
+      "approved_indices": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        13
+      ]
+    },
+    {
+      "map": "CeladonDeptStore1F",
+      "group": 21,
+      "number": 8,
+      "objects": 3,
+      "approved_indices": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "map": "CeladonDeptStore2F",
+      "group": 21,
+      "number": 9,
+      "objects": 4,
+      "approved_indices": [
+        3,
+        4
+      ]
+    },
+    {
+      "map": "CeladonDeptStore3F",
+      "group": 21,
+      "number": 10,
+      "objects": 9,
+      "approved_indices": [
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "map": "CeladonDeptStore4F",
+      "group": 21,
+      "number": 11,
+      "objects": 4,
+      "approved_indices": [
+        2,
+        3
+      ]
+    },
+    {
+      "map": "CeladonDeptStore5F",
+      "group": 21,
+      "number": 12,
+      "objects": 5,
+      "approved_indices": [
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "map": "CeladonDeptStoreRoof",
+      "group": 21,
+      "number": 13,
+      "objects": 4,
+      "approved_indices": [
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "map": "CeladonDeptStoreElevator",
+      "group": 21,
+      "number": 14,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "CeladonMansion1F",
+      "group": 21,
+      "number": 15,
+      "objects": 4,
+      "approved_indices": [
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "map": "CeladonMansion2F",
+      "group": 21,
+      "number": 16,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "CeladonMansion3F",
+      "group": 21,
+      "number": 17,
+      "objects": 4,
+      "approved_indices": [
+        3,
+        4
+      ]
+    },
+    {
+      "map": "CeladonMansionRoof",
+      "group": 21,
+      "number": 18,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "CeladonMansionRoofHouse",
+      "group": 21,
+      "number": 19,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "CeladonPokeCenter1F",
+      "group": 21,
+      "number": 20,
+      "objects": 5,
+      "approved_indices": [
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "map": "CeladonGameCorner",
+      "group": 21,
+      "number": 21,
+      "objects": 9,
+      "approved_indices": [
+        2,
+        3,
+        4,
+        5,
+        7,
+        8
+      ]
+    },
+    {
+      "map": "CeladonGameCornerPrizeRoom",
+      "group": 21,
+      "number": 22,
+      "objects": 4,
+      "approved_indices": [
+        3,
+        4
+      ]
+    },
+    {
+      "map": "CeladonGym",
+      "group": 21,
+      "number": 23,
+      "objects": 7,
+      "approved_indices": []
+    },
+    {
+      "map": "CeladonCafe",
+      "group": 21,
+      "number": 24,
+      "objects": 7,
+      "approved_indices": [
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    {
+      "map": "CeladonChiefHouse",
+      "group": 21,
+      "number": 25,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "CeladonHotel1F",
+      "group": 21,
+      "number": 26,
+      "objects": 4,
+      "approved_indices": [
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "map": "CeladonHotel2F",
+      "group": 21,
+      "number": 27,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "CeladonHotelRoom1",
+      "group": 21,
+      "number": 28,
+      "objects": 3,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "CeladonHotelRoom2",
+      "group": 21,
+      "number": 29,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "CeladonHotelRoom3",
+      "group": 21,
+      "number": 30,
+      "objects": 2,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "CeladonHotelPool",
+      "group": 21,
+      "number": 31,
+      "objects": 5,
+      "approved_indices": [
+        1,
+        2,
+        4,
+        5
+      ]
+    },
+    {
+      "map": "EusinesHouse",
+      "group": 21,
+      "number": 32,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "PsychicInversHouse",
+      "group": 21,
+      "number": 33,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "Route16FuchsiaSpeechHouse",
+      "group": 21,
+      "number": 34,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "Route16Gate",
+      "group": 21,
+      "number": 35,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "Route1617Gate",
+      "group": 21,
+      "number": 36,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "Route1617Gate2F",
+      "group": 21,
+      "number": 37,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "Route7SaffronGate",
+      "group": 21,
+      "number": 38,
+      "objects": 2,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "Route18Gate",
+      "group": 21,
+      "number": 39,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "Route18Gate2F",
+      "group": 21,
+      "number": 40,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "CeladonHomeDecorStore1F",
+      "group": 21,
+      "number": 41,
+      "objects": 6,
+      "approved_indices": [
+        1,
+        6
+      ]
+    },
+    {
+      "map": "CeladonHomeDecorStore2F",
+      "group": 21,
+      "number": 42,
+      "objects": 2,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "CeladonHomeDecorStore3F",
+      "group": 21,
+      "number": 43,
+      "objects": 4,
+      "approved_indices": [
+        3,
+        4
+      ]
+    },
+    {
+      "map": "CeladonHomeDecorStore4F",
+      "group": 21,
+      "number": 44,
+      "objects": 9,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "CeladonUniversity1F",
+      "group": 21,
+      "number": 45,
+      "objects": 8,
+      "approved_indices": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "map": "CeladonUniversity2F",
+      "group": 21,
+      "number": 46,
+      "objects": 7,
+      "approved_indices": [
+        2,
+        4,
+        5,
+        6,
+        7
+      ]
+    },
+    {
+      "map": "CeladonUniversityLibrary1F",
+      "group": 21,
+      "number": 47,
+      "objects": 8,
+      "approved_indices": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        7,
+        8
+      ]
+    },
+    {
+      "map": "CeladonUniversityLibrary2F",
+      "group": 21,
+      "number": 48,
+      "objects": 7,
+      "approved_indices": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    {
+      "map": "CeladonUniversityPrincipalsOffice",
+      "group": 21,
+      "number": 49,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "CeladonUniversityWestwoodsOffice",
+      "group": 21,
+      "number": 50,
+      "objects": 2,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "CeladonUniversityWillowsOffice",
+      "group": 21,
+      "number": 51,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "CeladonUniversityNursesOffice",
+      "group": 21,
+      "number": 52,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "CeladonUniversityLounge",
+      "group": 21,
+      "number": 53,
+      "objects": 6,
+      "approved_indices": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    {
+      "map": "CeladonUniversityCafeteria",
+      "group": 21,
+      "number": 54,
+      "objects": 7,
+      "approved_indices": [
+        2,
+        3,
+        5
+      ]
+    },
+    {
+      "map": "CeladonUniversityHyperTestRoom",
+      "group": 21,
+      "number": 55,
+      "objects": 4,
+      "approved_indices": [
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "map": "CeladonUniversityPool",
+      "group": 21,
+      "number": 56,
+      "objects": 5,
+      "approved_indices": [
+        2,
+        4
+      ]
+    },
+    {
+      "map": "CeladonUniversityClassroom1",
+      "group": 21,
+      "number": 57,
+      "objects": 7,
+      "approved_indices": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    },
+    {
+      "map": "CeladonUniversityClassroom2",
+      "group": 21,
+      "number": 58,
+      "objects": 6,
+      "approved_indices": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    {
+      "map": "CeladonUniversityClassroom3",
+      "group": 21,
+      "number": 59,
+      "objects": 5,
+      "approved_indices": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "map": "CeladonUniversityClassroom4",
+      "group": 21,
+      "number": 60,
+      "objects": 7,
+      "approved_indices": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    {
+      "map": "CeladonOldManSpeechHouse",
+      "group": 21,
+      "number": 61,
+      "objects": 2,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "CeladonDevelopmentSpeechHouse",
+      "group": 21,
+      "number": 62,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "RocketHideoutB1F",
+      "group": 21,
+      "number": 63,
+      "objects": 7,
+      "approved_indices": []
+    },
+    {
+      "map": "RocketHideoutB2F",
+      "group": 21,
+      "number": 64,
+      "objects": 5,
+      "approved_indices": []
+    },
+    {
+      "map": "RocketHideoutB3F",
+      "group": 21,
+      "number": 65,
+      "objects": 4,
+      "approved_indices": []
+    },
+    {
+      "map": "RocketHideoutB4F",
+      "group": 21,
+      "number": 66,
+      "objects": 10,
+      "approved_indices": []
+    },
+    {
+      "map": "RocketHideoutElevator",
+      "group": 21,
+      "number": 67,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "Route41",
+      "group": 22,
+      "number": 1,
+      "objects": 13,
+      "approved_indices": []
+    },
+    {
+      "map": "CianwoodCity",
+      "group": 22,
+      "number": 2,
+      "objects": 15,
+      "approved_indices": [
+        4,
+        5,
+        12,
+        13,
+        14,
+        15
+      ]
+    },
+    {
+      "map": "ManiasHouse",
+      "group": 22,
+      "number": 3,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "CianwoodGym",
+      "group": 22,
+      "number": 4,
+      "objects": 12,
+      "approved_indices": [
+        12
+      ]
+    },
+    {
+      "map": "CianwoodPokeCenter1F",
+      "group": 22,
+      "number": 5,
+      "objects": 5,
+      "approved_indices": [
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "map": "CianwoodPharmacy",
+      "group": 22,
+      "number": 6,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "CianwoodCityPhotoStudio",
+      "group": 22,
+      "number": 7,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "CianwoodLugiaSpeechHouse",
+      "group": 22,
+      "number": 8,
+      "objects": 4,
+      "approved_indices": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "map": "MoveManiacsHouse",
+      "group": 22,
+      "number": 9,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "Route2South",
+      "group": 23,
+      "number": 1,
+      "objects": 6,
+      "approved_indices": []
+    },
+    {
+      "map": "ViridianCity",
+      "group": 23,
+      "number": 2,
+      "objects": 8,
+      "approved_indices": [
+        2,
+        3,
+        5,
+        6
+      ]
+    },
+    {
+      "map": "ViridianGym",
+      "group": 23,
+      "number": 3,
+      "objects": 8,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "ViridianNicknameSpeechHouse",
+      "group": 23,
+      "number": 4,
+      "objects": 4,
+      "approved_indices": [
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "map": "ViridianSchoolHouse",
+      "group": 23,
+      "number": 5,
+      "objects": 6,
+      "approved_indices": [
+        1,
+        2,
+        3,
+        5,
+        6
+      ]
+    },
+    {
+      "map": "TrainerHouse1F",
+      "group": 23,
+      "number": 6,
+      "objects": 5,
+      "approved_indices": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "map": "TrainerHouseB1F",
+      "group": 23,
+      "number": 7,
+      "objects": 2,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "ViridianMart",
+      "group": 23,
+      "number": 8,
+      "objects": 3,
+      "approved_indices": [
+        2,
+        3
+      ]
+    },
+    {
+      "map": "ViridianPokeCenter1F",
+      "group": 23,
+      "number": 9,
+      "objects": 4,
+      "approved_indices": [
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "map": "Route2NuggetSpeechHouse",
+      "group": 23,
+      "number": 10,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "Route2Gate",
+      "group": 23,
+      "number": 11,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "PokemonLeagueGate",
+      "group": 23,
+      "number": 12,
+      "objects": 3,
+      "approved_indices": [
+        2,
+        3
+      ]
+    },
+    {
+      "map": "ViridianForest",
+      "group": 23,
+      "number": 13,
+      "objects": 7,
+      "approved_indices": []
+    },
+    {
+      "map": "ViridianForestViridianGate",
+      "group": 23,
+      "number": 14,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "ViridianForestPewterGate",
+      "group": 23,
+      "number": 15,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "Route1ViridianGate",
+      "group": 23,
+      "number": 16,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "Route29",
+      "group": 24,
+      "number": 1,
+      "objects": 10,
+      "approved_indices": [
+        3,
+        4,
+        8
+      ]
+    },
+    {
+      "map": "NewBarkTown",
+      "group": 24,
+      "number": 2,
+      "objects": 5,
+      "approved_indices": [
+        4,
+        5
+      ]
+    },
+    {
+      "map": "ElmsLab",
+      "group": 24,
+      "number": 3,
+      "objects": 7,
+      "approved_indices": []
+    },
+    {
+      "map": "PlayersHouse1F",
+      "group": 24,
+      "number": 4,
+      "objects": 6,
+      "approved_indices": []
+    },
+    {
+      "map": "PlayersHouse2F",
+      "group": 24,
+      "number": 5,
+      "objects": 4,
+      "approved_indices": []
+    },
+    {
+      "map": "PlayersNeighborsHouse",
+      "group": 24,
+      "number": 6,
+      "objects": 3,
+      "approved_indices": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "map": "LyrasHouse1F",
+      "group": 24,
+      "number": 7,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "LyrasHouse2F",
+      "group": 24,
+      "number": 8,
+      "objects": 3,
+      "approved_indices": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "map": "ElmsHouse",
+      "group": 24,
+      "number": 9,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "Route26HealSpeechHouse",
+      "group": 24,
+      "number": 10,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "Route26DayofWeekSiblingsHouse",
+      "group": 24,
+      "number": 11,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "Route27RestHouse",
+      "group": 24,
+      "number": 12,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "Route2946Gate",
+      "group": 24,
+      "number": 13,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "FightingDojo",
+      "group": 25,
+      "number": 1,
+      "objects": 4,
+      "approved_indices": [
+        4
+      ]
+    },
+    {
+      "map": "SaffronGym",
+      "group": 25,
+      "number": 2,
+      "objects": 9,
+      "approved_indices": [
+        9
+      ]
+    },
+    {
+      "map": "SaffronMart",
+      "group": 25,
+      "number": 3,
+      "objects": 3,
+      "approved_indices": [
+        3
+      ]
+    },
+    {
+      "map": "SaffronPokeCenter1F",
+      "group": 25,
+      "number": 4,
+      "objects": 4,
+      "approved_indices": [
+        2,
+        3
+      ]
+    },
+    {
+      "map": "MrPsychicsHouse",
+      "group": 25,
+      "number": 5,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "SaffronTrainStation",
+      "group": 25,
+      "number": 6,
+      "objects": 4,
+      "approved_indices": [
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "map": "SilphCo1F",
+      "group": 25,
+      "number": 7,
+      "objects": 4,
+      "approved_indices": [
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "map": "SilphCo2F",
+      "group": 25,
+      "number": 8,
+      "objects": 4,
+      "approved_indices": [
+        1,
+        2,
+        4
+      ]
+    },
+    {
+      "map": "SilphCo3F",
+      "group": 25,
+      "number": 9,
+      "objects": 6,
+      "approved_indices": [
+        2,
+        3,
+        5
+      ]
+    },
+    {
+      "map": "CopycatsHouse1F",
+      "group": 25,
+      "number": 10,
+      "objects": 3,
+      "approved_indices": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "map": "CopycatsHouse2F",
+      "group": 25,
+      "number": 11,
+      "objects": 6,
+      "approved_indices": [
+        6
+      ]
+    },
+    {
+      "map": "Route5",
+      "group": 25,
+      "number": 12,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "Route5UndergroundPathEntrance",
+      "group": 25,
+      "number": 13,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "Route5SaffronCityGate",
+      "group": 25,
+      "number": 14,
+      "objects": 2,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "Route5CleanseTagSpeechHouse",
+      "group": 25,
+      "number": 15,
+      "objects": 2,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "PokemonTrainerFanClub",
+      "group": 25,
+      "number": 16,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "SaffronHitmontopKidHouse",
+      "group": 25,
+      "number": 17,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "SaffronBookSpeechHouse",
+      "group": 25,
+      "number": 18,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "SaffronOrreSpeechHouse",
+      "group": 25,
+      "number": 19,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "SaffronRichSpeechHouse",
+      "group": 25,
+      "number": 20,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "Route16North",
+      "group": 25,
+      "number": 21,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "Route30",
+      "group": 26,
+      "number": 1,
+      "objects": 13,
+      "approved_indices": [
+        7,
+        8
+      ]
+    },
+    {
+      "map": "Route31",
+      "group": 26,
+      "number": 2,
+      "objects": 9,
+      "approved_indices": [
+        3
+      ]
+    },
+    {
+      "map": "CherrygroveBay",
+      "group": 26,
+      "number": 3,
+      "objects": 15,
+      "approved_indices": [
+        3
+      ]
+    },
+    {
+      "map": "CherrygroveCity",
+      "group": 26,
+      "number": 4,
+      "objects": 6,
+      "approved_indices": [
+        3,
+        4,
+        6
+      ]
+    },
+    {
+      "map": "CherrygroveMart",
+      "group": 26,
+      "number": 5,
+      "objects": 3,
+      "approved_indices": [
+        2,
+        3
+      ]
+    },
+    {
+      "map": "CherrygrovePokeCenter1F",
+      "group": 26,
+      "number": 6,
+      "objects": 5,
+      "approved_indices": [
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "map": "CherrygroveGymSpeechHouse",
+      "group": 26,
+      "number": 7,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "GuideGentsHouse",
+      "group": 26,
+      "number": 8,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "CherrygroveEvolutionSpeechHouse",
+      "group": 26,
+      "number": 9,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "Route30BerrySpeechHouse",
+      "group": 26,
+      "number": 10,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "MrPokemonsHouse",
+      "group": 26,
+      "number": 11,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "Route31VioletGate",
+      "group": 26,
+      "number": 12,
+      "objects": 2,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "CherrygroveTrainTrackDual",
+      "group": 26,
+      "number": 13,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "CliffEdgeGate",
+      "group": 27,
+      "number": 1,
+      "objects": 3,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "CliffCave",
+      "group": 27,
+      "number": 2,
+      "objects": 2,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "Route47",
+      "group": 27,
+      "number": 3,
+      "objects": 15,
+      "approved_indices": [
+        11
+      ]
+    },
+    {
+      "map": "Route48",
+      "group": 27,
+      "number": 4,
+      "objects": 5,
+      "approved_indices": []
+    },
+    {
+      "map": "QuietCave1F",
+      "group": 27,
+      "number": 5,
+      "objects": 8,
+      "approved_indices": []
+    },
+    {
+      "map": "QuietCaveB1F",
+      "group": 27,
+      "number": 6,
+      "objects": 7,
+      "approved_indices": []
+    },
+    {
+      "map": "QuietCaveB2F",
+      "group": 27,
+      "number": 7,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "QuietCaveB3F",
+      "group": 27,
+      "number": 8,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "YellowForestGate",
+      "group": 27,
+      "number": 9,
+      "objects": 4,
+      "approved_indices": [
+        1,
+        3
+      ]
+    },
+    {
+      "map": "YellowForest",
+      "group": 27,
+      "number": 10,
+      "objects": 14,
+      "approved_indices": [
+        5
+      ]
+    },
+    {
+      "map": "Route9",
+      "group": 28,
+      "number": 1,
+      "objects": 9,
+      "approved_indices": []
+    },
+    {
+      "map": "Route10North",
+      "group": 28,
+      "number": 2,
+      "objects": 11,
+      "approved_indices": []
+    },
+    {
+      "map": "DimCave1F",
+      "group": 28,
+      "number": 3,
+      "objects": 5,
+      "approved_indices": []
+    },
+    {
+      "map": "DimCave2F",
+      "group": 28,
+      "number": 4,
+      "objects": 7,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "DimCave3F",
+      "group": 28,
+      "number": 5,
+      "objects": 9,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "DimCave4F",
+      "group": 28,
+      "number": 6,
+      "objects": 8,
+      "approved_indices": [
+        2,
+        5
+      ]
+    },
+    {
+      "map": "DimCave5F",
+      "group": 28,
+      "number": 7,
+      "objects": 8,
+      "approved_indices": []
+    },
+    {
+      "map": "GoldenrodHarbor",
+      "group": 29,
+      "number": 1,
+      "objects": 14,
+      "approved_indices": [
+        9,
+        12
+      ]
+    },
+    {
+      "map": "GoldenrodHarborGate",
+      "group": 29,
+      "number": 2,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "RuinsOfAlphOutside",
+      "group": 30,
+      "number": 1,
+      "objects": 14,
+      "approved_indices": [
+        6,
+        7
+      ]
+    },
+    {
+      "map": "RuinsOfAlphHoOhChamber",
+      "group": 30,
+      "number": 2,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "RuinsOfAlphKabutoChamber",
+      "group": 30,
+      "number": 3,
+      "objects": 2,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "RuinsOfAlphOmanyteChamber",
+      "group": 30,
+      "number": 4,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "RuinsOfAlphAerodactylChamber",
+      "group": 30,
+      "number": 5,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "RuinsOfAlphEntranceChamber",
+      "group": 30,
+      "number": 6,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "RuinsOfAlphInnerChamber",
+      "group": 30,
+      "number": 7,
+      "objects": 4,
+      "approved_indices": [
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "map": "RuinsOfAlphResearchCenter",
+      "group": 30,
+      "number": 8,
+      "objects": 4,
+      "approved_indices": []
+    },
+    {
+      "map": "RuinsOfAlphHoOhItemRoom",
+      "group": 30,
+      "number": 9,
+      "objects": 4,
+      "approved_indices": []
+    },
+    {
+      "map": "RuinsOfAlphKabutoItemRoom",
+      "group": 30,
+      "number": 10,
+      "objects": 4,
+      "approved_indices": []
+    },
+    {
+      "map": "RuinsOfAlphOmanyteItemRoom",
+      "group": 30,
+      "number": 11,
+      "objects": 4,
+      "approved_indices": []
+    },
+    {
+      "map": "RuinsOfAlphAerodactylItemRoom",
+      "group": 30,
+      "number": 12,
+      "objects": 4,
+      "approved_indices": []
+    },
+    {
+      "map": "RuinsOfAlphHoOhWordRoom",
+      "group": 30,
+      "number": 13,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "RuinsOfAlphKabutoWordRoom",
+      "group": 30,
+      "number": 14,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "RuinsOfAlphOmanyteWordRoom",
+      "group": 30,
+      "number": 15,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "RuinsOfAlphAerodactylWordRoom",
+      "group": 30,
+      "number": 16,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "RuinsOfAlphSinjohChamber",
+      "group": 30,
+      "number": 17,
+      "objects": 4,
+      "approved_indices": []
+    },
+    {
+      "map": "Route22Past",
+      "group": 30,
+      "number": 18,
+      "objects": 4,
+      "approved_indices": []
+    },
+    {
+      "map": "ShamoutiIsland",
+      "group": 31,
+      "number": 1,
+      "objects": 9,
+      "approved_indices": [
+        5,
+        6,
+        7
+      ]
+    },
+    {
+      "map": "BeautifulBeach",
+      "group": 31,
+      "number": 2,
+      "objects": 9,
+      "approved_indices": []
+    },
+    {
+      "map": "WarmBeach",
+      "group": 31,
+      "number": 3,
+      "objects": 7,
+      "approved_indices": [
+        3,
+        4,
+        7
+      ]
+    },
+    {
+      "map": "ShamoutiCoast",
+      "group": 31,
+      "number": 4,
+      "objects": 9,
+      "approved_indices": [
+        8
+      ]
+    },
+    {
+      "map": "RockyBeach",
+      "group": 31,
+      "number": 5,
+      "objects": 11,
+      "approved_indices": [
+        10,
+        11
+      ]
+    },
+    {
+      "map": "ShamoutiTunnel",
+      "group": 31,
+      "number": 6,
+      "objects": 7,
+      "approved_indices": []
+    },
+    {
+      "map": "NoisyForest",
+      "group": 31,
+      "number": 7,
+      "objects": 15,
+      "approved_indices": [
+        9,
+        10
+      ]
+    },
+    {
+      "map": "ShamoutiPokeCenter1F",
+      "group": 31,
+      "number": 8,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "ShamoutiHotel1F",
+      "group": 31,
+      "number": 9,
+      "objects": 5,
+      "approved_indices": [
+        1,
+        3,
+        5
+      ]
+    },
+    {
+      "map": "ShamoutiHotel2F",
+      "group": 31,
+      "number": 10,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "ShamoutiHotel3F",
+      "group": 31,
+      "number": 11,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "ShamoutiHotelRoom2A",
+      "group": 31,
+      "number": 12,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "ShamoutiHotelRoom2B",
+      "group": 31,
+      "number": 13,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "ShamoutiHotelRoom3B",
+      "group": 31,
+      "number": 14,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "ShamoutiHotelRoom3C",
+      "group": 31,
+      "number": 15,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "ShamoutiHotelRestaurant",
+      "group": 31,
+      "number": 16,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "ShamoutiTouristCenter",
+      "group": 31,
+      "number": 17,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "ShamoutiMerchant",
+      "group": 31,
+      "number": 18,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "ShamoutiHouse",
+      "group": 31,
+      "number": 19,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "BeautifulBeachVilla",
+      "group": 31,
+      "number": 20,
+      "objects": 5,
+      "approved_indices": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "map": "WarmBeachShack",
+      "group": 31,
+      "number": 21,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "WarmBeachHouse",
+      "group": 31,
+      "number": 22,
+      "objects": 3,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "RockyBeachHouse",
+      "group": 31,
+      "number": 23,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "FireIsland",
+      "group": 31,
+      "number": 24,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "FireIslandRoof",
+      "group": 31,
+      "number": 25,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "IceIsland",
+      "group": 31,
+      "number": 26,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "IceIslandRoof",
+      "group": 31,
+      "number": 27,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "LightningIsland",
+      "group": 31,
+      "number": 28,
+      "objects": 14,
+      "approved_indices": []
+    },
+    {
+      "map": "LightningIslandRoof",
+      "group": 31,
+      "number": 29,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "SafariZoneHub",
+      "group": 32,
+      "number": 1,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "SafariZoneEast",
+      "group": 32,
+      "number": 2,
+      "objects": 4,
+      "approved_indices": []
+    },
+    {
+      "map": "SafariZoneNorth",
+      "group": 32,
+      "number": 3,
+      "objects": 6,
+      "approved_indices": []
+    },
+    {
+      "map": "SafariZoneWest",
+      "group": 32,
+      "number": 4,
+      "objects": 4,
+      "approved_indices": []
+    },
+    {
+      "map": "SafariZoneHubRestHouse",
+      "group": 32,
+      "number": 5,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "SafariZoneEastRestHouse",
+      "group": 32,
+      "number": 6,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "SafariZoneNorthRestHouse",
+      "group": 32,
+      "number": 7,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "SafariZoneWestRestHouse1",
+      "group": 32,
+      "number": 8,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "SafariZoneWestRestHouse2",
+      "group": 32,
+      "number": 9,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "ValenciaIsland",
+      "group": 33,
+      "number": 1,
+      "objects": 2,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "Route49",
+      "group": 33,
+      "number": 2,
+      "objects": 11,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "IvysLab",
+      "group": 33,
+      "number": 3,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "IvysHouse",
+      "group": 33,
+      "number": 4,
+      "objects": 2,
+      "approved_indices": [
+        1,
+        2
+      ]
+    },
+    {
+      "map": "ValenciaHouse",
+      "group": 33,
+      "number": 5,
+      "objects": 1,
+      "approved_indices": [
+        1
+      ]
+    },
+    {
+      "map": "ValenciaPort",
+      "group": 33,
+      "number": 6,
+      "objects": 2,
+      "approved_indices": [
+        2
+      ]
+    },
+    {
+      "map": "SinjohRuins",
+      "group": 34,
+      "number": 1,
+      "objects": 0,
+      "approved_indices": []
+    },
+    {
+      "map": "SinjohRuinsHouse",
+      "group": 34,
+      "number": 2,
+      "objects": 4,
+      "approved_indices": [
+        2,
+        4
+      ]
+    },
+    {
+      "map": "MystriStage",
+      "group": 34,
+      "number": 3,
+      "objects": 3,
+      "approved_indices": []
+    },
+    {
+      "map": "EmbeddedTower",
+      "group": 34,
+      "number": 4,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "SaffronCity",
+      "group": 35,
+      "number": 1,
+      "objects": 13,
+      "approved_indices": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        9,
+        10,
+        11,
+        12
+      ]
+    },
+    {
+      "map": "ShamoutiShrineRuins",
+      "group": 35,
+      "number": 2,
+      "objects": 4,
+      "approved_indices": [
+        2,
+        3
+      ]
+    },
+    {
+      "map": "RuggedRoadNorth",
+      "group": 36,
+      "number": 1,
+      "objects": 8,
+      "approved_indices": [
+        4
+      ]
+    },
+    {
+      "map": "RuggedRoadSouth",
+      "group": 36,
+      "number": 2,
+      "objects": 12,
+      "approved_indices": [
+        6
+      ]
+    },
+    {
+      "map": "SnowtopMountainInside",
+      "group": 36,
+      "number": 3,
+      "objects": 5,
+      "approved_indices": []
+    },
+    {
+      "map": "SnowtopMountainOutside",
+      "group": 36,
+      "number": 4,
+      "objects": 12,
+      "approved_indices": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ]
+    },
+    {
+      "map": "SnowtopPokeCenter1F",
+      "group": 36,
+      "number": 5,
+      "objects": 1,
+      "approved_indices": []
+    },
+    {
+      "map": "Route39RuggedRoadGate",
+      "group": 36,
+      "number": 6,
+      "objects": 2,
+      "approved_indices": []
+    },
+    {
+      "map": "EcruteakShrineOutside",
+      "group": 37,
+      "number": 1,
+      "objects": 3,
+      "approved_indices": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "map": "EcruteakShrineInside",
+      "group": 37,
+      "number": 2,
+      "objects": 5,
+      "approved_indices": [
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "map": "CeruleanCape",
+      "group": 38,
+      "number": 1,
+      "objects": 17,
+      "approved_indices": [
+        13,
+        14
+      ]
+    },
+    {
+      "map": "Route35",
+      "group": 39,
+      "number": 1,
+      "objects": 13,
+      "approved_indices": []
+    },
+    {
+      "map": "Route36",
+      "group": 39,
+      "number": 2,
+      "objects": 11,
+      "approved_indices": [
+        8
+      ]
+    }
+  ]
+}

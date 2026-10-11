@@ -2,6 +2,7 @@
 """Compare completed build layouts and enforce dedicated mobile placement."""
 import argparse
 import json
+import re
 from pathlib import Path
 from probe_emulator import BASELINE_SHA256, digest, read_symbols, require
 
@@ -27,23 +28,55 @@ buffers = new["wMobileBufferEnd"][1] - new["wMobileBufferStart"][1]
 code = new["MobileCodeEnd"][1] - new["MobileCodeStart"][1]
 require(resident <= 128 and buffers <= 1536 and code <= 8192, "Mobile allocation exceeds caps")
 avatar_bytes = new["wMobileAvatarCacheEnd"][1] - new["wMobileAvatarCache1"][1]
-require(new["wMobileAvatarCache1"] == (2, 0xdac0) and avatar_bytes == 768, "Avatar cache placement changed")
-require(new["wMobileBufferEnd"][1] <= 0xdac0 and new["wMobileAvatarCacheEnd"][1] <= 0xe000, "Avatar cache overlaps retained data")
-render_bytes = new["wMobileRenderMaskEnd"][1] - new["wMobileRenderMapMask"][1]
-scanline_bytes = new["wMobileScanlineDeltaEnd"][1] - new["wMobileScanlineDelta"][1]
-require(new["wMobileRenderMapMask"] == (2, 0xddc0) and render_bytes == 45,
-        "Render cache placement changed")
-require(new["wMobileScanlineDelta"] == (2, 0xde00) and scanline_bytes == 145,
-        "Scanline scratch placement changed")
-require(new["wMobileAvatarCacheEnd"][1] <= new["wMobileRenderMapMask"][1] and
-        new["wMobileRenderMaskEnd"][1] <= new["wMobileScanlineDelta"][1] and
-        new["wMobileScanlineDeltaEnd"][1] <= 0xdf00, "Render scratch overlaps retained data")
-require(new["wMobileScanlineBudget"] == new["wMobileScanlineDelta"],
-        "Sequential weather/NPC scratch no longer shares its dedicated table")
-require(new["wMobileNPCOptional"][1] - new["wMobileOAMOutput"][1] == 64,
-        "Peer output and saved prefix must each fit two four-quad avatars")
-report = {"existing_ram_symbols_checked": len(ram), "existing_ram_symbols_changed": changed,
-          "avatar_cache_bytes": avatar_bytes, "render_cache_bytes": render_bytes, "scanline_scratch_bytes": scanline_bytes, "resident_bytes": resident, "buffer_bytes": buffers, "banked_driver_bytes": code}
+require(new["wMobileAvatarCache1"] == (2, 0xda40) and avatar_bytes == 1152, "Avatar cache placement changed")
+require(new["wMobileBufferEnd"][1] <= 0xda40 and new["wMobileAvatarCacheEnd"][1] <= 0xe000, "Avatar cache overlaps retained data")
+legacy_allocations = ('wMobileRenderMapMask', 'wMobileScanlineDelta',
+                      'wMobileOAMOutput', 'wMobileNPCOptional', 'wMobileOAMSnapshot')
+require(not any(name in new for name in legacy_allocations), 'Unused legacy renderer memory returned')
+backups = new["wMobileActorBackup1"]
+tiles = new["wMobileActorTiles1"]
+require(backups == (5, 0xd562), "Native object backup placement changed")
+require(new["wMobileActorBackupEnd"][1] - backups[1] == 3 * 38,
+        "Native object/camera backup pool changed")
+require(tiles[0] == 5 and tiles[1] % 16 == 0 and
+        new["wMobileActorTilesEnd"][1] - tiles[1] == 3 * 384 and
+        new["wMobileActorTilesEnd"][1] <= 0xdd00, "Raw tile backups overlap native memory or violate GDMA alignment")
+require(not any(name.startswith("sMobile") for name in new), "Mobile state must never allocate SRAM")
+helpers = sum(new[end][1] - new[start][1] for start, end in
+              (("MobileNativeInstanceStart", "MobileNativeInstanceEnd"),
+               ("MobileNativeTileCodeStart", "MobileNativeTileCodeEnd"),
+               ("MobileNativeSaveCodeStart", "MobileNativeSaveCodeEnd")))
+policy_bytes = new["MobileNativePolicyEnd"][1] - new["MobileNativePolicyStart"][1]
+require(policy_bytes <= 1280, "Lease policy ROM budget exceeded")
+require(helpers <= 768, "Feature helper ROM budget exceeded")
+views = new['wMobileNativeOriginalsEnd'][1] - new['wMobileNativeOriginals'][1]
+private_colors = new['wMobilePrivatePalEnd'][1] - new['wMobilePrivatePalTemporary'][1]
+palette_code = new['MobileNativePaletteCodeEnd'][1] - new['MobileNativePaletteCodeStart'][1]
+require(new['wMobileNativeOriginals'] == (0, 0xcf44) and views == 121 and
+        new['wMobileResidentEnd'][1] <= 0xcf44 and new['wMobileNativeOriginalsEnd'][1] <= 0xd000,
+        'Native original views overlap resident or native memory')
+require(new['wMobilePrivatePalTemporary'] == new['wMobileActorTilesEnd'] and
+        private_colors == 53 and new['wMobilePrivatePalEnd'][1] <= 0xdd00,
+        'Private palette storage overlaps native memory')
+require(palette_code <= 1536, 'Private palette ROM budget exceeded')
+near_calls = 0
+for source in sorted((REPO / 'mobile_adapter/rom').rglob('*.asm')):
+    owner = None
+    for number, line in enumerate(source.read_text().splitlines(), 1):
+        label = re.match(r'^(Mobile\w+)::?', line)
+        if label:
+            owner = label[1]
+        call = re.match(r'^\s*(?:call|jp|jmp|jr)\s+(?:(?:nz|z|nc|c),\s*)?([A-Za-z_]\w*(?:\.\w+)?)\s*(?:;.*)?$', line)
+        if not call or owner not in new or call[1] not in new:
+            continue
+        origin, target = new[owner], new[call[1]]
+        if not (0x4000 <= origin[1] < 0x8000 and 0x4000 <= target[1] < 0x8000):
+            continue
+        near_calls += 1
+        require(origin[0] == target[0],
+                f'{source.relative_to(REPO)}:{number}: near call/jump {owner} -> {call[1]} crosses ROM banks')
+report = {"banked_near_calls_checked": near_calls, "native_original_view_bytes": views, "private_palette_bytes": private_colors, "private_palette_code_bytes": palette_code, "existing_ram_symbols_checked": len(ram), "existing_ram_symbols_changed": changed,
+          "avatar_cache_bytes": avatar_bytes, "removed_legacy_renderer_bytes": 456, "resident_bytes": resident, "buffer_bytes": buffers, "banked_driver_bytes": code, "feature_helper_bytes": helpers, "lease_policy_bytes": policy_bytes, "raw_native_tile_backup_bytes": 1152}
 for name in ("baseline", "mobile", "faithful"):
     path = getattr(args, name)
     report[name + "_rom_sha256"] = digest(path)

@@ -1,6 +1,9 @@
 ; Explicit prototype lobby controls. Select+A opens this outside MobileTick.
 MobileMenuInput::
-	call MobileTick
+	ldh a, [hJoypadDown]
+	and PAD_SELECT | PAD_B
+	cp PAD_SELECT | PAD_B
+	call z, MobileConsumeKey
 	ldh a, [hJoypadDown]
 	and PAD_SELECT | PAD_A | PAD_B
 	cp PAD_SELECT | PAD_A
@@ -60,7 +63,7 @@ MobileMenuInput::
 	push af
 	call ExitMenu
 	pop af
-	jr c, .close
+	jp c, .close
 	ld a, [wMenuCursorY]
 	cp 1
 	jr z, .connect
@@ -85,24 +88,22 @@ MobileMenuInput::
 	ld [wMobileLocalStaging + 1], a
 	xor a
 	ld hl, wMobileLocalStaging + 2
-	ld bc, 4
+	ld bc, 2 * MOBILE_PEERS
 	rst ByteFill
 	ld a, [wMobilePeerCount]
 	and a
 	jr z, .roster
 	ld a, MOBILE_WRAM_BANK
 	ldh [rWBK], a
-	ld a, [wMobilePeer1Id]
-	ld [wMobileLocalStaging + 2], a
-	ld a, [wMobilePeer1Id + 1]
-	ld [wMobileLocalStaging + 3], a
+for peer, 1, MOBILE_PEERS + 1
 	ld a, [wMobilePeerCount]
-	cp 2
-	jr nz, .bank
-	ld a, [wMobilePeer2Id]
-	ld [wMobileLocalStaging + 4], a
-	ld a, [wMobilePeer2Id + 1]
-	ld [wMobileLocalStaging + 5], a
+	cp peer
+	jr c, .bank
+	ld a, [wMobilePeer{d:peer}Id]
+	ld [wMobileLocalStaging + 2 * peer], a
+	ld a, [wMobilePeer{d:peer}Id + 1]
+	ld [wMobileLocalStaging + 2 * peer + 1], a
+endr
 .bank
 	ld a, 1
 	ldh [rWBK], a
@@ -113,6 +114,7 @@ MobileMenuInput::
 	jp .menu
 .close
 	call CloseText
+	farcall MobileNativeInvalidateHash
 	xor a
 	ld [wMobileMenuState], a
 	ld [wMobileLocalValid], a
@@ -129,7 +131,7 @@ MobileMenuInput::
 	db "CONNECT@", "PLAYERS@", "DISCONNECT@", "CANCEL@"
 .OfflineText
 	text "Mobile: offline."
-	line "Lobby: 1 (3 max)."
+	line "Lobby: 1 (4 max)."
 	done
 .ConnectingText
 	text "Mobile: connecting"
@@ -148,11 +150,10 @@ MobileMenuInput::
 	text_decimal wMobileLocalStaging + 2, 2, 5
 	text "  2: "
 	text_decimal wMobileLocalStaging + 4, 2, 5
+	para "3: "
+	text_decimal wMobileLocalStaging + 6, 2, 5
 	para "Same-map peers"
 	line "appear nearby."
-	para "Scripts, menus and"
-	line "large sprites pause"
-	cont "avatar rendering."
 	done
 .ProtectedText
 	text "Avatars paused for"

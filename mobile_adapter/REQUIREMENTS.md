@@ -40,11 +40,12 @@ Do not implement wishlist features merely because they have been recorded.
   Raising capacity may legitimately fail a documented resource assertion; an
   advertised supported value must not require hand-editing several allocators.
 
-This replaces the original three-player target. The current implementation still
-supports three total players. Four-player memory placement is demonstrated in
-[research/FOUR_PLAYER_FEASIBILITY.md](research/FOUR_PLAYER_FEASIBILITY.md); rendering,
-timing, palette handling and four-client behavior remain implementation work.
-The preferred architecture to investigate is leasing ordinary NPC object/graphics
+This replaces the original three-player target. The normal mobile build now
+supports four total players through native NPC object/graphics leases. Current
+acceptance and its finite coverage boundaries are recorded in
+[research/MILESTONE_2.md](research/MILESTONE_2.md). The original memory exploration
+remains in [research/FOUR_PLAYER_FEASIBILITY.md](research/FOUR_PLAYER_FEASIBILITY.md).
+The implemented architecture leases ordinary NPC object/graphics
 resources through the native renderer: use free slots first, then only explicitly
 replaceable NPCs, and restore them when the visible-peer demand ends. Actual resource
 release is required; hiding an NPC's OAM alone does not release its object slot or
@@ -52,8 +53,9 @@ tile allocation. Connected peers on other maps need records but no local sprite
 lease. Preserve script actors, map/event identity and NPC state. Three remote
 players require at most three such actor leases, not four extra actors.
 The user approved the protected-by-default, audited NPC allowlist and runtime
-selection/restoration policy in PLAN.md on 2026-10-11. This approves the design;
-it does not make the current render-suppression table safe for object eviction.
+selection/restoration policy in PLAN.md on 2026-10-11. The generated native lease
+allowlist is separate from the removed legacy render-suppression table. Source
+fingerprints and finite script-graph checks gate every mobile build.
 
 ## Save files and recovery
 
@@ -119,6 +121,26 @@ The user explicitly confirmed the matched-NPC performance comparison, priority
 Select+B path, ordinary user-managed transfer saving and this ROM-control boundary.
 
 ## Development experience and server assurance
+
+- **D6 MUST:** One Bridge owns a shared local session containing multiple distinct
+  emulator players, up to the four-player lobby limit. Local mode embeds the
+  native Rust lobby owner and needs no Internet service. Internet mode connects
+  that same local group to one remote lobby over a multiplexed WebSocket. A second
+  Bridge can add its own local players to that lobby. A transport connection is
+  not a player identity; disconnecting one player must not remove its siblings.
+- **D7 MUST:** The Bridge application uses Flutter for the cross-platform UI and
+  native compiled Rust for transport and embedded lobby logic. Reuse the same
+  socket-independent Rust lobby core in the native Bridge and WASM Durable Object.
+  Do not reimplement lobby rules in Dart. macOS, Linux, Windows, Android and iOS
+  are delivery targets; platform lifecycle feasibility is checked explicitly.
+- **D8 MUST:** Autonomous local tests can inject bounded latency on the server
+  transport boundary. The delay is a test configuration, never an untrusted
+  client-controlled production setting. Describe one-way delay versus round-trip
+  delay, and preserve bounded queues and independent player progress under delay.
+- **D9 EXECUTION:** Finish milestone 2 autonomously using isolated native headless
+  DoubleCherryGB instances on macOS. The unavailable phone and actual Cloudflare
+  deployment are not acceptance prerequisites for this run. Keep physical Android
+  lifecycle testing and hosted deployment as explicitly deferred follow-ups.
 
 - **D1 MUST:** Make every multiplayer component autonomously testable by an agent.
   Deterministic host tests must run without a Game Boy emulator; actual ROM
@@ -221,18 +243,21 @@ save histories is not promised. The previous durability-design blocker is remove
 
 The target is a bounded local escape path checked independently of ordinary menus,
 scripts, input suppression flags and protocol parsing. It must not wait for a
-graceful network shutdown. Select+B is a disconnect action, including an offline
-no-op; it must not toggle back into joining when state is stale or partly cleared.
-Joining can use the existing Select+A menu. Existing diagnostic key combinations
+graceful network shutdown. Select+B must disconnect every active/stale multiplayer state and must not
+toggle back into joining while teardown is pending or the chord remains held.
+The existing human development workflow also uses a fresh press to join from a
+fully offline state. Joining is available through the Select+A menu. Existing diagnostic key combinations
 must yield to disconnect when Select+B is held.
 Explicit user exit must disable automatic reconnect until the user joins again;
 temporary involuntary disconnects retain automatic recovery.
 
-The current implementation is insufficient: native `Joypad` returns early on
-input locks and `wGameLogicPaused`; some VBlank modes omit that input routine
-entirely. The current connected Select+B path requests ordinary session teardown,
-and the offline path can start a connection. Cancellation needs its own design
-and a measured worst-case response bound. No response-time bound is claimed yet.
+The implementation now samples physical JOYP at the common VBlank entry before
+native input locks, and stops local intent/serial ownership without a network
+acknowledgement. Actual connected-menu, Save-menu and compatible adapter-free
+RAM-state tests verify escape and subsequent ordinary movement. These finite
+cases do not establish every possible native critical-section response bound.
+Native interrupt masking and direct-poll opportunities still require lifecycle
+audits whenever new feature code is added.
 
 The recovery path must not tear down a native save halfway through its critical
 write sequence. Recognize/latch cancellation at a reachable input service point,
@@ -279,9 +304,10 @@ camera so the avatar does not become stuck to the screen. Rendering that cached
 pose has a nonzero cost which must also fit the budget. Expensive animation/tile
 updates may be deferred independently of position updates.
 
-This is a proposed scheduling model, not the behavior already verified in the ROM.
-It may reduce remote update frequency or increase remote latency. No fixed extra
-delay is promised until measured. If a scene has no sufficient spare time for an
+The native lease implementation now uses bounded idle jobs and retains complete
+cached appearance while a later update waits. The finite four-core cadence and
+latency measurements are in MILESTONE_2.md. This may reduce remote update frequency;
+it does not promise a fixed delay on every scene or WAN path. If a scene has no sufficient spare time for an
 extended period, perfect native cadence and a fixed minimum remote freshness
 cannot both be assumed. Report that case to the user; do not silently accept
 seconds of delay or drop required local rendering. Coalescing applies to presence
@@ -295,8 +321,10 @@ renderer does not replace the native-NPC comparison. Any fixture that cannot
 represent the same actor load must disclose that limitation rather than claim
 parity. Existing baseline gaps must remain visible. Match input/audio timing too;
 identical instruction timing between different binaries is not implied. The
-current implementation fails strict cadence and must not be described as meeting
-P1/P2. Existing 300% evidence does not satisfy the new 400% acceptance requirement.
+current four-core dense-room gate passes at 100/200/300/400% against matched native
+NPC controls, with no additional world-update gaps or background VBlank crossings.
+That evidence does not prove P1/P2 across every possible map/story/input state.
+The same strict gates remain mandatory for future feature changes.
 
 ### Speed, hostile input and physical limits
 

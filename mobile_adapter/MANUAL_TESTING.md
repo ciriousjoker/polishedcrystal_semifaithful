@@ -21,11 +21,11 @@ The portable saves and their provenance are committed in
 same regardless of the selected scene. Each update resets that scene's initial
 progress and regenerates platform-specific auto-states.
 
-The command builds the current feature ROM and Rust server, detects the Mac's
+The command builds the current feature ROM and Rust Bridge, detects the Mac's
 LAN IPv4 address, prepares an isolated Mac game, updates the connected Android
 phone through ADB, and starts both RetroArch instances with DoubleCherryGB.
-The server binds the detected LAN address on fixed TCP port **17423** and prints
-`SERVER tcp://<address>:17423`. Both ROM copies use this same endpoint. The ROM's
+The Bridge binds the detected LAN address on fixed TCP port **17423** and prints
+`BRIDGE tcp://<address>:17423`. Both ROM copies use this same endpoint. The ROM's
 small feature-owned endpoint table and cartridge checksum are adapted in a copy
 of the compiler output; the standard build and existing game routines stay intact.
 The phone and Mac must be able to reach each other through the local network.
@@ -44,34 +44,32 @@ Close ordinary dialogs before connecting.
 The terminal distinguishes frontend startup from actual network membership:
 
 ```text
-ANDROID START confirmed: core initialized; fresh state loaded. Select+B joins the three-player lobby.
-CLIENT_CONNECTED session=1 peer=192.168.2.23:51000 client=android
-LOBBY_JOIN session=1 lobby=1 player=1 generation=1
-LOBBY_JOIN session=2 lobby=1 player=2 generation=1
-LOBBY_LEAVE session=1 player=1
-CLIENT_DISCONNECTED session=1 peer=192.168.2.23:51000 reason=closed client=android
+ANDROID START confirmed: core initialized; fresh state loaded. Select+B joins the four-player lobby.
+BRIDGE_EMULATOR_CONNECTED stream=1 peer=192.168.2.23:51000
+BRIDGE_JOINED stream=1 player=1 generation=1
+BRIDGE_JOINED stream=2 player=2 generation=1
+BRIDGE_DISCONNECTED stream=1 result=Ok(())
 ```
 
-Numbers and source ports vary. CLIENT_CONNECTED confirms a real TCP socket;
-LOBBY_JOIN confirms compatibility and player membership. LOBBY_OFFLINE records
-a lost connection, and a later LOBBY_JOIN with the same player and a higher
-generation confirms token resume. Explicit leave removes identity, so rejoining
-gets a new player ID. Mac/Android labels are inferred from source IPs. They are
-not authentication. Errors appear as SESSION_ERROR or LOBBY_REJECTED.
+Numbers and source ports vary. BRIDGE_EMULATOR_CONNECTED confirms a real TCP
+socket; BRIDGE_JOINED confirms validated player membership. BRIDGE_UPSTREAM
+confirms the shared upstream WebSocket in hosted mode. BRIDGE_UPSTREAM_LOST and
+BRIDGE_PLAYER_ERROR expose failures. Disconnecting one local stream leaves its
+siblings active. These logs identify transport sessions, not authenticated people.
 
-Three players can share lobby 1. They see each player's actual selected figure and movement sprite on the same
-map with compatible physical block layouts. Remote players do not block movement
-or run NPC scripts. World progress, items, puzzles and encounters remain local.
-Scripts, menus and Snowtop's camera temporarily pause rendering.
-The Start menu keeps the local scene still and clears sprites under its panel.
-Remote players can keep moving in their own emulator; social drawing is deliberately
-paused on the menu owner's screen and that player publishes busy availability.
-Closing the menu recaptures the world and restores current remote figures. This
-behavior is tested in the bedroom and the crowded Game Corner. Large Gyarados
-and Exeggutor sprites, or unavoidable required-NPC sprite pressure, also pause
-avatars. A peer without an available matching hardware palette is also deferred;
-this uses the generic scene-pause status. Select+A shows rendering status and keeps the player roster accessible in
-a safe idle scene. Leaving the protected situation restores avatars.
+Four players can share one lobby, including three remote avatars on the same map.
+They use each player's actual selected figure, movement sprite and hardware colors.
+Remote players do not block movement or run NPC scripts. World progress, items,
+puzzles and encounters remain local. Free native actor resources are used first;
+only audited replaceable NPCs can be temporarily leased, with their original state
+and graphics restored on departure. Required actors and story flags stay protected.
+
+The Start menu preserves complete static native avatars while other clients keep
+moving independently. Closing it refreshes positions. Protected camera/cutscene
+and resource-critical drawing may temporarily defer avatars; ordinary exploration
+must show all three peers when they share the viewport. Select+A keeps the roster
+and rendering status available in a safe idle scene. Detailed finite coverage
+boundaries are recorded in research/MILESTONE_2.md.
 
 The Mobile Adapter popup describes the emulator peripheral. Its initialization
 log can appear with emulation disabled, so the popup alone does not prove a Rust
@@ -185,7 +183,7 @@ despite the generated options file specifying On. Enforcing the isolated options
 path fixed the direct-intent launch. After one force-stop and one game intent,
 the real Pixel frontend loaded its fresh state and completed TCP connect, the
 `PC` transport-v1 `TEST` request, its matching echo reply and clean session teardown
-against the running Rust server at `192.168.2.25:17423`. This was tested through
+against the running Rust Bridge at `192.168.2.25:17423`. This was tested through
 the running GUI's inputs, not the headless runner. The raw frontend trace is in
 `dev-session/gui-proof/android-retroarch.log` in the host cache. Eight host-only
 contracts passed, including inherited per-core options and the single-intent start.
@@ -196,7 +194,7 @@ Host-only deployment checks:
 python3 -m unittest discover -s mobile_adapter/tools -p test_dev_session.py
 ```
 
-Milestone 2 adds the three-player lobby and live overworld avatars. The native
+Milestone 2 adds the four-player lobby and live overworld avatars. The native
 three-core acceptance suite checks actual movement, map transitions, reconnects,
 rendering pressure and visible latency. Phone interactions, battles and transfers
 remain milestones 3 to 5. A server ECHO log alone is not gameplay acceptance.
@@ -221,3 +219,17 @@ Final proof: `m2-final16-gui-server.log`, `m2-final16-gui-input.json` and
 `m2-final16-phone-visible.png` in the host cache. The full automatic acceptance,
 including the separate 300% speed test, is recorded in
 [research/MILESTONE_2.md](research/MILESTONE_2.md).
+
+## Shared Bridge and hosted simulation
+
+The default command uses one Rust Bridge with an embedded local owner. Mac and
+phone emulator streams belong to the same household session; no cloud connection
+is required. To simulate the public router/lobby split locally:
+
+```sh
+python3 mobile_adapter/tools/dev_session.py --mode hosted --test-one-way-delay-ms 50
+```
+
+This starts a local hosted router and lobby owner, then the Bridge's shared
+WebSocket. The explicit delay adds 50ms in each direction. Public Cloudflare
+account deployment and the phone's native Flutter Bridge packaging are deferred.

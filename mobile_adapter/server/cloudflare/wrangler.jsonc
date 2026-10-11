@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "polishedcrystal-mobile",
+  "main": "build/worker/shim.mjs",
+  "compatibility_date": "2026-10-11",
+  "workers_dev": false,
+  "build": { "command": "python3 ../../tools/build_cloudflare.py" },
+  "durable_objects": {
+    "bindings": [{ "name": "LOBBIES", "class_name": "LobbyObject" }]
+  },
+  "exports": {
+    "LobbyObject": { "type": "durable-object", "storage": "sqlite" }
+  }
+}

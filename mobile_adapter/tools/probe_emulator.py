@@ -7,6 +7,7 @@ acceptance harness. Artifacts are retained on failure; existing output is refuse
 """
 
 import argparse
+import gzip
 import hashlib
 import json
 from pathlib import Path
@@ -15,6 +16,14 @@ import struct
 import subprocess
 import sys
 import zlib
+
+
+def trace_text(path):
+    """Read current compressed or historical plain instruction-observer evidence."""
+    if path.exists():
+        return path.read_text()
+    with gzip.open(str(path) + ".gz", "rt") as trace:
+        return trace.read()
 
 
 BASELINE_SHA256 = "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e"

@@ -6,5 +6,6 @@ rust-version.workspace = true
 
 [dependencies]
 mobile-protocol = { path = "../protocol" }
+mobile-lobby-core = { path = "../lobby-core" }
 tokio.workspace = true
 getrandom = "=0.3.4"

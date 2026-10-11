@@ -55,6 +55,7 @@ wMobileAvatarPalette:: db
 wMobileAvatarTile:: db
 wMobileOAMReadCursor:: db
 wMobileOAMWriteCursor:: db
+wMobileNativeSlotLimit::
 wMobileLocalOAMStart:: db
 wMobileInstanceKey:: ds 2
 wMobileClippedWeather:: db
@@ -72,10 +73,28 @@ wMobileBudgetOptional:: db
 wMobileBudgetCursor:: db
 wMobileIRQTrampoline:: ds MOBILE_IRQ_TRAMPOLINE_SIZE
 wMobilePumpCount:: db
+wMobileNativeActorMode::
 wMobileFacingsSuppressed:: db
 wMobileColdFrame:: db
+wMobileEmergencyLatch:: db
+wMobileEmergencyPending:: db
+wMobileNativePrepareFrame:: db
 wMobileResidentEnd::
 ASSERT wMobileResidentEnd - wMobileResidentStart <= 128
+
+; Native palette scans need a normal object view without swapping live records.
+; This unbanked view stays outside the original game's serialized WRAM span.
+SECTION "Mobile Native Object Views", WRAM0[$cf44]
+wMobileNativeOriginals:: ds MOBILE_PEERS * OBJECT_LENGTH
+wMobilePrivatePalRequest:: db
+wMobilePrivatePalSlot:: db
+wMobilePrivatePalUsed:: db
+wMobilePrivatePalBlocked:: db
+wMobilePrivatePalCurrent:: db
+wMobilePrivatePalSavedUpdate:: db
+wMobileNativePaletteOwners:: ds NUM_OBJECT_STRUCTS
+wMobileNativeOriginalsEnd::
+ASSERT wMobileNativeOriginalsEnd <= $d000
 
 SECTION "Mobile Buffers", WRAMX[$d4eb], BANK[MOBILE_WRAM_BANK]
 wMobileBufferStart::
@@ -84,90 +103,111 @@ wMobileTx:: ds MOBILE_BUFFER_SIZE
 wMobileGuardTx:: db
 wMobileRx:: ds MOBILE_BUFFER_SIZE
 wMobileGuardRx:: db
+wMobileDecodePhase:: db
 wMobileApp:: ds MOBILE_FRAME_SIZE
 wMobileOutgoing:: ds MOBILE_FRAME_SIZE
 wMobileResumeToken:: ds 8
 wMobileLocalSnapshot:: ds MOBILE_SNAPSHOT_SIZE
-wMobilePeer1::
-wMobilePeer1Id:: ds 2
-wMobilePeer1Generation:: ds 2
-wMobilePeer1Revision:: ds 2
-wMobilePeer1MapGroup:: db
-wMobilePeer1MapNumber:: db
-wMobilePeer1Instance:: ds 2
-wMobilePeer1Epoch:: ds 2
-wMobilePeer1X:: ds 2
-wMobilePeer1Y:: ds 2
-wMobilePeer1Facing:: db
-wMobilePeer1Status:: db
-wMobilePeer1Avatar:: db
-wMobilePeer1Movement:: db
-wMobilePeer1DrawX:: dw
-wMobilePeer1DrawY:: dw
-wMobilePeer1DrawValid:: db
-wMobilePeer1ScreenX:: db
-wMobilePeer1ScreenY:: db
-wMobilePeer1Visible:: db
-wMobilePeer1OAMStart:: db
+for peer, 1, MOBILE_PEERS + 1
+wMobilePeer{d:peer}::
+wMobilePeer{d:peer}Id:: ds 2
+wMobilePeer{d:peer}Generation:: ds 2
+wMobilePeer{d:peer}Revision:: ds 2
+wMobilePeer{d:peer}MapGroup:: db
+wMobilePeer{d:peer}MapNumber:: db
+wMobilePeer{d:peer}Instance:: ds 2
+wMobilePeer{d:peer}Epoch:: ds 2
+wMobilePeer{d:peer}X:: ds 2
+wMobilePeer{d:peer}Y:: ds 2
+wMobilePeer{d:peer}Facing:: db
+wMobilePeer{d:peer}Status:: db
+wMobilePeer{d:peer}Avatar:: db
+wMobilePeer{d:peer}Movement:: db
+wMobilePeer{d:peer}DrawX:: dw
+wMobilePeer{d:peer}DrawY:: dw
+wMobilePeer{d:peer}DrawValid:: db
+wMobilePeer{d:peer}ScreenX:: db
+wMobilePeer{d:peer}ScreenY:: db
+wMobilePeer{d:peer}Visible:: db
+wMobilePeer{d:peer}OAMStart:: db
 ds 1 ; pending OAM offset
-wMobilePeer1LoadedSprite:: db
-wMobilePeer1LoadedFrame:: db
-wMobilePeer1Palette:: db
-ds MOBILE_PEER_SIZE - 33
-wMobilePeer2::
-wMobilePeer2Id:: ds 2
-wMobilePeer2Generation:: ds 2
-wMobilePeer2Revision:: ds 2
-wMobilePeer2MapGroup:: db
-wMobilePeer2MapNumber:: db
-wMobilePeer2Instance:: ds 2
-wMobilePeer2Epoch:: ds 2
-wMobilePeer2X:: ds 2
-wMobilePeer2Y:: ds 2
-wMobilePeer2Facing:: db
-wMobilePeer2Status:: db
-wMobilePeer2Avatar:: db
-wMobilePeer2Movement:: db
-wMobilePeer2DrawX:: dw
-wMobilePeer2DrawY:: dw
-wMobilePeer2DrawValid:: db
-wMobilePeer2ScreenX:: db
-wMobilePeer2ScreenY:: db
-wMobilePeer2Visible:: db
-wMobilePeer2OAMStart:: db
-ds 1 ; pending OAM offset
-wMobilePeer2LoadedSprite:: db
-wMobilePeer2LoadedFrame:: db
-wMobilePeer2Palette:: db
-ds MOBILE_PEER_SIZE - 33
-wMobileOAMSnapshot:: ds OAM_SIZE
-wMobileOAMOutput:: ds 2 * MOBILE_PEERS * 4 * OBJ_SIZE ; peer output plus overwritten prefix
-wMobileNPCOptional:: ds OAM_COUNT
+wMobilePeer{d:peer}LoadedSprite:: db
+wMobilePeer{d:peer}LoadedFrame:: db
+wMobilePeer{d:peer}Palette:: db
+wMobilePeer{d:peer}NativeSprite:: db
+wMobilePeer{d:peer}NativeStage:: db
+wMobilePeer{d:peer}NativeRole:: db
+wMobilePeer{d:peer}LZState:: ds 16
+wMobilePeer{d:peer}NativeFacing:: db
+wMobilePeer{d:peer}BackupStage:: db
+wMobilePeer{d:peer}PrivatePalValid:: db
+wMobilePeer{d:peer}PendingLease:: db
+ds MOBILE_PEER_SIZE - 56
+endr
+wMobileLZScratch::
+wMobileLZBank:: db
+wMobileLZInput:: dw
+wMobileLZOutput:: dw
+wMobileLZBase:: dw
+wMobileLZLeft:: dw
+wMobileLZCommand:: db
+wMobileLZFirst:: db
+wMobileLZSecond:: db
+wMobileLZCopy:: dw
+wMobileLZHalf:: db
+wMobileLZPacked:: db
+ASSERT @ - wMobileLZScratch == 16
+wMobileLZBudget:: db
+wMobileHashPointer:: dw
+wMobileHashWidth:: db
+wMobileHashColumns:: db
+wMobileHashRows:: db
+wMobileHashB:: db
+wMobileHashC:: db
+wMobileHashActive:: db
+wMobileLeaseMask:: ds 3
+wMobileLeaseBestSlot:: db
+wMobileLeaseBestScore:: db
 wMobileUploadedSnapshot:: ds MOBILE_SNAPSHOT_SIZE
+wMobileChecksumCursor:: dw
+wMobileChecksumLeft:: dw
+wMobileChecksumSum:: dw
+wMobileChecksumChunk:: db
 wMobileGuardEnd:: db
 wMobileBufferEnd::
 ASSERT wMobileBufferEnd - wMobileBufferStart <= 1536
 ASSERT wMobileBufferStart >= $d4eb && wMobileBufferEnd <= $e000
 
 ; Independent persistent graphics cache in the audited bank-2 tail.
-SECTION "Mobile Avatar Cache", WRAMX[$dac0], BANK[MOBILE_WRAM_BANK]
-wMobileAvatarCache1:: ds 24 tiles
-wMobileAvatarCache2:: ds 24 tiles
+SECTION "Mobile Avatar Cache", WRAMX[$da40], BANK[MOBILE_WRAM_BANK]
+for peer, 1, MOBILE_PEERS + 1
+wMobileAvatarCache{d:peer}:: ds 24 tiles
+endr
 wMobileAvatarCacheEnd::
 ASSERT wMobileBufferEnd <= wMobileAvatarCache1
 ASSERT wMobileAvatarCacheEnd <= $e000
 
-; Optional map-rendering declarations are copied once when graphics reset.
-SECTION "Mobile Render Mask", WRAMX[$ddc0], BANK[MOBILE_WRAM_BANK]
-wMobileRenderMapMask:: ds 3
-wMobileScanlineValid:: db
-wMobileScanlineKey:: ds OAM_COUNT + 1
-wMobileRenderMaskEnd::
-ASSERT wMobileRenderMaskEnd <= $de00
-
-; A page-aligned delta table avoids pointer arithmetic for each OAM quad.
-SECTION "Mobile Scanline Delta", WRAMX[$de00], BANK[MOBILE_WRAM_BANK]
-wMobileScanlineBudget:: ; weather and NPC sweeps run sequentially, never in IRQ
-wMobileScanlineDelta:: ds SCREEN_HEIGHT_PX + 1
-wMobileScanlineDeltaEnd::
-ASSERT wMobileScanlineDeltaEnd <= $df00
+SECTION "Mobile Actor Backups", WRAMX[$d562], BANK[MOBILE_BACKUP_BANK]
+for peer, 1, MOBILE_PEERS + 1
+wMobileActorBackup{d:peer}:: ds OBJECT_LENGTH + 4 ; camera and BG anchor
+endr
+wMobileActorBackupEnd::
+; GDMA ignores the source address's low four bits. Keep every private raw tile
+; snapshot aligned, independently of the 38-byte native object records.
+ds (16 - (LOW(@) & $f)) & $f
+for peer, 1, MOBILE_PEERS + 1
+wMobileActorTiles{d:peer}:: ds 24 tiles
+endr
+wMobileActorTilesEnd::
+; Temporary ordinary buffers are restored before leaving a palette job.
+wMobilePrivatePalTemporary:: ds 2 palettes
+wMobilePrivatePalColors:: ds MOBILE_PEERS palettes
+wMobilePrivatePalIdentities:: ds MOBILE_PEERS
+wMobilePrivatePalBindings:: ds 8
+wMobilePrivatePalDirty:: db
+wMobilePrivatePalWasFading:: db
+wMobilePrivatePalEnd::
+ASSERT LOW(wMobileActorTiles1) & $f == 0
+ASSERT wMobileActorBackupEnd <= $dd00
+ASSERT wMobileActorTilesEnd <= $dd00
+ASSERT wMobilePrivatePalEnd <= $dd00

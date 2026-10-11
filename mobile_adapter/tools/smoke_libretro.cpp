@@ -4,6 +4,7 @@
 // per instance. Acceptance tests boot battery saves. Explicit snapshot flags are
 // for regenerating manual-play start states with the current ROM/core only.
 #include <libretro.h>
+#include <zlib.h>
 #include <dlfcn.h>
 #include <cstdarg>
 #include <cstdint>
@@ -33,10 +34,13 @@ static uint64_t audio_samples = 0, audio_batches = 0;
 static retro_pixel_format pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
 static std::vector<unsigned char> image;
 static unsigned char video_oam[160] = {};
+static unsigned char video_object_palettes[64] = {};
 static unsigned char video_peer_tiles[128] = {};
+static unsigned char video_native_tiles[0x4000] = {};
 static std::ofstream input_events;
 static std::set<std::pair<unsigned, unsigned>> logged_inputs;
 static std::vector<retro_memory_descriptor> memory_maps;
+static unsigned restoring_native_slots[3] = {};
 struct InputAction { unsigned first, end, button; };
 static std::vector<InputAction> input_actions = {{700, 710, RETRO_DEVICE_ID_JOYPAD_START}};
 struct ConditionalAction {
@@ -45,6 +49,10 @@ struct ConditionalAction {
     bool fired = false;
 };
 static std::vector<ConditionalAction> conditional_actions;
+struct WalkWaypoint { unsigned earliest, x, y, timeout, started = 0; };
+static std::vector<WalkWaypoint> walk_waypoints;
+static size_t walk_index = 0;
+static unsigned walk_button = 0xffff, walk_ready_frame = 0;
 struct Binding { unsigned bank, address; };
 static std::map<std::string, Binding> bindings;
 static const std::map<std::string, unsigned> buttons = {
@@ -92,13 +100,15 @@ static unsigned observe(unsigned bank, unsigned address, const unsigned char* sr
 
 static void load_bindings(const std::string& path) {
     const std::set<std::string> watched = {
-        "hCGB", "hCrashCode", "hVBlankCounter", "hInMenu", "wJumptableIndex",
+        "hCGB", "hCrashCode", "hVBlankCounter", "hDelayFrameLY", "hInMenu", "wJumptableIndex",
+        "hNbTilesToCopy", "hRequested1bpp", "hRequested2bpp",
+        "wInputFlags", "wGameLogicPaused",
         "wSaveFileExists", "wMapGroup", "wMapNumber", "wXCoord", "wYCoord",
         "wPlayerMapX", "wPlayerMapY", "wPlayerSpriteX", "wPlayerSpriteY",
         "wPlayerSpriteXOffset", "wPlayerSpriteYOffset", "wPlayerFacing", "wPlayerDirection",
         "wPlayerStepFrame", "wPlayerBGMapOffsetX", "wPlayerBGMapOffsetY", "wMapStatus", "wScriptRunning",
         "wObjectStructs", "wEventFlags", "wCurBox", "wPlayerCurrentOAMSlot",
-        "wPlayerGender", "wPlayerSprite", "wPlayerPalette",
+        "wPlayerGender", "wPlayerSprite", "wPlayerPalette", "wPalFlags", "wPalState", "wPalFadeDelayFrames",
         "wPlayerWalking", "wPlayerStepDuration", "wPlayerState", "wPanningAroundTinyMap",
         "hUsedWeatherSpriteIndex", "hUsedOAMIndex",
         "wMenuCursorY", "wMenuSelection", "wOptionsMenuIsInitial",
@@ -124,12 +134,14 @@ static std::map<std::string, unsigned> capture(const unsigned char* sram, size_t
     const std::set<std::string> words = {"sChecksum", "wMobileRemaining", "wMobileTxPointer",
         "wMobileRxPointer", "wMobileSequence", "wMobileAttemptTicks", "wMobileIRQCount",
         "wMobilePresenceCount", "wMobileMapEpoch", "wMobilePeer1DrawX", "wMobilePeer1DrawY",
-        "wMobilePeer2DrawX", "wMobilePeer2DrawY"};
+        "wMobilePeer2DrawX", "wMobilePeer2DrawY", "wMobilePeer3DrawX", "wMobilePeer3DrawY"};
     const std::set<std::string> wire_words = {"wMobilePlayerId", "wMobileGeneration", "wMobileInstanceKey",
         "wMobilePeer1Id", "wMobilePeer1Generation", "wMobilePeer1Revision",
         "wMobilePeer1Instance", "wMobilePeer1Epoch", "wMobilePeer1X", "wMobilePeer1Y",
         "wMobilePeer2Id", "wMobilePeer2Generation", "wMobilePeer2Revision",
-        "wMobilePeer2Instance", "wMobilePeer2Epoch", "wMobilePeer2X", "wMobilePeer2Y"};
+        "wMobilePeer2Instance", "wMobilePeer2Epoch", "wMobilePeer2X", "wMobilePeer2Y",
+        "wMobilePeer3Id", "wMobilePeer3Generation", "wMobilePeer3Revision",
+        "wMobilePeer3Instance", "wMobilePeer3Epoch", "wMobilePeer3X", "wMobilePeer3Y"};
     std::map<std::string, unsigned> values;
     for (const auto& entry : bindings) {
         unsigned bank = entry.second.bank, address = entry.second.address;
@@ -150,7 +162,15 @@ static std::map<std::string, unsigned> capture(const unsigned char* sram, size_t
                 observe(local.bank, address + 1, sram, sram_size);
         }
     }
-    for (const char* peer : {"1", "2"}) {
+    if (bindings.count("wObjectStructs") && descriptor(0x10000)) {
+        auto objects = bindings.at("wObjectStructs");
+        unsigned palette = observe(objects.bank, objects.address + 6, sram, sram_size) & 7;
+        unsigned hash = 2166136261u;
+        for (unsigned i = 0; i < 8; ++i)
+            hash = (hash ^ video_object_palettes[palette * 8 + i]) * 16777619u;
+        values["vLocalPaletteHash"] = hash;
+    }
+    for (const char* peer : {"1", "2", "3"}) {
         unsigned tile_hash = 2166136261u;
         unsigned tile_start = peer[0] == '1' ? 0 : 64;
         for (unsigned i = 0; i < 64; ++i)
@@ -166,6 +186,114 @@ static std::map<std::string, unsigned> capture(const unsigned char* sram, size_t
         std::string prefix = std::string("wMobilePeer") + peer;
         if (!values.count(prefix + "OAMStart")) continue;
         unsigned slot = values.at(prefix + "OAMStart");
+        if (bindings.count("wMobileNativeActorMode")) {
+            const auto slots = bindings.at("wMobileSavedFacings");
+            const auto objects = bindings.at("wObjectStructs");
+            unsigned actor = observe(slots.bank, slots.address + peer[0] - '1', sram, sram_size);
+            values[std::string("vMobilePeer") + peer + "NativeSlot"] = actor;
+            const auto backup_name = std::string("wMobileActorBackup") + peer;
+            if (bindings.count(backup_name)) {
+                const auto backup = bindings.at(backup_name);
+                values[std::string("vMobilePeer") + peer + "BackupMap"] = observe(backup.bank, backup.address + 1, sram, sram_size);
+                unsigned hash = 2166136261u;
+                for (unsigned field = 0; field < 34; ++field)
+                    hash = (hash ^ observe(backup.bank, backup.address + field, sram, sram_size)) * 16777619u;
+                values[std::string("vMobilePeer") + peer + "BackupHash"] = hash;
+                values[std::string("vMobilePeer") + peer + "BackupSprite"] = observe(backup.bank, backup.address, sram, sram_size);
+                const unsigned pool = peer[0] - '1';
+                const unsigned role = values.at(prefix + "NativeRole");
+                if (role == 2 && actor > 0 && actor < 13) restoring_native_slots[pool] = actor;
+                unsigned restored_actor = actor;
+                bool restored = role == 2 && values.at(prefix + "NativeStage") == 7;
+                if (role == 0 && restoring_native_slots[pool]) {
+                    restored_actor = restoring_native_slots[pool];
+                    const unsigned object = objects.address + restored_actor * 34;
+                    restored = observe(objects.bank, object, sram, sram_size) ==
+                                   observe(backup.bank, backup.address, sram, sram_size) &&
+                               observe(objects.bank, object + 1, sram, sram_size) ==
+                                   observe(backup.bank, backup.address + 1, sram, sram_size);
+                    restoring_native_slots[pool] = 0;
+                }
+                if (restored && restored_actor > 0 && restored_actor < 13 &&
+                        observe(backup.bank, backup.address, sram, sram_size) != 191) {
+                    const auto original = bindings.at(std::string("wMobileActorTiles") + peer);
+                    unsigned saved_hash = 2166136261u, restored_hash = 2166136261u;
+                    const auto* actual = descriptor(0x8000);
+                    if (!actual) fail("Native VRAM observer unavailable");
+                    unsigned tile_bank = restored_actor < 8 ? 0 : 1;
+                    unsigned base = tile_bank * 0x2000 + (tile_bank ? restored_actor - 8 : restored_actor) * 192;
+                    for (unsigned byte = 0; byte < 384; ++byte) {
+                        unsigned offset = base + (byte < 192 ? byte : byte - 192 + (tile_bank ? 0x400 : 0x800));
+                        saved_hash = (saved_hash ^ observe(original.bank, original.address + byte, sram, sram_size)) * 16777619u;
+                        restored_hash = (restored_hash ^ actual[offset]) * 16777619u;
+                    }
+                    values[std::string("vMobilePeer") + peer + "OriginalTileHash"] = saved_hash;
+                    values[std::string("vMobilePeer") + peer + "RestoredTileHash"] = restored_hash;
+                }
+            }
+            slot = 160;
+            if (actor > 0 && actor < 13) {
+                unsigned object = objects.address + actor * 34;
+                for (unsigned field = 0; field < 34; ++field)
+                    values[std::string("vMobilePeer") + peer + "NativeField" + std::to_string(field)] = observe(objects.bank, object + field, sram, sram_size);
+                unsigned base = observe(objects.bank, object + 2, sram, sram_size);
+                unsigned facing = observe(objects.bank, object + 13, sram, sram_size);
+                unsigned bank = base < 128 ? 1 : 0;
+                unsigned source_frame = facing & 12;
+                if (source_frame == 12) source_frame = 8;
+                if (facing & 1) source_frame += 12;
+                unsigned palette = observe(objects.bank, object + 6, sram, sram_size) & 7;
+                values[prefix + "Palette"] = palette;
+                if (descriptor(0x10000)) {
+                    unsigned color_hash = 2166136261u;
+                    for (unsigned i = 0; i < 8; ++i)
+                        color_hash = (color_hash ^ video_object_palettes[palette * 8 + i]) * 16777619u;
+                    values[std::string("vMobilePeer") + peer + "PaletteHash"] = color_hash;
+                }
+                if (bindings.count("wMobilePrivatePalColors")) {
+                    auto colors = bindings.at("wMobilePrivatePalColors");
+                    unsigned color_hash = 2166136261u;
+                    for (unsigned i = 0; i < 8; ++i)
+                        color_hash = (color_hash ^ observe(colors.bank, colors.address + (peer[0] - '1') * 8 + i,
+                                                          sram, sram_size)) * 16777619u;
+                    values[std::string("vMobilePeer") + peer + "PrivatePaletteHash"] = color_hash;
+                }
+                // Native InitSprites submits each four-quad figure backwards.
+                // Inspect a complete coherent hardware group, including its
+                // actual previous-frame facing, rather than adjoining actors.
+                for (unsigned i = 0; i <= 144; i += 4) {
+                    unsigned first = video_oam[i + 14];
+                    unsigned base_tile = base & 127;
+                    unsigned offset = first >= base_tile ? first - base_tile : 256;
+                    bool walking = offset >= (bank ? 64u : 128u);
+                    if (walking) offset -= bank ? 64u : 128u;
+                    if (offset != 0 && offset != 4 && offset != 8) continue;
+                    bool complete = true;
+                    unsigned mask = 0;
+                    bool visible = false;
+                    for (unsigned q = 0; q < 4; ++q) {
+                        unsigned t = video_oam[i + q * 4 + 2];
+                        if (t < first || t >= first + 4 ||
+                            (video_oam[i + q * 4 + 3] & 15) != (bank * 8 + palette)) {
+                            complete = false; break;
+                        }
+                        mask |= 1u << (t - first);
+                        visible |= video_oam[i + q * 4] > 0 && video_oam[i + q * 4] < 160;
+                    }
+                    if (complete && visible && mask == 15) {
+                        slot = i; source_frame = offset + (walking ? 12 : 0); break;
+                    }
+                }
+                unsigned tile = (base & 127) + source_frame % 12;
+                if (source_frame >= 12) tile += bank ? 64 : 128;
+                unsigned hash = 2166136261u;
+                for (unsigned i = 0; i < 64; ++i)
+                    hash = (hash ^ video_native_tiles[bank * 0x2000 + tile * 16 + i]) * 16777619u;
+                values[std::string("vMobilePeer") + peer + "TileHash"] = hash;
+                values[prefix + "LoadedFrame"] = source_frame;
+                values[prefix + "OAMStart"] = slot;
+            }
+        }
         if (slot > 144) {
             values[std::string("vMobilePeer") + peer + "OAM0"] = 160;
             for (unsigned i = 1; i < 16; ++i) values[std::string("vMobilePeer") + peer + "OAM" + std::to_string(i)] = 0;
@@ -187,8 +315,11 @@ static std::map<std::string, unsigned> capture(const unsigned char* sram, size_t
                     positions = (positions ^ observe(objects.bank, start + 17, sram, sram_size)) * 16777619u;
                 }
             }
+            values["vNativeObject" + std::to_string(i) + "Map"] = observe(objects.bank, start + 1, sram, sram_size);
+            for (const auto& field : std::map<std::string, unsigned>{{"Sprite", 0}, {"Flags1", 4}, {"Flags2", 5}, {"Facing", 13}})
+                values["vNativeObject" + std::to_string(i) + field.first] = observe(objects.bank, start + field.second, sram, sram_size);
             unsigned facing = observe(saved.bank, saved.address + i, sram, sram_size);
-            if (i && facing != 255) {
+            if (!bindings.count("wMobileNativeActorMode") && i && facing != 255) {
                 suppressed |= 1u << i;
                 if (facing == observe(objects.bank, start + 13, sram, sram_size)) restored |= 1u << i;
             }
@@ -305,7 +436,13 @@ static bool environment(unsigned command, void* data) {
 static void video(const void* data, unsigned w, unsigned h, size_t pitch) {
     ++video_frames;
     if (const auto* oam = descriptor(0xfe00)) std::memcpy(video_oam, oam, sizeof(video_oam));
-    if (const auto* vram = descriptor(0x8000)) std::memcpy(video_peer_tiles, vram + 0x640, sizeof(video_peer_tiles));
+    if (const auto* colors = descriptor(0x10000))
+        std::memcpy(video_object_palettes, colors, sizeof(video_object_palettes));
+    if (const auto* vram = descriptor(0x8000)) {
+        std::memcpy(video_peer_tiles, vram + 0x640, sizeof(video_peer_tiles));
+        // The pinned core's cpu::vram contains both physical 8 KiB banks.
+        std::memcpy(video_native_tiles, vram, sizeof(video_native_tiles));
+    }
     if (!data) return;
     width = w;
     height = h;
@@ -349,6 +486,7 @@ static void write_image(const std::string& path) {
 static void input_poll() {}
 static int16_t input_state(unsigned port, unsigned device, unsigned, unsigned id) {
     if (port != 0 || device != RETRO_DEVICE_JOYPAD) return 0;
+    if (id == walk_button) return 1;
     for (const auto& action : input_actions)
         if (id == action.button && input_frame >= action.first && input_frame < action.end) {
             if (input_events.is_open() && logged_inputs.insert({action.first, id}).second) {
@@ -373,9 +511,9 @@ int main(int argc, char** argv) {
         std::cerr << "Usage: smoke-libretro CORE ROM OUTPUT.ppm SYSTEM_DIRECTORY [OPTION VALUE]...\n"
                      "Options: --frames N --input SCRIPT --symbols SYM --state-out JSON\n"
                      "         --save-in SAV --save-out SAV --adapter 0|1 --pace-from FRAME --trace-out JSONL\n"
-                     "         --checkpoint-dir EXISTING_DIRECTORY --profile-out JSON --pace-multiplier 1|3\n"
+                     "         --checkpoint-dir EXISTING_DIRECTORY --profile-out JSON --pace-multiplier 1|2|3|4\n"
                      "         --snapshot-out STATE --snapshot-in STATE (manual-play preparation only)\n"
-                     "Input: FRAME BUTTON DURATION, or ON MIN_FRAME SYMBOL=VALUE[,SYMBOL=VALUE] BUTTON DURATION\n";
+                     "Input: FRAME BUTTON DURATION, ON MIN_FRAME SYMBOL=VALUE[,SYMBOL=VALUE] BUTTON DURATION, or WALK MIN_FRAME X Y TIMEOUT\n";
         return 1;
     }
     unsigned frame_limit = 1200;
@@ -383,11 +521,11 @@ int main(int argc, char** argv) {
     for (int i = 5; i < argc; i += 2) {
         std::string key = argv[i];
         if (key != "--frames" && key != "--input" && key != "--symbols" &&
-            key != "--state-out" && key != "--save-in" && key != "--save-out" &&
+            key != "--ram-out" && key != "--state-out" && key != "--save-in" && key != "--save-out" &&
             key != "--adapter" && key != "--pace-from" && key != "--trace-out" &&
-            key != "--checkpoint-dir" && key != "--profile-out" &&
-            key != "--snapshot-out" && key != "--snapshot-in" && key != "--input-events" &&
-            key != "--finish-barrier" && key != "--pace-multiplier") fail("Unknown option: " + key);
+            key != "--checkpoint-dir" && key != "--profile-out" && key != "--profile-window-start" &&
+            key != "--snapshot-out" && key != "--test-snapshot-out" && key != "--snapshot-in" && key != "--input-events" &&
+            key != "--finish-barrier" && key != "--pace-multiplier" && key != "--expected-peers" && key != "--expected-online") fail("Unknown option: " + key);
         arguments[key] = argv[i + 1];
     }
     if (arguments.count("--frames")) {
@@ -413,6 +551,17 @@ int main(int argc, char** argv) {
         std::string line;
         while (std::getline(script, line)) {
             std::istringstream row(line.substr(0, line.find('#')));
+            if (line.substr(0, 5) == "WALK ") {
+                std::string tag;
+                WalkWaypoint waypoint;
+                if (!(row >> tag >> waypoint.earliest >> waypoint.x >> waypoint.y >> waypoint.timeout) ||
+                    waypoint.earliest >= frame_limit || waypoint.x >= 128 || waypoint.y >= 128 ||
+                    !waypoint.timeout || waypoint.timeout > 600 || !bindings.count("wXCoord") ||
+                    !bindings.count("wYCoord") || !bindings.count("wPlayerStepDuration"))
+                    fail("Invalid walk waypoint or missing symbols");
+                walk_waypoints.push_back(waypoint);
+                continue;
+            }
             if (line.substr(0, 3) == "ON ") {
                 std::string on, conditions, button;
                 unsigned earliest, duration;
@@ -449,6 +598,11 @@ int main(int argc, char** argv) {
     if (arguments.count("--profile-out")) {
         metric = symbol<Metric>(core, "mobile_profile_metric");
         profile_frame = symbol<void(*)()>(core, "mobile_profile_frame");
+        if (arguments.count("--profile-window-start")) {
+            const auto first = std::stoul(arguments.at("--profile-window-start"));
+            if (first > frame_limit - 800) fail("Profile window exceeds scenario");
+            symbol<void(*)(unsigned)>(core, "mobile_profile_window")(first);
+        }
         if (!arguments.count("--symbols")) fail("Profiling requires symbols");
         std::ifstream symbols(arguments.at("--symbols"));
         std::string location, name;
@@ -479,10 +633,20 @@ int main(int argc, char** argv) {
             configured = true;
         }
         if (!configured && bindings.count("wMobileOwner")) fail("MobileTick symbol missing");
+        if (native_addresses.count("MobileNativeSaveObjects")) {
+            auto save = native_addresses.at("MobileNativeSaveObjects");
+            const auto begin = native_addresses.at("wPlayerData").second;
+            const auto objects = native_addresses.at("wObjectStructs").second;
+            symbol<void(*)(unsigned, unsigned, unsigned, unsigned, unsigned, unsigned, unsigned)>(core, "mobile_profile_save")(
+                save.first, save.second, native_addresses.at("wPlayerDataEnd").second - begin,
+                native_addresses.at("wMobileSavedFacings").second,
+                native_addresses.at(native_addresses.count("wMobileNativeOriginals") ?
+                    "wMobileNativeOriginals" : "wMobileActorBackup1").second, objects - begin, objects);
+        }
         if (auto observer = reinterpret_cast<void(*)(unsigned, unsigned, unsigned)>(dlsym(core, "mobile_profile_overworld"))) {
             const char* points[] = {"MobilePrepareSprites", "MobileRenderSprites", "DelayFrame", "HandleNPCStep", "MobileBudgetNPCScanlines",
                 "MobileCheckNPCScanlines", "MobileCanSuppress", "MobileBudgetWeather",
-                "MobileCountObjectOAM", "MobilePreparePeerGraphics", "MobileProjectPeer", "MobileCapture", "_UpdateSprites"};
+                "MobileCountObjectOAM", "MobilePreparePeerGraphics", "MobileProjectPeer", "MobileCapture", "_UpdateSprites", "MobileNativeUpload", "MobileNativeIdle", "MobileNativePrepareSpritesWork"};
             for (unsigned i = 0; i < sizeof(points) / sizeof(points[0]); ++i) {
                 if (native_addresses.count(points[i])) {
                     auto point = native_addresses.at(points[i]);
@@ -546,21 +710,30 @@ int main(int argc, char** argv) {
     }
     auto run = symbol<void(*)()>(core, "retro_run");
     std::ofstream trace;
+    gzFile compressed_trace = nullptr;
     if (arguments.count("--trace-out")) {
-        trace.open(arguments.at("--trace-out"));
-        if (!trace) fail("Cannot create trace output");
+        const auto& path = arguments.at("--trace-out");
+        if (path.size() >= 3 && path.substr(path.size() - 3) == ".gz") {
+            compressed_trace = gzopen(path.c_str(), "wb3");
+            if (!compressed_trace) fail("Cannot create compressed trace output");
+        } else {
+            trace.open(path);
+            if (!trace) fail("Cannot create trace output");
+        }
     }
+    const bool trace_enabled = trace.is_open() || compressed_trace;
     unsigned pace_from = frame_limit;
     if (arguments.count("--pace-from")) pace_from = std::stoul(arguments.at("--pace-from"));
     unsigned pace_multiplier = 1;
     if (arguments.count("--pace-multiplier")) {
         const auto& value = arguments.at("--pace-multiplier");
-        if (value != "1" && value != "3") fail("Pace multiplier must be 1 or 3");
+        if (value != "1" && value != "2" && value != "3" && value != "4") fail("Pace multiplier must be 1..4");
         pace_multiplier = std::stoul(value);
     }
     if (av_info.timing.fps <= 0) fail("Invalid emulator frame rate");
     std::chrono::steady_clock::time_point paced_start;
     std::map<std::string, unsigned> previous;
+    std::map<std::string, unsigned> checkpoint_previous;
     const bool barrier_enabled = arguments.count("--finish-barrier");
     bool announced_ready = false;
     auto settle_started = std::chrono::steady_clock::time_point{};
@@ -571,7 +744,7 @@ int main(int argc, char** argv) {
             if (std::chrono::steady_clock::now() - settle_started > std::chrono::seconds(20))
                 fail("Lobby observation barrier did not settle");
             auto live = capture(sram, sram_size);
-            if (!announced_ready && live.at("wMobileOnline") == 1 && live.at("wMobilePeerCount") == 2) {
+            if (!announced_ready && live.at("wMobileOnline") == (arguments.count("--expected-online") ? std::stoul(arguments.at("--expected-online")) : 1) && live.at("wMobilePeerCount") == (arguments.count("--expected-peers") ? std::stoul(arguments.at("--expected-peers")) : 2)) {
                 std::ofstream(arguments.at("--state-out") + ".ready") << "ready\n";
                 announced_ready = true;
             }
@@ -585,8 +758,38 @@ int main(int argc, char** argv) {
         }
         run();
         if (profile_frame) profile_frame();
-        if (!trace.is_open() && conditional_actions.empty()) continue;
+        if (!trace_enabled && conditional_actions.empty() && walk_waypoints.empty()) continue;
         auto values = capture(sram, sram_size);
+        if (walk_index < walk_waypoints.size()) {
+            auto& target = walk_waypoints[walk_index];
+            if (input_frame >= target.earliest && input_frame >= walk_ready_frame) {
+                if (!target.started) target.started = input_frame;
+                if (input_frame - target.started >= target.timeout)
+                    fail("Walk waypoint timed out at " + std::to_string(walk_index) +
+                         ": player=" + std::to_string(values.at("wXCoord")) + "," +
+                         std::to_string(values.at("wYCoord")) + "; target=" +
+                         std::to_string(target.x) + "," + std::to_string(target.y));
+                // Release on the native next-tile coordinate, before the completed
+                // step updates global coordinates and can accept another held step.
+                if (values.at("wPlayerMapX") == target.x + 4 && values.at("wPlayerMapY") == target.y + 4)
+                    walk_button = 0xffff;
+                if (values.at("wXCoord") == target.x && values.at("wYCoord") == target.y &&
+                    values.at("wPlayerStepDuration") == 0) {
+                    ++walk_index;
+                    walk_button = 0xffff;
+                    walk_ready_frame = input_frame + 3;
+                } else if (values.at("wPlayerStepDuration") == 0 &&
+                           (values.at("wPlayerMapX") != target.x + 4 || values.at("wPlayerMapY") != target.y + 4) &&
+                           values.at("wScriptRunning") == 0 && values.at("hInMenu") == 0) {
+                    int dx = int(target.x) - int(values.at("wXCoord"));
+                    int dy = int(target.y) - int(values.at("wYCoord"));
+                    if (std::abs(dx) + std::abs(dy) != 1)
+                        fail("Walk waypoint is not adjacent: index=" + std::to_string(walk_index) + "; player=" + std::to_string(values.at("wXCoord")) + "," + std::to_string(values.at("wYCoord")) + "; target=" + std::to_string(target.x) + "," + std::to_string(target.y) + "; frame=" + std::to_string(input_frame));
+                    walk_button = dx ? buttons.at(dx > 0 ? "RIGHT" : "LEFT") : buttons.at(dy > 0 ? "DOWN" : "UP");
+                }
+            }
+        }
+        values["vWalkReachedWaypoints"] = unsigned(walk_index);
         for (auto& action : conditional_actions) {
             if (action.fired || input_frame < action.earliest) continue;
             bool matches = true;
@@ -614,18 +817,38 @@ int main(int argc, char** argv) {
         for (const auto& entry : values)
             if (entry.first.rfind("vMobile", 0) == 0 || entry.first.rfind("vNPC", 0) == 0 || entry.first == "vOAMMaxScanline")
                 progress.insert(entry);
-        if (trace.is_open() && progress != previous) {
+        if (trace_enabled && progress != previous) {
             auto wall_us = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now().time_since_epoch()).count();
-            trace << "{\"frame\":" << input_frame << ",\"wall_us\":" << wall_us << ",\"symbols\":";
-            json_values(trace, values);
-            trace << "}\n";
+            std::ostringstream record;
+            record << "{\"frame\":" << input_frame << ",\"wall_us\":" << wall_us << ",\"symbols\":";
+            json_values(record, values);
+            record << "}\n";
+            const auto line = record.str();
+            if (compressed_trace) {
+                if (gzwrite(compressed_trace, line.data(), line.size()) != int(line.size()))
+                    fail("Compressed trace write failed");
+            } else {
+                trace << line;
+                if (!trace) fail("Trace write failed");
+            }
             previous = progress;
-            if (input_frame >= pace_from && arguments.count("--checkpoint-dir"))
-                write_image(arguments.at("--checkpoint-dir") + "/frame-" + std::to_string(input_frame) + ".ppm");
+            if (input_frame >= pace_from && arguments.count("--checkpoint-dir")) {
+                std::map<std::string, unsigned> checkpoint;
+                for (const char* key : {"wMobileStep", "wMobileOwner", "wMobileError", "wMobileSuccessCount",
+                                       "wMobileOnline", "wMobilePeerCount", "wXCoord", "wYCoord", "hInMenu"})
+                    if (values.count(key)) checkpoint[key] = values.at(key);
+                // IRQ and partial-packet counters change every frame. Screenshots
+                // document semantic phases; the complete trace retains byte work.
+                if (checkpoint != checkpoint_previous)
+                    write_image(arguments.at("--checkpoint-dir") + "/frame-" + std::to_string(input_frame) + ".ppm");
+                checkpoint_previous = checkpoint;
+            }
         }
     }
 
+    if (compressed_trace && gzclose(compressed_trace) != Z_OK) fail("Compressed trace close failed");
+    trace.close();
     bool missing_input = false;
     for (const auto& action : conditional_actions) {
         if (action.fired) continue;
@@ -633,6 +856,8 @@ int main(int argc, char** argv) {
                   << " button=" << action.button << '\n';
         missing_input = true;
     }
+
+    if (walk_index != walk_waypoints.size()) fail("Walk route did not complete");
 
     std::set<unsigned> colors;
     for (size_t i = 0; i + 2 < image.size(); i += 3)
@@ -680,6 +905,21 @@ int main(int argc, char** argv) {
             }
             profile << ']';
         }
+        if (auto idle = reinterpret_cast<uint64_t(*)(unsigned)>(dlsym(core, "mobile_profile_idle_metric"))) {
+            const char* idle_names[] = {"native_upload_delay_frames", "native_upload_count", "native_upload_max_cycles",
+                "native_upload_total_cycles", "native_upload_vblank_crossings", "native_idle_count",
+                "native_idle_max_cycles", "native_idle_total_cycles", "native_idle_vblank_crossings",
+                "native_upload_lowest_sp", "native_idle_lowest_sp", "native_position_max_cycles",
+                "native_position_count", "native_position_vblank_crossings", "native_position_lowest_sp"};
+            for (unsigned i = 0; i < sizeof(idle_names) / sizeof(idle_names[0]); ++i)
+                profile << ",\"" << idle_names[i] << "\":" << idle(i);
+        }
+        if (auto saved = reinterpret_cast<Metric>(dlsym(core, "mobile_profile_save_metric"))) {
+            const char* save_names[] = {"save_copy_count", "save_copy_register_failures", "save_copy_byte_failures",
+                "save_projected_objects", "save_copy_max_cycles", "save_copy_lowest_sp"};
+            for (unsigned i = 0; i < 6; ++i) profile << ",\"" << save_names[i] << "\":" << saved(i);
+        }
+        profile << ",\"world_window_start\":" << (arguments.count("--profile-window-start") ? std::stoul(arguments.at("--profile-window-start")) : 3600);
         profile << ",\"video_frames\":" << video_frames << ",\"audio_batches\":" << audio_batches
                 << ",\"audio_samples\":" << audio_samples << "}\n";
         if (!profile) fail("Cannot write profiling result");
@@ -690,11 +930,12 @@ int main(int argc, char** argv) {
         save.write(reinterpret_cast<const char*>(sram), sram_size);
         if (!save) fail("Cannot write battery save");
     }
-    if (arguments.count("--snapshot-out")) {
-        // Never snapshot an active Mobile Adapter session: peripheral sockets
-        // are not included in the pinned core's serialization format.
+    if (arguments.count("--snapshot-out") || arguments.count("--test-snapshot-out")) {
+        // Human-play fixtures stay offline. The explicit test option captures
+        // live CPU/RAM state to verify recovery when peripheral sockets are lost.
         auto values = capture(sram, sram_size);
-        for (const auto& expected : std::map<std::string, unsigned>{
+        if (!arguments.count("--test-snapshot-out"))
+          for (const auto& expected : std::map<std::string, unsigned>{
                 {"hCGB", 1}, {"hCrashCode", 0}, {"hInMenu", 0},
                 {"wMapStatus", 2}, {"wScriptRunning", 0}, {"wMobileOwner", 0}})
             if (!values.count(expected.first) || values.at(expected.first) != expected.second)
@@ -704,11 +945,22 @@ int main(int argc, char** argv) {
         std::vector<char> bytes(size, 0);
         if (!symbol<bool(*)(void*, size_t)>(core, "retro_serialize")(bytes.data(), bytes.size()))
             fail("Core could not serialize manual-play snapshot");
-        std::ofstream file(arguments.at("--snapshot-out"), std::ios::binary);
+        std::ofstream file(arguments.at(arguments.count("--test-snapshot-out") ?
+                          "--test-snapshot-out" : "--snapshot-out"), std::ios::binary);
         file.write(bytes.data(), bytes.size());
         if (!file) fail("Cannot write manual-play snapshot");
     }
+    if (arguments.count("--ram-out")) {
+        const auto* physical = descriptor(0xc000);
+        if (!physical) fail("Physical WRAM observer unavailable");
+        std::ofstream ram(arguments.at("--ram-out"), std::ios::binary);
+        ram.write(reinterpret_cast<const char*>(physical), 8 * 0x1000);
+        if (!ram) fail("Cannot preserve read-only WRAM evidence");
+    }
     if (arguments.count("--state-out")) {
+        std::ofstream hardware_oam(system_directory + "/hardware-oam.bin", std::ios::binary);
+        hardware_oam.write(reinterpret_cast<const char*>(video_oam), sizeof(video_oam));
+        if (!hardware_oam) fail("Cannot preserve hardware OAM evidence");
         if (!arguments.count("--symbols")) fail("--state-out requires matching --symbols");
         auto values = capture(sram, sram_size);
         if (!values.count("hCrashCode") || !values.count("hCGB")) fail("Required observer symbols missing");

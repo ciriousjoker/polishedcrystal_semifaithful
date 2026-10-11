@@ -27,15 +27,13 @@ def facing(table, index):
     return bytearray(rom[start:start + 17])
 
 
+# Avatars use the native Facings table and ordinary object renderer. There is
+# no independent OAM geometry or tile atlas to drift from native characters.
 for index in range(16):
-    native, social = facing("Facings", index), facing("MobileSocialFacings", index)
-    require(native[0] == social[0] == 4, "Approved avatar must have four quads")
-    for attribute in range(3, 17, 4):
-        native[attribute] &= 0xe0
-    require(native == social, f"Facing {index} differs from native geometry")
+    require(facing("Facings", index)[0] == 4, "Approved native avatar must have four quads")
 
 # Bank-local counts replace three far reads on each object in every frame.
-counts = offset("MobileFacingOAMCounts")
+counts = offset("MobileNativeFacingCounts")
 table = offset("Facings")
 index = 0
 while int.from_bytes(rom[table + index * 2:table + index * 2 + 2], "little"):
@@ -76,6 +74,10 @@ for name, kind in expected.items():
     require((rom[headers + index * 4 + 3] >> 6) + 1 == kind, f"Sprite type changed: {name}")
 # Fifteen-tile final-slot walking sprites overlap 7c..7e and must defer avatars.
 for name in ("SPRITE_BIG_GYARADOS", "SPRITE_ALOLAN_EXEGGUTOR"):
-    require("cp " + name in (REPO / "mobile_adapter/rom/overworld.asm").read_text(),
-            "Missing protected large sprite")
-print("Renderer passed: 16 native facings, 13 tile slots, emotes/effects and six special headers")
+    require("cp " + name in (REPO / "mobile_adapter/rom/native_leases.asm").read_text(),
+            "Missing shared-atlas slot protection")
+raw = symbols["wMobileActorTiles1"]
+require(raw[0] == 5 and raw[1] % 16 == 0, "Native tile backups must be GDMA aligned")
+require(symbols["wMobileActorTilesEnd"][1] - raw[1] == 3 * 384,
+        "Each of three native leases needs a complete standing/walking backup")
+print("Native renderer passed: facing counts, tile slots, protected shared assets and aligned backups")

@@ -1,158 +1,214 @@
-# Milestone 2 implementation and acceptance
+# Milestone 2: native four-player presence and household Bridge
 
-Completed on 2026-10-11 on branch `mobileadapter`. Three-player lobbies and live
-overworld presence passed the gates below. Calls, battles and durable transfers
-remain milestones 3 through 5. Machine-readable evidence with hashes and per-core
-observations is in [milestone2-evidence.json](milestone2-evidence.json).
+Completed 2026-10-11 on branch `mobileadapter` for the approved autonomous
+macOS/local-host scope. Phone and public deployment tests remain deferred.
+This report supersedes the original three-player renderer and the selected-figure follow-up. Historical
+experiments and failures remain in PLAN.md and Git history.
 
-The later [selected-figure and save-scenario follow-up](AVATAR_SCENARIOS.md)
-supersedes this historical record's avatar appearance, VRAM allocation, live
-schema and current build hashes. The milestone-2 acceptance below remains the
-record of its original completed implementation.
+## Implemented behavior
 
-The final compiler outputs, before adapting endpoint/checksum in test copies:
+The normal `make mobile` build supports four players, including three remote
+avatars on the same supported map instance. Remote players use their saved Chris,
+Kris, Crys or Beta choice and the ordinary native walking, running, bicycle and
+surf assets. A generic bounded peer pool leases native object/graphics resources.
+Free slots are preferred; only reviewed replaceable NPCs can be displaced.
+Their original object, camera and raw graphics state is retained and restored.
+Story flags, protected actors, services and puzzles remain local.
 
-| Build | SHA-256 |
-| --- | --- |
-| Standard mobile | `725d94ee2e8adec0817a9398e9fa3a1056908943e429ccbdaa335384f3a7e3e8` |
-| Faithful mobile | `81e0664967741a11c30143379985df231bb97b2ef00fdde9049349664bbf36d7` |
-| Disabled standard | `314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e` |
+The Flutter Bridge uses a native Rust engine. Several emulator connections belong
+to one household session. Local mode embeds the shared lobby owner and needs no
+upstream service. Internet mode uses one multiplexed WebSocket for that household;
+two Bridges can contribute two players each to one four-player lobby. Disconnecting
+one stream does not remove its siblings. The native hosted simulator routes the
+upgrade to a room owner; the WASM Worker routes it to that lobby's Durable Object.
+All three hosts use the same socket-independent Rust rules.
 
-Every accepted test ROM was normalized back to localhost port 17423 and its
-global checksum recomputed. Its resulting hash matches the appropriate final
-compiler output. Earlier intermediate hashes in PLAN.md are superseded.
+The remote transport coalesces presence and changed rosters at 20Hz. Local polls
+stay local and grant bounded delivery credit; they do not fabricate authority
+receipts or freshness. Embedded mode flushes dirty state immediately through the
+same owner. The hosted simulator supports bounded test-only one-way delay queues.
+50ms in each direction adds approximately 100ms client/server RTT.
 
-The implementation uses feature-owned ROMX bank 7f, 121 bytes of resident WRAM0
-at cec4 and 1473 bytes of WRAMX bank 2 at d4eb. It occupies 6924 driver bytes
-under the 8192-byte cap. All 23373 existing RAM symbols remain at baseline
-addresses. The standard feature build leaves seven ROM0 bytes and 6983 ROMX
-bytes free. No existing helper was relocated, no mapper changed, no new SRAM
-or HRAM was allocated. The disabled ROM's exact SHA-256 remains
-314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e.
+Heavy ROM work runs in native idle waits, with explicit admission deadlines and
+bounded parser, checksum, map-hash, decompression and upload phases. Current native
+actors retain their last complete appearance while updates wait. Urgent positions
+alternate with ordinary pool jobs, so a fast sender cannot starve other peers.
+No native helper was relocated.
 
-The renderer does not allocate runtime NPC slots. Two private peer records and
-reserved sprite tiles produce local+peer OAM ahead of ordinary objects. The
-approved Chris appearance reuses the local player's palette. Standing tiles
-are VRAM0 64..6b and VRAM1 7c..7f; walking tiles are VRAM0 e0..eb. Ordinary
-12-tile sprite allocations, emotes at 60..63 and effects at 6f..7f remain intact.
-The 15-tile final-slot Gyarados/Exeggutor walking allocation overlaps 7c..7e,
-so those active large sprites explicitly pause social drawing. Sailboat,
-Ho-Oh and Lugia types fit the ordinary tile ranges.
+## Save and emergency recovery
 
-Generated rendering masks cover all 611 assembled maps. 407 have eligible
-optional actors: generic trainers, no-op decoration, pure text commands and
-complete text-only scripts ending in a cosmetic turn of LAST_TALKED. Custom
-story/service scripts, cameras, rocks and boulders remain protected. Nearby
-actors within two tiles stay visible. Total OAM pressure may suppress temporary
-facing bytes, restored immediately after vanilla InitSprites. A second sweep
-checks the ten-sprites-per-scanline limit and may hide whole optional actors in
-that frame's OAM without touching their object state. If required actors still
-cannot fit, the exact vanilla OAM is restored and status reports a pause.
-Weather fills remaining scanline space after avatars. No story flags or collision
-objects are changed by rendering.
+Physical Select+B is sampled from JOYP at the common VBlank entry path, before
+engine input locks. An active session exits locally without an adapter/server
+acknowledgement. The foreground rechecks cancellation before publishing work.
+Offline Select+B requests a join; Select+B+A consumes one echo diagnostic request.
+The same escape works through a connected Start menu, normal Save menu and a
+compatible online emulator state restored with the adapter disabled.
 
-Protected exceptions are scripted/camera/menu scenes, overlapping large sprite
-tiles and unavoidable required-actor OAM pressure. Select+A reports the reason
-and exposes the roster when normal input is available. These are temporary
-rendering exceptions; connection membership remains independent. Every peer
-must also share map group/number, a physical block-layout key and safe availability.
-World progress stays local. The 16-bit key is a visual hint, not collision-free
-instance identity or story synchronization.
+The native wPlayerData save span includes object records. Allocating no mobile
+SRAM alone was insufficient: the previous implementation could serialize remote
+TEMP_OBJECT data. The corrected feature captures exact originals for both empty
+and reclaimed slots. Two guarded farcalls after the existing primary/backup
+CopyBytes project still-owned original records into those ordinary save copies.
+Live game RAM is not rewritten. Native checksum, backup and disk handling remain
+in control. Five serialized native palette scratch fields are preserved across feature calls.
+Remote colors no longer allocate entries in the ordinary palette manager. Fast
+feature-owned macros give its scans the unbanked original actor view. Matching
+ordinary colors are reused; otherwise a still-unused hardware palette is borrowed
+with feature-private color storage. Native palette buffers/cache bytes remain
+unchanged. The guarded object-palette uploader selects verified private colors
+only for a live owned remote actor. Slots 6/7 retain their native effect roles.
+Native palette endpoint/fade scratch is preserved too. Existing complete colors
+are retained during fades; new private colors wait until the native fade ends,
+avoiding the constructor's potentially long catch-up loop. This is a deliberate
+presentation boundary, not permission to delay a native game frame.
+There is no multiplayer save journal, new save metadata or new SRAM allocation.
 
-Integration tests boot ordinary 32-KiB in-game saves and perform actual inputs.
-Observer addresses come from matching SYM files. No game RAM/SRAM editing or
-emulator state injection occurs. The read-only profiling core checks physical
-banks, registers, stack, actual VBlank serial budget and NPC facings immediately
-before MobileRestoreFacings returns. Arbitrary video observations can occur
-inside the temporary hide window, so those are not the exact restoration oracle.
-Manual-play start snapshots are a separate deployment feature and are regenerated
-from ordinary saves with each current ROM/core build.
+A separate read-only instruction observer starts with the complete same-state
+native save payload, projects the verified original records and compares every
+byte after the feature call. It also verifies registers, stack return and banks.
+This avoids comparing independently booted games whose RTC, NPC movement and daily
+random data differ. Fresh Continue and ordinary movement are checked with both
+the mobile ROM without an adapter and its hash-verified disabled counterpart.
+An independent disabled-ROM Save additionally compares native palette-cache
+ranges in both primary and backup saves, in the bedroom with four different colors
+and in the crowded fault scenarios. It catches remote-induced writes made before
+the copy observer starts. No RAM writes, patched battery bytes or prebuilt emulator
+states seed these tests. The compatible-state recovery test intentionally captures
+a real online RAM state.
 
-The latest-state server uses a bounded model, watch notification and previous
-roster per connection. It coalesces for 8 ms, sends full membership rosters or
-changed-peer deltas, and never queues walking events. Each receiver grants a coalescing delivery credit through PRESENCE or POLL;
-one held write plus one pending credit bounds old movement even with a 3x sender.
-POLL avoids libmobile's one-second empty TCP receive wait. It neither produces replies nor refreshes
-presence. Each client has a three-second presence lease and 30-second token
-resume window. Reconnect advances generation and invalidates old writes/cleanup.
-Calls/interactions, battles and durable gifts/trades remain milestones 3 to 5.
+## Footprint and compatibility
 
+One MOBILE_ADAPTER compilation flag controls every feature hook and allocation.
+All feature assembly lives in mobile_adapter/rom. Integration consists of small
+conditional calls or a feature-owned macro at existing native seams, including
+the two save-copy calls. Existing game helpers and mapper are unchanged.
+All 23,373 checked native RAM/SRAM/HRAM symbols retain their baseline addresses.
+Removing unused legacy renderer buffers recovered 456 WRAMX bytes. ROM0 has 39
+bytes free; total ROM headroom is approximately 2.8KiB. This is a material risk
+for later interaction/battle features and must be budgeted before adding them.
+Exact final hashes and allocation sizes are recorded in milestone2-evidence.json.
+A static audit checks known near calls/jumps between banked feature symbols: a
+moved emergency helper once crashed because a JP did not switch banks. The corrected
+path uses farjp, and live physical-disconnect regressions are mandatory.
 
-The read-only profiler retains the original ISR (<2048 cycles), foreground
-(<32768 cycles), stack floor (c040), bank/register and half-VBlank serial gates.
-The APP parser copies at most 16 bytes and publishes at most one complete frame
-per pump. Adapter checksums, APP parsing and next-request preparation are split.
-Observed foreground elapsed time still includes preempting vanilla interrupts.
-Stack measurements exclude SP used as a graphics copy iterator only with IME
-disabled and PC/bank in ten source-audited video/gfx/tileset copy ranges from the
-current SYM. Excluded sample count and raw minimum remain separate metrics.
-All true stack values and routine return state remain checked. Earlier 94a0/
-45fd raw minima belonged to these native copy routines, not mobile stack writes.
+The current wire boundary checks transport 1, lobby schema 4, capacity 4 and
+standard/faithful mechanics. It does not establish compatibility between arbitrary
+Polished Crystal revisions. Generated semantic compatibility metadata and secure
+invite creation remain later design work. Prototype room IDs are nonzero 16-bit
+values, not an authentication/password guarantee.
 
-A two-phase final observation barrier keeps all three cores running until every
-client is ready, then captures all states before allowing any frontend teardown.
-This prevents the test harness from expiring or disconnecting its earliest client
-before the last client's assertions. No game state is altered by this barrier.
-Latency uses the ordinary core with real-time pacing and native video callbacks;
-profiling is a separate instruction observer and introduces extra host work.
+## Acceptance and repeatability
 
-## Final measured gates
+Host-only checks require no Game Boy emulator:
 
-Twenty Rust tests, eight host deployment tests, RGBDS contracts and emitted
-protocol vectors passed without starting an emulator. Cargo formatting and
-Clippy with warnings denied passed. The renderer audit checks 16 native facing
-definitions, tile allocations, emotes/effects and six special sprite headers.
-The generated policy covers all 611 maps; 407 contain eligible optional actors.
+```sh
+make test-mobile-host RGBDS=/path/to/rgbds-1.0.4/
+cargo clippy --locked --manifest-path mobile_adapter/server/Cargo.toml --workspace --all-targets -- -D warnings
+```
 
-Fifteen three-core functional/profile scenarios passed: dense Game Corner,
-Snowtop camera and differing map layout, Cinnabar Volcano, large Gyarados,
-300%/100%/100% with 100-ms RTT, menu suspension, explicit rejoin, socket token
-resume, warp, connected border, running, bike, surf and faithful. Each uses
-three independent native game processes and ordinary battery saves. The speed
-case performs 24 alternating movement bursts and checks final absolute position,
-map, identity and generation agreement. A further two three-core latency cases
-and all 12 Echo regression scenarios passed: 65 native processes in total.
-This is representative dynamic coverage, not gameplay of every audited map.
+These cover 35 Rust test functions with bounded framing, deterministic arbitrary
+bytes/state sequences, token/generation checks, capacity, churn, aggressive-client
+budgets, upstream loss and room/stream isolation. Additional tests cover the human
+launcher, ordinary-save fixtures, reviewed lease policy and production assembly
+vectors/layout. Formatting and renderer/capacity audits are separate checks.
 
-| Runtime measurement across accepted profiling cases | Result | Gate |
-| --- | ---: | ---: |
-| Longest serial handler | 1,432 cycles | <2,048 |
-| Longest foreground tick, including preempting interrupts | 25,268 cycles | <32,768 |
-| Maximum serial work per actual VBlank interval | 67,840 cycles | <70,224 at double speed |
-| Lowest true stack pointer | c091 | >=c040 |
-| Register/bank preservation failures | 0 | 0 |
-| NPC facing restoration failures | 0 | 0 |
+The native emulator acceptance command on the configured development Mac is:
 
-Nineteen native processes were profiled. The lowest observed stack pointer is
-145 bytes above the c000 stack bottom. These are emulator measurements of these
-fixtures, not a hardware timing certification or a future battle budget.
+```sh
+make test-mobile-rom RGBDS=/Volumes/Storage/Cache/mobileadapter/rgbds-1.0.4/
+```
 
-Latency uses 40 movement samples per case and an independent bounded TCP bridge
-with 50 ms of propagation in each direction for the 100-ms RTT case. Four-quad
-position bounds reject mere facing flips as motion. Both timings are retained:
+It requires the pinned native core, profiling core and runner in the configured
+cache. The suite builds four ordinary-NPC controls from the measured cadence run
+and validates actor identity/count, peer coordinates and replayed movement inputs.
+MOBILE_TEST_CACHE, optional MOBILE_TEST_CONTROL,
+MOBILE_TEST_OUTPUT and MOBILE_TEST_CASES expose those dependencies. Each run uses
+fresh artifacts and isolated ports, never the manual listener on 17423. Failures
+retain diagnostics. The suite runs real instructions with ordinary battery saves,
+controller input and matching-symbol read-only observations.
 
-| Timing, p95 | Local | Added 100-ms client/server RTT |
-| --- | ---: | ---: |
-| Local world motion to remote visible motion | 93.879 ms | 198.846 ms |
-| Initial input to remote visible motion | 244.252 ms | 350.064 ms |
+The crowded cadence case uses four actual cores at 100/200/300/400 percent through
+two household Bridges and the delayed hosted simulator. The strict 800-frame cold
+window is compared with corresponding ordinary native NPC controls. The controls
+replace the map objects actually leased in that run, then create their own normal
+New Game/Save batteries: Continue would otherwise restore the original cached
+actors and silently bypass the compiled control scene. Fixture builds force the
+map dependency and restore the exact disabled hash even with same-second file
+timestamps. Builds must not run concurrently while source fixtures are active.
+Standing peers model final geometry; networking chords and cold-join animations
+have no ordinary-NPC equivalent. NPC random history and hardware palette-slot
+assignment can differ. These are actor-load controls, not identical whole-game
+executions. Historical controls with mismatched figures or actor inventory are
+excluded from the final evidence. All four connected profiles have 800/800 update-bearing frames, zero duplicates
+and maximum gap one; the equal ten-actor controls have 783/784 update-bearing
+frames, with 16/17 native duplicates and maximum gap two. Multiplayer adds no
+world-update gap and never crosses the awaited VBlank in this measured window.
+NPC wandering
+has a longer stationary observation because random movement need not occur in a
+short final interval. That extension does not change the cadence or cycle gates.
 
-The original full-input 200/300-ms targets failed. Acceptance explicitly changed
-to additional delay after local world motion, below 200/300 ms respectively;
-unchanged vanilla turning precedes movement. This does not claim that the original
-targets passed. These are controlled loopback measurements, not mobile/WAN latency.
+Other final-source cases cover local and hosted visible movement, connected-menu
+escape, adapter-free compatible-state recovery, uninterrupted online Save plus
+peer disconnect/server close/malformed response/physical Save-menu exit, running,
+Start-menu static sprites, map transitions and rejoin. Separate native cases cover
+special shared graphics, the full Snowtop camera lifecycle and exact raw Miltank
+icon restoration. Echo transport regressions cover 14 native processes in 12 cases.
+Each latency case records 60 movements and checks all three receivers. The
+current final-source p95 is 188.997ms locally and 298.842ms with 100ms added RTT;
+full input-to-visible p95 is 306.721ms and 417.990ms respectively. The hosted
+result is close to the 300ms gate and provides little margin for host scheduling
+or a slower WAN. These are finite loopback results, not a production latency
+guarantee.
 
-The final ROM also passed a real Mac RetroArch plus physical Pixel GUI check.
-Both source IPs joined lobby 1 with distinct player IDs and both screens displayed
-the other avatar after normal movement. The Pixel cold-started the generated ROM
-and current-core snapshot after unlocking. A disposable Mac F2 mapping provided
-Select+B for UI automation; normal deployment controls remain left Shift+Z.
-The hardware pair ran at normal speed; the three-speed proof uses native headless
-cores. See [../MANUAL_TESTING.md](../MANUAL_TESTING.md) for the one-command workflow.
+Latency is measured from first local world movement to first directional movement
+of a complete remote four-quad avatar at the native video callback. The p95 gates
+remain below 200ms locally and 300ms with an added 100ms RTT. Full input latency is
+also retained; the game's unchanged turn delay precedes world movement. Neither
+these loopback measurements nor the static resource audit promise every WAN path.
 
-Raw artifacts remain outside Git under `/Volumes/Storage/Cache/mobileadapter/`:
-`m2-accepted-final-{crowding,camera,instance,volcano,gyarados,speed3-rtt100}`,
-`m2-complete-final-{menu,rejoin,resume,warp,connection,running,bike,surf,faithful}`,
-`m2-final16-latency-{local,rtt100}`, `m2-final16-echo`, and
-`m2-final16-gui-{server.log,input.json,mac.log}` / `m2-final16-phone-visible.png`.
-Other similarly named directories are historical experiments and are excluded
-from the final evidence summary.
+Canonical final evidence is in milestone2-evidence.json. The accepted main suite
+is host cache m2-accepted-final-guard; its old cadence controls are superseded by
+m2-accepted-final-matched-cadence, which generates and validates its own controls.
+The five Save faults are repeated under m2-accepted-final-immutable-saves with
+immutable hash-verified disabled inputs. Special scenes, faithful and transport
+are in m2-accepted-final-guard-special and m2-accepted-final-guard-other. The
+isolated human startup preparation is m2-human-final-guard-preparation; it builds
+the same final ROM and regenerates a real Continue snapshot without touching the
+manual listener or user profiles.
+
+The actual local workerd tests cover Worker routing, WebSocket upgrade, two-household
+multiplexing, capacity, malformed traffic, isolation, budgets and four forced
+hibernations with identity/position recovery. Flutter widget and actual native FFI
+listener/port-release tests pass; the native ARM64 macOS bundle is built and signed.
+
+## Explicit boundaries and follow-ups
+
+The generated protected-default lease policy covers all 611 assembled maps. The
+raw conservative slot bound resolves 607; reviewed fingerprinted story/terrain/
+camera contracts resolve the remaining four ordinary-exploration bounds. This is
+a slot bound, not a full playthrough or an all-story-state OAM/timing proof.
+Script-created actors and changed dynamic assets require further lifecycle fixtures.
+Protected panning/cutscene scenes may temporarily defer remote drawing; menus keep
+complete static native avatars while other clients continue independently.
+
+Current finite tests do not prove the absence of every possible ROM, Rust or host
+defect. Every new feature must keep the hash, footprint, save, recovery and cadence
+gates. The binding requirements remain active; coverage boundaries are not waivers.
+
+The phone is unavailable for this run. Public Cloudflare deployment/account tests,
+Android/iOS/Linux/Windows packaging and background service survival are deferred.
+Native Rust support alone does not establish iOS background feasibility. Calls,
+interaction menus, battles, gifts, trades and quick travel remain later milestones.
+
+For the existing human Mac/Android workflow, run from this worktree:
+
+```sh
+python3 mobile_adapter/tools/dev_session.py
+```
+
+It keeps scenario selection, stable Android paths/filenames, 5% Mac volume, the
+correct restart intent, connection logs, Ctrl+C cleanup and occupied-port approval.
+`--mac-only` supports local development without a phone; `--mode hosted
+--test-one-way-delay-ms 50` selects the local hosted model. Phone development may
+use the Mac's LAN endpoint until a device-local Android Bridge is packaged.
+Current snapshots are regenerated from ordinary saves for each exact ROM/core.

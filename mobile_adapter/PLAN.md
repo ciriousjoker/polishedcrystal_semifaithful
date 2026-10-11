@@ -1,6 +1,58 @@
 # Mobile Adapter multiplayer plan
 
 Last updated: 2026-10-11.
+
+Current checkpoint: milestone 2 is complete for the approved autonomous macOS
+and local-host scope. The normal `make mobile` build uses schema 4, capacity four
+and a generic native object lease pool. Flutter presents a native Rust household
+Bridge: embedded local hosting or one WebSocket per household to the routed room
+owner. The shared Rust owner runs embedded, in the native hosted simulator and
+in the locally tested Rust/WASM Durable Object adapter. Public deployment and the
+unavailable phone are deferred by the user.
+
+Final standard mobile SHA-256:
+fdb237ff7a3bf88d20236ca18a33f239a158b6ca0b9b0edd8193ee6d62bde138.
+Disabled standard remains hash-identical to the baseline:
+314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e.
+No original helper was relocated; all feature assembly stays in rom/ with small
+conditional integration seams. All 23,373 checked native RAM symbols stay fixed.
+Total ROM headroom is 2,849 bytes, including 39 in ROM0. Budget later features
+before implementing them.
+
+Four actual cores at 100/200/300/400 percent pass the strict cold 800-frame window
+with 800/800 world updates, zero duplicates and no VBlank overruns. Fresh native
+controls verify equal ten-actor inventory, actual reclaimed objects, correct peer
+figures/final positions and measured movement inputs. They are an actor-load
+comparison, not identical cold-join animation, random history or palette slots.
+The ten main groups, immutable Save/fault repeat, special scenes, faithful,
+echo transport, shared-owner/host tests, local workerd hibernation and native
+Flutter FFI/bundle checks pass. Ordinary save-copy projection and private remote
+palettes avoid both runtime-object and native palette-cache contamination.
+Physical Select+B works through menus and an online compatible state restored
+without an adapter. Later changes must retain these gates.
+
+Measured additional movement p95 is 188.997ms local and 298.842ms with 100ms added
+RTT. Full input p95 is 306.721ms and 417.990ms; hosted margin is thin. Finite tests
+are not universal fault freedom, all-story-state coverage or a WAN guarantee.
+Read research/MILESTONE_2.md and research/milestone2-evidence.json before historical
+notes below. They supersede old blockers/completion claims and invalid controls.
+Secure invites, semantic compatibility metadata and other-platform packaging/
+background lifecycle remain future work; calls/actions are milestone 3.
+
+Latest execution directive: implement milestone 2 autonomously, using native
+headless DoubleCherryGB on macOS, without the unavailable phone or cloud account.
+The Bridge foundation now includes a Flutter UI backed by native Rust, one shared
+session for all attached local emulators, embedded local lobby hosting, and a
+single multiplexed WebSocket for joining an Internet lobby. Two households can
+combine distinct emulator players through two Bridges without making each player
+a separate household connection. The local and hosted owners share Rust rules.
+Include bounded test-only latency injection at the transport boundary. Older
+per-emulator WebSocket proposals below are intermediate scaffolding, not the
+accepted final architecture. Platform packaging and hosted deployment follow
+later; iOS background execution must be assessed separately from Rust support.
+New work remains experimental and uncommitted until the revised milestone-2
+acceptance gates pass. Commit completed changes locally, as requested. The earlier
+quoted Bridge UI example does not override that Git workflow.
 Binding requirements: [REQUIREMENTS.md](REQUIREMENTS.md), including the latest
 four-player target, matched-NPC performance at up to 400% speed, priority local
 Select+B disconnect, independent saves and compatible state recovery without
@@ -10,29 +62,26 @@ are explicit and are not waivers.
 The gameplay wishlist and architecture outlook below were clarified on 2026-10-11:
 four-player coexistence is its sole absolute feature requirement. Other gameplay
 features remain desired, subject to feasibility and discussion. Foundational
-requirements remain binding. This update is planning only, not an instruction to
-implement the new wishlist or deploy cloud infrastructure.
+requirements remain binding. That wishlist clarification was planning only;
+later execution directives authorize M2, not the future gameplay wishlist or public deployment.
 The user subsequently selected a local TCP-to-WebSocket bridge on each device
 plus Cloudflare Workers/Durable Objects as the critical hosting direction. Keep
 the working direct-TCP development workflow until its replacement is tested.
-The current milestone-2 checklist explicitly includes the remaining adversarial
-server and four-client performance/recovery tests below.
+The revised milestone-2 checklist records the completed adversarial-server and
+four-client performance/recovery tests, with deferred delivery work explicit.
 Follow-up: the user accepts the documented Free-tier quota as the initial budget
 and approves local handling of frequent ROM polls. Lobby management is now
 preferred in the Bridge app. A build-generated, embedded compatibility hash is
 desired; the stronger claim that all semantically compatible versions necessarily
 hash alike remains an unresolved feasibility goal, not an established property.
-Status: milestone 1 complete; milestone 2 functionality is implemented, but its
-strict frame-cadence acceptance remains open. Three-player lobbies and live
-overworld presence are tested at 300%/100%/100% emulator speeds. Extra missed
-world-update frames and the new four-player/matched-NPC acceptance work block
-milestone 3. The current implementation still supports three total players.
-Selected figures and three selectable manual-save scenes are complete. Save and
-transport recovery checks pass.
-Current follow-up evidence: research/stability-cadence-followup.json.
-Earlier measured evidence: research/AVATAR_SCENARIOS.md and
-research/avatar-scenarios-evidence.json. Historical milestone-2 acceptance:
-research/MILESTONE_2.md and research/milestone2-evidence.json.
+Status: milestones 1 and 2 complete for the approved local scope.
+The normal mobile build now uses schema 4, four total players, native actor leases,
+the Flutter/native Rust Bridge and the shared embedded/hosted/WASM Owner.
+Historical three-player completion statements below do not establish this result.
+The final native build isolates original leased objects and palette state from
+ordinary primary/backup saves. Final-source results and resource measurements
+are recorded in research/MILESTONE_2.md and research/milestone2-evidence.json.
+No milestone-3 gameplay feature has started.
 Working branch: `mobileadapter`.
 Base commit: `8f3c7e9651e988d876e32a4c7ad9ef1bb76702a8`.
 
@@ -981,45 +1030,46 @@ not evidence that the original targets passed. Static all-map checks and represe
 crowding/transition scenarios preserve required NPCs, restore suppressed objects,
 and avoid tile/palette corruption.
 
-**Current milestone-2 TODO and acceptance additions (2026-10-11):**
+**Milestone-2 acceptance and retained delivery work (2026-10-11):**
 
-- [ ] Four real clients simultaneously at 100%, 200%, 300% and 400%, including
-  the same viewport, crowded maps, joins/leaves, transitions and fifth-client
-  rejection. Recheck generic peer/resource bounds and explicit target identity.
-- [ ] Matched ordinary-NPC control: equal actor count, movement, geometry, camera,
-  palette/effect load and input sequence. Compare per-frame world updates, gaps,
-  input/audio timing and remote freshness; retain the pristine control separately.
-- [ ] Codec fuzz/property tests and arbitrary model event sequences with
-  reproducible seeds and fake time. Cover partial/coalesced frames, invalid fields,
-  stale generations, wrong participants, identifier exhaustion and time advance.
-- [ ] Bounded resources and fair service with one aggressive client: valid and
-  invalid messages, slow readers/writers, socket admission, log pressure and queue
-  saturation. Healthy clients behind the same NAT and at 400% must remain usable.
-- [ ] Repeated connection churn, expiry, server restarts and fresh room/session
-  incarnations. Verify recovery, priority disconnect and native save independence;
-  an explicit exit must not silently reconnect or replay an old action.
-- [ ] Cross-lobby isolation: one room's hostile traffic, errors and disconnects
-  neither reach nor starve another room. Distinguish logical isolation from
-  process-wide outages and test both at their intended boundaries.
-- [ ] Bridge foundation proof: bounded TCP/WSS framing, ordering, credit handling,
-  local POLL semantics and loss/reconnect in a headless local multi-client suite.
-  Establish the shared lobby-core/native/Cloudflare boundaries and exercise the
-  real local Worker-routing/DO adapter with pinned Wrangler/workerd. Record the
-  joint deployment configuration and one-command delivery path early.
-  Demonstrate same-device loopback with Mac and Android libmobile, then Android
-  service survival while RetroArch is foreground. Record feasible service type,
-  launch/timeout rules and remaining desktop packaging work. No public deployment
-  is needed for this milestone's proof.
-- [ ] Define transport/gameplay compatibility profiles and reject unknown unsafe
-  combinations. Existing schema/mechanics checks are not a cross-ROM-version proof.
-  Investigate the desired generated/embedded hash, coverage and reproducibility;
-  test Bridge-visible metadata and live-client matching without claiming automatic
-  recognition of all semantically compatible source changes.
+- [x] Four real clients at 100%, 200%, 300% and 400%, including the same
+  crowded viewport. Separate join/leave/rejoin, movement modes and transition
+  scenarios pass. Shared-owner/native/workerd tests reject a fifth player.
+- [x] Fresh native actor-load controls: equal actor count and remaining native
+  identities, correct other-player figures/final geometry and replayed movement
+  inputs. All mobile profiles have 800/800 world-update frames, no duplicates
+  or extra gaps. Cold-join animations, NPC random history and palette-slot
+  assignment are explicitly not identical; these are finite resource controls.
+- [x] Deterministic arbitrary-byte codec and typed model-event sequences,
+  partial/coalesced frames, invalid fields, stale generations, participant checks,
+  identifier exhaustion and injected time. Run the current 35 Rust tests.
+- [x] Bounded resources, socket admission and fairness against aggressive
+  clients, invalid messages, slow transport and queue saturation. Healthy
+  household siblings and separate rooms are covered at their intended boundary.
+- [x] Churn, expiry, upstream loss/reconnect, server restart and fresh generation
+  handling. Physical exit cancels local intent without an acknowledgement.
+  Native saving and adapter-free compatible-state recovery pass independently.
+- [x] Cross-room and cross-stream isolation in the shared model, native adapter
+  tests and actual local workerd. Logical isolation does not isolate a host crash.
+- [x] Bridge foundation: native Rust inside Flutter, embedded local owner,
+  household multiplexing, bounded WS/TCP/credit and local poll semantics. Native
+  loopback, routed room ownership, actual local Worker/DO and four forced
+  hibernations pass. Mac bundle and real FFI listener/port-release tests pass.
+- [x] Current compatibility admission rejects unsafe transport/schema/capacity
+  and standard/faithful combinations. This is not cross-revision gameplay proof.
+- [ ] Deferred by the user's unavailable-phone instruction: Android loopback and
+  background service survival with foreground RetroArch. Other-platform packaging
+  and iOS lifecycle remain delivery work; native compilation alone is insufficient.
+- [ ] Optional semantic compatibility extension: generated/embedded metadata,
+  reproducibility, relevant/irrelevant data changes and imported-versus-live ROM
+  matching. The stronger compatibility goal is retained, not implemented here.
+- [ ] Deferred by the user: public Cloudflare account/deployment and one-command
+  authenticated rollout with namespace-upgrade and endpoint smoke tests. Joint
+  Worker/DO configuration and local WASM tests are already in the repository.
 
-These are open acceptance work for the current milestone, not a later backlog.
-Bridge installation/UX for all four platforms and the hosted rollout remain
-delivery work after the early proof. The other recorded emergency-exit and save
-acceptance requirements also remain open; this list does not replace them.
+The binding save, emergency, stability and performance requirements remain active
+for every later change. The approved local milestone is complete; the explicitly
+listed delivery work and optional compatibility extension are not claimed complete.
 
 ### 3. Adjacent interaction, Pokegear calls, and the common action menu
 
@@ -1105,6 +1155,38 @@ Commit locally on `mobileadapter`; no upstream PR, cloud publication or external
 deployment is part of this task. Only then is the agreed project complete.
 
 ## Execution policy and current blockers
+
+Current work in progress: extract the runtime-independent Rust lobby core, add
+the native Bridge and public Worker/per-lobby DO adapters, then prove grouped
+local and Internet paths with headless cores before completing the four-player
+ROM and matched-NPC cadence gates. The shared model passes its existing native
+tests. WASM type checking passes; bundling and adapter tests are still in progress.
+No cloud deployment, physical phone use or milestone completion is claimed.
+
+Bridge checkpoint: native embedded local mode and grouped Internet mode are
+implemented. One multiplexed upstream WebSocket carries distinct local emulator
+streams. Shared Owner rules isolate malformed player messages, bound membership
+and delivery credit, and route to independent room owners. Native transport tests
+pass for two household Bridges, full-lobby rejection, sibling survival and server
+loss. A 50ms one-way test delay produces at least 100ms handshake RTT without
+serial sleeps per message. Flutter widget tests and a real Dart-to-native FFI
+listener test pass. The macOS Flutter app builds and includes its signed native
+Rust library without Rosetta. Other platform packaging remains unverified.
+Three actual headless DoubleCherryGB clients passed both the embedded and hosted
+Bridge paths using ordinary Chris/Kris/Crys bedroom batteries, movement and avatar
+assertions. Artifacts: external cache m2-bridge-local-first and
+m2-bridge-hosted-first. This is still the schema-3, three-player ROM checkpoint;
+four-player runtime and strict matched-NPC cadence are not accepted yet.
+WASM Worker/DO bundling succeeds with worker-build 0.8.7's supported classic shim
+flag, --no-panic-recovery. The experimental module-target catch-wrapper generator
+failed on the pinned toolchain; no experimental panic recovery is claimed.
+Future parser/resource work must retain native/local-hosted/DO model equivalence.
+The actual Rust/WASM routing/DO path also passes local workerd tests for upgrade,
+capacity, presence, room isolation, wrong-room/malformed rejection and leave.
+This used no cloud account and performed no deployment. The Bridge now coalesces
+POLL credits as well as positions at a bounded wall-clock rate, and caps incoming
+local messages per emulator. Re-run actual ROM latency after these later changes;
+the two first headless proofs preceded the POLL-coalescing update.
 
 Milestone 1's actual-ROM transport, disabled hash and failure checks have passed.
 Current acceptance blockers are milestone 2's four-player expansion, matched-NPC
@@ -1673,3 +1755,666 @@ Launcher fix committed as 1ae47d85a. ROM/tooling/evidence changes belong to a
 separate local checkpoint with strict cadence explicitly left open. No upstream
 PR or push. The existing manual
 Mac/Pixel session on port 17423 was left running; no phone saves were overwritten.
+
+### Physical emergency exit and shared admission checks, 2026-10-11
+
+The guarded four-byte VBlank farcall samples physical JOYP outside native input
+locks. The handler restores the prior JOYP selection and never enables IME or
+waits for transport. A pending cancel prevents an interrupted foreground parser
+from publishing a successful join afterwards. Resident memory is 127 bytes.
+The disabled build again has SHA-256
+`314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e`.
+
+`probe_priority.py` passed an actual connected Start-menu exit and a real online
+Start-menu emulator snapshot restored into the same core with the adapter disabled.
+Select+B cleared local owner/intent/online/peers, menus closed, movement resumed,
+no crash marker appeared and the ordinary input battery remained unchanged.
+Artifacts: `/Volumes/Storage/Cache/mobileadapter/m2-priority-3`. The explicit
+`--test-snapshot-out` option permits this integration fixture only; ordinary human
+snapshot preparation retains its offline/idle guards.
+
+Shared Rust admission now limits each Bridge group separately to 1024 messages
+per second and expires idle groups after 10 seconds. Native routing and DO use
+this same budget. DO alarms expire silent members without needing traffic from
+another group. Identity churn evicts only disposable offline resume records;
+live players survive bounded storage exhaustion and identifier wrap. Checkpoint
+validation rejects out-of-range snapshots and unmatched live sessions. All 28
+native Rust tests pass. The latest Worker bundle and local workerd checks are
+being repeated after this change; no cloud deployment occurred.
+
+A separately flagged native actor experiment is now in
+`rom/native_actors_probe.asm`. It initially leases only free native actor slots,
+loads complete standing/walking graphics in bounded idle-time chunks and avoids
+the independent OAM/scanline renderer. It is NOT the release allocator and does
+not yet evict NPCs, support four players, or establish cadence acceptance. The
+first build needed JR-range repairs. Keep the normal renderer available until
+runtime evidence selects or rejects this approach. Latest production ROM/symbols
+before this experiment were copied to the external cache under
+`m2-native-actor-backup`. Never publish this experiment as completed M2.
+
+### Native actor experiment results, 2026-10-11
+
+Three real headless ROMs passed the free-slot native actor experiment. Every
+peer's complete cache and currently displayed native VRAM frame matched its
+selected vanilla figure. A read-only observer now follows leased native object
+slots and actual hardware OAM, instead of assuming fixed tile windows. Three
+selected figures were visible in the bedroom (`m2-native-actors-fourth`).
+
+The first measured experiment still missed world updates: 768/768/768 of 800,
+max gap 2. It is not a performance fix. The foreground native renderer hook was
+small (48-cycle render hook), but peer preparation still performed substantial
+work before normal engine updates. The next experiment moves that preparation
+into bounded HALT wait opportunities, alongside transport, retaining the last
+remote appearance when no suitable window remains. This is distinct from the
+previous failed whole-parser experiment because the per-facing upload and
+independent OAM/scanline pipeline have been removed. Measure before accepting.
+
+`build_native_controls.py` creates a disposable baseline bedroom with two normal
+native avatar NPCs through a temporary map-source include. All fixture assembly
+lives under `rom/fixtures`. It restores the original map source in a finally
+block, rebuilds the disabled ROM and checks its exact hash. The first ordinary
+control ROM is under external cache `m2-native-control-1`; its scene must still
+be checked for unintended dialogue from boot inputs before using the result.
+No source map modification remains.
+
+Latest actual local workerd tests pass household multiplexing on one WebSocket,
+two households sharing a room, malformed one-stream payload isolation and
+single-group message-budget rejection, in addition to routing/capacity/leave.
+These are local native/workerd checks, not a cloud deployment.
+
+### Four-player native free-slot slice, 2026-10-11
+
+The native actor experiment now has three generic peer records/caches, schema 4
+and four total players. Full rosters and deltas validate all records, uniqueness
+and identity bindings before publishing any record. Reverse packed expansion is
+generic and bounded. The native diagnostic labels are generated from the pool.
+Experiment objects/ROMs use an isolated `MOBILE_PROBE=1` Make configuration, so
+normal `make mobile` cannot reuse experimental objects.
+
+Four actual selected-character ROMs connected to one embedded Bridge, displayed
+all three selected peers and passed graphics/cache/OAM checks in the bedroom.
+All four profiles had 800/800 world-update frames, max gap 1, zero preservation
+failures, serial max 1448 and tick max 15876 cycles. Artifacts:
+`/Volumes/Storage/Cache/mobileadapter/m2-four-native-bedroom-2`.
+This is not all-map or speed acceptance and does not yet implement NPC eviction.
+The first crowded trial never joined: its normal game work had already passed
+the conservative idle-window cutoff. The cutoff/budget is being measured and
+revised; do not report this trial as a multiplayer or crowd acceptance.
+
+The shared Rust core now admits four and rejects a fifth. All 29 Rust tests
+pass, including two native Bridges with two emulators each, local embedding,
+latency and upstream-loss isolation, checkpoint state-sequence fuzzing and
+identifier churn. Host launcher tests are now 19 and pass the local/hosted/remote
+command paths. DO schema/capacity is being rebuilt and tested locally; no cloud
+account or deployment is involved. The normal production ROM remains schema 3
+until the native actor experiment passes enough evidence to replace it.
+
+### Crowded idle scheduling investigation, 2026-10-11
+
+The crowded scene's first full four-player allocation shifted native frame wait
+entry to LY about 124. The initial LY<120 transport gate then starved maintenance
+and peers expired. The revised slice stages packed expansion, whole-roster
+validation and publication across bounded pumps, updates one pool actor per idle
+unit and avoids scanning leases for ordinary map objects. Four connected crowded
+cores now retain all identities and each reports 800/800 update frames, max gap 1
+(`m2-four-native-corner-5`). Functional acceptance still FAILED: two remote actors
+were absent from actual OAM in several clients. Native OAM submission can fill
+before all high-priority actors are emitted. Allocation must budget OAM as well
+as runtime slots and replace audited optional actors when needed. Correcting
+native priority alone does not establish this gate.
+
+The current experiment raises the byte budget back to eight with a separate
+LY guard before starting each serial byte, retaining an ISR guard window. The
+first hosted four-ROM latency trial is running; its independently injected delay
+must be declared separately from the Python transparent-hop delay in evidence.
+Do not confuse an endpoint declaration with actual injected propagation delay.
+The ordinary production ROM still uses the retained renderer; the new shared
+server's schema 4 will require promotion of the validated native ROM or an
+explicit compatibility strategy before the human launcher is declared usable.
+
+### Household transfer latency and resource leases, 2026-10-11
+
+The first four-ROM hosted trial kept correct identity/graphics, but did not pass
+latency: the first remote movement arrived about 1.2 seconds after input and
+some directional samples had no matching change. The unchanged-roster delivery
+credit left a libmobile TCP receive with no immediate response. The experiment
+now introduces identity-bound local transfer receipts, with authority receipts
+from accepted presence messages and a three-second authority freshness bound.
+Receipts do not change membership or positions; WELCOME still comes exclusively
+from the actual room owner. Retest measured motion; this diagnosis is not yet an
+accepted latency fix.
+
+The scoped Game Corner lease prototype saves a complete native object in free
+bank-5 WRAM and temporarily reuses audited cosmetic script actors 6 through 11.
+It also reserves four OAM entries per remote actor before using a free slot.
+Restoration, palette/camera refresh, map-transition cleanup and all-map policy
+are not accepted yet. The new allocator is still experimental and isolated by
+MOBILE_PROBE, not promoted to the human launcher.
+
+### Receipt and native observer follow-up, 2026-10-11
+
+Thirty-one Rust tests now pass, including silent-authority expiry and coalesced
+local delta delivery. Local transfer replies return one latest roster/delta or
+an identity receipt, never both per poll. Pending join polls are allowed without
+fabricating WELCOME. The faster ROM trial exposed that pending-poll ordering bug;
+its repeated unjoined sessions are not accepted connectivity evidence.
+
+The native OAM observer was incorrect: InitSprites writes each avatar's four
+quads backwards, but the observer read forwards from the lowest tile. It could
+include adjacent NPCs/zeros and falsely report missing figures or directional
+motion. A corrected observer requires a coherent complete four-tile group and
+uses its actual hardware facing. Earlier native cache evidence remains useful,
+but complete four-quad visibility/latency must be rerun with the corrected runner.
+
+The first scoped Game Corner lease profile with a 16-byte burst failed cadence:
+three clients had only about 693 through 695 update-bearing frames out of 800,
+with duplicate updates in other frames; the fourth also had gaps. Total update
+counts alone are insufficient. The burst is reverted to eight; this failure
+is explicitly not an accepted performance tradeoff. The candidate allocator
+leased two audited dialog actors and one free native slot in that scene.
+
+### Coherent native OAM and frame-wait boundary, 2026-10-11
+
+The corrected OAM observer also skips coherent stale groups whose Y bytes were
+hidden by vanilla cleanup, and preserves the last complete physical OAM image
+as hardware-oam.bin. Four real Game Corner clients pass selected cache/VRAM/
+complete-avatar visibility with two audited leases (map actors 6 and 8) and one
+free slot (`m2-four-native-corner-lease-3`). Its profiling still had one missed
+update-bearing frame in two clients, so that run is not cadence acceptance.
+
+A feature-owned replacement HALT wait now checks whether the awaited VBlank has
+already occurred during background work before sleeping. Its integration replaces
+HALT/NOP with a four-byte farcall; existing native helpers are not moved. All four
+Game Corner profiles subsequently measured 800/800 update-bearing frames, max gap
+1 and zero duplicate updates (`m2-four-native-corner-waitguard-1`). That run failed
+the separate randomized NPC-motion oracle in one client; do not label the entire
+run accepted. Extend the ordinary observation and compare native motion behavior.
+
+A disposable matched Game Corner ROM replaces audited actors 6 and 8 with normal
+Crys/Beta objects and adds a normal Kris object in the otherwise free slot. A
+native control with the same selected Chris save and movement measured 800/800,
+max gap 1 and no duplicates. The original map file and exact disabled ROM hash
+were restored afterwards. Evidence: m2-four-native-control-corner-1/run. The
+normal production ROM is still schema 3 and remains incompatible with the new
+schema-4 Bridge until promotion; do not claim the human launcher is ready yet.
+
+The harness now supports two household Bridges and per-player 1/2/3/4 speed
+multipliers. These new real-ROM paths still need execution. The latest four-ROM
+100-ms hosted RTT latency trial uses the corrected complete-OAM observer and
+is running under m2-four-native-receipt-latency-5. All earlier native latency
+trials failed and must not be used as accepted timing evidence.
+
+
+### Native wait-window scheduling checkpoint, 2026-10-11
+
+The shared owner now replenishes roster delivery credit for accepted PRESENCE
+messages as well as POLL. A dedicated regression runs two moving clients through
+20 successive updates without polls and verifies fresh peer state each time.
+All 32 native Rust tests pass. This does not establish real-ROM latency acceptance.
+
+With the feature-owned VBlank-before-HALT guard, the 16-byte burst passes a longer
+Game Corner run: all four profiles have 800/800 update-bearing frames, no duplicate
+updates and max gap 1. Every selected avatar has coherent visible native OAM,
+matching VRAM/cache/palette; ordinary NPC motion and protected story flags pass.
+Artifacts: m2-four-native-waitguard-burst16-corner. The earlier failed 16-byte trial
+predated that wait-boundary fix and is retained as failed evidence.
+
+The refreshed 100-ms hosted RTT trial still fails: 60 visible-motion samples have
+p95 837.05ms, max 843.327ms after first local world motion. Input-to-remote p95 is
+954.902ms. Artifacts: m2-four-native-receipt-latency-7. No latency target was raised
+and no failed directional samples were dropped. A follow-up permits only cheap
+late transport transitions, excludes in-flight byte waits from foreground credit,
+and investigates bounded phase progress inside the native frame wait. This stays
+behind MOBILE_PROBE until all timing and recovery gates pass.
+
+
+The bounded wait-window phase loop also passes Game Corner's four-client native
+cadence: 800/800 update frames, zero duplicates, max gap 1 in all four clients,
+with NPC motion and actual selected-avatar graphics. It never waits for a network
+answer past the scanline deadline. In-flight serial bytes do not consume a
+foreground transition credit. Expensive request/application work retains the
+earlier LY admission boundary; only small transport transitions use late idle.
+Artifacts: m2-four-native-idle-phases-corner. Hosted latency retest is still open.
+
+
+### Cadence gate and early-window admission, 2026-10-11
+
+The 32-byte budget on every map FAILED: two Game Corner clients had 799/800 update
+frames, one duplicate update and a max gap of 2 (frames 3921 and 4091). Functional
+avatar/NPC checks had passed, exposing an overly weak harness success condition.
+Native basic/speed profiles now explicitly reject any non-800 update count,
+duplicate update or max gap above one, even without a supplied control directory.
+Artifacts: m2-four-native-idle32-corner. That unconditional budget was reverted.
+
+The current experiment permits 32 bytes only when native wait entry is before
+LY96, otherwise retaining 16, with the unchanged per-byte LY136 deadline. The
+four-client bedroom profile passes 800/800, zero duplicates and max gap 1 in all
+clients. Hosted RTT100ms latency still FAILED: p95 478.802ms, max 727.252ms;
+input-to-remote p95 597.128ms. Artifacts: m2-four-native-receipt-latency-9.
+
+Single-peer roster/delta changes now use one fixed bounded validation/publication
+unit; full three-peer updates remain staged and atomically validated. This reduces
+unnecessary phase waits, but its new timing/recovery gates are still running.
+No human launcher ROM was promoted and no new acceptance target was weakened.
+
+
+### Shared-owner push scheduling and local read admission, 2026-10-11
+
+The Owner now emits bounded latest-state pushes without requiring a WAN POLL
+credit round trip. Per-receiver pushes are separated by at least 50ms; dirty
+latest state is retained implicitly in the bounded room model, with an explicit
+flush_after deadline. The native host ticks the owner; the Durable Object schedules
+a short alarm only for dirty state and otherwise retains its idle deadline alarm.
+Attachment schema is now 4. The local Rust/WASM workerd suite passes routing,
+capacity, presence, room isolation, household multiplexing, scoped invalid streams
+and single-group traffic admission. This is local evidence, not cloud deployment.
+
+The Bridge coalesces each emulator's upstream PRESENCE to at most 20Hz. Local
+POLL delivery credit stays in the Bridge, with at most one pending latest roster.
+An unchanged POLL produces no TCP frame: libmobile's nonempty send completes its
+adapter command without its empty-receive one-second wait. A fresh cached roster
+can satisfy that local credit as soon as it arrives. Authority liveness depends
+only on validated upstream WELCOME/ROSTER/RECEIPT, never local polling. No join or
+remote state is fabricated. Native integration tests keep sending presence into
+a silent authority and verify that the local stream still expires within 3s.
+
+33 native Rust tests pass after automatic-push admission. The real four-ROM
+RTT100ms trial with immediate local receipts failed at p95 407.662ms, max425.647ms
+(m2-four-native-push-latency-1). Removing empty POLL receipt traffic improved a
+subsequent trial to p95 303.099ms, max312.286ms, but it still FAILS the unchanged
+300ms gate (m2-four-native-push-latency-2). Empty PRESENCE receipts have now also
+been removed in the diagnostic candidate; its next ROM test is pending. The ROM
+itself remains the native actor experiment, not yet promoted for the human launcher.
+
+
+### Four-speed matched-control investigation, 2026-10-11
+
+The updated Bridge/Owner passes 60 actual-ROM hosted RTT100ms visible-motion
+samples: p95 269.586ms, max327.422ms; input-to-remote p95 386.037ms includes the
+unchanged native turn delay. All four profiles have 800 update-bearing frames,
+zero duplicates and max gap1 (m2-four-native-push-latency-3). Do not reuse the
+failed prior trials as acceptance. Local latency still needs final-source proof.
+The Bridge no longer fabricates any local receipt; only real cached state can
+satisfy a local read credit. Upstream authority receipts remain internal liveness
+signals. Native tests and Clippy pass; FFI pointer lifetime is explicitly documented.
+
+A four-client, two-household Game Corner run at 1/2/3/4 speed FAILED source cadence:
+793 update-bearing frames, one duplicate, maxgap2; other clients each800/0/1
+(m2-four-native-households-speeds-corner-1). Its seven gaps occur during long tile
+scroll steps. An actual matched ordinary-NPC control has797 frames, two duplicates
+and three gaps (m2-native-matched-control-speeds-1); the source has four additional
+missed frames. This is a real regression, reported to the user, not a waived FPS
+threshold. Native graphics-request waits now skip Mobile work; new expensive
+transport starts require LY<116 and actor work requires LY<104. That candidate is
+being retested against the actual matching control. A supplied control now replaces
+the blanket800 gate, while still rejecting extra missing frames, larger gaps or
+more duplicates. Without a control, the strict800/0/1 gate remains unchanged.
+
+Authoritative four-player capacity now lives in rom/capacity.asm. Rust derives
+its constant through a small build script; all generic actor/peer collections use
+that setting. The historical schema3 production path has not yet been promoted.
+The new crowded disconnect harness also needs --expected-online=0 for its final
+barrier; its first failed run was an observer readiness error, not recovery proof.
+A compatible-state recovery test now supports three actual peer processes and
+requires a real NPC lease in its crowded saved RAM state.
+
+### Native wait and delayed household checkpoint, 2026-10-11
+
+The maximum-delay Rust workflow passes four concurrently active emulator
+streams, two household Bridges and a 1000-ms delay in each direction. A malformed
+additional local stream closes independently. The scenario keeps issuing local
+presence/read credits while waiting for delayed remote state, as libmobile does;
+stopping all local requests before the delayed roster arrives is not that flow.
+
+The native graphics-priority experiment found an invalid admission predicate:
+`hNbTilesToCopy` aliases the persistent BG-map row count. Treating any nonzero
+value as an active sprite request starved joins. Use actual pending 1bpp/2bpp
+request counts. The 104-line actor boundary then passed the native cadence
+comparison but starved avatar publication; that is a failed functional result.
+A 124-line actor boundary restored avatars, with one extra source-world gap
+versus the ordinary-NPC control. Lowering transport admission to 112 starved
+ongoing response phases in crowded clients. All trials are retained.
+
+Response checksums are now sliced into at most 32 bytes per foreground pump,
+with seven feature-owned scratch bytes and publication only after full trailer
+validation. This alone did not satisfy cadence. The native wait loop also must
+check `hVBlankOccurred` before beginning any new idle work: once the awaited
+VBlank arrives, the regular game immediately owns the frame. The final-source
+mixed-speed measurement of that correction is pending. Milestone 2 is open.
+
+### Native sprite transfer and menu recovery checkpoint, 2026-10-11
+
+The real crowded compatible-state recovery fixture passed in
+`m2-four-native-crowded-state-recovery-3`: one local player and three actual
+headless peers, two genuine displaced NPC leases, Start menu, physical Select+B,
+normal movement after exit, and a real compatible RAM snapshot restored without
+an attached adapter. Ordinary input batteries remained unchanged. No game memory
+was injected. Native menu stationary actions set temporary actors to STANDING;
+the feature-owned existing sprite hook now restores their last accepted facing
+while menus freeze presentation. Offline lease restoration remains active even
+while the menu is open. This candidate must be rerun after the transfer changes.
+
+The previous four-tile Get2bpp upload invoked DelayFrame during cold joins. It was
+replaced with four aligned single-tile GDMA blocks in four fresh HBlanks, exclusively
+inside the native idle wait, without a pending DMA or frame-wait call. Admission
+checks actual pending native graphics requests, hDMATransfer, and DMA activity.
+This is different from the abandoned VBlank GDMA queue: no additional native
+VBlank upload hook, no independently rendered OAM pipeline. A partial chunk stays
+hidden and is retried before publishing an actor. Pan Docs specifies single-block
+VRAM DMA takes about 8 microseconds and GDMA must respect safe VRAM windows:
+https://github.com/gbdev/pandocs/blob/master/src/CGB_Registers.md
+
+Native helper decompression is currently called with ordinary VBlank handling
+through a feature-owned five-byte ROM0 stub. No native helper was relocated.
+ROM0 has zero bytes free; this is a pressure point rather than accepted final
+allocation. Full cold decompression still needs a stricter bounded-work proof.
+
+The mixed-speed two-household trial 11 observed 797/800/800/800 update frames,
+matching the equal ordinary-NPC controls, no extra gaps, and no upload DelayFrame
+calls. The overall trial failed a diagnostic mode marker removed by the menu fix.
+Trial 12 with that marker restored failed source-player parity (793 vs 797
+populated frames). Thus parity is not reproducibly accepted. Both failed trials
+are preserved; do not cite only trial 11 as a complete performance solution.
+The current candidate removes no-op rendering farcalls in the native path, limits
+the existing menu sprite hook to active scripts, and sets the diagnostic marker
+once at join. Trial 13 is pending. The observer now supports an explicit 800-frame
+window so cold joins can be measured against corresponding native controls;
+comparing different windows is rejected.
+
+The Rust maximum-delay workflow passed four active clients through two Bridges
+with 1000 ms delay in each direction and an isolated malformed extra local stream.
+Local workerd acceptance passed twelve cases, including repeated complete
+four-player position rosters, room isolation, household multiplexing and scoped
+malformed-stream handling. The cloud account and deployment remain untouched.
+The current Durable Object WebSocket attachment limit documented by Cloudflare
+is 16384 bytes, not the older 2048-byte figure. No forced hibernation recovery
+acceptance has yet been recorded.
+
+The read-only native idle/upload instruction observer is now in
+`tools/profile_core.h`, not just the local build cache. It records upload
+frame waits, span cycles and VBlank crossings. The invalid disk-exhausted trial
+10 is diagnostic only. Completed trace JSONL artifacts were losslessly gzip
+compressed to preserve evidence and recover cache space.
+
+### Idle scheduling and hibernation checkpoint
+
+The four actual ROMs in `m2-four-native-households-speeds-corner-18` passed the
+matched ordinary-NPC cadence check and the existing functional oracle at
+100/200/300/400% across two household Bridges with 50 ms upstream one-way delay.
+The primary moving client had exactly the control's three normal frame gaps;
+all stationary clients had 800 update frames, no duplicate updates and no gap.
+Maximum measured transport pump was below 10,000 cycles. This is an 800-frame
+warm-window result, not all-scene or cold-join acceptance.
+
+Serial dispatch is now suspended during background capture, parsing and graphics
+jobs and native game work. The enclosing idle wait resumes bounded byte IRQs.
+Native position capture moved from the normal overworld frame into idle time.
+The wait preserves BC as well as AF and yields immediately when VBlank completes.
+This removed additional cadence gaps caused by serial bursts extending job cost.
+Earlier trials 13, 14 and 16 failed cadence; 15 starved joining; 17 passed cadence
+but exceeded the transport-pump budget. Keep these failure artifacts.
+
+Whole-avatar decompression remains unacceptable for cold work. A private,
+resumable LZ decoder now emits at most eight cache bytes per job and leaves
+native VBlank mode unchanged. The first experiment (trial 19) passed warm cadence
+but failed the exact vanilla graphics-cache oracle. Inspection identified the
+project's special minimum repeat/alternate counts (two/three rather than one).
+That correction is under test in trial 20. Do not promote the ROM until the
+byte oracle and cold-window cadence/recovery checks pass. The former feature-owned
+five-byte ROM0 decompression trampoline is no longer referenced.
+
+The actual Rust/WASM lobby owner passed four forced workerd hibernations with
+four players on two household WebSockets, preserving accepted sockets, identities
+and full position rosters. Reproducible test: `server/cloudflare/tests/hibernation.mjs`.
+Miniflare is pinned directly for that test. No Cloudflare account was accessed.
+
+Remaining milestone-2 work includes cold-window comparison, generic all-map
+protected-default leasing and lifecycle coverage, final save/recovery/latency/fault
+checks, ordinary-build flag/protocol promotion, host contracts and Flutter bundle
+verification. Do not claim milestone 2 complete on the warm-window result alone.
+
+
+## Generic native lease checkpoint
+
+The native-actor experiment remains separate from the legacy default mobile ROM.
+Do not promote it or call milestone 2 complete yet.
+
+- `m2-four-native-cold-speeds-corner-2/probe` passed real four-core cold joining,
+  two household Bridges, 100/200/300/400 percent speeds and 100 ms injected RTT.
+  Window 3300..4099 has 798 source updates, no duplicate updates, and only the
+  two vanilla control gaps; the other three cores have 800 updates. All four
+  have zero observed background-job VBlank crossings. The earlier cold-1 run
+  was invalid because disk space exhausted; it is not acceptance evidence.
+- The corrected incremental native LZ decoder passed the four selected-avatar
+  cache and displayed-tile byte oracles. It emits eight bytes per job and uses
+  native minimum counts of two for repeats and three for alternates.
+- Map-instance hashing now runs in bounded 16-cell slices. The latest
+  `m2-four-native-crowded-state-recovery-4` passed physical menu disconnect and
+  restoration of a real online RAM snapshot with no adapter attached.
+- Actual Rust/WASM workerd survived four forced Durable Object hibernations
+  with two household WebSockets and four distinct authorized players. Socket
+  identity and exact full rosters/positions survived wake-up. See local
+  `m2-workerd-hibernation-2.log`; deployment is still deferred.
+- Trace output supports direct gzip, avoiding hundreds of megabytes per core.
+  The runner checks output errors. Failed experiments remain preserved.
+- `audit_native_leases.py` and `native_lease_policy.asm` provide a distinct
+  protected-default leasing policy, independent from the older visual-only
+  suppression policy. Version 2 identifies 717 finite dialogue graphs across
+  all 611 maps. They can read event flags, face the speaker and print dialogue;
+  all branches must terminate without state-writing commands. Unknown commands,
+  cycles, external object references, numeric references, special graphics,
+  trainer interactions and puzzle objects remain protected. Source fingerprints
+  and reference-count checks gate experimental mobile builds.
+- The runtime chooses free slots first, then approved offscreen actors, then
+  the most distant approved actor. It preserves the 34-byte native state and
+  camera anchor, and restores original graphics/palette before publishing the
+  NPC again. It verifies that a frozen temporary lease still owns a slot before
+  updating/restoring it, so a script-deleted or reused slot is not overwritten.
+- Slot 12 is available on ordinary maps. It remains reserved when the declared
+  map assets contain Big Gyarados, Alolan Exeggutor, Sailboat or variable sprites.
+  This avoids wasting a native slot on every map while protecting shared graphics.
+- `m2-four-native-generic-cold-1/probe` passed cadence and four native avatars
+  with generic selection. Its largest observed idle job was 31,344 cycles and
+  no VBlank was crossed. A subsequent all-work admission guard at LY 96 failed:
+  fast cores starved their avatar work even though their native world cadence
+  remained correct. This is a failed prototype, not a supported configuration.
+- The corrected guards admit bounded uploads before LY 116 and the larger
+  actor-preparation job before LY 108. `m2-four-native-generic-cold-3/probe`
+  passed four real cores, all avatars, matched cold cadence and zero observed
+  background VBlank crossings. The later expanded policy still needs final
+  cadence/recovery reruns.
+- Pure whole-map retained-object counts overestimate some resource demands.
+  Cinnabar Volcano has a declared out-of-map rock and separated walk regions;
+  directional walls and warps matter. Do not assert that it fits from a naive
+  FLOOR-only flood fill: LAVA_GLOW has native LAND permission. The new crowd-route
+  tool follows native side-wall permissions and excludes warps, jump tiles and
+  actor anchors. Its routes are fixture proposals, not reachability proofs.
+- `build_crowd_route.py` and the runner's `WALK` command are being validated
+  against an ordinary Cinnabar Volcano save made by New Game and the Save menu.
+  The first controller prototype overshot a waypoint because global coordinates
+  update later than native next-tile coordinates. The corrected controller
+  releases input on the native next-tile coordinate and waits between waypoints.
+  Preserve this failure; do not bypass it with RAM writes.
+
+Next: finish the real crowd walk, test all four clients after retained-slot
+accumulation, cover other dense/special maps, then run final latency, mode changes,
+map transitions, save equivalence and malformed-transport recovery. Rerun Rust,
+Flutter and both local workerd suites. Promote ROM/launcher/contracts together,
+verify disabled baseline hashes and native symbol layout, and commit stable work.
+
+
+### Movement presentation checkpoint
+
+- The final ordinary Cinnabar route traversed 44 real controller waypoints and
+  returned to its starting tile without RAM injection. Four actual ROMs then
+  displayed three remote figures with eleven physical object slots occupied;
+  the protected retained rocks remained intact. Artifact:
+  `m2-four-native-cinnabar-retained-1`. Azalea Gym's southern special-object
+  fixture also passed four native clients (`m2-four-native-azalea-special-1`).
+  Other disconnected walk regions still need separate fixtures.
+- Rust workspace assurance passed 34 tests, including bounded malicious state
+  sequences. Python deployment passed 19 tests. Both actual local workerd suites
+  passed: twelve routing/room cases and four forced hibernations with two
+  household WebSockets and four player identities. The Cloudflare account
+  remains untouched. Logs: `m2-rust-workspace-final-1.log`,
+  `m2-python-deployment-final-1.log`, `m2-workerd-local-final-1.log`.
+- A running fixture exposed presentation gaps that the final-state-only oracle
+  missed. In-flight graphics now retain their last complete visible frame and
+  accept live position work independently of the bounded decoder. The current
+  four-tile frame is uploaded last. Same-map offscreen leases retain their cache;
+  different maps, instances and unavailable participants still release safely.
+  A separate per-frame preparation credit prevents uploads from starving all
+  position updates. Native menu restoration stores native facing bits separately
+  from the six-frame graphics index, and verifies slot ownership.
+- `m2-four-native-running-4` passed all four real ROMs plus intermediate complete
+  selected-avatar tile and visibility checks. A partially clipped native viewport
+  edge does not provide a complete four-quad group, so that byte oracle requires
+  the full figure inside the viewport. Earlier running-1 never entered running;
+  running-2 exposed gaps; running-3 failed at the expected clipped edge. Preserve
+  all those artifacts. The new scheduler still requires matched cold/warm cadence
+  and recovery acceptance before promotion.
+
+
+### Native lifecycle and capacity evidence
+
+- `m2-four-native-generic-cold-4/probe` passed the new independent upload/position
+  scheduler against the matched ordinary-NPC control at 100/200/300/400 percent
+  and 100ms injected RTT: 798/800/800/800 world update frames, no duplicates,
+  zero background VBlank crossings. Largest idle span was 28,288 cycles.
+- Four-core bicycle, surf and Big Gyarados map probes passed exact selected-avatar
+  cache/VRAM oracles (`m2-four-native-bike-1`, `m2-four-native-surf-1`,
+  `m2-four-native-gyarados-1`). Start-menu presentation also passed
+  (`m2-four-native-start-menu-1`).
+- The first camera probe failed its explicit deferral oracle. Unsafe tiny-map
+  panning now overrides menu freezing for cleanup, marks deferral and releases
+  social leases. `m2-four-native-camera-2` passed real pan entry, retained native
+  window objects, exit and restored four-player presentation. Review then found
+  the new projection carry contract had been changed in the legacy file instead
+  of the active native copy. It is now corrected in the active native function,
+  with the legacy file restored; map/instance lifecycle tests must validate it.
+- `audit_native_capacity.py` computes a conservative protected-actor bound after
+  approved leasing. `m2-generic-capacity-1.json` fits three remote slots on 605
+  of 611 maps under its stated static model. Six require additional evidence:
+  Route39, Route36NationalParkGate, CinnabarVolcano1F, CinnabarLab, AzaleaGym and
+  SnowtopMountainOutside. This is not an all-story/effect, OAM or timing proof.
+  The contest gate selects only five contestants and one officer in native code;
+  Cinnabar Lab has mutually exclusive event actors. Geometry-only counts include
+  impossible combinations and unreachable retained actors. Other regions and
+  runtime slot preservation still need actual controller fixtures.
+
+
+### Default native ROM promotion and exact recovery checkpoint
+
+The normal Mobile Adapter build now selects the native path with its single
+MOBILE_ADAPTER flag. Schema 4, authoritative capacity 4, generic three-peer
+storage and the Python Bridge launcher are promoted together. Experimental
+MOBILE_PROBE/MOBILE_NATIVE_ACTOR_PROBE switches and the duplicate independent
+OAM renderer are removed. All feature assembly remains in mobile_adapter/rom.
+
+- Native NPC leases preserve the complete 34-byte object, four camera bytes and
+  exact 384 standing/walking graphics bytes in private bank 5. Restore graphics
+  before making the native object visible, then let native palette binding run.
+  Pokemon icon tests exposed a GDMA source alignment error: low address bits are
+  ignored by hardware. The raw tile pool is now 16-byte aligned with an assertion.
+  Actual Game Corner and Route39 icon restoration compare original and restored
+  VRAM bytes, including an online menu RAM state loaded without an adapter.
+- Four actual retained-slot Route39 cores passed after 52 real controller
+  waypoints. One displaced a real Miltank icon under OAM pressure. Native OAM
+  subtraction is conditionally bounded to prevent an out-of-ShadowOAM write when
+  a native actor enters between background admission jobs.
+- Actor preparation is admitted before LY 115, preserving the per-byte LY 136
+  hard stop and bounded idle work. The default final ROM passed the dense cold
+  matched-NPC comparison at 100/200/300/400 percent, two households and 100ms
+  added RTT. All four had 800 update frames, zero duplicates and zero measured
+  NativeIdle/Upload VBlank crossings. Largest idle span: 29,348 cycles. Artifact:
+  m2-default-cold-cadence-1/probe. Earlier raw-cold-1 had 798/800/800/800 matching
+  the control's two ordinary gaps.
+- A source-pinned capacity audit now fits all 611 maps under its stated ordinary
+  exploration model (607 raw static bounds, 611 reviewed bounds). Contest gates
+  select five contestants; the bound includes both officers. Lab gender actors
+  are exclusive. Azalea retains all carts across native scripted paths. Native
+  walls/warps separate volcano lifetimes. Snowtop panning is explicitly deferred;
+  afterward, approved offscreen shared-atlas window records may be leased without
+  touching their graphics. The long full-camera-tour-2 passed pan entry, travel,
+  exit and restored four-player display. These are slot bounds and finite
+  lifecycle evidence, not an all-story/OAM/full-playthrough proof.
+- The default ROM passed four-client native Save menu fault cases: peer departure,
+  server shutdown and corrupted application magic. Faults start at frame 4050
+  while the native Save menu is active. Checksums, backup and primary saves agree;
+  fresh adapter-free Continue and movement pass. Artifact: m2-default-save-faults-1.
+  No save engine, SRAM allocation or save journal was added.
+- Standard disabled hash is exact. check_layout preserves all 23,373 existing
+  RAM/SRAM/HRAM symbols. Driver 8,084 bytes, auxiliary code 407 bytes, policy 1,005
+  bytes; resident 128 bytes; bank-2 buffers 1,336 bytes; raw backup 1,152 bytes.
+  Standard mobile leaves 4,404 ROM bytes and 956 aggregate WRAMX bytes free.
+  Faithful mobile also compiles. Existing native helpers were not relocated.
+- Actual Rust workspace tests, strict Clippy, static ASM vectors/layout contracts,
+  Python deployment/scenario/policy tests, the signed native macOS Flutter bundle,
+  real Dart FFI and local workerd routing/hibernation tests pass. No cloud account
+  or phone was accessed. The human launcher prepared an isolated fresh Game Corner
+  snapshot, without touching the manual session's port, saves or frontend.
+- Local visible latency initially failed at p95 217.048ms, then 206.775ms after
+  removing one Bridge throttle. The embedded owner now flushes the same bounded
+  dirty state immediately, while cloud delivery retains 20Hz coalescing. A new
+  unit test checks eager delivery against the same identity/capacity/checkpoint
+  rules. The post-change actual-ROM latency measurement is pending. Do not claim
+  M2 complete until the unchanged local<200ms/RTT100<300ms p95 gates pass.
+
+### Native save span correction and final-source retest
+
+A paired baseline save exposed a mistaken earlier assumption: wPlayerData includes
+wObjectStructs and native palette scratch. Merely allocating no mobile SRAM was
+insufficient. Before this correction, TEMP_OBJECT leases and frozen remote fields
+could enter a normal save copy. Earlier fault-save results checked checksums and
+Continue but did not prove independence of those records; they are superseded.
+
+The feature now captures exact original empty records as well as reclaimed NPCs.
+Free leases restore their original bytes. Two guarded farcalls after native
+SavePlayerData/SaveBackupPlayerData CopyBytes project still-owned object records
+from private bank-5 backups directly into the ordinary save copies. No live game
+RAM is changed and native checksum/backup handling remains intact. Palette calls
+preserve all five native scratch fields. Every assembly implementation stays in
+mobile_adapter/rom/native_save.asm; no save journal or new SRAM is introduced.
+
+A read-only instruction observer retains the native same-state payload, substitutes
+the verified original records and checks every byte, register and bank after each
+projection. Tests also reject serialized remote TEMP_OBJECT records, boot the
+exported batteries with the disabled counterpart, and exercise physical exit
+mid-save. Five save cases include an uninterrupted online save, peer disconnect,
+server close, malformed data and Select+B.
+
+The first post-change crowded test had no randomly wandering NPC motion in its
+short final stationary window. Extending only the motion-observation duration to
+5500 frames made this fixture pass; the strict 3300..4099 cadence comparison and
+all cycle limits remain unchanged. Final-source four-core cadence passed, followed
+by local visible p95 181.258ms. The remaining suite is running under
+m2-save-isolation-suite-2. Older latency results remain historical.
+
+
+## Final revised milestone-2 acceptance, 2026-10-11
+
+Final evidence and reproduction are in research/MILESTONE_2.md and
+research/milestone2-evidence.json. The native palette-cache Save blocker was
+resolved with private hardware colors, original native actor views and complete
+native palette scratch preservation. Native fades retain complete remote colors
+and defer new color construction to avoid the normal long catch-up loop.
+Five Save/fault cases are repeated with immutable disabled-ROM inputs and both
+full same-state save-copy and independent native palette-cache oracles.
+
+Earlier ordinary-NPC comparison fixtures were invalid: Continue restored cached
+original map objects, and the replacement inventory/input sequence differed.
+The final verifier generates actual reclaimed map indexes, correct figures,
+positions and control-specific normal New Game/Save batteries for each measured
+run. It checks remaining native actor identities, counts and replayed movements.
+Fast source restoration explicitly forces the map dependency, then verifies the
+exact baseline hash. Final four-player cold profiles are 800/800 at all speeds;
+controls are 783/784. No extra world gap or idle/upload VBlank crossing is observed.
+The boundaries of this actor-load comparison are retained in the evidence.
+
+All ten main cases, five immutable Save faults, native camera/bike/surf/volcano/
+connection cases, actual icon restoration, faithful and 14-process echo transport
+pass with the final ROM. Host tests and immutable final layout/renderer audits
+pass, and the human preparation path produces the same ROM and a fresh normal
+Continue snapshot in an isolated cache. No manual listener, user profile, phone
+or public cloud was changed. The milestone is complete for the latest authorized
+scope; future features must preserve the gates and address the small ROM budget.

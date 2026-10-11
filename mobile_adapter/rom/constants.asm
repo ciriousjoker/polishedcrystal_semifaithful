@@ -1,10 +1,24 @@
 ; Bounded transport and lobby fields. Raw bytes do not use the text charmap.
 DEF MOBILE_ROM_BANK EQU $7f
 DEF MOBILE_WRAM_BANK EQU 2
+DEF MOBILE_BACKUP_BANK EQU 5
+DEF MOBILE_NATIVE_ROLE EQU 35
+MACRO mobile_native_oam_bounds
+; A=quad count, C=last available reverse OAM address. Preserve all pointers.
+; The original byte subtraction can wrap after OAM fills. Keep every write in
+; ShadowOAM even when native actors enter between background admission jobs.
+	add a
+	add a
+	sub OBJ_SIZE
+	cp c
+	jr z, .mobile_oam_fits\@
+	jr nc, .full
+.mobile_oam_fits\@
+ENDM
 DEF MOBILE_BUFFER_SIZE EQU 272 ; maximum 8-bit adapter response plus framing
 DEF MOBILE_FRAME_SIZE EQU 128
 ; Bound serial/foreground work; strict native cadence is measured separately.
-DEF MOBILE_BURST_BYTES EQU 24
+DEF MOBILE_BURST_BYTES EQU 16
 DEF MOBILE_PUMPS_PER_FRAME EQU 4
 DEF MOBILE_IRQ_TRAMPOLINE_SIZE EQU 14
 DEF MOBILE_COMMAND_TICKS EQU 120
@@ -13,11 +27,11 @@ DEF MOBILE_ATTEMPT_TICKS EQU 600
 DEF MOBILE_SERVER_PORT EQU 17423
 DEF MOBILE_DEVICE EQU $88 ; blue adapter, 8-bit mode
 ; The generated title dependency is explicit in Makefile.
-if DEF(FAITHFUL)
-	DEF mobile_title_version EQUS "INCBIN \"mobile_adapter/build-faithful-mobile/title-version.2bpp.lzp\""
-else
-	DEF mobile_title_version EQUS "INCBIN \"mobile_adapter/build-mobile/title-version.2bpp.lzp\""
-endc
+	if DEF(FAITHFUL)
+		DEF mobile_title_version EQUS "INCBIN \"mobile_adapter/build-faithful-mobile/title-version.2bpp.lzp\""
+	else
+		DEF mobile_title_version EQUS "INCBIN \"mobile_adapter/build-mobile/title-version.2bpp.lzp\""
+	endc
 
 DEF MOBILE_WIRE_IDLE EQU 0
 DEF MOBILE_WIRE_TX EQU 1
@@ -35,8 +49,8 @@ DEF MOBILE_ERROR_ADAPTER EQU 4
 DEF MOBILE_ERROR_PROTOCOL EQU 5
 DEF MOBILE_ERROR_BUSY EQU 6
 
-DEF MOBILE_SCHEMA EQU 3
-DEF MOBILE_CAPACITY EQU 3
+DEF MOBILE_SCHEMA EQU 4
+INCLUDE "mobile_adapter/rom/capacity.asm"
 DEF MOBILE_PEERS EQU MOBILE_CAPACITY - 1
 DEF MOBILE_HELLO EQU 16
 DEF MOBILE_WELCOME EQU 17
@@ -47,6 +61,7 @@ DEF MOBILE_LEFT EQU 21
 DEF MOBILE_SERVER_ERROR EQU 22
 DEF MOBILE_POLL EQU 23
 DEF MOBILE_DELTA EQU 24
+DEF MOBILE_RECEIPT EQU 25
 DEF MOBILE_SNAPSHOT_SIZE EQU 14
 DEF MOBILE_SNAPSHOT_WIRE_SIZE EQU 11
 DEF MOBILE_PEER_WIRE_SIZE EQU 17
@@ -78,3 +93,5 @@ ASSERT MOBILE_SERVER_PORT > 0 && MOBILE_SERVER_PORT < 65536
 DEF MOBILE_PEER_LOADED_SPRITE EQU 30
 DEF MOBILE_PEER_LOADED_FRAME EQU 31
 DEF MOBILE_PEER_PALETTE EQU 32
+
+INCLUDE "mobile_adapter/rom/native_palette_macros.asm"

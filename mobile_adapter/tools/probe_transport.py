@@ -12,7 +12,7 @@ import re
 import socket
 import subprocess
 import time
-from probe_emulator import convert_png, digest, read_symbols, require, validate_battery
+from probe_emulator import convert_png, digest, read_symbols, require, trace_text, validate_battery
 
 REPO = Path(__file__).resolve().parents[2]
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -55,7 +55,7 @@ def run_client(args, case, directory, profile=False):
     command = [str(args.runner), str(args.profile_core if profile else args.core), str(args.rom),
                str(directory / "screen.ppm"), str(directory), "--frames", str(frames),
                "--input", str(script), "--symbols", str(args.symbols),
-               "--state-out", str(directory / "state.json"), "--trace-out", str(directory / "trace.jsonl"),
+               "--state-out", str(directory / "state.json"), "--trace-out", str(directory / "trace.jsonl.gz"),
                "--checkpoint-dir", str(checkpoints), "--save-in", str(args.battery),
                "--pace-from", "3250", "--adapter", "0" if case == "no-adapter" else "1"]
     if profile:
@@ -76,7 +76,7 @@ def run_client(args, case, directory, profile=False):
                           "wMobileGuardStart": 165, "wMobileGuardTx": 165,
                           "wMobileGuardRx": 165, "wMobileGuardEnd": 165}.items():
         require(state[key] == expected, f"{case}: {key}={state[key]}, expected {expected}")
-    trace = [json.loads(line) for line in (directory / "trace.jsonl").read_text().splitlines()]
+    trace = [json.loads(line) for line in trace_text(directory / "trace.jsonl").splitlines()]
     # Adapter absence may claim and release serial between video observations.
     # The attempt, error, cleanup, guards and subsequent movement above still
     # prove this fast failure path. Live adapter scenarios must expose ownership.

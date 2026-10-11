@@ -158,9 +158,11 @@ def native_tools(args, android=False):
     source = args.cache / "sources/doublecherry"
     require(output(["git", "-C", source, "rev-parse", "HEAD"]) == CORE_REVISION,
             "DoubleCherryGB source is not the pinned tested revision")
+    from observe_core_palettes import prepare
+    prepare(source)
     runner = args.cache / "smoke-libretro"
     run(["clang++", "-std=c++17", "-O2", "-I", source / "libretro/DoubleCherryEngine",
-         TOOLS / "smoke_libretro.cpp", "-o", runner])
+         TOOLS / "smoke_libretro.cpp", "-lz", "-o", runner])
     if not android:
         return runner
     ndk = args.sdk / "ndk/29.0.14206865"
@@ -176,7 +178,7 @@ def native_tools(args, android=False):
     android_runner = args.cache / "smoke-libretro-android-arm64"
     run([compiler, "-std=c++17", "-O2", "-static-libstdc++", "-ldl",
          "-I", source / "libretro/DoubleCherryEngine", TOOLS / "smoke_libretro.cpp",
-         "-o", android_runner])
+         "-lz", "-o", android_runner])
     return build / "DoubleCherryGB_libretro.so", android_runner
 
 
@@ -447,7 +449,7 @@ def launch_android(device, launch):
         if device.exists(logfile):
             log = device.shell("tail", "-n", "150", logfile)
             if all(frontend_status(log).values()):
-                print("ANDROID START confirmed: core initialized; fresh state loaded. Select+B joins the three-player lobby.", flush=True)
+                print("ANDROID START confirmed: core initialized; fresh state loaded. Select+B joins the four-player lobby.", flush=True)
                 return
         time.sleep(0.5)
     result = device.call("shell", "pidof", device.package, capture_output=True, text=True, check=False)
@@ -457,28 +459,29 @@ def launch_android(device, launch):
 
 
 def start(args, mac, address, device=None, launch=None):
-    server = REPO / "mobile_adapter/server/target/debug/mobile-server"
     children = []
+    android_address = None
     stopped = threading.Event()
     log = (mac / "play.log").open("w")
     try:
-        process = subprocess.Popen([str(server), "--bind", f"{address}:{PORT}"],
+        for command, prefix in bridge_commands(args, address):
+            process = subprocess.Popen(command,
                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
                                    start_new_session=True)
-        children.append(process)
-        ready = process.stdout.readline().strip()
-        require(ready == f"READY {address}:{PORT}", f"Server failed to start: {ready}")
-        print(f"SERVER tcp://{address}:{PORT} (fixed port {PORT})", flush=True)
+            children.append(process)
+            ready = process.stdout.readline().strip()
+            require(ready.startswith(prefix), f"Bridge/hosted model failed to start: {ready}")
+            def forward(source=process):
+                for line in source.stdout:
+                    print(labelled_server_line(line, address, android_address), end="", flush=True)
+            threading.Thread(target=forward, daemon=True).start()
+        print(f"BRIDGE tcp://{address}:{PORT} (fixed port {PORT}), mode={args.mode}, lobby={args.lobby}", flush=True)
         android_address = None
         if device:
             route = device.shell("ip", "-4", "route", "get", address)
             match = re.search(r"\bsrc\s+(\S+)", route)
             android_address = match.group(1) if match else None
             print(f"CLIENT ADDRESSES mac={address} android={android_address or 'unknown'} (labels by source IP)", flush=True)
-        def forward():
-            for line in process.stdout:
-                print(labelled_server_line(line, address, android_address), end="", flush=True)
-        threading.Thread(target=forward, daemon=True).start()
         children.append(subprocess.Popen([str(args.frontend), "-v", "-c", str(mac / "retroarch.cfg"),
             "-L", str(args.cache / "build/doublecherry/DoubleCherryGB_libretro.dylib"),
             str(mac / f"roms/{NAME}.gbc")], stdout=log, stderr=subprocess.STDOUT,
@@ -512,10 +515,33 @@ def start(args, mac, address, device=None, launch=None):
         log.close()
 
 
+def bridge_commands(args, address):
+    """One household Bridge, with an optional owned local Worker/DO simulator."""
+    binaries = REPO / "mobile_adapter/server/target/debug"
+    commands = []
+    bridge = [str(binaries / "mobile-bridge"), "--bind", f"{address}:{PORT}", "--lobby", str(args.lobby)]
+    if args.mode == "hosted":
+        endpoint = f"127.0.0.1:{args.hosted_port}"
+        commands.append(([str(binaries / "mobile-hosted"), "--bind", endpoint,
+                          "--test-one-way-delay-ms", str(args.test_one_way_delay_ms)], f"MOBILE_HOSTED_READY {endpoint} "))
+        bridge += ["--upstream", f"ws://{endpoint}"]
+    elif args.mode == "remote":
+        require(args.upstream, "Remote mode requires --upstream")
+        bridge += ["--upstream", args.upstream]
+    commands.append((bridge, f"BRIDGE_READY {address}:{PORT} "))
+    return commands
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scenario", help="Starting save: bedroom, game-corner or goldenrod-city; otherwise ask interactively")
     parser.add_argument("--mac-avatar", choices=AVATARS, default="chris")
+    parser.add_argument("--mode", choices=("local", "hosted", "remote"), default="local",
+                        help="Embedded local lobby, local Worker/DO simulation, or an external WS origin")
+    parser.add_argument("--lobby", type=int, default=1)
+    parser.add_argument("--upstream", help="WSS origin for remote mode, or WS loopback for a local host")
+    parser.add_argument("--hosted-port", type=int, default=8787)
+    parser.add_argument("--test-one-way-delay-ms", type=int, default=0, help="Hosted-mode test delay, 0..1000ms per direction")
     parser.add_argument("--android-avatar", choices=AVATARS, default="kris")
     parser.add_argument("--server-ip", help="Mac LAN IPv4; otherwise detect its default interface")
     parser.add_argument("--interface", help="Network interface to use instead of the default route")
@@ -530,6 +556,12 @@ def main():
                         help="Shared-storage folder for the stable ROM, save and auto-start snapshot")
     parser.add_argument("--frontend", type=Path, default=FRONTEND)
     args = parser.parse_args()
+    require(1 <= args.lobby <= 65535 and 1 <= args.hosted_port <= 65535 and args.hosted_port != PORT,
+            "Choose a nonzero lobby and a hosted port distinct from the emulator port")
+    require(0 <= args.test_one_way_delay_ms <= 1000 and (not args.test_one_way_delay_ms or args.mode == "hosted"),
+            "Latency simulation requires hosted mode and a delay in 0..1000ms")
+    require(not args.upstream or args.mode == "remote", "--upstream requires remote mode")
+    require(args.mode != "remote" or args.upstream, "Remote mode requires --upstream")
     args.scenario_record = choose(args.scenario)
     print(f"SCENARIO: {args.scenario_record['label']}; Mac={args.mac_avatar}, Android={args.android_avatar}", flush=True)
     require(sys.platform == "darwin", "This launcher is for the configured native macOS host")
@@ -537,6 +569,8 @@ def main():
     address = server_address(args)
     if not args.prepare_only:
         ensure_port_available(address)
+        if args.mode == "hosted":
+            ensure_port_available("127.0.0.1", args.hosted_port)
     device = None if args.mac_only else Android(args)
     if device:
         device.shell("am", "force-stop", device.package)

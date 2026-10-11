@@ -1,10 +1,11 @@
-# Lobby schema 3
+# Lobby schema 4
 
-One TCP stream per ROM connects through libmobile's ISP path. Frames use
-transport-v1's eight-byte PC header, version 1 and maximum 120-byte payload.
-All application words are unsigned big endian. Socket reads and adapter DATA
-responses can split or combine frames. The server publishes the latest state using coalescing delivery credits from
-each client, independently of which peer produced the update.
+The historical filename is retained for links. This is the current schema-4
+four-player wire contract. Schema 2/3 clients must update with their Bridge.
+Each ROM opens one TCP stream through libmobile's ISP path to the local Bridge.
+Transport-v1 has an eight-byte PC header, version 1 and a maximum 120-byte payload.
+Words are unsigned big endian. Reads and adapter DATA responses may split/combine
+frames; parsing never assumes a socket read equals a complete application frame.
 
 | Kind | Value | Payload |
 | --- | ---: | --- |
@@ -16,28 +17,29 @@ each client, independently of which peer produced the update.
 | LEFT | 21 | ID u16, generation u16 |
 | ERROR | 22 | error code u8 |
 | POLL | 23 | empty, sequence zero |
-| DELTA | 24 | ROSTER layout, containing changed existing peers only |
+| DELTA | 24 | ROSTER layout, changed existing peers only |
+| RECEIPT | 25 | receiver ID u16, generation u16 |
 
-Schema is 3, mechanics 0 standard or 1 faithful, capacity 3. The ROM selects
-public test lobby 1. IDs are nonzero, assigned by the server independently of
-trainer IDs, runtime objects and socket sessions. Rooms permit three connected
-players. The service retains at most 128 identities globally and accepts 16
-sockets. IDs are not reused in a server lifetime; generations never wrap.
+Schema is 4; mechanics is standard 0 or faithful 1. Capacity is read from the
+single `rom/capacity.asm` declaration by both assembly and the Rust build script.
+The supported value is four total players, with three generic remote pool entries.
+This knob is subject to ROM, RAM, graphics and audited layout bounds; increasing
+it beyond the supported value requires new acceptance, not just changing a number.
 
-These are protocol/build-option checks, not full Polished Crystal release
-compatibility checks. HELLO currently carries no source revision or gameplay/map
-compatibility profile. Identical multiplayer code alone does not guarantee matching
-map IDs, battle rules or Pokemon/item semantics across ROM revisions. The planned
-profile policy is in [SERVER_ARCHITECTURE.md](../research/SERVER_ARCHITECTURE.md).
-This note changes no current wire bytes. The planned local TCP/WSS bridge is a
-separate transport boundary and is not implemented by this protocol document.
+The ROM initially names lobby 1. Bridge configuration selects the household's
+actual lobby and validates/translates the local HELLO lobby field. Prototype room
+IDs are canonical nonzero 16-bit numbers, not secure invitations or passwords.
+Server IDs are independent of trainer IDs, object slots and TCP sessions.
+Generations/identifiers fail closed on exhaustion rather than silently wrapping.
+The shared room bounds retained identities to 128, active players to four,
+households to eight and emulator stream IDs to 1..16.
 
-A peer record contains ID u16, generation u16, revision u16, then its snapshot.
-A full roster contains up to two peers and has a maximum 39-byte payload. It
-replaces membership and removes absent peers. Membership/generation changes
-always send a full roster. DELTA updates existing records by explicit ID and
-cannot create membership. The ROM checks receiving identity, duplicates, self
-records, unknown delta IDs and all snapshot bounds before publishing records.
+A peer record contains ID, generation and revision (u16 each), then its snapshot.
+A full three-peer roster is 56 payload bytes or 64 bytes with its transport header.
+It replaces membership; an absent peer is removed. Membership/generation changes
+send a full roster. DELTA cannot create a member. The ROM validates receiving
+identity, duplicates, self records, unknown delta IDs and every field before
+publishing the bounded pool. Internal records are separate from packed wire bytes.
 
 | Snapshot offset | Size | Meaning |
 | --- | ---: | --- |
@@ -45,95 +47,85 @@ records, unknown delta IDs and all snapshot bounds before publishing records.
 | 1 | 1 | Map number |
 | 2 | 2 | Physical map block-layout key |
 | 4 | 2 | Scene-entry epoch |
-| 6 | 3 | Packed absolute X/Y: X[11:4], X[3:0] with Y[11:8], Y[7:0] |
+| 6 | 3 | Packed X/Y: X[11:4], X[3:0] with Y[11:8], Y[7:0] |
 | 9 | 1 | Facing bits 7..4; movement bits 3..1; availability bit 0 |
-| 10 | 1 | Chosen figure: Chris 0, Kris 1, Crys 2, Beta 3 |
+| 10 | 1 | Saved figure: Chris 0, Kris 1, Crys 2, Beta 3 |
 
-Coordinates retain all 12 bits (0..4095), facing is 0..15, movement is normal 0,
-run 1, bike 2, skate 3, surf 4 or surf Pikachu 5. Availability is 0 paused or
-1 safe overworld. Figure is read from the actual saved wPlayerGender. Values above 3 are rejected. Older schema-2 fixed-Chris clients are incompatible. The ROM expands peer
-records to its own 20-byte internal layout after validating packed frame size.
-Expansion scratch occupies the last 17 bytes of the private APP buffer; a packed
-full roster occupies at most 47 bytes including its header.
+Coordinates are 0..4095, facing 0..15 and movement normal 0, run 1, bike 2,
+skate 3, surf 4 or surf Pikachu 5. Availability is paused 0 or safe overworld 1.
+Native capture combines logical coordinates, step-timer progress and jump offset;
+projection follows the local camera. Epoch/generation changes reset presentation.
+Old complete avatars remain visible until a bounded idle update fits; obsolete
+intermediate presence may be skipped. Remote actors have no scripts or collision.
 
-Capture follows the player-object step and combines logical tile coordinates,
-fractional progress from the walking timer and vertical jump offset. Slow,
-normal, run and bicycle steps have separate durations. Camera projection uses
-the same fractional progress. A negative border position is clamped until the
-connected map loads. Generation/epoch changes reset interpolation; ordinary
-rendering approaches the latest target, snapping beyond 32 pixels.
+Map instance keys hash interior blocks and tileset in bounded idle phases. A
+scripted layout change invalidates the visual key. The 16-bit key can collide and
+is only a visibility hint. It never synchronizes story, items, puzzles or encounters.
+Transport/schema/capacity/mechanics checks are not complete cross-revision game
+compatibility. HELLO carries no semantic game digest. The desired manifest and
+conservative cross-version policy remain future work in SERVER_ARCHITECTURE.md.
 
-Entry and paused menus/scripts invalidate capture. The next safe scene increments
-its epoch and hashes interior map blocks, excluding connection padding and
-including tileset. Scripted block changes therefore invalidate the visual key.
-The 16-bit key is a conservative visual hint, can collide, and does not synchronize
-story flags, pickups, puzzles or encounters. Rendering requires matching map/key
-and safe availability. Remote avatars have no collision or NPC scripts.
+## Household envelope and owner
 
-WELCOME/LEFT repeat the request sequence. Increasing PRESENCE revisions and
-scene epochs use modulo-65536 serial arithmetic with difference 1..32767. A
-changed map/key needs a newer epoch. Generation changes reset revision tracking.
-Push sequences belong to server notifications, not outstanding requests.
+Several emulator streams share one Bridge session and one upstream WebSocket.
+Binary WebSocket messages have a six-byte envelope: ASCII MB, version 1, operation
+1 for frame or 0 for stream close, then stream u16. Operation 1 contains exactly
+one complete bounded PC frame; operation 0 has no trailing data. Maximum message
+size is 134 bytes. Closing one stream leaves its siblings intact. Invalid envelope
+framing may close the household; invalid one-player payloads are scoped to that
+stream. No envelope contains an address belonging to another player.
 
-Each connection keeps one latest model snapshot, one watch notification and one
-previous normalized roster. The writer coalesces for 8 ms and skips heartbeat-only
-and self-only changes. One pending delivery credit per adapter DATA request additionally bounds
-slow receivers: PRESENCE and POLL grant a credit, repeated grants coalesce, and
-the writer keeps a held credit until the latest peer state changes. At most one
-write plus one pending credit can exist. Credit is replenished by each client's
-own requests, independently of the sender's emulator speed. Movement never
-becomes an event backlog in the model or an unbounded outgoing TCP queue. A one-entry
-control channel prioritizes LEFT/ERROR. Independent reader/writer tasks preserve
-partial incoming frames while pushing outgoing state. Writes have a two-second
-deadline. Later reliable actions need separate bounded queues and credits.
+Local mode embeds the Rust Owner with no upstream. Internet mode routes the
+upgrade at `/lobbies/<id>/ws` to one owner per lobby. Native hosted simulation and
+WASM Durable Object share this same socket-independent owner; subsequent DO
+messages are handled by the DO, not a Worker relay per packet. The DO's validated
+hibernation attachments retain transient owner state and accepted socket identities.
+They do not contain cartridge saves, inventory or any irreplaceable game state.
 
-The ROM sends changed snapshots at a minimum one-frame interval plus 500-ms
-keepalives. Otherwise adapter DATA carries POLL. Pinned libmobile waits up to one
-second for an empty TCP receive; nonempty POLL avoids that wait without changing
-libmobile. POLL has no reply and does not renew the presence lease. The foreground
-parser copies at most 32 application bytes and publishes one completed frame per
-pump. Header/body chunks stop at the validated frame boundary; lengths cannot
-spill into another frame or the dedicated buffer. Adapter checksum validation,
-application parsing and preparation of the next request run in separate pumps.
-Serial bursts share at most 24 bytes per VBlank. At most four foreground pumps
-run per frame across the existing hooks. No network wait runs on the game CPU.
-These caps bound work; the strict matching-input world-cadence check remains a
-separate requirement and must pass before claiming timing parity.
+Internet presence and authority rosters coalesce at 20Hz per player. Embedded mode
+flushes dirty state immediately. Local POLL grants one delivery credit and stays
+local; repeated credits coalesce. A changed roster supersedes the pending one.
+Validated identity-bound authority RECEIPTs confirm accepted presence without
+copying a roster each time. They refresh liveness; local polls/movement cannot
+hide a dead authority. Local replies never fabricate a join or remote freshness.
+No pending roster means no TCP response; the adapter can complete an empty
+nonblocking exchange. Control output, write queues, socket admission, deadlines,
+room counts and test delay queues are bounded. See the source and tests for limits.
 
-After a broken socket, automatic retry waits 240 frames and submits the previous
-ID/token. Disconnected identities remain resumable for 30 seconds. Resume advances
-generation; old writes/cleanup cannot remove the replacement. Presence expires
-after three seconds without a valid update. Explicit LEAVE immediately removes
-identity and LEFT clears ROM credentials.
+WELCOME/LEFT repeat the request sequence. Revisions/epochs use modulo-65536
+serial arithmetic with forward difference 1..32767. Map/key changes need a newer
+epoch. Generations reset revision tracking. Server push sequences are independent
+of outstanding requests. Presence expires after three wall-clock seconds; detached
+identities remain resumable for thirty seconds. Resume requires the opaque token
+and advances generation. Old cleanup cannot remove a replacement session.
+Server restart discards disposable membership; unavailable resume credentials cause
+a fresh join. Explicit local exit disables recovery until a later explicit join.
 
-ERROR codes: malformed 1, incompatible 2, full 3, stale 4, resume unavailable 5,
-service capacity 6. Error 5 clears old credentials and retries a fresh join,
-including after server restart. Other semantic errors stop automatic joining.
-Tokens use OS randomness through pinned getrandom 0.3.4. This local protocol has
-no encryption, accounts or identity persistence across restarts.
+ERROR codes are malformed 1, incompatible 2, full 3, stale 4, resume unavailable 5,
+service capacity 6. Code 5 clears credentials and retries fresh admission. Other
+semantic errors stop joining. Tokens come from host entropy; WSS protects remote
+transport, while loopback development permits WS. Modified clients are not attested.
 
-Select+B toggles online intent. Select+A opens status/roster/controls. Select+B+A
-retains transport-v1's echo diagnostic. Physical joypad bytes remain intact for
-debouncing; accepted chords filter mirrored game input. Cable/printer use releases
-mobile ownership. Offline play remains available without a server.
+## ROM priority and acceptance
 
-Latency acceptance observes the first captured local world motion and the
-first directional change in remote four-quad avatar bounds at the native video
-callback. Facing flips alone do not count. The network/rendering p95 budget is
-200 ms local or 300 ms RTT100. The separate input-to-remote statistic includes
-the unchanged vanilla turn script, which often takes roughly 130 ms before
-movement begins. Earlier input-to-remote 200/300-ms experiments failed; those
-results remain recorded, rather than being presented as accepted measurements. RTT100 uses a transparent TCP test bridge with independent 50-ms upstream and
-downstream delivery deadlines. Its queues are capped at 64 KiB per direction.
-Multiple packets share the propagation delay rather than each imposing a new
-serial wait. This is a reproducible loopback-delay experiment, not a full WAN
-loss/bandwidth simulation or a real mobile network measurement.
+Physical Select+B exits active/stale multiplayer intent before engine input locks;
+a fresh press in the fully offline development workflow can join. Select+A opens
+status/roster/controls; Select+B+A requests the offline echo diagnostic. Exit never
+waits for an adapter acknowledgement and does not interrupt native save writes.
+The ROM keeps network state out of SRAM and projects original leased actors into
+native save copies before their ordinary checksums. Native palette scans use the
+original actor views; remote hardware colors have private bounded storage.
 
+Serial activity is restricted to native wait time. Heavy parser/CRC/map-hash/LZ/
+upload jobs have measured admission deadlines. Application publication copies at
+most 32 bytes per job, native decompression at most eight bytes per job, map hashing
+16 bytes per job and at most four transport pumps per frame. Limits alone are not
+proof of cadence: real instruction profiling checks every awaited VBlank boundary.
 
-Fast-forward acceptance runs one actual core at 3x and two at 1x. Presence uses
-absolute world positions, map/instance/epoch and monotonic session revisions,
-never an assumption of shared frame counts or equal walking speed. The server
-uses wall-clock leases; client frame counters only pace local transport. Slow
-receivers may skip intermediate positions and snap, but must converge on the
-latest identity, generation, map and position. Future battles and transactions
-must synchronize explicit actions/acknowledgements rather than emulator frames.
+Current four-core acceptance uses 100/200/300/400% speeds through two Bridges,
+matching ordinary native NPCs and a 100ms injected hosted RTT. The separate visible
+latency gate measures local world motion to directional movement of a complete
+remote avatar: p95 below 200ms local or 300ms RTT100. Full input-to-visible delay
+is also retained, including unchanged native turning time. Tests are loopback
+experiments, not guarantees for every WAN. Later battles/transfers must synchronize
+explicit actions and bounded acknowledgements rather than emulator frame counts.

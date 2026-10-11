@@ -37,6 +37,9 @@ endr
 ; copy 8 pals to obpd
 	ld a, %10000000 ; auto increment, index 0
 	ldh [rOBPI], a
+if DEF(MOBILE_ADAPTER)
+	farcall MobileNativeUpdateOBPalettes
+else
 	lb bc, 4, LOW(rOBPD) ; 4 = NUM_PALS / 2
 .obp
 rept 2 palettes
@@ -46,6 +49,8 @@ endr
 
 	dec b
 	jr nz, .obp
+
+endc
 
 	pop af
 	ldh [rWBK], a

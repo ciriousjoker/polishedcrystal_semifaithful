@@ -15,6 +15,10 @@ VBlank::
 	ldh a, [hROMBank]
 	ldh [hROMBankBackup], a
 
+if DEF(MOBILE_ADAPTER)
+	farcall MobileEmergencyInput
+endc
+
 	; Skip the .VBlanks table if [hVBlank] is just 7.
 	; _SafeCopyTilemapAtOnce sets it to 1 << 7 | 7 to execute actual VBlank7.
 	ldh a, [hVBlank]

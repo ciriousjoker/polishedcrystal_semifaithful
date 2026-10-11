@@ -1,0 +1,21 @@
+[package]
+name = "mobile-cloudflare"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.91"
+
+[lib]
+crate-type = ["cdylib"]
+
+[workspace]
+
+[dependencies]
+worker = "=0.8.7"
+mobile-protocol = { path = "../crates/protocol", features = ["checkpoint"] }
+mobile-lobby-core = { path = "../crates/lobby-core", features = ["checkpoint"] }
+serde = { version = "=1.0.228", features = ["derive"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

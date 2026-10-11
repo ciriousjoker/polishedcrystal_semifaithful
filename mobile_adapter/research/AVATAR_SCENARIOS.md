@@ -1,5 +1,11 @@
 # Selected figures and portable test scenarios
 
+Historical acceptance: the current four-player native renderer, schema, memory
+layout, Start-menu behavior and build hashes are documented in
+[MILESTONE_2.md](MILESTONE_2.md). That report supersedes the renderer-specific
+details below. The committed ordinary battery fixtures remain current inputs;
+emulator snapshots are always regenerated for the selected ROM/core.
+
 Completed on 2026-10-11 on branch `mobileadapter`, after milestone 2. This report
 supersedes the fixed-Chris renderer, tile reservations, schema and build hashes
 in the original [MILESTONE_2.md](MILESTONE_2.md) acceptance record.

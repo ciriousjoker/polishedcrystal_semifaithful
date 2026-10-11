@@ -1,8 +1,8 @@
 //! Explicit, bounded lobby wire fields. All multibyte fields are big endian.
 use crate::DecodeError;
 
-pub const SCHEMA: u8 = 3;
-pub const CAPACITY: u8 = 3;
+pub const SCHEMA: u8 = 4;
+include!(concat!(env!("OUT_DIR"), "/capacity.rs"));
 pub const HELLO: u8 = 16;
 pub const WELCOME: u8 = 17;
 pub const PRESENCE: u8 = 18;
@@ -12,6 +12,8 @@ pub const LEFT: u8 = 21;
 pub const ERROR: u8 = 22;
 pub const POLL: u8 = 23;
 pub const DELTA: u8 = 24;
+/// Identity-bound receipt; never changes membership or a peer snapshot.
+pub const RECEIPT: u8 = 25;
 pub const SNAPSHOT_LEN: usize = 11;
 pub const PEER_LEN: usize = 17;
 pub const HELLO_LEN: usize = 15;
@@ -70,6 +72,7 @@ impl Hello {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "checkpoint", derive(serde::Serialize, serde::Deserialize))]
 pub struct Welcome {
     pub player: u16,
     pub generation: u16,
@@ -105,6 +108,7 @@ impl Welcome {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "checkpoint", derive(serde::Serialize, serde::Deserialize))]
 pub struct Snapshot {
     pub map_group: u8,
     pub map_number: u8,
@@ -119,15 +123,16 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
+    pub fn is_valid(&self) -> bool {
+        self.x <= 4095
+            && self.y <= 4095
+            && self.facing < 16
+            && self.status <= 1
+            && self.avatar < 4
+            && self.movement <= 5
+    }
     pub fn encode(&self) -> Vec<u8> {
-        assert!(
-            self.x <= 4095
-                && self.y <= 4095
-                && self.facing < 16
-                && self.status <= 1
-                && self.avatar < 4
-                && self.movement <= 5
-        );
+        assert!(self.is_valid());
         let mut bytes = vec![self.map_group, self.map_number];
         bytes.extend(self.instance.to_be_bytes());
         bytes.extend(self.epoch.to_be_bytes());
@@ -169,6 +174,17 @@ pub struct Peer {
 }
 
 impl Peer {
+    pub fn decode(bytes: &[u8]) -> Result<Self, Error> {
+        if bytes.len() != PEER_LEN || word(bytes, 0) == 0 || word(bytes, 2) == 0 {
+            return Err(Error::Malformed);
+        }
+        Ok(Self {
+            player: word(bytes, 0),
+            generation: word(bytes, 2),
+            revision: word(bytes, 4),
+            snapshot: Snapshot::decode(&bytes[6..])?,
+        })
+    }
     pub fn encode(&self) -> Vec<u8> {
         let mut bytes = self.player.to_be_bytes().to_vec();
         bytes.extend(self.generation.to_be_bytes());
@@ -207,7 +223,7 @@ mod tests {
             resume: 7,
             token: [0xa5; 8],
         };
-        assert_eq!(&hello.encode()[..7], &[3, 1, 3, 0x12, 0x34, 0, 7]);
+        assert_eq!(&hello.encode()[..7], &[4, 1, 4, 0x12, 0x34, 0, 7]);
         assert_eq!(Hello::decode(&hello.encode()), Ok(hello));
         let welcome = Welcome {
             player: 0x1234,

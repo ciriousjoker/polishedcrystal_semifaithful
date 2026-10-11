@@ -29,6 +29,16 @@ DeleteMapObject::
 	farjp CheckForUsedObjPals
 
 HandleObjectStep:
+if DEF(MOBILE_ADAPTER)
+	ld hl, OBJECT_MAP_OBJECT_INDEX
+	add hl, bc
+	ld a, [hl]
+	cp TEMP_OBJECT
+	jr nz, .native
+	farcall MobileNativeActorStep
+	ret c
+.native
+endc
 	ld hl, OBJECT_FLAGS2
 	add hl, bc
 	ld a, [hl]
@@ -2729,13 +2739,14 @@ _UpdateSprites::
 	ld a, 1
 	ldh [hOAMUpdate], a
 if DEF(MOBILE_ADAPTER)
+	ld a, [wScriptRunning]
+	and a
+	jr z, .native_sprites
 	farcall MobilePrepareSprites
+.native_sprites
 endc
 	call InitSprites
 	call .hide_unused_sprites
-if DEF(MOBILE_ADAPTER)
-	farcall MobileRenderSprites
-endc
 	pop af
 	ldh [hOAMUpdate], a
 	ret
@@ -3013,9 +3024,13 @@ InitSprites:
 	ld b, HIGH(wShadowOAM)
 	ld a, [hli]
 	ldh [hUsedSpriteTile], a
+if DEF(MOBILE_ADAPTER)
+	mobile_native_oam_bounds
+else
 	sub c
 	cp LOW(wShadowOAM)
 	jr c, .full
+endc
 .addsprite
 	ldh a, [hCurSpriteYPixel]
 	add [hl]

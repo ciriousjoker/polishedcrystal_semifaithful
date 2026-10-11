@@ -17,6 +17,25 @@ struct MobileProfileSpan {
     uint16_t lowest_sp = 0xffff;
 };
 static MobileProfileSpan mobile_irq_profile, mobile_tick_profile;
+static unsigned mobile_save_bank, mobile_save_pc, mobile_save_size;
+static unsigned mobile_save_slots, mobile_save_backups, mobile_save_object_offset, mobile_save_objects;
+static MobileProfileSpan mobile_save_profile;
+static byte mobile_save_expected[4096];
+static byte* mobile_save_page = nullptr;
+static unsigned mobile_save_start;
+static uint64_t mobile_save_projected = 0, mobile_save_byte_failures = 0;
+extern "C" void mobile_profile_save(unsigned bank, unsigned pc, unsigned size,
+                                  unsigned slots, unsigned backups, unsigned object_offset, unsigned objects) {
+    mobile_save_bank = bank; mobile_save_pc = pc; mobile_save_size = size;
+    mobile_save_slots = slots; mobile_save_backups = backups;
+    mobile_save_object_offset = object_offset;
+    mobile_save_objects = objects;
+}
+extern "C" uint64_t mobile_profile_save_metric(unsigned index) {
+    const uint64_t values[] = {mobile_save_profile.count, mobile_save_profile.failures,
+        mobile_save_byte_failures, mobile_save_projected, mobile_save_profile.maximum_cycles, mobile_save_profile.lowest_sp};
+    return index < 6 ? values[index] : 0;
+}
 static unsigned mobile_tick_pc, mobile_tick_bank;
 static unsigned mobile_stack_cursor_ranges[10][3] = {};
 static uint64_t mobile_stack_cursor_samples = 0;
@@ -33,7 +52,7 @@ static void mobile_profile_stack(MobileProfileSpan& span, gb* game, const cpu_re
     // Vanilla video/gfx/tileset routines save the real SP in wSPBuffer or BC
     // and use POP as a copy iterator with interrupts disabled. Only audited PC/bank ranges can be
     // excluded, and every normal/mobile stack address remains measured.
-    if (&span == &mobile_tick_profile && regs.SP < 0xc000 && !regs.I) {
+    if (regs.SP < 0xc000 && !regs.I) {
         for (const auto& range : mobile_stack_cursor_ranges) {
             bool bank_matches = range[0] == 0 ? regs.PC < 0x4000 :
                 game->get_mbc()->get_rom() == game->get_rom()->get_rom() + (range[0] - 1) * 0x4000;
@@ -58,10 +77,13 @@ struct MobileRenderSpan {
     bool active = false;
     unsigned sp = 0, return_pc = 0;
     uint32_t clock = 0;
+    unsigned vblank = 0, stage = 0, ly = 0;
+    uint16_t lowest_sp = 0xffff;
+    uint64_t crossings = 0;
     uint64_t maximum_cycles = 0, count = 0, total_cycles = 0;
 };
-static MobileRenderSpan mobile_render_spans[11];
-static unsigned mobile_overworld_points[13][2] = {};
+static MobileRenderSpan mobile_render_spans[14];
+static unsigned mobile_overworld_points[16][2] = {};
 static uint64_t mobile_world_gaps[64] = {};
 static unsigned mobile_world_gap_count = 0;
 static unsigned char mobile_world_frames[800] = {};
@@ -69,11 +91,29 @@ extern "C" uint64_t mobile_profile_world_gap(unsigned index) {
     return index < mobile_world_gap_count ? mobile_world_gaps[index] : 0;
 }
 static unsigned mobile_observed_frames = 0, mobile_last_world_frame = 0;
+static unsigned mobile_world_start = 3600;
+extern "C" void mobile_profile_window(unsigned first) {
+    mobile_world_start = first;
+}
 static uint64_t mobile_active_window_cycles = 0;
+static uint64_t mobile_upload_waits = 0;
+extern "C" uint64_t mobile_profile_idle_metric(unsigned index) {
+    if (index == 0) return mobile_upload_waits;
+    if (index == 9) return mobile_render_spans[11].lowest_sp;
+    if (index == 10) return mobile_render_spans[12].lowest_sp;
+    if (index == 11) return mobile_render_spans[13].maximum_cycles;
+    if (index == 12) return mobile_render_spans[13].count;
+    if (index == 13) return mobile_render_spans[13].crossings;
+    if (index == 14) return mobile_render_spans[13].lowest_sp;
+    if (index > 8) return 0;
+    const auto& span = mobile_render_spans[11 + (index - 1) / 4];
+    const uint64_t values[] = {span.count, span.maximum_cycles, span.total_cycles, span.crossings};
+    return values[(index - 1) % 4];
+}
 static uint64_t mobile_prepare_waits = 0, mobile_world_updates = 0, mobile_world_max_gap = 0;
 
 extern "C" void mobile_profile_overworld(unsigned index, unsigned bank, unsigned pc) {
-    if (index < 13) {
+    if (index < 16) {
         mobile_overworld_points[index][0] = bank;
         mobile_overworld_points[index][1] = pc;
     }
@@ -181,27 +221,59 @@ static void mobile_profile_exit(MobileProfileSpan& span, gb* game, const cpu_reg
     span.active = false;
 }
 static void mobile_profile_before_instruction(gb* game, const cpu_regs& regs, int clock) {
-    for (unsigned index = 0; index < 13; ++index) {
+    if (mobile_save_pc && regs.PC == mobile_save_pc && mobile_save_size <= sizeof(mobile_save_expected) &&
+        game->get_mbc()->get_rom() == game->get_rom()->get_rom() + (mobile_save_bank - 1) * 0x4000) {
+        mobile_profile_enter(mobile_save_profile, game, regs, clock);
+        mobile_save_page = game->get_mbc()->get_sram();
+        mobile_save_start = regs.DE.w - mobile_save_size - 0xa000;
+        auto* ram = game->get_cpu()->get_ram();
+        for (unsigned i = 0; i < mobile_save_size; ++i)
+            mobile_save_expected[i] = mobile_save_page[mobile_save_start + i];
+        // The native CopyBytes already produced the complete vanilla payload.
+        // Only still-owned slots may differ from that same-state native copy.
+        for (unsigned i = 0; i < 3; ++i) {
+            unsigned slot = ram[mobile_save_slots - 0xc000 + i];
+            if (!slot || slot >= 13) continue;
+            auto* object = ram + 0x1000 + mobile_save_objects - 0xd000 + 34 * slot;
+            if (object[1] != 254 || (object[5] & 0x22) != 0x22) continue;
+            auto* original = mobile_save_backups < 0xd000 ?
+                ram + mobile_save_backups - 0xc000 + 34 * i :
+                ram + 0x5000 + mobile_save_backups - 0xd000 + 38 * i;
+            unsigned offset = mobile_save_object_offset + 34 * slot;
+            for (unsigned j = 0; j < 34; ++j) mobile_save_expected[offset + j] = original[j];
+            mobile_save_projected++;
+        }
+    }
+    for (unsigned index = 0; index < 16; ++index) {
         auto* point = mobile_overworld_points[index];
         bool bank_matches = point[0] == 0 ? regs.PC < 0x4000 :
             game->get_mbc()->get_rom() == game->get_rom()->get_rom() + (point[0] - 1) * 0x4000;
         if (!point[1] || regs.PC != point[1] || !bank_matches) continue;
+        if (index == 2 && mobile_render_spans[11].active) {
+            mobile_upload_waits++;
+            if (mobile_upload_waits < 10) std::fprintf(stderr, "UPLOAD_DELAY frame=%u ly=%u\n", mobile_observed_frames, game->get_cpu()->read(0xff44));
+        }
         if (index < 2 || index >= 4) {
             auto& span = mobile_render_spans[index < 2 ? index : index - 2];
             span.active = true;
             span.sp = regs.SP;
             span.return_pc = game->get_cpu()->readw(regs.SP);
             span.clock = static_cast<uint32_t>(clock);
+            span.vblank = game->get_cpu()->read(mobile_vblank_address);
+            if (index == 13 || index == 14 || index == 15) {
+                span.stage = game->get_cpu()->read(regs.HL.w + 34);
+                span.ly = game->get_cpu()->read(0xff44);
+            }
         } else if (index == 2 && mobile_render_spans[0].active) {
             mobile_prepare_waits++;
-        } else if (index == 3 && mobile_observed_frames >= 3600 && mobile_observed_frames < 4400) {
+        } else if (index == 3 && mobile_observed_frames >= mobile_world_start && mobile_observed_frames < mobile_world_start + 800) {
             if (mobile_world_updates) {
                 auto gap = mobile_observed_frames - mobile_last_world_frame;
                 mobile_world_max_gap = std::max(mobile_world_max_gap, uint64_t(gap));
                 if (gap > 1 && mobile_world_gap_count < 64)
                     mobile_world_gaps[mobile_world_gap_count++] = (uint64_t(gap) << 32) | mobile_observed_frames;
             }
-            mobile_world_frames[mobile_observed_frames - 3600]++;
+            mobile_world_frames[mobile_observed_frames - mobile_world_start]++;
             mobile_last_world_frame = mobile_observed_frames;
             mobile_world_updates++;
         }
@@ -228,16 +300,35 @@ static void mobile_profile_before_instruction(gb* game, const cpu_regs& regs, in
         mobile_profile_enter(mobile_tick_profile, game, regs, clock);
 }
 static void mobile_profile_after_instruction(gb* game, const cpu_regs& regs, int clock, unsigned opcode, unsigned cycles) {
-    if (mobile_observed_frames >= 3600 && mobile_observed_frames < 4400 && opcode != 0x76)
+    if (mobile_observed_frames >= mobile_world_start && mobile_observed_frames < mobile_world_start + 800 && opcode != 0x76)
         mobile_active_window_cycles += cycles;
     bool returned_from_render = opcode == 0xc9 || opcode == 0xd9 ||
                                ((opcode & 0xe7) == 0xc0 && cycles == 20);
+    if (mobile_save_profile.active && returned_from_render &&
+        regs.SP == mobile_save_profile.before.SP + 2 && regs.PC == mobile_save_profile.return_pc) {
+        if (game->get_mbc()->get_sram() != mobile_save_page) mobile_save_byte_failures++;
+        for (unsigned i = 0; i < mobile_save_size; ++i)
+            if (mobile_save_page[mobile_save_start + i] != mobile_save_expected[i]) mobile_save_byte_failures++;
+        mobile_profile_exit(mobile_save_profile, game, regs, clock, false);
+    }
+    if (mobile_save_profile.active) mobile_profile_stack(mobile_save_profile, game, regs);
     for (auto& span : mobile_render_spans) {
+        if (span.active) {
+            MobileProfileSpan stack;
+            mobile_profile_stack(stack, game, regs);
+            span.lowest_sp = std::min(span.lowest_sp, stack.minimum_sp);
+        }
         if (span.active && returned_from_render && regs.SP == span.sp + 2 && regs.PC == span.return_pc) {
             auto elapsed = uint64_t(static_cast<uint32_t>(clock) - span.clock);
             span.count++;
             span.total_cycles += elapsed;
             span.maximum_cycles = std::max(span.maximum_cycles, elapsed);
+            if (game->get_cpu()->read(mobile_vblank_address) != span.vblank) span.crossings++;
+            if (&span == &mobile_render_spans[11] && elapsed > 8000 && mobile_observed_frames >= mobile_world_start && mobile_observed_frames < mobile_world_start + 800) std::fprintf(stderr, "LONG_UPLOAD frame=%u cycles=%llu ly=%u/%u stage=%u crossing=%u\n", mobile_observed_frames, (unsigned long long)elapsed, span.ly, game->get_cpu()->read(0xff44), span.stage, game->get_cpu()->read(mobile_vblank_address) != span.vblank);
+            if (game->get_cpu()->read(mobile_vblank_address) != span.vblank && &span >= &mobile_render_spans[11])
+                std::fprintf(stderr, "BACKGROUND_CROSS kind=%u frame=%u cycles=%llu ly=%u/%u\n",
+                    unsigned(&span - mobile_render_spans), mobile_observed_frames,
+                    (unsigned long long)elapsed, span.ly, game->get_cpu()->read(0xff44));
             span.active = false;
         }
     }

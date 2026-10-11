@@ -1,48 +1,58 @@
 # Server ownership, hosting options and assurance
 
-Updated: 2026-10-11. Inspected source: `5ec1e0b48`; this follow-up changes
-documentation only. Public deployment, a provider migration and new gameplay
-features are not being implemented. The user wants the current architecture to
-leave room for the desired features in [PLAN.md](../PLAN.md).
-The selected hosting direction is now a device-local TCP/WSS bridge with
-Cloudflare Workers and one Durable Object per lobby. This is a critical planned
-component, superseding the earlier optional-bridge/unspecified-provider discussion.
+Updated: 2026-10-11. The native Rust implementation now includes the household
+Bridge, a shared socket-independent lobby owner, and a local Worker/DO-style
+hosting adapter. The Rust/WASM Cloudflare adapter is exercised under local
+workerd. Public account access, deployment and phone testing are deferred by the
+user. The normal four-player mobile ROM and human launcher now use this protocol.
+The current measured acceptance is recorded in MILESTONE_2.md.
 
-## What runs today
+## Current development path
 
 ```text
-ROM -> emulated Mobile Adapter / libmobile -> ordinary TCP
-    -> native Rust process on the Mac, port 17423
-    -> another client's TCP connection -> libmobile -> its ROM
+ROM -> emulated Mobile Adapter / libmobile -> localhost TCP
+    -> native Rust engine inside the Flutter Bridge
+       Local mode: embedded shared Rust lobby owner
+       Internet mode: one multiplexed WebSocket per household
+           -> public router, upgrade forwarded to the selected room owner
+           -> one native simulated owner or WASM Durable Object per lobby
 ```
 
-The server uses Tokio with two runtime worker threads and async connection tasks,
-not one process per lobby or one operating-system thread per player. It accepts
-at most 16 simultaneous sockets across the process. A shared `Service` owns a
-mutex-protected `Lobbies` model and a shared change notification. The model has
-one bounded map of player records, with lobby membership stored on each record.
-This is a development server, not the final public multi-tenant architecture.
+A household can contain several independently identified emulator players.
+Four players are allowed across all participating households. Capacity comes
+from `rom/capacity.asm`, read by the Rust protocol build script. The normal
+mobile ROM, human launcher, Bridge and shared lobby core all use schema 4.
+Update old ROMs and servers together; schema-3 clients cannot join this model.
 
-The current ROM sends a HELLO whose prefix hardcodes public test lobby 1 in
-`rom/session.asm:MobileHelloPrefix`. A valid join creates a player record tagged
-with that lobby number. No external matchmaking service or per-room server is
-spawned. The wire/model can distinguish room IDs, but the game has no room-code
-entry UI. Capacity is still three total players, pending the four-player work.
+Native TCP streams have bounded framing, admission, write queues and deadlines.
+Each Internet Bridge uses one bounded stream-envelope protocol over WebSocket.
+The public native router selects a room from `/lobbies/<id>/ws`; the room owns
+its serialized state machine. The WASM Worker forwards the upgrade to that
+room's Durable Object, which receives subsequent WebSocket messages directly.
+Both adapters use the same Rust owner as local mode.
 
-The server retains player ID, connection generation, reconnect token, mechanics
-variant, last-seen time, sequence and latest presence snapshot. A presence snapshot
-contains map/instance, position, direction, avatar and movement/status. Outgoing
-presence is coalesced; an adapter polling credit limits delivery to a slow client.
-The current model has a three-second live lease and a thirty-second reconnect
-retention period, evaluated while servicing model operations. These differ from
-the proposed ten-minute empty-room lifetime.
+The Internet Bridge coalesces each emulator's latest position to at most 20
+upstream updates per second. Local polls never become WAN polls. The remote
+authority pushes changed rosters at most 20 times per second per receiving
+player, retaining only the latest state. Embedded local mode flushes dirty state
+immediately through the same owner rules, without imposing the cloud cadence.
+Local read credit bounds delivery to each emulator;
+there is no fabricated local join, server receipt or fresh remote state. If no
+roster is pending, the Bridge sends no TCP response. A nonempty libmobile
+transfer can return its empty adapter-level response without a blocking read.
+Validated authority receipts and rosters refresh liveness; local polls and local
+movement cannot conceal a dead authority.
 
-There is no database or authoritative save/inventory copy. A server restart loses
-all these records. Client recovery must form a fresh valid session and publish
-current presence; it must not depend on recovering old server memory.
+The server retains player ID, generation, reconnect token, mechanics variant,
+last-seen time, sequence and latest presence snapshot. The live lease is three
+seconds, with a thirty-second reconnect retention period in the native model.
+No database or authoritative save/inventory copy exists. A server restart loses
+these transient records. Recovery forms a fresh valid session and publishes
+current presence, independently of ordinary cartridge save data.
 
-Source anchors: `server/crates/server/src/main.rs`, `src/lib.rs`, `src/lobby.rs`,
-`server/crates/protocol/src/lobby.rs`, and `rom/session.asm`.
+Source anchors: `server/crates/lobby-core/src/group.rs`,
+`server/crates/bridge/src/{lib,hosted,ffi}.rs`,
+`server/cloudflare/src/lib.rs`, `bridge_app/lib/`, and `rom/session.asm`.
 
 ## State ownership
 
@@ -73,6 +83,34 @@ source IPs; it should not expose them in game messages or tokens.
 
 ## Runtime and isolation recommendation
 
+### Shared Bridge groups and embedded hosting
+
+Latest approved direction: Flutter owns the application UI; native Rust owns
+the device-local TCP listener, session routing and optional embedded lobby.
+One Bridge represents a household group containing multiple independent emulator
+players. Local mode runs the shared Rust room owner inside the Bridge, without
+an upstream socket. Internet mode uses one multiplexed WebSocket per Bridge
+group to the public Worker and selected lobby DO. The envelope contains a bounded
+local stream identifier; the owner assigns distinct authenticated game identities.
+Never equate the WebSocket identity with a player identity. Enforce four players
+across all groups, and isolate a malformed stream or departing local player from
+its healthy siblings. A whole Bridge disconnect removes only its own members.
+
+The same socket-independent Rust room state machine serves the embedded owner,
+local hosted-model simulator and WASM Durable Object. Flutter does not duplicate
+game validation. A C ABI/FFI boundary provides lifecycle commands and bounded
+status snapshots. Native Rust compilation is supported on iOS as well as Android;
+this does not imply that iOS will keep an arbitrary background network service
+running while an external emulator is foreground. Prove lifecycle behavior per
+platform before claiming this workflow works there.
+
+Latency simulation belongs to the local service/transport adapter, with explicit
+bounded one-way delay and queue limits. Production clients cannot select this
+setting. Do not put sleeps inside the shared room state machine or block other
+rooms while injecting delay. Actual Cloudflare access/deployment and phone tests
+are deferred by the user; local deterministic adapter and native core tests are
+the autonomous milestone-2 path for now.
+
 Keep Rust. The existing typed codec and time-injected model are a useful base for
 fast deterministic tests and bounded binary handling. Memory safety does not
 prevent invalid state transitions, panics, identifier exhaustion or unbounded
@@ -97,8 +135,9 @@ deployment remains an architectural alternative, not the selected public path.
 
 A protocol version defines the format and interpretation of network messages;
 it is independent of the Polished Crystal release number. The current code checks
-transport version 1, lobby schema 3, capacity 3 and the standard/faithful mechanics
-flag. An incompatible schema or capacity is rejected; a room cannot mix mechanics
+transport version 1, lobby schema 4, capacity 4 and the standard/faithful mechanics
+flag in the normal Bridge path. The human launcher uses the same schema-4 ROM.
+An incompatible schema or capacity is rejected; a room cannot mix mechanics
 flags. There is no Polished Crystal source revision or full gameplay compatibility
 fingerprint in the current HELLO. Being accepted today is not proof that different
 ROM revisions are safe together.
@@ -170,7 +209,7 @@ local ROM import can read the block, but cannot prove that imported file is runn
 Network compatibility across revisions also does not imply cross-revision `.sav`
 compatibility; the existing same-base enabled/disabled save guarantee is separate.
 
-Milestone 2 should test reproducibility, relevant/irrelevant input changes,
+The optional semantic-compatibility extension should test reproducibility, relevant/irrelevant input changes,
 mechanics flags, malformed/unknown metadata and imported-versus-live mismatches,
 alongside the disabled-ROM hash gate. Feature-specific compatibility coverage
 must grow with battles, transfers and travel. Preserve the stronger user goal as
@@ -220,21 +259,22 @@ add custom placement engineering. [Data location][location].
 
 ### Development and one-command delivery contract
 
-Account for the split before finishing the native Rust server. The current
-`mobile-server` crate still couples the lobby model to Tokio, sockets, a process
-clock and shared synchronization; it cannot simply be uploaded as a Worker.
-Extract the reusable codec and runtime-independent room rules, then exercise
-those same rules through both native and Cloudflare adapters.
+The split is implemented. `lobby-core` owns socket-independent rules, injected
+time/entropy and effects. `mobile-bridge` embeds that owner or multiplexes a
+household to the native hosted router. The Rust/WASM adapter uses the same owner
+under local workerd, including hibernation reconstruction. The legacy TCP server
+remains a diagnostic adapter; Tokio is not compiled into the Worker.
 
-Proposed source responsibilities under `mobile_adapter/server`:
+Source responsibilities under `mobile_adapter/server`:
 
 - Existing protocol crate: bounded encoding/decoding and compatibility metadata.
 - Shared lobby-core crate: typed room events, injected time/entropy and effects;
   no Tokio, Cloudflare bindings, sockets or process-global room ownership.
-- Native server adapter: current development TCP transport and room scheduling.
+- Native Bridge adapter: local TCP, embedded owner and Internet WebSocket.
+- Native hosted adapter: public routing and serialized per-room scheduling.
 - Cloudflare adapter: routing and lobby-DO modules in one Worker bundle, using
-  `workers-rs`/WASM and the platform's event model. Prove SDK WebSocket/hibernation
-  support against pinned versions during the milestone-2 foundation work.
+  `workers-rs`/WASM and the platform's event model. Actual local workerd tests
+  exercise routing, household streams, resource budgets and forced hibernation.
 
 Keep fast core tests independent of Cloudflare. Also test the actual Worker/DO
 adapter locally with pinned Wrangler/workerd, not just an unrelated WebSocket

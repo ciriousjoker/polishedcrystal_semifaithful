@@ -3,3 +3,9 @@ name = "mobile-protocol"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+
+[features]
+checkpoint = ["dep:serde"]
+
+[dependencies]
+serde = { version = "=1.0.228", features = ["derive"], optional = true }

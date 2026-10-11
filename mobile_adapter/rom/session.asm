@@ -153,27 +153,48 @@ MobilePackSnapshot:
 	ret
 
 MobileExpandRoster:
-; The validated packed roster is at most 47 bytes. Its last 17 buffer bytes
-; are private scratch here. Expand backwards to retain overlapping peer data.
+; Expand backwards through one fixed scratch record. Never overlap unread data.
 	ld a, [wMobileApp + 12]
 	and a
 	ret z
-	cp 2
-	jr nz, .first
-	ld hl, wMobileApp + 13 + MOBILE_PEER_WIRE_SIZE
-	ld de, wMobileApp + MOBILE_FRAME_SIZE - MOBILE_PEER_WIRE_SIZE
-	ld bc, MOBILE_PEER_WIRE_SIZE
-	rst CopyBytes
-	ld hl, wMobileApp + MOBILE_FRAME_SIZE - MOBILE_PEER_WIRE_SIZE
-	ld de, wMobileApp + 13 + MOBILE_PEER_RECORD_SIZE
-	call MobileExpandPeer
-.first
+	ld b, a
+.loop
+	dec b
+	push bc
 	ld hl, wMobileApp + 13
+	ld de, MOBILE_PEER_WIRE_SIZE
+	ld a, b
+.source
+	and a
+	jr z, .source_ready
+	add hl, de
+	dec a
+	jr .source
+.source_ready
 	ld de, wMobileApp + MOBILE_FRAME_SIZE - MOBILE_PEER_WIRE_SIZE
 	ld bc, MOBILE_PEER_WIRE_SIZE
 	rst CopyBytes
+	pop bc
+	push bc
+	ld hl, wMobileApp + 13
+	ld de, MOBILE_PEER_RECORD_SIZE
+	ld a, b
+.destination
+	and a
+	jr z, .destination_ready
+	add hl, de
+	dec a
+	jr .destination
+.destination_ready
+	ld d, h
+	ld e, l
 	ld hl, wMobileApp + MOBILE_FRAME_SIZE - MOBILE_PEER_WIRE_SIZE
-	ld de, wMobileApp + 13
+	call MobileExpandPeer
+	pop bc
+	ld a, b
+	and a
+	jr nz, .loop
+	ret
 MobileExpandPeer:
 	ld bc, 12 ; identity, revision, map, instance and epoch
 	rst CopyBytes
@@ -245,6 +266,8 @@ MobileConsumeFrame:
 	dec b
 	jr nz, .header
 	ld a, [hli]
+	cp MOBILE_RECEIPT
+	jr z, .push_kind
 	cp MOBILE_DELTA
 	jr z, .push_kind
 	cp MOBILE_ROSTER
@@ -292,6 +315,8 @@ MobileConsumeFrame:
 	jr z, .welcome
 	cp MOBILE_LEFT
 	jp z, .left
+	cp MOBILE_RECEIPT
+	jp z, .receipt
 	jp .roster
 .welcome
 	ld a, [wMobileApp + 7]
@@ -333,6 +358,15 @@ MobileConsumeFrame:
 	ld [wMobilePingSent], a
 	call MobileNextSequence
 	jp .accepted
+.receipt
+; Local transfer receipts only acknowledge a known identity. They cannot alter
+; online state, membership, local game data or the latest remote positions.
+	ld a, [wMobileApp + 7]
+	cp 4
+	jp nz, .bad
+	call .check_identity
+	jp c, .bad
+	jp .accepted
 .roster
 	call .check_identity
 	jp c, .bad
@@ -353,7 +387,29 @@ MobileConsumeFrame:
 	ld a, [wMobileApp + 7]
 	cp c
 	jp nz, .bad
+	ld a, [wMobileDecodePhase]
+	and a
+	jr nz, .validate_roster
 	call MobileExpandRoster
+	ld a, 1
+	ld [wMobileDecodePhase], a
+; A single changed peer has a small fixed validation/copy bound. Keep the
+; three-peer path staged, but avoid two extra frame waits for this common case.
+	ld a, [wMobileApp + 12]
+	cp 2
+	jp nc, .incomplete
+	call MobileValidateRoster
+	jp c, .bad
+	jr .publish_roster
+.validate_roster
+	cp 2
+	jr z, .publish_roster
+	call MobileValidateRoster
+	jp c, .bad
+	ld a, 2
+	ld [wMobileDecodePhase], a
+	jp .incomplete
+.publish_roster
 	ld a, [wMobileApp + 3]
 	cp MOBILE_DELTA
 	jp z, MobileMergePeers
@@ -361,31 +417,23 @@ MobileConsumeFrame:
 	ld [wMobilePeerCount], a
 	and a
 	jr z, .roster_done
+	ld b, a
 	ld hl, wMobileApp + 13
-	call MobileValidatePeer
-	jp c, .bad
 	ld de, wMobilePeer1
+.copy_peer
+	push bc
 	call MobileInvalidatePeer
 	ld bc, MOBILE_PEER_RECORD_SIZE
 	rst CopyBytes
-	ld a, [wMobilePeerCount]
-	cp 2
-	jr nz, .roster_done
-	call MobileValidatePeer
-	jp c, .bad
-	ld a, [wMobilePeer1Id]
-	cp [hl]
-	jr nz, .distinct
-	inc hl
-	ld a, [wMobilePeer1Id + 1]
-	cp [hl]
-	dec hl
-	jp z, .bad
-.distinct
-	ld de, wMobilePeer2
-	call MobileInvalidatePeer
-	ld bc, MOBILE_PEER_RECORD_SIZE
-	rst CopyBytes
+	push hl
+	ld hl, MOBILE_PEER_SIZE - MOBILE_PEER_RECORD_SIZE
+	add hl, de
+	ld d, h
+	ld e, l
+	pop hl
+	pop bc
+	dec b
+	jr nz, .copy_peer
 .roster_done
 	ld hl, wMobilePresenceCount
 	inc [hl]
@@ -394,6 +442,7 @@ MobileConsumeFrame:
 	inc [hl]
 .accepted
 	xor a
+	ld [wMobileDecodePhase], a
 	ld [wMobileAppCount], a
 .incomplete
 	and a
@@ -450,63 +499,138 @@ MobileConsumeFrame:
 	inc hl
 	jp .length
 
-MobileMergePeers:
-; A delta updates existing identities only. Membership changes use a full roster.
+MobileValidateRoster:
+; Validate every entry and all identity bindings before publishing any bytes.
 	ld a, [wMobileApp + 12]
-	and a
-	jr z, .bad
 	ld b, a
-	cp 2
-	jr nz, .start
-	ld a, [wMobileApp + 13]
-	ld hl, wMobileApp + 33
-	cp [hl]
-	jr nz, .start
-	ld a, [wMobileApp + 14]
-	inc hl
-	cp [hl]
-	jr z, .bad
-.start
+	ld c, 0
 	ld hl, wMobileApp + 13
-.peer
+.loop
+	ld a, b
+	and a
+	ret z
 	push bc
 	push hl
 	call MobileValidatePeer
-	jr c, .unwind
-	ld de, wMobilePeer1
-	call .matches
-	jr z, .copy
-	ld a, [wMobilePeerCount]
-	cp 2
-	jr nz, .unwind
-	ld de, wMobilePeer2
-	call .matches
-	jr nz, .unwind
-.copy
-	call MobileInvalidatePeer
-	ld bc, MOBILE_PEER_RECORD_SIZE
-	rst CopyBytes
+	jr c, .bad
+	ld a, [wMobileApp + 3]
+	cp MOBILE_DELTA
+	jr nz, .duplicates
+	call MobileFindPeer
+	jr c, .bad
+.duplicates
 	pop hl
-	ld bc, MOBILE_PEER_RECORD_SIZE
-	add hl, bc
-	pop bc
-	dec b
-	jr nz, .peer
-	jmp MobileConsumeFrame.roster_done
-.matches
+	push hl
+	ld d, h
+	ld e, l
+	ld hl, wMobileApp + 13
+	pop bc ; current record pointer, retain the loop counters below it
+	push bc
+.compare
+	ld a, h
+	cp b
+	jr nz, .identity
+	ld a, l
+	cp c
+	jr z, .next
+.identity
 	ld a, [de]
 	cp [hl]
-	ret nz
+	jr nz, .advance
 	inc de
 	inc hl
 	ld a, [de]
 	cp [hl]
 	dec de
 	dec hl
-	ret
-.unwind
+	jr z, .bad
+.advance
+	push bc
+	ld bc, MOBILE_PEER_RECORD_SIZE
+	add hl, bc
+	pop bc
+	jr .compare
+.next
+	pop hl
+	ld bc, MOBILE_PEER_RECORD_SIZE
+	add hl, bc
+	pop bc
+	dec b
+	inc c
+	jr .loop
+.bad
 	pop hl
 	pop bc
+	scf
+	ret
+
+MobileFindPeer:
+; HL validated record -> DE known private peer, carry if no binding. HL preserved.
+	push hl
+	push bc
+	ld a, [wMobilePeerCount]
+	ld b, a
+	ld de, wMobilePeer1
+.loop
+	ld a, b
+	and a
+	jr z, .missing
+	ld a, [de]
+	cp [hl]
+	jr nz, .next
+	inc de
+	inc hl
+	ld a, [de]
+	cp [hl]
+	dec de
+	dec hl
+	jr z, .found
+.next
+	push hl
+	ld hl, MOBILE_PEER_SIZE
+	add hl, de
+	ld d, h
+	ld e, l
+	pop hl
+	dec b
+	jr .loop
+.found
+	pop bc
+	pop hl
+	and a
+	ret
+.missing
+	pop bc
+	pop hl
+	scf
+	ret
+
+MobileMergePeers:
+; All identity bindings were checked before publication. No partial delta commits.
+	ld a, [wMobileApp + 12]
+	and a
+	jr z, .bad
+	ld b, a
+	ld hl, wMobileApp + 13
+.loop
+	push bc
+	call MobileFindPeer
+; Prioritize one already validated changed record without increasing frame work.
+; Private records have a 64-byte stride; subtraction remains valid across pages.
+	ld a, e
+	sub LOW(wMobilePeer1)
+rept 6
+	rrca
+endr
+	inc a
+	ld [wMobileBudgetPriority], a
+	call MobileInvalidatePeer
+	ld bc, MOBILE_PEER_RECORD_SIZE
+	rst CopyBytes
+	pop bc
+	dec b
+	jr nz, .loop
+	jmp MobileConsumeFrame.roster_done
 .bad
 	scf
 	ret
@@ -537,6 +661,10 @@ MobileAppendPending:
 	ld c, 32 ; maximum bytes copied per pump; one published frame per pump
 .target
 	ld a, [wMobileAppCount]
+	and a
+	jr nz, .partial
+	ld [wMobileDecodePhase], a
+.partial
 	cp 8
 	ld b, 8
 	jr c, .size
@@ -605,6 +733,9 @@ MobileAppendPending:
 .complete
 	call MobileConsumeFrame
 	ret c
+	ld a, [wMobileAppCount]
+	and a
+	ret nz ; unfinished validation keeps the bounded application frame
 	ld a, [wMobileAppPending]
 	and a
 	ret nz
@@ -669,6 +800,35 @@ MobileValidatePeer:
 	ret
 
 MobileMapEntered::
+	farcall MobileNativeInvalidateHash
+	call MobileNativeResetLeases
+	ld hl, wMobileSavedFacings
+	ld bc, MOBILE_PEERS
+	xor a
+	rst ByteFill
+	ld [wMobileBudgetCursor], a
+	ld [wMobileBudgetPriority], a
+	ld [wMobileVisibleCount], a
+	ld [wMobileRenderedCount], a
+	ldh a, [rWBK]
+	push af
+	ld a, MOBILE_WRAM_BANK
+	ldh [rWBK], a
+	ld hl, wMobilePeer1 + 33
+	ld b, MOBILE_PEERS
+.loop
+	xor a
+	ld [hli], a
+	ld [hli], a
+	ld [hl], a
+	push bc
+	ld bc, MOBILE_PEER_SIZE - 2
+	add hl, bc
+	pop bc
+	dec b
+	jr nz, .loop
+	pop af
+	ldh [rWBK], a
 	xor a
 	ld [wMobileLocalValid], a
 	ld [wMobileGraphicsReady], a
@@ -695,6 +855,7 @@ MobileCapture::
 	and a
 	jr z, .safe
 .paused
+	farcall MobileNativeInvalidateHash
 	xor a
 	ld [wMobileLocalValid], a
 	ld [wMobileGraphicsReady], a
@@ -705,13 +866,18 @@ MobileCapture::
 	ld a, [wMobileLocalValid]
 	and a
 	jr nz, .epoch
+	farcall MobileNativeInstanceSlice
+	jr c, .fingerprint_ready
+	pop af
+	ldh [rWBK], a
+	ret
+.fingerprint_ready
 	ld hl, wMobileMapEpoch
 	inc [hl]
 	jr nz, .valid
 	inc hl
 	inc [hl]
 .valid
-	call MobileComputeInstance
 	ld a, 1
 	ld [wMobileLocalValid], a
 .epoch

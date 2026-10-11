@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "purpose": "Reviewed native story, puzzle and camera capacity assumptions; re-review changes before mobile acceptance.",
+  "source_sha256": {
+    "maps/Route35NationalParkGate.asm": "a52fb12e336493b616bd93aa6d01491c538759be6b646e7890f811fa0bd4ee14",
+    "maps/Route36NationalParkGate.asm": "80398d9ce9d60e455ce95c8d5d7032569ffab991167da4587321f13547e5dbdb",
+    "engine/events/bug_contest/contest.asm": "39480bf8614209605113aba6dcf1d9848ee52d2862b23cfb26c101d5b3272afb",
+    "maps/CinnabarLab.asm": "0c241fc46ddb77614d0b0dfa4fe6b1ca9d1b8334af777fe966f4f307658f93dc",
+    "data/events/initialize_events.asm": "af3e7bb872319e04a945c1715612307ed1fe8d6aa74d567a9c19a8ff099f9886",
+    "maps/AzaleaGym.asm": "966f97dcd44be46ff5c59635e435c41dcbed4bebf4c5b7b45e03c3d5d715cb79",
+    "maps/CinnabarVolcano1F.asm": "0c48a93e883f31e372b1842589393887440234449c623db1a4f20bb9f45b541c",
+    "maps/SnowtopMountainOutside.asm": "3642e84957c06e090dcce0929e2eb4c39bbaeb9528cfef2b40f7713f84e5487b",
+    "data/maps/spawn_points.asm": "442fe42349c5ffe826150c738f7acada0a729988109fb73f6df5db63c06bcf62",
+    "data/maps/attributes.asm": "c5ad3a8d5938cf45a4d4515f059aad5c0c12d569597f3b1870a91e5b375b2b31",
+    "home/map.asm": "12feba368da113571c137260a119345f08e5cb66c0f0a78cda9d0dd432c80ea9"
+  }
+}

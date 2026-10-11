@@ -25,7 +25,7 @@ def read_symbols(path):
 
 
 def max_snapshot(objects, width, height, unflagged_only=False, movement_envelope=False,
-                 retained_movements=frozenset()):
+                 retained_movements=frozenset(), positions=None):
     """Match InitializeVisibleSprites' unsigned initial-coordinate rectangle."""
     best = (0, 0, 0, 0)
     for time in range(4):
@@ -56,16 +56,18 @@ def max_snapshot(objects, width, height, unflagged_only=False, movement_envelope
             rectangles.append((left, right, top, bottom))
             xs.update((left, right))
             ys.update((top, bottom))
-        for x in sorted(v for v in xs if 0 <= v < width * 2):
-            for y in sorted(v for v in ys if 0 <= v < height * 2):
-                if movement_envelope or retained_movements:
-                    count = sum(left <= x <= right and top <= y <= bottom
-                                for left, right, top, bottom in rectangles)
-                else:
-                    count = sum((obj[2] + 1 - x) % 256 < 12
-                                and (obj[1] + 1 - y) % 256 < 11 for obj in active)
-                if count > best[0]:
-                    best = (count, x, y, time)
+        candidates = positions if positions is not None else (
+            (x, y) for x in sorted(v for v in xs if 0 <= v < width * 2)
+            for y in sorted(v for v in ys if 0 <= v < height * 2))
+        for x, y in candidates:
+            if movement_envelope or retained_movements:
+                count = sum(left <= x <= right and top <= y <= bottom
+                            for left, right, top, bottom in rectangles)
+            else:
+                count = sum((obj[2] + 1 - x) % 256 < 12
+                            and (obj[1] + 1 - y) % 256 < 11 for obj in active)
+            if count > best[0]:
+                best = (count, x, y, time)
     return best
 
 

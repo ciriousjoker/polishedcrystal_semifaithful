@@ -1,0 +1,12 @@
+[package]
+name = "mobile-lobby-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+checkpoint = ["dep:serde", "mobile-protocol/checkpoint"]
+
+[dependencies]
+mobile-protocol = { path = "../protocol" }
+serde = { version = "=1.0.228", features = ["derive"], optional = true }

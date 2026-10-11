@@ -102,9 +102,6 @@ endc
 	ret nz
 
 	call HandleMapObjects
-if DEF(MOBILE_ADAPTER)
-	farcall MobileCapture
-endc
 	call NextOverworldFrame
 	call HandleMapBackground
 	call CheckPlayerState

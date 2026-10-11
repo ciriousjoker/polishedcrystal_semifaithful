@@ -121,6 +121,10 @@ ScanObjectStructPals:
 	ld b, NUM_OBJECT_STRUCTS
 
 .loop
+if DEF(MOBILE_ADAPTER)
+	push de
+	mobile_native_palette_source
+endc
 	; Check if the object has a sprite
 	ld hl, OBJECT_SPRITE
 	add hl, de
@@ -265,8 +269,14 @@ ScanObjectStructPals:
 	and ~OAM_PALETTE
 	or c
 	ld [hl], a
+if DEF(MOBILE_ADAPTER)
+	farcall MobileNativePaletteNPCBound
+endc
 
 .skip
+if DEF(MOBILE_ADAPTER)
+	pop de
+endc
 	dec b
 	ret z
 
@@ -554,6 +564,10 @@ RefreshObjectGlowTypes:
 	ld hl, wObjectGlowTypes
 	lb bc, NUM_OBJECT_STRUCTS, FALSE
 .loop
+if DEF(MOBILE_ADAPTER)
+	push de
+	mobile_native_palette_source
+endc
 	ld a, [de] ; OBJECT_SPRITE
 	and a
 	jr nz, .active_object
@@ -626,6 +640,9 @@ RefreshObjectGlowTypes:
 	ld [hl], a
 	inc c
 .next
+if DEF(MOBILE_ADAPTER)
+	pop de
+endc
 	inc hl
 	ld a, OBJECT_LENGTH
 	add e
@@ -634,7 +651,11 @@ RefreshObjectGlowTypes:
 	sub e
 	ld d, a
 	dec b
+if DEF(MOBILE_ADAPTER)
+	jp nz, .loop
+else
 	jr nz, .loop
+endc
 	ld a, c
 	and a
 	ret

@@ -1,9 +1,6 @@
 SECTION "Mobile Adapter", ROMX, BANK[MOBILE_ROM_BANK]
 MobileCodeStart::
 
-; Foreground only: DelayFrame has completed its VBlank wait. Preserve all
-; registers and WBK. This routine never waits, calls DelayFrame, or reenters.
-; Select+B toggles the lobby; adding A runs the one-shot transport diagnostic.
 MobileTick::
 	push af
 	push bc
@@ -21,7 +18,14 @@ MobileTick::
 	cp [hl]
 	jr z, .same_frame
 	ld [hl], a
+; Only an early native wait has room for a larger byte budget. Busy maps retain
+; the cadence-tested default; the per-byte LY deadline remains authoritative.
+	ldh a, [rLY]
+	cp 96
 	ld a, MOBILE_BURST_BYTES
+	jr nc, .byte_budget
+	ld a, 32
+.byte_budget
 	ld [wMobileBurst], a
 	ld a, MOBILE_PUMPS_PER_FRAME
 	ld [wMobilePumpCount], a
@@ -54,68 +58,13 @@ MobileTick::
 	jr z, .key
 	dec [hl]
 .key
-	ldh a, [hJoypadDown]
-	and PAD_SELECT | PAD_B
-	cp PAD_SELECT | PAD_B
-	jr z, .pressed
-	; Physical input is never cleared by our mirrored-input filter.
-	xor a
-	ld [wMobileKeyLatch], a
-	jr .pump
-.pressed
-	ld a, [wMobileKeyLatch]
-	and a
-	jr nz, .pump
-	inc a
-	ld [wMobileKeyLatch], a
-	ld a, [wMobileOwner]
-	and a
-	jr z, .begin
-	ld a, [wMobileMode]
-	and a
-	jr z, .cancel
-	ld a, [wMobileOnline]
-	and a
-	jr z, .cancel
-	xor a
-	ld [wMobileWanted], a
-	ld a, 2
-	ld [wMobileKeyLatch], a
-	jr .pump
-.cancel
-	xor a
-	ld [wMobileWanted], a
-	ld a, 2
-	ld [wMobileKeyLatch], a
-	ld a, MOBILE_ERROR_CANCEL
-	call MobileFail
-	call MobileConsumeKey
-	jp .return
-.begin
-	ld a, [wMobileCooldown]
-	and a
-	jr nz, .pump
-	ld a, [wMapStatus]
-	cp MAPSTATUS_HANDLE
-	jr nz, .pump
-	ldh a, [hInMenu]
-	and a
-	jr nz, .pump
-	call MobileSceneIsSafe
-	jr nz, .pump
-	ldh a, [hJoypadDown]
-	and PAD_A
-	ld a, 0
-	jr nz, .mode
-	inc a
-.mode
-	ld [wMobileMode], a
-	ld [wMobileWanted], a
-	call MobileBegin
 .pump
 	ld a, [wMobileKeyLatch]
 	and a
 	call nz, MobileConsumeKey ; consume the entire held chord, including later frames
+	ld a, [wMobileTransferActive]
+	and a
+	jp nz, .return ; in-flight bytes do not consume foreground state-transition credit
 	ld hl, wMobilePumpCount
 	ld a, [hl]
 	and a
@@ -184,11 +133,17 @@ MobileTick::
 	and a
 	jr z, .available
 .paused
+	farcall MobileNativeInvalidateHash
 	xor a
 	ld [wMobileAvailability], a
 	ld [wMobileLocalValid], a
 	ld [wMobileGraphicsReady], a
 .available
+	ld a, [wMobileLocalValid]
+	and a
+	jr nz, .fingerprint_ready
+	ld [wMobileAvailability], a ; do not publish a previous map while hashing
+.fingerprint_ready
 	ld a, MOBILE_WRAM_BANK
 	ldh [rWBK], a
 	call MobileCheckGuards
@@ -218,9 +173,19 @@ MobileTick::
 	call MobileClock
 	jp .return
 .prepare
+; IRQs may have completed a byte since the outer admission check. Check the
+; budget again after choosing the actual expensive state, before touching it.
+	ldh a, [rLY]
+	cp 120
+	jp nc, .return
 	call MobilePrepareCommand
 	jp .return
 .app_continue
+; IRQs may have completed a byte since the outer admission check. Check the
+; budget again after choosing the actual expensive state, before touching it.
+	ldh a, [rLY]
+	cp 120
+	jp nc, .return
 	call MobileAppendPending
 	jp c, .protocol_error
 	ld a, [wMobileWire]
@@ -249,8 +214,14 @@ MobileTick::
 	call MobileClock
 	jr .return
 .response_done
-	call MobileValidateResponse
-	jr c, .packet_error
+; IRQs may have completed a byte since the outer admission check. Check the
+; budget again after choosing the actual expensive state, before touching it.
+	ldh a, [rLY]
+	cp 120
+	jp nc, .return
+	call MobileValidateResponseSlice
+	jp c, .packet_error
+	jp z, .return ; checksum work resumes in a later bounded foreground pump
 	ld a, [wMobileRx + 2]
 	cp $ee ; adapter command error, not application data
 	jr z, .adapter_error_detail
@@ -290,6 +261,17 @@ MobileTick::
 .fail
 	call MobileFail
 .return
+	ld a, [wMobileEmergencyPending]
+	and a
+	jr z, .restore_registers
+	xor a
+	ld [wMobileWanted], a
+	ld [wMobileOnline], a
+	ld [wMobilePeerCount], a
+	ld a, [wMobileOwner]
+	and a
+	call nz, MobileRelease
+.restore_registers
 	pop af
 	ldh [rWBK], a
 	pop hl
@@ -327,6 +309,9 @@ MobileYieldSerial::
 	ret
 
 MobileBegin:
+	ld a, [wMobileEmergencyPending]
+	and a
+	ret nz
 	ld a, [wLinkMode]
 	and a
 	ret nz
@@ -370,6 +355,8 @@ MobileBegin:
 	ld [wMobilePhase], a
 	ld [wMobileSendCooldown], a
 	ld [wMobileKeepalive], a
+	ld a, 1
+	ld [wMobileNativeActorMode], a ; identify the experimental path once per join
 	ld a, LOW(MOBILE_ATTEMPT_TICKS)
 	ld [wMobileAttemptTicks], a
 	ld a, HIGH(MOBILE_ATTEMPT_TICKS)
@@ -383,7 +370,12 @@ MobileBegin:
 	ld [wMobileGuardEnd], a
 	ld a, [wMobileMode]
 	and a
-	call nz, MobileBuildHello
+	jr nz, .hello
+	ld [wMobileWanted], a ; consume one diagnostic request, never auto-repeat it
+	jr .claim
+.hello
+	call MobileBuildHello
+.claim
 ; Claim/clear serial atomically. Other interrupt-enable bits are preserved.
 	di
 	ld a, 1
@@ -418,6 +410,10 @@ MobileFail:
 ; An aborted packet resets in libmobile after serial inactivity. Do not send
 ; a fresh START into a partial packet before this cooldown has elapsed.
 MobileRelease:
+	call MobileReleaseNoIME
+	ei
+	ret
+MobileReleaseNoIME:
 	di
 	xor a
 	ldh [rSC], a
@@ -440,7 +436,6 @@ MobileRelease:
 	ld a, [wMobileSavedSC]
 	and $03 ; never restart a previous transfer
 	ldh [rSC], a
-	ei
 	ret
 
 MobileCheckGuards:
@@ -612,6 +607,8 @@ MobilePrepareCommand:
 	ld [wMobileTx + 12], a
 .header
 	pop bc
+	xor a
+	ld [wMobileChecksumCursor + 1], a
 	ld hl, wMobileTx
 	ld a, $99
 	ld [hli], a
@@ -793,6 +790,9 @@ MobileStoreRx:
 
 ; Start exactly one byte with WBK=2. IRQ chaining stays within its budget.
 MobileClock:
+	ldh a, [rLY]
+	cp 136
+	ret nc ; leave a guard window for the final byte ISR before VBlank
 	ldh a, [hVBlankCounter]
 	ld hl, wMobileLastFrame
 	cp [hl]
@@ -840,6 +840,99 @@ MobileClock:
 	ldh [rSB], a
 	ld a, SC_START | SC_INTERNAL | SC_FAST
 	ldh [rSC], a
+	ret
+
+MobileValidateResponseSlice:
+; A maximum-length response must not monopolize the native frame wait. The
+; decoder sees no payload until this bounded checksum and trailer check finish.
+	ld a, [wMobileChecksumCursor + 1]
+	and a
+	jr nz, .resume
+	ld a, [wMobileRx + 3]
+	and a
+	jp nz, .bad
+	ld a, [wMobileRx + 5]
+	ld l, a
+	ld h, 0
+	ld bc, 4
+	add hl, bc
+	ld a, l
+	ld [wMobileChecksumLeft], a
+	ld a, h
+	ld [wMobileChecksumLeft + 1], a
+	ld hl, wMobileRx + 2
+	ld a, l
+	ld [wMobileChecksumCursor], a
+	ld a, h
+	ld [wMobileChecksumCursor + 1], a
+	xor a
+	ld [wMobileChecksumSum], a
+	ld [wMobileChecksumSum + 1], a
+.resume
+	ld a, [wMobileChecksumCursor]
+	ld l, a
+	ld a, [wMobileChecksumCursor + 1]
+	ld h, a
+	ld a, [wMobileChecksumSum]
+	ld e, a
+	ld a, [wMobileChecksumSum + 1]
+	ld d, a
+	ld a, [wMobileChecksumLeft]
+	ld c, a
+	ld a, [wMobileChecksumLeft + 1]
+	or c
+	jr z, .complete
+	ld a, [wMobileChecksumLeft + 1]
+	and a
+	ld a, 32
+	jr nz, .chunk
+	ld a, [wMobileChecksumLeft]
+	cp 32
+	jr c, .chunk
+	ld a, 32
+.chunk
+	ld [wMobileChecksumChunk], a
+	ld c, a
+	ld b, 0
+	call MobileChecksum.loop
+	ld a, l
+	ld [wMobileChecksumCursor], a
+	ld a, h
+	ld [wMobileChecksumCursor + 1], a
+	ld a, e
+	ld [wMobileChecksumSum], a
+	ld a, d
+	ld [wMobileChecksumSum + 1], a
+	ld a, [wMobileChecksumChunk]
+	ld c, a
+	ld a, [wMobileChecksumLeft]
+	sub c
+	ld [wMobileChecksumLeft], a
+	ld c, a
+	ld a, [wMobileChecksumLeft + 1]
+	sbc 0
+	ld [wMobileChecksumLeft + 1], a
+	or c
+	jr z, .complete
+	xor a ; Z means pending, carry clear
+	ret
+.complete
+	ld a, [hli]
+	cp d
+	jr nz, .bad
+	ld a, [hli]
+	cp e
+	jr nz, .bad
+	ld a, [hli]
+	cp MOBILE_DEVICE
+	jr nz, .bad
+	ld a, [hl]
+	and a
+	jr nz, .bad
+	inc a ; NZ means complete, carry clear
+	ret
+.bad
+	scf
 	ret
 
 MobileValidateResponse:
@@ -1033,7 +1126,11 @@ ASSERT MobileRequestVectorEnd - MobileRequestVector == 12
 MobileReplyHeader:
 	db $50, $43, 1, 2
 INCLUDE "mobile_adapter/rom/session.asm"
-INCLUDE "mobile_adapter/rom/overworld.asm"
+INCLUDE "mobile_adapter/rom/native_actors.asm"
 INCLUDE "mobile_adapter/rom/menu.asm"
 MobileCodeEnd::
 ASSERT MobileCodeEnd - MobileCodeStart <= 8192
+INCLUDE "mobile_adapter/rom/native_instance.asm"
+INCLUDE "mobile_adapter/rom/native_tile_backup.asm"
+INCLUDE "mobile_adapter/rom/native_save.asm"
+INCLUDE "mobile_adapter/rom/native_palettes.asm"

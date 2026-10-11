@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -15,6 +16,26 @@ import dev_session as session
 
 
 class DeploymentContracts(unittest.TestCase):
+    def test_bridge_modes_share_one_household_and_hosted_delay(self):
+        args = SimpleNamespace(mode="local", lobby=73, upstream=None,
+                               hosted_port=18787, test_one_way_delay_ms=80)
+        commands = session.bridge_commands(args, "192.168.1.10")
+        self.assertEqual(len(commands), 1)
+        self.assertIn("192.168.1.10:17423", commands[0][0])
+        self.assertNotIn("--upstream", commands[0][0])
+        args.mode = "hosted"
+        commands = session.bridge_commands(args, "192.168.1.10")
+        self.assertEqual(len(commands), 2)
+        self.assertEqual(commands[0][0][-2:], ["--test-one-way-delay-ms", "80"])
+        self.assertEqual(commands[1][0][-2:], ["--upstream", "ws://127.0.0.1:18787"])
+        args.mode = "remote"
+        with self.assertRaisesRegex(ValueError, "requires --upstream"):
+            session.bridge_commands(args, "127.0.0.1")
+        args.upstream = "wss://example.test"
+        commands = session.bridge_commands(args, "127.0.0.1")
+        self.assertEqual(len(commands), 1)
+        self.assertEqual(commands[0][0][-2:], ["--upstream", args.upstream])
+
     def test_free_port_never_prompts_or_stops_a_process(self):
         with patch.object(session, "port_available", return_value=True), patch.object(session, "port_listeners") as owners, patch.object(session.os, "kill") as kill:
             session.ensure_port_available("127.0.0.1", ask=lambda _: self.fail("Unexpected prompt"))
@@ -94,13 +115,13 @@ class DeploymentContracts(unittest.TestCase):
             reservation.bind(("127.0.0.1", 0))
             port = reservation.getsockname()[1]
             reservation.close()
-            server = root / "mobile_adapter/server/target/debug/mobile-server"
+            server = root / "mobile_adapter/server/target/debug/mobile-bridge"
             server.parent.mkdir(parents=True)
             server.write_text(f'#!{sys.executable}\nimport os, socket, sys, time\n'
                               f'open({str(root / "server.pid")!r}, "w").write(str(os.getpid()))\n'
                               'address, port = sys.argv[2].split(":")\n'
                               'listener = socket.socket()\nlistener.bind((address, int(port)))\nlistener.listen()\n'
-                              'print("READY " + sys.argv[2], flush=True)\ntime.sleep(30)\n')
+                              'print("BRIDGE_READY " + sys.argv[2] + " mode=local", flush=True)\ntime.sleep(30)\n')
             frontend = root / "frontend"
             frontend.write_text(f'#!{sys.executable}\nimport os, time\n'
                                 f'open({str(root / "frontend.pid")!r}, "w").write(str(os.getpid()))\ntime.sleep(30)\n')
@@ -109,7 +130,7 @@ class DeploymentContracts(unittest.TestCase):
             code = (f'import sys; sys.path.insert(0, {str(Path(session.__file__).parent)!r}); '
                     'import dev_session as s; from pathlib import Path; from types import SimpleNamespace; '
                     f's.REPO=Path({str(root)!r}); s.PORT={port}; '
-                    f's.main=lambda: s.start(SimpleNamespace(frontend=Path({str(frontend)!r}), cache=Path({str(root)!r})), Path({str(root)!r}), "127.0.0.1"); '
+                    f's.main=lambda: s.start(SimpleNamespace(mode="local", lobby=1, frontend=Path({str(frontend)!r}), cache=Path({str(root)!r})), Path({str(root)!r}), "127.0.0.1"); '
                     'sys.exit(s.entrypoint())')
             parent = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE,
                                       stderr=subprocess.STDOUT, text=True, start_new_session=True)
