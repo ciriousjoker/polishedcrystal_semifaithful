@@ -1,6 +1,6 @@
 # Server ownership, hosting options and assurance
 
-Updated: 2026-10-11. Inspected source: `5df50d4d1`; this follow-up changes
+Updated: 2026-10-11. Inspected source: `5ec1e0b48`; this follow-up changes
 documentation only. Public deployment, a provider migration and new gameplay
 features are not being implemented. The user wants the current architecture to
 leave room for the desired features in [PLAN.md](../PLAN.md).
@@ -206,20 +206,17 @@ or an explicitly designed directory if the chosen code flow later requires one.
 Avoid an unexamined global lobby-manager object that couples every active room.
 [Getting started][do-start], [WebSockets][ws].
 
-The user prefers placement close to players. Start with room activation on the
-host's first real creation/join request, rather than pre-creating production rooms
-from deployment scripts or distant smoke-test runners. Cloudflare normally places
-an object near the first requesting location; the Worker can provide a supported
-regional `locationHint` on the initial lookup. Hints are best effort, not exact
-city/data-center selection. Validate any exposed region choice server-side.
-All members of one room must resolve to the same object. Do not choose a new object
-or placement per joining player. Current documentation says existing objects do
-not relocate and only the first lookup's hint is honored. A later player elsewhere
-therefore shares the existing room's location. Optional host-selected room regions
-and multi-region latency comparisons can improve group placement later; no single
-room location can be physically close to four globally dispersed users. Public
-placement and latency require hosted measurements; the local runtime does not
-prove them. [Data location][location].
+Placement decision: the lobby creator's location is the only application-level
+reference. Use Cloudflare's automatic default placement when the creator first
+activates the room; no custom geolocation, regional selector, location hints or
+placement optimizer is planned. Create/activate the room before publishing its
+invitation. Do not pre-create production rooms from deployment scripts or distant
+smoke-test runners. Cloudflare normally places an object near the initial lookup,
+without guaranteeing an exact city/data center. All subsequent members resolve
+to that same object regardless of their locations. Current documentation says
+existing objects do not relocate. A later member must not trigger replacement or
+relocation. Hosted latency measurements remain useful, but are not a reason to
+add custom placement engineering. [Data location][location].
 
 ### Development and one-command delivery contract
 
@@ -423,6 +420,28 @@ GB-seconds. Incoming WebSocket messages use a 20:1 billing ratio; outgoing messa
 do not add request charges. Duration uses 128 MB per billed object, not its actual
 tiny application state. Billable excess is rounded per the provider's rules.
 [Workers pricing][workers-pricing], [Object pricing][object-pricing].
+
+### WebSocket setup versus ongoing message accounting
+
+The public URL remains a Worker URL, but this does not make every WebSocket
+message a fresh HTTP/Worker request. For the selected pass-through upgrade path:
+
+| Event | Worker request accounting | Durable Object request accounting |
+| --- | --- | --- |
+| Establish one WebSocket | One initial upgrade request | One request to establish the connection |
+| Incoming application messages on that socket | No additional Worker requests | Twenty incoming messages count as one request unit for compute-request billing |
+| Outgoing DO WebSocket messages | No per-message Worker requests | No outgoing-message request charge |
+
+The routing handler returns the DO's accepted socket rather than processing each
+message itself. Cloudflare still carries traffic through its network. This is
+not a direct publicly addressed DO TCP endpoint or a claim of no network hop.
+For example, one connection followed by 1,000 incoming application messages
+contributes one Worker request, one DO setup request and 50 DO message request
+units. Additional lobby HTTP API calls and reconnects count separately. DO active
+duration remains a separate quota/billing dimension; request accounting is not
+the entire cost. Included Free quotas are consumed rather than charging money
+for each operation within those quotas. [Workers pricing][workers-pricing],
+[Object pricing][object-pricing], [WebSockets][ws].
 
 Illustrative calculation, not a benchmark or deployment quote:
 

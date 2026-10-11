@@ -206,10 +206,12 @@ resolves a room and forwards the WebSocket upgrade; the DO owns its accepted
 connection events, membership and rules. Cloudflare activates objects on demand;
 no per-room deployment or separate publicly addressed server is needed. Bridge
 keeps the original upgraded socket; no per-message Worker relay or second direct
-DO connection is planned. Activate rooms from real host traffic with optional
-supported regional hints, not deployment-time precreation. All members share one
-room location; current placement hints are best effort and do not relocate an
-existing object. Measure regional/cross-region latency before acceptance. Extract
+DO connection is planned. The creator determines the placement reference: use
+Cloudflare's automatic default placement on the creator's initial activation,
+before publishing the invitation. No custom regions, location hints or placement
+optimization are planned. Avoid deployment-time room precreation. All members
+share that room location; later joins do not relocate it. Measure latency before
+acceptance. Extract
 runtime-independent lobby rules from the current Tokio server and share them
 between native and Cloudflare adapters. Test the actual Worker/DO path locally
 with pinned Wrangler/workerd during milestone 2, not only a WebSocket mock.
@@ -232,6 +234,11 @@ The user accepts the documented Free-tier quota as sufficient for the initial
 deployment target. Measure usage across rooms, keepalives, poll handling and 400%
 traffic; handle quota exhaustion safely. The architecture report records the
 assumptions. No paid upgrade or public deployment is authorized by this decision.
+WebSocket setup consumes one Worker request and one DO request. Ongoing messages
+consume no new Worker requests; DO incoming-message request accounting uses the
+documented 20:1 ratio. Outgoing DO messages have no request charge. Track DO active
+duration, API calls and reconnects separately. The public Worker address does not
+imply a double per-message request bill; see the architecture report's breakdown.
 
 The bridge is a critical compatibility boundary, not a stateless byte copier.
 TCP reads may split or combine application frames; bound reassembly, WebSocket
