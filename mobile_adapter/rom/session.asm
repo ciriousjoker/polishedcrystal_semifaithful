@@ -532,62 +532,79 @@ MobileAppendLobbyData:
 	and a
 	ret
 MobileAppendPending:
+; Copy only to the next validated frame boundary. Header/body chunks replace
+; repeated per-byte pointer construction, without enlarging either buffer.
+	ld c, 32 ; maximum bytes copied per pump; one published frame per pump
+.target
+	ld a, [wMobileAppCount]
+	cp 8
+	ld b, 8
+	jr c, .size
+	ld a, [wMobileApp + 6]
+	and a
+	jp nz, .bad
+	ld a, [wMobileApp + 7]
+	cp MOBILE_FRAME_SIZE - 8 + 1
+	jp nc, .bad
+	add 8
+	ld b, a
+.size
+	ld a, [wMobileAppCount]
+	cp b
+	jr z, .complete
+	jp nc, .bad
+	ld e, a
+	ld a, b
+	sub e
+	ld b, a ; bytes remaining to the header or complete frame boundary
+	ld a, [wMobileAppPending]
+	and a
+	jr z, .finished
+	cp b
+	jr nc, .budget
+	ld b, a
+.budget
+	ld a, c
+	and a
+	ret z
+	cp b
+	jr nc, .copy
+	ld b, a
+.copy
+	push bc ; B=chunk, C=remaining pump budget
 	ld a, [wMobileRxConsumed]
 	ld e, a
 	ld d, 0
 	ld hl, wMobileRx + 7
 	add hl, de
-	ld c, 16 ; leave headroom for vanilla VBlank work interrupting this pump
-.byte
-	ld a, [wMobileAppPending]
-	and a
-	jr z, .finished
-	ld a, c
-	and a
-	ret z
-	ld a, [wMobileAppCount]
-	cp MOBILE_FRAME_SIZE
-	jr nc, .bad
-	ld e, a
-	ld d, 0
 	push hl
+	ld a, [wMobileAppCount]
+	ld e, a
 	ld hl, wMobileApp
 	add hl, de
 	ld d, h
 	ld e, l
 	pop hl
-	ld a, [hli]
-	ld [de], a
-	dec c
-	push hl
-	ld hl, wMobileAppPending
-	dec [hl]
-	ld hl, wMobileRxConsumed
-	inc [hl]
-	pop hl
-	ld a, [wMobileAppCount]
-	inc a
-	ld [wMobileAppCount], a
-	cp 8
-	jr c, .byte
-	ld b, a
-	ld a, [wMobileApp + 6]
-	and a
-	jr nz, .bad
-	ld a, [wMobileApp + 7]
-	cp MOBILE_FRAME_SIZE - 8 + 1
-	jr nc, .bad
-	add 8
-	cp b
-	jr nz, .byte
-	push bc
-	push hl
-	call MobileConsumeFrame
-	pop hl
+	ld c, b
+	ld b, 0
+	rst CopyBytes
 	pop bc
+	ld a, [wMobileAppCount]
+	add b
+	ld [wMobileAppCount], a
+	ld a, [wMobileRxConsumed]
+	add b
+	ld [wMobileRxConsumed], a
+	ld a, [wMobileAppPending]
+	sub b
+	ld [wMobileAppPending], a
+	ld a, c
+	sub b
+	ld c, a
+	jr .target
+.complete
+	call MobileConsumeFrame
 	ret c
-	; Publish at most one complete application frame per pump. Preserve the
-	; remaining adapter bytes for the next bounded foreground call.
 	ld a, [wMobileAppPending]
 	and a
 	ret nz
@@ -658,7 +675,13 @@ MobileMapEntered::
 	ret
 
 MobileCapture::
-; One coherent foreground snapshot after the player's object step. Preserve WBK.
+; One coherent snapshot after the player's object step. Preserve WBK.
+	ld a, [wMobileOwner]
+	and a
+	ret z
+	ld a, [wMobileMode]
+	and a
+	ret z
 	ldh a, [rWBK]
 	push af
 	ld a, 1

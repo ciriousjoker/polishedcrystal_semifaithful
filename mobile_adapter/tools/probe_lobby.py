@@ -194,6 +194,14 @@ def run_client(args, index):
         metrics = json.loads((directory / "profile.json").read_text())
         require(metrics["serial_count"] > 1000 and metrics["tick_count"] > 1000, "Insufficient instruction samples")
         require(metrics["serial_failures"] == metrics["tick_failures"] == 0, "Register/bank preservation failure")
+        require(metrics["prepare_delay_frames"] == 0, "Avatar preparation waited for an extra frame")
+        if args.cadence_baseline:
+            baseline = json.loads((args.cadence_baseline / str(index) / "profile.json").read_text())
+            require(metrics["world_frames_with_update"] >= baseline["world_frames_with_update"] and
+                    metrics["world_max_frame_gap"] <= baseline["world_max_frame_gap"],
+                    f"Client {index}: adapter missed extra world frames: "
+                    f"{800 - metrics['world_frames_with_update']} versus "
+                    f"{800 - baseline['world_frames_with_update']} baseline")
         require(metrics["npc_restore_count"] > 100 and metrics["npc_restore_failures"] == 0,
                 "NPC restore boundary observer failed")
         require(min(metrics["serial_lowest_sp"], metrics["tick_lowest_sp"]) >= 0xc040, "Insufficient stack headroom")
@@ -259,6 +267,7 @@ def main():
     parser.add_argument("--latency", action="store_true")
     parser.add_argument("--test-one-way-delay-ms", type=int, default=0)
     parser.add_argument("--profile", action="store_true")
+    parser.add_argument("--cadence-baseline", type=Path, help="Fail on any extra missed world frame relative to matching baseline profiles")
     parser.add_argument("--port", type=int, default=17425)
     parser.add_argument("--scenario", choices=("basic", "menu", "start-menu", "rejoin", "warp", "connection", "running", "camera", "resume", "instance", "speed"), default="basic")
     parser.add_argument("--second-battery", type=Path, help="Second player's ordinary character-choice save")
@@ -268,6 +277,7 @@ def main():
     parser.add_argument("--exercise-pressure", action="store_true", help="Require optional rendering pressure in the chosen dense scene")
     parser.add_argument("--deferred", type=int, choices=(0, 1, 2, 3), default=0)
     args = parser.parse_args()
+    require(not args.cadence_baseline or args.profile, "Cadence comparison requires --profile")
     for name in ("runner", "core", "server", "battery", "output", "rom", "symbols"):
         setattr(args, name, getattr(args, name).resolve())
     require(not args.output.exists(), "Choose a fresh artifact directory")
@@ -392,7 +402,7 @@ def main():
     if args.require_npc_motion:
         verify_npc_motion(args.output)
     verify_avatar_graphics(states)
-    if args.scenario == "basic" and states[0]["wMapGroup"] == 11 and states[0]["wMapNumber"] == 23:
+    if args.scenario in ("basic", "speed", "start-menu") and states[0]["wMapGroup"] == 11 and states[0]["wMapNumber"] == 23:
         # Goldenrod Game Corner is a representative real OAM-pressure scene.
         exercised = False
         for index in range(3):

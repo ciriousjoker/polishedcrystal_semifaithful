@@ -66,11 +66,28 @@ frames while sending deltas. RGBDS additionally compiles the production adapter 
 layout with the actual LCD/OAM LOAD blocks, then checks emitted protocol vectors
 and memory bounds. It does not execute LR35902 instructions. Existing stack and HRAM
 addresses are explicit contract assertions.
-The same target runs eight host deployment tests and six portable-save selection
+The same target runs eighteen host deployment tests and six portable-save selection
 and integrity tests, including validation of the chosen scene and figure in
 each freshly prepared start snapshot.
 See [protocol/transport-v1.md](protocol/transport-v1.md) and
 [protocol/lobby-v2.md](protocol/lobby-v2.md).
+
+## Binding isolation and failure requirements
+
+All feature assembly remains in `mobile_adapter/rom`, with only conditional
+integration hooks in game files. `make mobile` enables MOBILE_ADAPTER; disabled
+output must match the corresponding pristine upstream SHA-256. The adapter owns
+separate work buffers and allocates no SRAM. Native Save logic stays unchanged.
+Malformed packets and transport failures must release the adapter and retain
+local play, without reset or writes to saved game data.
+
+World-update timing must match the same input sequence without the feature.
+Profiling now counts frames with updates, duplicate updates and every gap,
+rather than accepting a high total that hides missed frames. Pass a directory
+of matching baseline client profiles with `probe_lobby.py --profile
+--cadence-baseline PATH` to enforce this requirement. The current NPC performance
+follow-up still has additional missed frames and does not meet strict parity.
+Do not treat older milestone cycle budgets as proof of identical frame timing.
 
 ## Explicit native integration tests
 
@@ -111,6 +128,26 @@ The frontend accepts one-shot `ON MIN_FRAME SYMBOL=VALUE[,SYMBOL=VALUE] BUTTON
 DURATION` actions, fails when required states are never reached, and paces live
 network frames. Fixed boot inputs are specific to the baseline. For later UI,
 add semantic phases rather than guessing arbitrary global frame delays.
+
+The separate save-failure integration suite exercises real online Save followed
+by peer disconnect, server loss and malformed application packets, then boots
+its exported battery in fresh offline instances:
+
+```sh
+python3 mobile_adapter/tools/probe_save_safety.py \
+  --core "$adapter_cache/build/doublecherry/DoubleCherryGB_libretro.dylib" \
+  --runner "$adapter_cache/smoke-libretro" \
+  --server mobile_adapter/server/target/debug/mobile-server \
+  --battery mobile_adapter/tests/scenarios/bedroom/chris.sav \
+  --peer-battery mobile_adapter/tests/scenarios/bedroom/kris.sav \
+  --output "$adapter_cache/new-save-safety-run" --port 17510
+```
+
+Both primary and backup checksums, save stability after failure, post-failure
+movement and fresh Continue are required. This tests ordinary battery saves.
+Emulator snapshots include CPU and RAM addresses, so manual auto-start snapshots
+are regenerated for the current ROM/core. A finite suite cannot prove absence
+of every possible defect or protect against frontend disk-flush failures.
 
 ## Optional runtime profiling
 

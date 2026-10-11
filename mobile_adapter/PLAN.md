@@ -1,11 +1,13 @@
 # Mobile Adapter multiplayer plan
 
 Last updated: 2026-10-11.
-Status: milestones 1 and 2 complete. Three-player lobbies and live overworld
-presence are implemented and tested, including 300%/100%/100% emulator speeds.
-Next feature work when requested: milestone 3, adjacent interactions and Pokegear
-calls. Selected figures and three selectable manual-save scenes are complete.
-Current measured evidence: research/AVATAR_SCENARIOS.md and
+Status: milestone 1 complete; milestone 2 functionality is implemented, but its
+strict frame-cadence acceptance remains open. Three-player lobbies and live
+overworld presence are tested at 300%/100%/100% emulator speeds. Extra missed
+world-update frames block milestone 3. Selected figures and three selectable
+manual-save scenes are complete. Save and transport recovery checks pass.
+Current follow-up evidence: research/stability-cadence-followup.json.
+Earlier measured evidence: research/AVATAR_SCENARIOS.md and
 research/avatar-scenarios-evidence.json. Historical milestone-2 acceptance:
 research/MILESTONE_2.md and research/milestone2-evidence.json.
 Working branch: `mobileadapter`.
@@ -1214,3 +1216,156 @@ symbols are unchanged; driver 7196, resident 122, protocol/OAM 1473, new graphic
 Game Corner preparation has Chris/Kris respectively; read-only live screenshots
 also show their correct local and remote figures. The user's manual session
 was left running. No upstream PR/push. Next work remains M3 when requested.
+
+### Binding project invariants, clarified 2026-10-11
+
+- All feature assembly stays in mobile_adapter/rom. Existing game assembly may
+  contain only surgical conditional integration hooks; do not move existing
+  game helpers or introduce multiplayer implementation outside that directory.
+- One build switch, MOBILE_ADAPTER (make mobile), includes the feature. A build
+  without it must match the corresponding pristine upstream build byte for
+  byte, including SHA-256. Tooling may be elsewhere. Compare equivalent standard
+  variants: only baseline/disabled and enabled should be distinct ROM outputs.
+- Connected gameplay must retain the same 60 Hz world-update/frame cadence as
+  offline gameplay. CPU overhead is acceptable only within the existing frame
+  budget. Report every observed deviation to the user, including isolated
+  missed frames. Do not accept a relaxed FPS threshold silently.
+- Save integrity is independent of multiplayer connection state. Adapter
+  work buffers must never alias ordinary save data or native save scratch RAM;
+  invalid packets, disconnects and transport failures must degrade to offline
+  gameplay without resetting/crashing the game or writing a damaged save.
+  Save while connected and disconnect/malformed-packet recovery require explicit
+  integration tests. Later trade/gift transactions must preserve recoverable
+  state across interruptions. Never claim absolute crash freedom from a finite
+  test suite; document what is protected and tested.
+- Maximize error tolerance and performance while keeping the repository footprint
+  and native integration surface minimal.
+- The current performance follow-up is not complete. A strict matching-input
+  baseline comparison now detects additional missed world frames, including
+  individual gaps masked by catch-up updates. Do not accept total update counts
+  alone or claim timing parity until this gate passes. Cold joins, dense maps,
+  3x emulation, menus and RTT100 remain explicit timing cases.
+
+### NPC cadence and development-session follow-up, 2026-10-11
+
+Active user request after 28e9257b7: NPCs visibly stutter while moving online;
+Ctrl+C must stop normally; an occupied fixed port should prompt before stopping
+its owner. Work remains in the same mobileadapter worktree, no upstream PR.
+
+Launcher changes are implemented: SO_REUSEADDR bind probe, lsof PID/name listing,
+default-No interactive approval, revalidate listener ownership after approval,
+SIGTERM only and five-second free-port wait. Noninteractive calls never kill.
+Server/Mac children have isolated process groups so terminal Ctrl+C reaches the
+parent, whose existing cleanup reaps both. Normal SIGINT/SIGTERM exits are not
+failures. Eighteen host deployment tests pass, including a real listener restart
+and real process-group Ctrl+C with two owned stand-in children.
+
+Read-only profiling now observes MobilePrepareSprites/MobileRenderSprites,
+DelayFrame within preparation and HandleNPCStep cadence in display frames
+3600..4399. Core source/build: external cache sources/doublecherry-profile-cadence
+and build/doublecherry-profile-cadence; runner smoke-libretro-cadence. An offline
+Game Corner control has 800 world updates in 800 frames, max gap 1. The old-ROM
+three-core speed reproduction (cache/cadence-before) has 452/408/407 updates,
+max gap 3, plus 7/5 preparation DelayFrame calls on the two 1x clients. It also
+exposes one old Tick cycle-budget failure and is diagnostic, not accepted.
+
+Implemented renderer optimizations: bounded four-tile HBlank/early-VBlank
+copies and post-copy frame publication; audited bank-local native OAM counts;
+retained native OAM with a separate peer prefix; exact accepted Y-byte keys and
+a page-aligned scanline delta table; optional classification only on overflow;
+fast exact palette reuse; persistent graphics across menus; bounded four
+foreground pumps per frame; fast restoration when no NPC facings were suppressed; final
+actual native OAM-size guard; at most one cold avatar decompression per frame.
+Foreground snapshot capture stays lobby-only; the duplicate tick at that hook
+was removed. No native helper was relocated.
+
+Timing remains unresolved. Full protocol work inside the VBlank wait reached
+p95 739 ms and was rejected. Byte-only idle polling and foreground byte budgets
+also failed cadence/latency gates. These are diagnostic experiments, not accepted
+implementations. The HALT hook was reverted. Current code keeps normal serial
+interrupts, a 24-byte budget and four foreground pumps. The parser now copies
+bounded chunks up to the validated header/frame boundary instead of rebuilding
+pointers for every byte. It copies at most 32 bytes and publishes one frame per
+pump. Native save logic remains unchanged.
+
+The serial-RAM experiment at de91 was removed. Its first prototype tripped the
+native ERR_EXECUTING_RAM guard. A DI foreground wrapper fixed it, and all three
+save-failure cases passed, with millions of checked IME=0/WBK=2 RAM instructions.
+However it saved only 168 worst-case cycles per interrupt, consumed 311 extra
+RAM bytes, and still failed cadence. It is not retained in the current source.
+
+The VBlank GDMA queue experiment was also removed. An initial late hook starved
+tile publication; the early hook fixed avatars and passed local p95 166.526 ms,
+but still failed cadence (737/676/672 populated frames). It added a native hook
+without sufficient benefit. The retained source has no new VBlank/HALT hook,
+uses bounded foreground four-tile copies, and removes only the duplicate
+HandleMapObjects tick from existing native integration.
+
+The retained standard ROM is byte-identical to the chunk-parser save and latency
+candidates after normalizing only endpoint and global checksum. Canonical SHA256
+996e9f92541b83f08066c63e488b112872ae418283a93495093802cf874b66bd.
+Local motion p95 164.775 ms, max 197.920 ms; dense 3x cadence 729/677/679 versus
+797/800/800 baseline. Strict parity FAILS. No M3 work should start until the
+world-cadence architecture is resolved; do not describe this follow-up as a
+complete NPC performance fix. Earlier 27 fps reproduction improves, but the
+user requires matching cadence, not an average-FPS threshold.
+
+Matching-input pristine controls (cache/cadence-baseline-final) have 797/800/800
+frames containing a world update per 800 frames, max gaps 2/1/1. Chris has three
+pre-existing gaps and two catch-up updates. The user was told both the baseline
+and every observed regression. The chunk-parser candidate passed local p95 164.775 ms but failed strict
+cadence (729/677/679 populated frames). The removed RAM candidate passed local
+p95 183.942 ms, with one 575.984-ms outlier, but failed cadence
+(743/701/692). Final transport probes use final-transport-a,b,c (17614/17616/17618).
+The retained source passed all three save cases in save-safety-chunks. Earlier failed experiments are
+diagnostic only, including cadence-capacity which accidentally used a previous
+ROM after a failed build. Do not include them as accepted evidence.
+
+Current resident allocation is 125/128 bytes; buffers 1232, graphics 768 and
+render scratch 190 bytes. Total dedicated RAM is 48 bytes smaller than
+28e9257b7. No extra serial RAM code or DMA fields remain. OAM scratch is
+reduced from 160 to 64 bytes; weather/scanline scratch share a 145-byte table in
+separate passes. Native RAM/SRAM must not move. check_layout additionally checks scratch
+aliasing and both OAM prefix blocks.
+
+New probe_save_safety.py boots two ordinary bedroom saves, selects the real
+Save menu online, then injects peer disconnect, server closure or invalid packet
+magic. It validates both native checksums, unchanged saved data after failure,
+continued gameplay, and fresh offline Continue/movement in new core processes.
+All three cases pass on frozen occurrence and chunk-parser ROM copies in
+cache/save-safety-occurrence, cache/save-safety-chunks and
+cache/save-safety-ram-atomic (removed RAM experiment). No RAM/save edits or emulator states are used.
+The frozen chunk candidate exactly matches the retained ROM. Existing deployment already backs up Mac/Android
+ordinary battery files before replacing a test scenario; do not duplicate it.
+
+Final validation of retained code: 44 host tests (20 Rust, 18 deployment, six
+scenario), production assembly contracts and renderer audit pass. Standard and
+faithful enabled builds pass; disabled SHA256 still matches 314001ec5a2dde...
+check_layout preserves all 23373 native RAM/SRAM/HRAM symbols, allocates no new
+SRAM/HRAM, and measures 7966 ROM bytes, 125 resident bytes, 1232 buffer bytes,
+768 graphics bytes and 190 render-scratch bytes. Existing helpers stay in place.
+
+All 12 transport fault cases pass in 14 native core processes in
+cache/final-transport-a,b,c: reconnect, three-clients, split, bad-magic, silent,
+close, no-server, no-adapter, cancel, recover, oversize and truncated. Profiles
+check register/bank/stack and IME preservation; there are no failures or resets.
+Start-menu, optional rendering pressure, ordinary NPC motion and reconnect with
+resume identity pass in final-start-menu and final-resume. RTT100 movement p95
+274.362 ms, max 275.571 ms, 40 directional video samples. Local p95 164.775 ms,
+max 197.920 ms. Both latency gates pass. Both ordinary save slots remain valid
+after all three online-save failure cases, and fresh offline Continue succeeds.
+The saved-data tests use the exact retained ROM after endpoint/checksum
+normalization; do not rerun merely because source comments changed.
+
+Strict frame parity remains FAILED: dense three-core speed case has 729/677/679
+frames with updates versus 797/800/800 matching-input pristine controls. Do not
+mark this performance task complete. Next work must budget the combined serial,
+parser and rendering costs, measure work per individual frame and move/avoid
+work without trading away latency or native story rendering. No M3 until this
+requirement is met. Experimental HALT, RAM-code and VBlank-queue implementations
+are removed. Keep their rejected results as diagnostic history only.
+
+Launcher fix committed as 1ae47d85a. ROM/tooling/evidence changes belong to a
+separate local checkpoint with strict cadence explicitly left open. No upstream
+PR or push. The existing manual
+Mac/Pixel session on port 17423 was left running; no phone saves were overwritten.

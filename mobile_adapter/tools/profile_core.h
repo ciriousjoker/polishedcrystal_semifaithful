@@ -54,6 +54,31 @@ static uint64_t mobile_serial_vblank_cycles = 0, mobile_serial_max_vblank_cycles
 static unsigned mobile_restore_bank, mobile_restore_pc, mobile_saved_facings, mobile_objects;
 static uint64_t mobile_restore_count = 0, mobile_restore_failures = 0;
 
+struct MobileRenderSpan {
+    bool active = false;
+    unsigned sp = 0, return_pc = 0;
+    uint32_t clock = 0;
+    uint64_t maximum_cycles = 0, count = 0, total_cycles = 0;
+};
+static MobileRenderSpan mobile_render_spans[11];
+static unsigned mobile_overworld_points[13][2] = {};
+static uint64_t mobile_world_gaps[64] = {};
+static unsigned mobile_world_gap_count = 0;
+static unsigned char mobile_world_frames[800] = {};
+extern "C" uint64_t mobile_profile_world_gap(unsigned index) {
+    return index < mobile_world_gap_count ? mobile_world_gaps[index] : 0;
+}
+static unsigned mobile_observed_frames = 0, mobile_last_world_frame = 0;
+static uint64_t mobile_active_window_cycles = 0;
+static uint64_t mobile_prepare_waits = 0, mobile_world_updates = 0, mobile_world_max_gap = 0;
+
+extern "C" void mobile_profile_overworld(unsigned index, unsigned bank, unsigned pc) {
+    if (index < 13) {
+        mobile_overworld_points[index][0] = bank;
+        mobile_overworld_points[index][1] = pc;
+    }
+}
+
 extern "C" void mobile_profile_restore(unsigned bank, unsigned pc, unsigned saved, unsigned objects) {
     mobile_restore_bank = bank;
     mobile_restore_pc = pc;
@@ -80,10 +105,26 @@ extern "C" uint64_t mobile_profile_metric(unsigned index) {
         mobile_serial_max_vblank_cycles,
         mobile_restore_count, mobile_restore_failures,
         mobile_stack_cursor_samples, mobile_stack_cursor_lowest,
+        mobile_render_spans[0].maximum_cycles, mobile_render_spans[1].maximum_cycles,
+        mobile_prepare_waits, mobile_world_updates, mobile_world_max_gap,
     };
-    return index < sizeof(values) / sizeof(values[0]) ? values[index] : 0;
+    if (index < sizeof(values) / sizeof(values[0])) return values[index];
+    index -= sizeof(values) / sizeof(values[0]);
+    if (index < 33) {
+        const auto& span = mobile_render_spans[index / 3];
+        return index % 3 == 0 ? span.count : index % 3 == 1 ? span.total_cycles : span.maximum_cycles;
+    }
+    unsigned present = 0, duplicates = 0;
+    for (unsigned count : mobile_world_frames) {
+        present += count != 0;
+        duplicates += count > 1 ? count - 1 : 0;
+    }
+    const uint64_t tail[] = {mobile_active_window_cycles, present, duplicates};
+    index -= 33;
+    return index < sizeof(tail) / sizeof(tail[0]) ? tail[index] : 0;
 }
 extern "C" void mobile_profile_frame() {
+    mobile_observed_frames++;
     mobile_serial_max_frame_cycles = std::max(mobile_serial_max_frame_cycles, mobile_serial_frame_cycles);
     mobile_serial_frame_cycles = 0;
 }
@@ -128,6 +169,7 @@ static void mobile_profile_exit(MobileProfileSpan& span, gb* game, const cpu_reg
     if (span.wram != game->get_cpu()->get_ram_bank()) failure |= 128;
     if (span.wram_selector != game->get_cregs()->SVBK) failure |= 256;
     if (span.rom_shadow != game->get_cpu()->read(0xff87)) failure |= 512;
+    if (span.before.I != regs.I) failure |= 1024;
     if (failure) {
         if (span.failures < 3) std::fprintf(stderr, "PROFILE_FAILURE irq=%u mask=%u pc=%04x/%04x sp=%04x/%04x svbk=%u/%u shadow=%u/%u\n",
             irq, failure, span.before.PC, regs.PC, span.before.SP, regs.SP,
@@ -139,6 +181,31 @@ static void mobile_profile_exit(MobileProfileSpan& span, gb* game, const cpu_reg
     span.active = false;
 }
 static void mobile_profile_before_instruction(gb* game, const cpu_regs& regs, int clock) {
+    for (unsigned index = 0; index < 13; ++index) {
+        auto* point = mobile_overworld_points[index];
+        bool bank_matches = point[0] == 0 ? regs.PC < 0x4000 :
+            game->get_mbc()->get_rom() == game->get_rom()->get_rom() + (point[0] - 1) * 0x4000;
+        if (!point[1] || regs.PC != point[1] || !bank_matches) continue;
+        if (index < 2 || index >= 4) {
+            auto& span = mobile_render_spans[index < 2 ? index : index - 2];
+            span.active = true;
+            span.sp = regs.SP;
+            span.return_pc = game->get_cpu()->readw(regs.SP);
+            span.clock = static_cast<uint32_t>(clock);
+        } else if (index == 2 && mobile_render_spans[0].active) {
+            mobile_prepare_waits++;
+        } else if (index == 3 && mobile_observed_frames >= 3600 && mobile_observed_frames < 4400) {
+            if (mobile_world_updates) {
+                auto gap = mobile_observed_frames - mobile_last_world_frame;
+                mobile_world_max_gap = std::max(mobile_world_max_gap, uint64_t(gap));
+                if (gap > 1 && mobile_world_gap_count < 64)
+                    mobile_world_gaps[mobile_world_gap_count++] = (uint64_t(gap) << 32) | mobile_observed_frames;
+            }
+            mobile_world_frames[mobile_observed_frames - 3600]++;
+            mobile_last_world_frame = mobile_observed_frames;
+            mobile_world_updates++;
+        }
+    }
     if (mobile_restore_pc && regs.PC == mobile_restore_pc &&
         game->get_mbc()->get_rom() == game->get_rom()->get_rom() + (mobile_restore_bank - 1) * 0x4000) {
         mobile_restore_count++;
@@ -161,6 +228,19 @@ static void mobile_profile_before_instruction(gb* game, const cpu_regs& regs, in
         mobile_profile_enter(mobile_tick_profile, game, regs, clock);
 }
 static void mobile_profile_after_instruction(gb* game, const cpu_regs& regs, int clock, unsigned opcode, unsigned cycles) {
+    if (mobile_observed_frames >= 3600 && mobile_observed_frames < 4400 && opcode != 0x76)
+        mobile_active_window_cycles += cycles;
+    bool returned_from_render = opcode == 0xc9 || opcode == 0xd9 ||
+                               ((opcode & 0xe7) == 0xc0 && cycles == 20);
+    for (auto& span : mobile_render_spans) {
+        if (span.active && returned_from_render && regs.SP == span.sp + 2 && regs.PC == span.return_pc) {
+            auto elapsed = uint64_t(static_cast<uint32_t>(clock) - span.clock);
+            span.count++;
+            span.total_cycles += elapsed;
+            span.maximum_cycles = std::max(span.maximum_cycles, elapsed);
+            span.active = false;
+        }
+    }
     if (mobile_irq_profile.active) {
         mobile_serial_vblank_cycles += cycles;
         mobile_profile_stack(mobile_irq_profile, game, regs);

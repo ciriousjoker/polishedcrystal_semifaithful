@@ -1,0 +1,160 @@
+{
+  "date": "2026-10-11",
+  "status": "save and transport checks pass; strict frame parity remains open",
+  "layout": {
+    "existing_ram_symbols_checked": 23373,
+    "existing_ram_symbols_changed": {},
+    "avatar_cache_bytes": 768,
+    "render_cache_bytes": 45,
+    "scanline_scratch_bytes": 145,
+    "resident_bytes": 125,
+    "buffer_bytes": 1232,
+    "banked_driver_bytes": 7966,
+    "baseline_rom_sha256": "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e",
+    "baseline_summary": "SUMMARY:\n\tROM0: 16366 bytes used / 18 free\n\tROMX: 2066825 bytes used / 13943 free in 127 banks\n\tSRAM: 30936 bytes used / 1832 free in 4 banks\n\tWRAM0: 3796 bytes used / 300 free\n\tWRAMX: 23760 bytes used / 4912 free in 7 banks\n\tHRAM: 122 bytes used / 5 free",
+    "mobile_rom_sha256": "996e9f92541b83f08066c63e488b112872ae418283a93495093802cf874b66bd",
+    "mobile_summary": "SUMMARY:\n\tROM0: 16377 bytes used / 7 free\n\tROMX: 2074823 bytes used / 5945 free in 127 banks\n\tSRAM: 30936 bytes used / 1832 free in 4 banks\n\tWRAM0: 3921 bytes used / 175 free\n\tWRAMX: 25950 bytes used / 2722 free in 7 banks\n\tHRAM: 122 bytes used / 5 free",
+    "faithful_rom_sha256": "0b9de167581421adf1140390afc2e6fa8704d2aed0cbf69380891c22ecd59a09",
+    "faithful_summary": "SUMMARY:\n\tROM0: 16363 bytes used / 21 free\n\tROMX: 2074774 bytes used / 5994 free in 127 banks\n\tSRAM: 30936 bytes used / 1832 free in 4 banks\n\tWRAM0: 3921 bytes used / 175 free\n\tWRAMX: 25950 bytes used / 2722 free in 7 banks\n\tHRAM: 122 bytes used / 5 free"
+  },
+  "host_tests": {
+    "rust": 20,
+    "deployment": 18,
+    "portable_scenarios": 6,
+    "production_assembly_contracts": "pass",
+    "renderer_audit": "pass"
+  },
+  "transport": {
+    "cases": [
+      "reconnect",
+      "three-clients",
+      "split",
+      "bad-magic",
+      "silent",
+      "close",
+      "no-server",
+      "no-adapter",
+      "cancel",
+      "recover",
+      "oversize",
+      "truncated"
+    ],
+    "native_processes": 14,
+    "status": "pass"
+  },
+  "save_failures": {
+    "rom_sha256": "996e9f92541b83f08066c63e488b112872ae418283a93495093802cf874b66bd",
+    "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+    "cases": [
+      {
+        "case": "peer-disconnect",
+        "saved_online_at_frame": 4333,
+        "battery": {
+          "bytes": 32768,
+          "save_version": 10,
+          "checksums": {
+            "s": 40401,
+            "sBackup": 40401
+          },
+          "sha256": "7ff0a6822d95dbf4316be008a5cf5401fa924c67b091c13fe0a5e3bb01e966e2"
+        },
+        "passed": true
+      },
+      {
+        "case": "server-close",
+        "saved_online_at_frame": 4333,
+        "battery": {
+          "bytes": 32768,
+          "save_version": 10,
+          "checksums": {
+            "s": 40397,
+            "sBackup": 40397
+          },
+          "sha256": "f4a8804bfab0b46825d8fa5c47221aa5c04ad59928d972f14dc1720add15c697"
+        },
+        "passed": true
+      },
+      {
+        "case": "malformed",
+        "saved_online_at_frame": 4333,
+        "battery": {
+          "bytes": 32768,
+          "save_version": 10,
+          "checksums": {
+            "s": 40511,
+            "sBackup": 40511
+          },
+          "sha256": "571f59bd5408b02df0e3d8d2d3bb02bdd7d25295c2a0ba5b042d2c4f4f935eb7"
+        },
+        "passed": true
+      }
+    ],
+    "passed": true,
+    "limitations": [
+      "Finite emulator checks do not prove absence of every possible defect",
+      "Frontend disk-flush failures and power loss during the native save write are separate risks"
+    ]
+  },
+  "local_latency": {
+    "samples": 40,
+    "p50_ms": 114.431,
+    "p95_ms": 164.775,
+    "max_ms": 197.92,
+    "added_client_server_rtt_ms": 0,
+    "input_to_remote_p95_ms": 298.724,
+    "input_to_remote_max_ms": 317.123,
+    "measurement": "first captured local world motion to first directional position change of four-quad remote avatar bounds at native video callback; input-to-remote includes unchanged vanilla turn delay"
+  },
+  "rtt100_latency": {
+    "samples": 40,
+    "p50_ms": 223.513,
+    "p95_ms": 274.362,
+    "max_ms": 275.571,
+    "added_client_server_rtt_ms": 100,
+    "input_to_remote_p95_ms": 396.306,
+    "input_to_remote_max_ms": 410.533,
+    "measurement": "first captured local world motion to first directional position change of four-quad remote avatar bounds at native video callback; input-to-remote includes unchanged vanilla turn delay"
+  },
+  "scene_cases": [
+    "start-menu with NPC motion and rendering pressure",
+    "resume after socket drop"
+  ],
+  "cadence": {
+    "window_frames": 800,
+    "baseline_frames_with_update": [
+      797,
+      800,
+      800
+    ],
+    "enabled_frames_with_update": [
+      729,
+      677,
+      679
+    ],
+    "status": "FAIL",
+    "input": "speed scenario in Game Corner: one client 3x, two clients 1x"
+  },
+  "retained_native_integration_change": "remove redundant MobileTick after HandleMapObjects; no new native hooks or helper relocations",
+  "rejected_experiments": [
+    "full idle protocol parsing: excessive latency",
+    "idle byte polling: cadence/latency failed",
+    "serial RAM code: insufficient savings, removed",
+    "VBlank GDMA queue: cadence failed, removed"
+  ],
+  "artifact_directories": [
+    "save-safety-chunks",
+    "latency-chunks-local",
+    "cadence-chunks",
+    "final-latency-rtt100",
+    "final-start-menu",
+    "final-resume",
+    "final-transport-a",
+    "final-transport-b",
+    "final-transport-c"
+  ],
+  "limitations": [
+    "finite scenarios cannot establish absolute crash freedom",
+    "ordinary battery saves tested; deployment regenerates raw emulator snapshots per ROM/core",
+    "strict frame cadence does not yet satisfy the project requirement"
+  ]
+}

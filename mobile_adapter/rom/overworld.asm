@@ -119,6 +119,8 @@ MobilePrepareSprites::
 	ld a, [hl]
 	ld [hl], STANDING
 	ld e, a
+	ld a, 1
+	ld [wMobileFacingsSuppressed], a
 	pop af
 	push af
 	ld hl, wMobileSavedFacings
@@ -377,58 +379,41 @@ MobileApproachPixel:
 	ret
 
 MobileCountObjectOAM:
-	xor a
-	ld [wMobileOAMDemand], a
-	ld bc, wObjectStructs
-	ld d, NUM_OBJECT_STRUCTS
-.loop
-	push de
-	ld a, [bc]
+; Absolute object fields and one local table pointer avoid per-actor calls.
+	ld bc, MobileFacingOAMCounts
+	ld e, 0
+for object, NUM_OBJECT_STRUCTS
+	ld a, [wObjectStructs + object * OBJECT_LENGTH]
 	and a
-	jr z, .next
-	ld hl, OBJECT_FACING
+	jr z, .next{d:object}
+	ld a, [wObjectStructs + object * OBJECT_LENGTH + OBJECT_FACING]
+	cp NUM_FACINGS
+	jr nc, .next{d:object}
+	ld l, a
+	ld h, 0
 	add hl, bc
 	ld a, [hl]
-	cp NUM_FACINGS
-	jr nc, .next
-	call MobileFacingOAMCount
-	ld a, [wMobileOAMDemand]
 	add e
+	ld e, a
+.next{d:object}
+endr
+	ld a, e
 	ld [wMobileOAMDemand], a
-.next
-	ld hl, OBJECT_LENGTH
-	add hl, bc
-	ld b, h
-	ld c, l
-	pop de
-	dec d
-	jr nz, .loop
 	ret
 
 MobileFacingOAMCount:
-; A=facing -> E=OAM bytes. BC preserved; vanilla Facings lives in ROMX.
+; A=facing -> E=OAM bytes. BC preserved. Avoid three ROM bank switches per actor.
 	push bc
 	ld l, a
 	ld h, 0
-	add hl, hl
-	ld bc, Facings
+	ld bc, MobileFacingOAMCounts
 	add hl, bc
-	ld a, BANK(Facings)
-	call GetFarByte
-	inc hl
-	ld e, a
-	ld a, BANK(Facings)
-	call GetFarByte
-	ld h, a
-	ld a, e
-	ld l, a
-	ld a, BANK(Facings)
-	call GetFarByte
-	add a
-	add a
+	ld a, [hl]
 	ld e, a
 	pop bc
 	ret
+
+INCLUDE "mobile_adapter/rom/facing_counts.asm"
 
 MobileHasOAMSpace:
 	ld a, [wMobileVisibleCount]
@@ -464,6 +449,39 @@ MobileCanSuppress:
 	cp NUM_OBJECTS
 	jr nc, .protected
 	ld e, a
+	srl a
+	srl a
+	srl a
+	ld l, a
+	ld h, 0
+	ld bc, wMobileRenderMapMask
+	add hl, bc
+	ld a, MOBILE_WRAM_BANK
+	ldh [rWBK], a
+	ld b, [hl]
+	ld a, 1
+	ldh [rWBK], a
+	ld a, e
+	and 7
+	jr z, .bit
+.shift
+	srl b
+	dec a
+	jr nz, .shift
+.bit
+	bit 0, b
+	jr z, .protected
+	and a
+	ret
+.protected
+	scf
+	ret
+
+MobileRenderMaskPointer:
+	ldh a, [rWBK]
+	push af
+	ld a, 1
+	ldh [rWBK], a
 	ld a, [wMapGroup]
 	dec a
 	ld l, a
@@ -488,31 +506,16 @@ MobileCanSuppress:
 	add hl, bc
 	ld bc, MobileRenderMasks
 	add hl, bc
-	ld a, e
-	srl a
-	srl a
-	srl a
-	ld c, a
-	ld b, 0
-	add hl, bc
-	ld b, [hl]
-	ld a, e
-	and 7
-	jr z, .bit
-.shift
-	srl b
-	dec a
-	jr nz, .shift
-.bit
-	bit 0, b
-	jr z, .protected
-	and a
-	ret
-.protected
-	scf
+	pop af
+	ldh [rWBK], a
 	ret
 
 MobileRestoreFacings:
+	ld a, [wMobileFacingsSuppressed]
+	and a
+	jr z, MobileRestoreFacingsEnd
+	xor a
+	ld [wMobileFacingsSuppressed], a
 ; WBK=1. Only frame-local facing bytes were suppressed; no story state changed.
 	ld bc, wObjectStructs
 	ld de, wMobileSavedFacings
@@ -536,6 +539,7 @@ MobileRestoreFacingsEnd::
 	ret
 
 MobileRenderSprites::
+	call MobileTick
 	ldh a, [rWBK]
 	push af
 	ld a, 1
@@ -544,23 +548,9 @@ MobileRenderSprites::
 	ld a, [wMobileVisibleCount]
 	and a
 	jp z, .no_peers
-	ld a, [wPlayerCurrentOAMSlot]
-	ld [wMobileLocalOAMStart], a
 	ld a, MOBILE_WRAM_BANK
 	ldh [rWBK], a
-	ld hl, wShadowOAM
-	ld de, wMobileOAMSnapshot
-	ld bc, OAM_SIZE
-	rst CopyBytes
-	ld a, [wMobileLocalOAMStart]
-	ld e, a
-	ld d, 0
-	ld hl, wMobileOAMSnapshot
-	add hl, de
-	ld de, wMobileOAMOutput
-	ld bc, 4 * OBJ_SIZE
-	rst CopyBytes
-	ld a, 4 * OBJ_SIZE
+	xor a
 	ld [wMobileOAMWriteCursor], a
 	ld hl, wMobilePeer1
 	call MobileWritePeerOAM
@@ -570,56 +560,49 @@ MobileRenderSprites::
 	ld hl, wMobilePeer2
 	call MobileWritePeerOAM
 .objects
+; Native NPC/local OAM stays in place. Peers occupy only the newly reserved
+; prefix, avoiding two full OAM copies and frame-by-frame actor reordering.
 	ldh a, [hUsedOAMIndex]
+	ld b, a
+	ld a, [wMobileOAMWriteCursor]
+	add b
+	jr c, .capacity_failed
+	cp OAM_SIZE + 1
+	jr nc, .capacity_failed
+	ld [wMobileOAMWriteCursor], a
 	cpl
 	add OAM_SIZE + 1
+	ld [wMobileLocalOAMStart], a ; beginning of the peer prefix
 	ld [wMobileOAMReadCursor], a
-.copy_object
-	ld a, [wMobileOAMReadCursor]
-	cp OAM_SIZE
-	jr nc, .assembled
-	ld b, a
-	ld a, [wMobileLocalOAMStart]
+	ld l, a
+	ld h, HIGH(wShadowOAM)
+	ld a, [wMobileVisibleCount]
+	swap a
 	ld c, a
-	ld a, b
-	sub c
-	cp 4 * OBJ_SIZE
-	jr c, .skip
-	ld e, b
-	ld d, 0
-	ld hl, wMobileOAMSnapshot
-	add hl, de
-	ld a, [wMobileOAMWriteCursor]
+	ld b, 0
+	push bc
+	ld de, wMobileOAMOutput + 2 * 4 * OBJ_SIZE
+	rst CopyBytes ; retain overwritten weather/unused prefix for rejection
+	pop bc
+	ld a, [wMobileLocalOAMStart]
 	ld e, a
-	ld d, 0
-	push hl
+	ld d, HIGH(wShadowOAM)
 	ld hl, wMobileOAMOutput
-	add hl, de
-	ld d, h
-	ld e, l
-	pop hl
-	ld bc, OBJ_SIZE
 	rst CopyBytes
-	ld hl, wMobileOAMWriteCursor
-	ld a, [hl]
-	add OBJ_SIZE
-	ld [hl], a
-.skip
-	ld hl, wMobileOAMReadCursor
-	ld a, [hl]
-	add OBJ_SIZE
-	ld [hl], a
-	jr .copy_object
-.assembled
 	ld a, [wMobileOAMDemand]
-	cp 4 * OBJ_SIZE ; only the local 16x16 avatar, at most six quads per line
+	cp 4 * OBJ_SIZE
 	jr z, .publish
 	call MobileBudgetNPCScanlines
 	jr nc, .publish
 ; Required NPCs keep the exact vanilla OAM when avatar scanlines cannot fit.
-	ld hl, wMobileOAMSnapshot
-	ld de, wShadowOAM
-	ld bc, OAM_SIZE
+	ld a, [wMobileLocalOAMStart]
+	ld e, a
+	ld d, HIGH(wShadowOAM)
+	ld a, [wMobileVisibleCount]
+	swap a
+	ld c, a
+	ld b, 0
+	ld hl, wMobileOAMOutput + 2 * 4 * OBJ_SIZE
 	rst CopyBytes
 	ld a, 1
 	ld [wMobileDeferred], a
@@ -629,34 +612,24 @@ MobileRenderSprites::
 .publish
 	ld a, [wMobileOAMWriteCursor]
 	ldh [hUsedOAMIndex], a
-	ld c, a
-	ld b, 0
-	cpl
-	add OAM_SIZE + 1
-	ld [wPlayerCurrentOAMSlot], a
-	push bc
+	ld a, [wMobileLocalOAMStart]
 	ld b, a
 	ld hl, wMobilePeer1
 	call MobileBindPeerOAM
 	ld hl, wMobilePeer2
 	call MobileBindPeerOAM
-	ld a, b
-	pop bc
-	ld e, a
-	ld d, 0
-	ld hl, wShadowOAM
-	add hl, de
-	ld d, h
-	ld e, l
-	ld hl, wMobileOAMOutput
-	rst CopyBytes
 	ld a, [wMobileVisibleCount]
 	ld [wMobileRenderedCount], a
 	call MobileBudgetWeather
 .done
 	pop af
 	ldh [rWBK], a
-	jmp MobileTick
+	ret
+.capacity_failed
+	ld a, 1
+	ld [wMobileDeferred], a
+	xor a
+	ld [wMobileVisibleCount], a
 .no_peers
 	ld a, MOBILE_WRAM_BANK
 	ldh [rWBK], a
@@ -781,35 +754,38 @@ MobileWritePeerOAM:
 	ret
 
 MobileBudgetWeather:
-; Preserve local+remote scanline capacity ahead of lower-priority NPCs. Weather
-; occupies the OAM prefix and therefore must not crowd out the avatar block.
+; Native local OAM is retained; peers occupy a separate prefix. Weather is
+; lower priority than both and may use only the remaining OAM before peers.
 	ldh a, [hUsedWeatherSpriteIndex]
 	and a
 	ret z
+	ld b, a
+	ld a, [wMobileLocalOAMStart]
+	cp b
+	jr nc, .capacity
+	ldh [hUsedWeatherSpriteIndex], a
+.capacity
 	ld hl, wMobileScanlineBudget
 	ld bc, SCREEN_HEIGHT_PX
 	xor a
 	rst ByteFill
 	ld a, [wPlayerCurrentOAMSlot]
 	ld [wMobileOAMReadCursor], a
+	add 4 * OBJ_SIZE
+	ld [wMobileOAMWriteCursor], a
+	call .avatars
+	ld a, [wMobileLocalOAMStart]
+	ld [wMobileOAMReadCursor], a
 	ld b, a
 	ld a, [wMobileVisibleCount]
-	inc a ; local player also has four sprites
 	swap a
 	add b
 	ld [wMobileOAMWriteCursor], a
-.avatar
-	call MobileAddScanlineOAM
-	ld a, [wMobileOAMReadCursor]
-	add OBJ_SIZE
-	ld [wMobileOAMReadCursor], a
-	ld hl, wMobileOAMWriteCursor
-	cp [hl]
-	jr c, .avatar
+	call .avatars
 	xor a
 	ld [wMobileOAMReadCursor], a
 .weather
-	ld a, [wPlayerCurrentOAMSlot]
+	ld a, [wMobileLocalOAMStart]
 	ld hl, wMobileOAMReadCursor
 	cp [hl]
 	ret z
@@ -829,8 +805,25 @@ MobileBudgetWeather:
 	add OBJ_SIZE
 	ld [wMobileOAMReadCursor], a
 	jr .weather
+.avatars
+	call MobileAddScanlineOAM
+	ld a, [wMobileOAMReadCursor]
+	add OBJ_SIZE
+	ld [wMobileOAMReadCursor], a
+	ld hl, wMobileOAMWriteCursor
+	cp [hl]
+	jr c, .avatars
+	ret
 
 MobileBudgetNPCScanlines:
+	ld a, $ff ; classification is absent on the primary fast path
+	ld [wMobileNPCOptional], a
+	call MobileCheckNPCScanlines
+	ret nc
+	ld hl, wShadowOAM
+	ld de, wMobileOAMSnapshot
+	ld bc, OAM_SIZE
+	rst CopyBytes ; only the overflow path needs a full rollback snapshot
 ; Reconstruct vanilla's reverse priority order to identify optional NPC quads.
 ; No object data changes. A scanline sweep costs two deltas per hardware sprite.
 	ld hl, wMobileNPCOptional
@@ -838,7 +831,6 @@ MobileBudgetNPCScanlines:
 	xor a
 	rst ByteFill
 	ld a, [wMobileVisibleCount]
-	inc a
 	swap a
 	ld [wMobileBudgetCursor], a
 	ld a, $30 ; high, normal, then low, matching InitSprites' reverse OAM
@@ -862,13 +854,15 @@ MobileBudgetNPCScanlines:
 	jr nz, .next_object
 	ld a, e
 	and $f
-	jr z, .next_object ; local player already has its own leading OAM block
 	ld hl, wObjectStructs
+	and a
+	jr z, .pointer_ready ; retain the local player's original native position
 	ld de, OBJECT_LENGTH
 .pointer
 	add hl, de
 	dec a
 	jr nz, .pointer
+.pointer_ready
 	ld b, h
 	ld c, l
 	push bc
@@ -922,12 +916,16 @@ MobileBudgetNPCScanlines:
 	ld hl, wMobileOAMWriteCursor
 	cp [hl]
 	jr nz, .invalid
-	call MobileCheckNPCScanlines
-	ret nc
+; The primary check already found overflow.
 ; Hide entire optional actors, including all their quads, for this frame only.
 	ld hl, wMobileNPCOptional
-	ld de, wMobileOAMOutput
-	ld b, OAM_COUNT
+	ld a, [wMobileLocalOAMStart]
+	ld e, a
+	ld d, HIGH(wShadowOAM)
+	ld a, [wMobileOAMWriteCursor]
+	rrca
+	rrca
+	ld b, a
 .hide_optional
 	ld a, [hli]
 	and a
@@ -941,69 +939,139 @@ MobileBudgetNPCScanlines:
 	inc de
 	dec b
 	jr nz, .hide_optional
-	jmp MobileCheckNPCScanlines
+	call MobileCheckNPCScanlines
+	ret nc
 .invalid
 	ld a, MOBILE_WRAM_BANK
 	ldh [rWBK], a
+	ld hl, wMobileOAMSnapshot
+	ld de, wShadowOAM
+	ld bc, OAM_SIZE
+	rst CopyBytes
+	xor a
+	ld [wMobileScanlineValid], a
 	scf
 	ret
 
 MobileCheckNPCScanlines:
-	ld hl, wMobileScanlineBudget
-	ld bc, SCREEN_HEIGHT_PX + 1
+; Exact Y-byte keys allow reuse only of an already accepted scanline layout.
+; X, tile and palette changes cannot affect the hardware's ten-sprite limit.
+	ld a, [wMobileScanlineValid]
+	ld [wMobileBudgetOptional], a
+	ld a, [wMobileOAMWriteCursor]
+	ld hl, wMobileScanlineKey + OAM_COUNT
+	cp [hl]
+	ld [hl], a
+	jr z, .key_start
 	xor a
-	rst ByteFill
-	ld [wMobileBudgetCursor], a
-.quad
-	ld a, [wMobileBudgetCursor]
+	ld [wMobileBudgetOptional], a
+.key_start
+	ld a, [wMobileOAMWriteCursor]
+	rrca
+	rrca
+	ld b, a
+	ld a, [wMobileLocalOAMStart]
 	ld l, a
-	ld h, 0
-	ld bc, wMobileOAMOutput
-	add hl, bc
+	ld h, HIGH(wShadowOAM)
+	ld de, wMobileScanlineKey
+.key
+	ld a, [de]
+	cp [hl]
+	jr z, .same
+	xor a
+	ld [wMobileBudgetOptional], a
+	ld a, [hl]
+	ld [de], a
+.same
+	inc de
+	inc hl
+	inc hl
+	inc hl
+	inc hl
+	dec b
+	jr nz, .key
+	ld a, [wMobileBudgetOptional]
+	and a
+	ret nz ; accepted keys matched; AND cleared carry
+	ld hl, wMobileScanlineDelta
+	xor a
+rept SCREEN_HEIGHT_PX + 1
+	ld [hli], a
+endr
+	ld [wMobileScanlineValid], a
+	ld [wMobileBudgetPriority], a ; exclusive last affected scanline
+	ld a, SCREEN_HEIGHT_PX
+	ld [wMobileBudgetCursor], a ; first affected scanline
+	ld a, [wMobileLocalOAMStart]
+	ld l, a
+	ld h, HIGH(wShadowOAM)
+	ld a, [wMobileOAMWriteCursor]
+	rrca
+	rrca
+	ld c, a
+.quad
 	ld a, [hl]
 	cp OAM_Y_OFS - TILE_WIDTH + 1
-	jr c, .next_quad
+	jr c, .next
 	cp SCREEN_HEIGHT_PX + OAM_Y_OFS
-	jr nc, .next_quad
-	ld e, a
+	jr nc, .next
+	push hl
+	ld b, a
 	sub OAM_Y_OFS
 	jr nc, .start
 	xor a
 .start
 	ld l, a
-	ld h, 0
-	ld bc, wMobileScanlineBudget
-	add hl, bc
+	ld h, HIGH(wMobileScanlineDelta)
 	inc [hl]
-	ld a, e
+	ld a, [wMobileBudgetCursor]
+	cp l
+	jr c, .end_start
+	ld a, l
+	ld [wMobileBudgetCursor], a
+.end_start
+	ld a, b
 	sub OAM_Y_OFS - TILE_WIDTH
 	cp SCREEN_HEIGHT_PX
 	jr c, .end
 	ld a, SCREEN_HEIGHT_PX
 .end
 	ld l, a
-	ld h, 0
-	add hl, bc
 	dec [hl]
-.next_quad
-	ld hl, wMobileBudgetCursor
-	ld a, [hl]
-	add OBJ_SIZE
-	ld [hl], a
-	ld hl, wMobileOAMWriteCursor
-	cp [hl]
-	jr c, .quad
-	ld hl, wMobileScanlineBudget
+	ld a, [wMobileBudgetPriority]
+	cp l
+	jr nc, .end_max
+	ld a, l
+	ld [wMobileBudgetPriority], a
+.end_max
+	pop hl
+.next
+	inc hl
+	inc hl
+	inc hl
+	inc hl
+	dec c
+	jr nz, .quad
+	ld a, [wMobileBudgetPriority]
+	ld c, a
+	ld a, [wMobileBudgetCursor]
+	cp c
+	jr nc, .accepted ; no quad touches the visible screen
+	ld l, a
+	ld h, HIGH(wMobileScanlineDelta)
 	ld b, 0
-	ld c, SCREEN_HEIGHT_PX
 .sweep
 	ld a, [hli]
 	add b
 	ld b, a
 	cp 11
 	jr nc, .overflow
-	dec c
+	ld a, l
+	cp c
 	jr nz, .sweep
+.accepted
+	ld a, 1
+	ld [wMobileScanlineValid], a
 	and a
 	ret
 .overflow
@@ -1058,7 +1126,7 @@ MobileCheckScanlineOAM:
 INCLUDE "mobile_adapter/rom/replaceable.asm"
 
 ; Own small copies of the sixteen approved avatar facings. Budget checks for
-; ordinary NPCs still read their actual banked tables through GetFarByte.
+; ordinary NPC counts use the audited bank-local table above.
 MobileSocialFacings:
 for facing, 0, 16
 	dw .Frame{d:facing}

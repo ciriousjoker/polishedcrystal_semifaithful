@@ -83,11 +83,14 @@ The ROM sends changed snapshots at a minimum one-frame interval plus 500-ms
 keepalives. Otherwise adapter DATA carries POLL. Pinned libmobile waits up to one
 second for an empty TCP receive; nonempty POLL avoids that wait without changing
 libmobile. POLL has no reply and does not renew the presence lease. The foreground
-parser consumes at most 16 application bytes and one completed frame per pump.
-Adapter checksum validation, application parsing and preparation of the next
-request run in separate pumps to bound each worst-case foreground path. Serial bursts share 48
-bytes per VBlank, and the IRQ cannot chain into a new frame before foreground
-replenishes the budget. No network wait runs on the game CPU.
+parser copies at most 32 application bytes and publishes one completed frame per
+pump. Header/body chunks stop at the validated frame boundary; lengths cannot
+spill into another frame or the dedicated buffer. Adapter checksum validation,
+application parsing and preparation of the next request run in separate pumps.
+Serial bursts share at most 24 bytes per VBlank. At most four foreground pumps
+run per frame across the existing hooks. No network wait runs on the game CPU.
+These caps bound work; the strict matching-input world-cadence check remains a
+separate requirement and must pass before claiming timing parity.
 
 After a broken socket, automatic retry waits 240 frames and submits the previous
 ID/token. Disconnected identities remain resumable for 30 seconds. Resume advances

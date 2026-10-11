@@ -34,6 +34,16 @@ for index in range(16):
         native[attribute] &= 0xe0
     require(native == social, f"Facing {index} differs from native geometry")
 
+# Bank-local counts replace three far reads on each object in every frame.
+counts = offset("MobileFacingOAMCounts")
+table = offset("Facings")
+index = 0
+while int.from_bytes(rom[table + index * 2:table + index * 2 + 2], "little"):
+    require(rom[counts + index] == facing("Facings", index)[0] * 4,
+            f"Cached native facing {index} has the wrong OAM byte count")
+    index += 1
+require(index == 62, "Native facing count changed; regenerate the cached counts")
+
 # A change in this allocator requires a fresh tile audit, even if it still builds.
 allocator = (REPO / "home/map_objects.asm").read_text()
 require("cp FIRST_VRAM1_OBJECT_STRUCT" in allocator and

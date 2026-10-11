@@ -104,7 +104,6 @@ endc
 	call HandleMapObjects
 if DEF(MOBILE_ADAPTER)
 	farcall MobileCapture
-	farcall MobileTick
 endc
 	call NextOverworldFrame
 	call HandleMapBackground

@@ -71,6 +71,9 @@ wMobileBudgetIndex:: db
 wMobileBudgetOptional:: db
 wMobileBudgetCursor:: db
 wMobileIRQTrampoline:: ds MOBILE_IRQ_TRAMPOLINE_SIZE
+wMobilePumpCount:: db
+wMobileFacingsSuppressed:: db
+wMobileColdFrame:: db
 wMobileResidentEnd::
 ASSERT wMobileResidentEnd - wMobileResidentStart <= 128
 
@@ -138,8 +141,7 @@ wMobilePeer2LoadedFrame:: db
 wMobilePeer2Palette:: db
 ds MOBILE_PEER_SIZE - 33
 wMobileOAMSnapshot:: ds OAM_SIZE
-wMobileOAMOutput:: ds OAM_SIZE
-wMobileScanlineBudget:: ds SCREEN_HEIGHT_PX + 1 ; terminal delta for scanline sweep
+wMobileOAMOutput:: ds 2 * MOBILE_PEERS * 4 * OBJ_SIZE ; peer output plus overwritten prefix
 wMobileNPCOptional:: ds OAM_COUNT
 wMobileUploadedSnapshot:: ds MOBILE_SNAPSHOT_SIZE
 wMobileGuardEnd:: db
@@ -154,3 +156,18 @@ wMobileAvatarCache2:: ds 24 tiles
 wMobileAvatarCacheEnd::
 ASSERT wMobileBufferEnd <= wMobileAvatarCache1
 ASSERT wMobileAvatarCacheEnd <= $e000
+
+; Optional map-rendering declarations are copied once when graphics reset.
+SECTION "Mobile Render Mask", WRAMX[$ddc0], BANK[MOBILE_WRAM_BANK]
+wMobileRenderMapMask:: ds 3
+wMobileScanlineValid:: db
+wMobileScanlineKey:: ds OAM_COUNT + 1
+wMobileRenderMaskEnd::
+ASSERT wMobileRenderMaskEnd <= $de00
+
+; A page-aligned delta table avoids pointer arithmetic for each OAM quad.
+SECTION "Mobile Scanline Delta", WRAMX[$de00], BANK[MOBILE_WRAM_BANK]
+wMobileScanlineBudget:: ; weather and NPC sweeps run sequentially, never in IRQ
+wMobileScanlineDelta:: ds SCREEN_HEIGHT_PX + 1
+wMobileScanlineDeltaEnd::
+ASSERT wMobileScanlineDeltaEnd <= $df00

@@ -212,13 +212,16 @@ static std::map<std::string, unsigned> capture(const unsigned char* sram, size_t
     unsigned maximum = 0;
     for (unsigned count : scanlines) maximum = std::max(maximum, count);
     values["vOAMMaxScanline"] = maximum;
-    if (bindings.count("wMobileNPCOptional") && bindings.count("wMobileOAMOutput")) {
-        auto optional = bindings.at("wMobileNPCOptional");
-        auto output = bindings.at("wMobileOAMOutput");
+    if (bindings.count("wMobileNPCOptional") && values.count("wMobileLocalOAMStart")) {
+        const auto optional = bindings.at("wMobileNPCOptional");
         unsigned clipped = 0;
-        for (unsigned quad = 0; quad < 40; ++quad)
-            if (observe(optional.bank, optional.address + quad, sram, sram_size) &&
-                !observe(output.bank, output.address + quad * 4, sram, sram_size)) clipped++;
+        const unsigned start = values.at("wMobileLocalOAMStart");
+        // Classification covers the peer prefix and native OAM in place.
+        // $ff in the first (protected peer) entry marks the unclassified fast path.
+        if (observe(optional.bank, optional.address, sram, sram_size) != 255)
+            for (unsigned quad = 0; quad < 40 && start + quad * 4 < 160; ++quad)
+                if (observe(optional.bank, optional.address + quad, sram, sram_size) == 1 &&
+                    !video_oam[start + quad * 4]) clipped++;
         values["vNPCClippedQuads"] = clipped;
     }
     return values;
@@ -475,7 +478,18 @@ int main(int argc, char** argv) {
                 std::stoul(location.substr(colon + 1), nullptr, 16));
             configured = true;
         }
-        if (!configured) fail("MobileTick symbol missing");
+        if (!configured && bindings.count("wMobileOwner")) fail("MobileTick symbol missing");
+        if (auto observer = reinterpret_cast<void(*)(unsigned, unsigned, unsigned)>(dlsym(core, "mobile_profile_overworld"))) {
+            const char* points[] = {"MobilePrepareSprites", "MobileRenderSprites", "DelayFrame", "HandleNPCStep", "MobileBudgetNPCScanlines",
+                "MobileCheckNPCScanlines", "MobileCanSuppress", "MobileBudgetWeather",
+                "MobileCountObjectOAM", "MobilePreparePeerGraphics", "MobileProjectPeer", "MobileCapture", "_UpdateSprites"};
+            for (unsigned i = 0; i < sizeof(points) / sizeof(points[0]); ++i) {
+                if (native_addresses.count(points[i])) {
+                    auto point = native_addresses.at(points[i]);
+                    observer(i, point.first, point.second);
+                }
+            }
+        }
         const std::pair<const char*, const char*> cursor_ranges[] = {
             {"HBlankCopy1bpp", "ClearBGPalettes"},
             {"UpdateBGMapBuffer", "WaitTop"},
@@ -639,11 +653,33 @@ int main(int argc, char** argv) {
             "serial_lowest_sp", "tick_count", "tick_max_cycles", "tick_total_cycles", "tick_failures",
             "tick_lowest_sp", "serial_max_frame_cycles", "serial_normal_speed_count", "serial_bank_switch_completions",
             "serial_max_vblank_cycles", "npc_restore_count", "npc_restore_failures",
-            "tick_stack_cursor_samples", "tick_stack_cursor_lowest_sp"};
+            "tick_stack_cursor_samples", "tick_stack_cursor_lowest_sp",
+            "prepare_max_cycles", "render_max_cycles", "prepare_delay_frames",
+            "world_updates_in_800_frames", "world_max_frame_gap",
+            "prepare_count", "prepare_total", "prepare_max",
+            "render_count", "render_total", "render_max",
+            "npc_budget_count", "npc_budget_total", "npc_budget_max",
+            "scanlines_count", "scanlines_total", "scanlines_max",
+            "eligibility_count", "eligibility_total", "eligibility_max",
+            "weather_count", "weather_total", "weather_max",
+            "oam_count_count", "oam_count_total", "oam_count_max",
+            "graphics_count", "graphics_total", "graphics_max",
+            "projection_count", "projection_total", "projection_max",
+            "capture_count", "capture_total", "capture_max",
+            "native_sprites_count", "native_sprites_total", "native_sprites_max",
+            "active_cycles_in_800_frames", "world_frames_with_update", "world_duplicate_updates"};
         std::ofstream profile(arguments.at("--profile-out"));
         profile << '{';
         for (unsigned i = 0; i < sizeof(names) / sizeof(names[0]); ++i)
             profile << (i ? "," : "") << '\"' << names[i] << "\":" << metric(i);
+        if (auto gaps = reinterpret_cast<uint64_t(*)(unsigned)>(dlsym(core, "mobile_profile_world_gap"))) {
+            profile << ",\"world_gaps\":[";
+            for (unsigned i = 0; auto gap = gaps(i); ++i) {
+                profile << (i ? "," : "") << "{\"frame\":" << uint32_t(gap)
+                        << ",\"gap\":" << (gap >> 32) << '}';
+            }
+            profile << ']';
+        }
         profile << ",\"video_frames\":" << video_frames << ",\"audio_batches\":" << audio_batches
                 << ",\"audio_samples\":" << audio_samples << "}\n";
         if (!profile) fail("Cannot write profiling result");

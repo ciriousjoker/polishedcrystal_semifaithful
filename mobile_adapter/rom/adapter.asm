@@ -23,6 +23,8 @@ MobileTick::
 	ld [hl], a
 	ld a, MOBILE_BURST_BYTES
 	ld [wMobileBurst], a
+	ld a, MOBILE_PUMPS_PER_FRAME
+	ld [wMobilePumpCount], a
 	ld a, 1
 	ld [wMobileFrameTick], a
 	jr .new_frame
@@ -114,6 +116,11 @@ MobileTick::
 	ld a, [wMobileKeyLatch]
 	and a
 	call nz, MobileConsumeKey ; consume the entire held chord, including later frames
+	ld hl, wMobilePumpCount
+	ld a, [hl]
+	and a
+	jp z, .return
+	dec [hl]
 	ld a, [wMobileOwner]
 	and a
 	jr nz, .owned
@@ -335,9 +342,8 @@ MobileBegin:
 	ldh a, [rIE]
 	and IE_SERIAL
 	ld [wMobileSavedSerialIE], a
-	; Copy before claiming the serial interrupt. This fixed non-overlaid WRAM0
-	; trampoline avoids a general FarCall on every byte. IME stays disabled
-	; throughout the IRQ and its final jump returns to ROM0 before RETI.
+	; Copy before claiming serial. The fixed WRAM0 trampoline is separate
+	; from save scratch. IME stays disabled throughout the byte handler.
 	ld hl, MobileIRQTrampolineSource
 	ld de, wMobileIRQTrampoline
 	ld bc, MOBILE_IRQ_TRAMPOLINE_SIZE
@@ -659,8 +665,8 @@ MobileSetRxPointer:
 	ld [wMobileRxPointer + 1], a
 	ret
 
-; This banked IRQ does bounded byte work, never enables interrupts or waits,
-; and restores the interrupted WRAM bank. Serial already saved all registers.
+; Bounded banked byte handler. Native Serial saves all registers; this
+; routine restores WBK, never enables interrupts and never waits.
 MobileSerialIRQ::
 	ldh a, [rWBK]
 	push af
@@ -754,12 +760,20 @@ MobileSerialIRQ::
 	ldh [rWBK], a
 	ret
 
-; D -> RX[ptr++], with a checked physical buffer end.
+; D -> RX[ptr++], with both physical buffer bounds checked.
 MobileStoreRx:
 	ld a, [wMobileRxPointer + 1]
 	ld h, a
 	ld a, [wMobileRxPointer]
 	ld l, a
+	ld a, h
+	cp HIGH(wMobileRx)
+	jr c, .overflow
+	jr nz, .upper
+	ld a, l
+	cp LOW(wMobileRx)
+	jr c, .overflow
+.upper
 	ld a, h
 	cp HIGH(wMobileGuardRx)
 	jr c, .store
@@ -777,7 +791,7 @@ MobileStoreRx:
 	scf
 	ret
 
-; Start exactly one byte. Called with WBK=2; IRQ chains only within its budget.
+; Start exactly one byte with WBK=2. IRQ chaining stays within its budget.
 MobileClock:
 	ldh a, [hVBlankCounter]
 	ld hl, wMobileLastFrame

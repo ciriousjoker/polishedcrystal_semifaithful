@@ -29,8 +29,21 @@ require(resident <= 128 and buffers <= 1536 and code <= 8192, "Mobile allocation
 avatar_bytes = new["wMobileAvatarCacheEnd"][1] - new["wMobileAvatarCache1"][1]
 require(new["wMobileAvatarCache1"] == (2, 0xdac0) and avatar_bytes == 768, "Avatar cache placement changed")
 require(new["wMobileBufferEnd"][1] <= 0xdac0 and new["wMobileAvatarCacheEnd"][1] <= 0xe000, "Avatar cache overlaps retained data")
+render_bytes = new["wMobileRenderMaskEnd"][1] - new["wMobileRenderMapMask"][1]
+scanline_bytes = new["wMobileScanlineDeltaEnd"][1] - new["wMobileScanlineDelta"][1]
+require(new["wMobileRenderMapMask"] == (2, 0xddc0) and render_bytes == 45,
+        "Render cache placement changed")
+require(new["wMobileScanlineDelta"] == (2, 0xde00) and scanline_bytes == 145,
+        "Scanline scratch placement changed")
+require(new["wMobileAvatarCacheEnd"][1] <= new["wMobileRenderMapMask"][1] and
+        new["wMobileRenderMaskEnd"][1] <= new["wMobileScanlineDelta"][1] and
+        new["wMobileScanlineDeltaEnd"][1] <= 0xdf00, "Render scratch overlaps retained data")
+require(new["wMobileScanlineBudget"] == new["wMobileScanlineDelta"],
+        "Sequential weather/NPC scratch no longer shares its dedicated table")
+require(new["wMobileNPCOptional"][1] - new["wMobileOAMOutput"][1] == 64,
+        "Peer output and saved prefix must each fit two four-quad avatars")
 report = {"existing_ram_symbols_checked": len(ram), "existing_ram_symbols_changed": changed,
-          "avatar_cache_bytes": avatar_bytes, "resident_bytes": resident, "buffer_bytes": buffers, "banked_driver_bytes": code}
+          "avatar_cache_bytes": avatar_bytes, "render_cache_bytes": render_bytes, "scanline_scratch_bytes": scanline_bytes, "resident_bytes": resident, "buffer_bytes": buffers, "banked_driver_bytes": code}
 for name in ("baseline", "mobile", "faithful"):
     path = getattr(args, name)
     report[name + "_rom_sha256"] = digest(path)
