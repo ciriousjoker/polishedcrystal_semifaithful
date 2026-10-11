@@ -1,11 +1,16 @@
 # Mobile Adapter development
 
-Milestone 2 adds three-player lobbies and live overworld avatars to the tested
-transport foundation. Battles, calls, gifts and trades follow in milestones 3 to 5. The persistent scope and next milestones are in [PLAN.md](PLAN.md).
+The current implementation adds three-player lobbies and live overworld avatars
+to the tested transport foundation. Milestone 2 now requires four-player support
+and the acceptance work below. Battles, calls, gifts and trades follow in
+milestones 3 to 5. The persistent scope is in [PLAN.md](PLAN.md).
 The binding requirements and explicit acceptance gaps are in
 [REQUIREMENTS.md](REQUIREMENTS.md). Strict frame parity remains open; 400% speed,
 priority escape and connected-state restoration without libmobile need additional
-acceptance tests. Historical milestone-2 acceptance and measured limits are in
+acceptance tests. The required capacity is now four total players on the same map;
+the implementation currently supports three. Gifts/trades will use ordinary
+user-managed saves, without a transaction journal or durable recovery requirement.
+Historical milestone-2 acceptance and measured limits are in
 [research/MILESTONE_2.md](research/MILESTONE_2.md).
 The implementation is under `rom/`, the Rust workspace under `server/`, and native
 acceptance tools under `tools/`. Existing game code has small conditional hooks;
@@ -35,6 +40,8 @@ The server prints `READY 127.0.0.1:17423`. Load
 blue adapter and telephone relay disabled. Continue a normal save into a safe
 idle overworld scene. Select+B joins or leaves lobby 1. Select+A opens status,
 players and connect/disconnect controls. Select+B+A runs the echo diagnostic.
+These are the current build's controls; the required independent, disconnect-only
+Select+B path is not implemented yet.
 Three clients can join; each sees two peers in a compatible map instance.
 Initial saves share coordinates, so move a tile to separate overlapping avatars.
 Avatars use each player's selected Chris/Kris/Crys/Beta figure, movement sprite

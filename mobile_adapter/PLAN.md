@@ -2,14 +2,18 @@
 
 Last updated: 2026-10-11.
 Binding requirements: [REQUIREMENTS.md](REQUIREMENTS.md), including the latest
-400% speed target, priority local escape, save independence and compatible
-emulator-state recovery when libmobile is absent. These requirements supersede
-older proposals below. Feasibility boundaries are explicit and are not waivers.
+four-player target, matched-NPC performance at up to 400% speed, priority local
+Select+B disconnect, independent saves and compatible state recovery without
+libmobile. Durable transfer recovery and save journals are explicitly out of
+scope. These requirements supersede older proposals below. Feasibility boundaries
+are explicit and are not waivers.
 Status: milestone 1 complete; milestone 2 functionality is implemented, but its
 strict frame-cadence acceptance remains open. Three-player lobbies and live
 overworld presence are tested at 300%/100%/100% emulator speeds. Extra missed
-world-update frames block milestone 3. Selected figures and three selectable
-manual-save scenes are complete. Save and transport recovery checks pass.
+world-update frames and the new four-player/matched-NPC acceptance work block
+milestone 3. The current implementation still supports three total players.
+Selected figures and three selectable manual-save scenes are complete. Save and
+transport recovery checks pass.
 Current follow-up evidence: research/stability-cadence-followup.json.
 Earlier measured evidence: research/AVATAR_SCENARIOS.md and
 research/avatar-scenarios-evidence.json. Historical milestone-2 acceptance:
@@ -59,10 +63,11 @@ requested. Commit completed changes locally. Do not use the GitHub plugin.
 
 - Develop ROM changes and a Rust server together on this branch.
 - Start with a server on the local PC and two independent game instances.
-- Design for multiple connected players from the beginning. The first supported
-  lobby capacity is three total players, including the local player, so each ROM
-  tracks up to two remote players. Player collections and explicit target IDs
-  must exist even in the first two-player demonstration.
+- Design for multiple connected players from the beginning. The required
+  lobby capacity is four total players, including the local player, so each ROM
+  tracks three remote players. All four can share the same map and viewport.
+  Player collections and explicit target IDs must exist even in the first
+  two-player demonstration.
 - Make remote players visible in the overworld.
 - Facing another player and pressing A opens a shared interaction menu.
 - Calling an online player through the Pokegear plays the existing call sound,
@@ -104,12 +109,13 @@ The most important risks, in implementation order, are:
    palettes on crowded maps.
 4. Replacing cable-specific waiting and acknowledgement behavior in battle and
    trade paths with explicit network sessions.
-5. Recovering interrupted trades and gifts without silently losing or duplicating
-   inventory in normal supported clients.
+5. Validating live gifts/trades and applying consistent local inventory updates,
+   with ordinary user saving and no persistent multiplayer recovery journal.
 
 Presence, calls, and menus are a reasonable first playable milestone. Battles
-require a deeper transport adaptation. Persistent transfers should come after
-connection recovery and durable transaction recovery are demonstrated.
+require a deeper transport adaptation. Inventory features should follow
+validated live-session transfer handling. Reliable recovery across crashes or
+independent save histories is explicitly not required.
 No calendar estimate is justified before the serial and memory experiments.
 
 ## Verified baseline and resource limits
@@ -291,8 +297,8 @@ copy to validate adapter transcripts separately from ROM execution.
   service hook in relevant foreground loops. A global `DelayFrame` hook needs
   a reentrancy and bank audit before use; it is not automatically safe.
 - Disconnect cancels noncommitted invitations, removes stale avatars, and
-  returns control to ordinary gameplay. Inventory recovery follows the durable
-  transaction state rather than a blanket rollback.
+  returns control to ordinary gameplay. Transfers use volatile session state and
+  valid local application; no persistent reconciliation or rollback is required.
 
 libmobile exposes up to 254 network bytes per transfer, while connection-ID and
 adapter framing bytes consume additional space. Begin with logical application
@@ -309,6 +315,14 @@ Use explicit `LobbyId`, `PlayerId`, connection generation, `InteractionId`,
 not a persistent identity. A reconnect must invalidate delayed events from the
 old connection generation.
 
+A single authoritative maximum-capacity setting must drive ROM and server
+constants and bounded storage. Use generic iteration and resource leases for
+zero through three remote peers; no numbered-player implementation branches.
+Investigate using eligible native NPC object/graphics resources with exact actor
+restoration, rather than manually assigning a new fixed VRAM window per peer.
+See research/FOUR_PLAYER_FEASIBILITY.md for the placement proof and remaining
+allocator/renderer acceptance.
+
 The server maintains a collection of players per lobby and routes each action
 to an explicit target or participant list. A ROM keeps a bounded collection of
 remote-player records. Never introduce a global "the remote player" for lobby
@@ -317,17 +331,18 @@ single-opponent game buffers with the selected peer's data.
 
 Separate these limits:
 
-- Supported lobby capacity: initially 3 total players.
-- ROM peer cache and visible avatar capacity: initially 2 remote players.
+- Required lobby capacity: 4 total players, superseding the implemented limit of 3.
+- Required ROM peer cache and visible avatar capacity: 3 remote players.
 - Interaction participants: initially 2, explicitly identified.
 - Battle participants: 2 under the existing battle engine.
 - One exclusive battle/trade/gift session per player at a time.
 
 The server collections can support a larger configurable lobby limit later, but
 the current ROM advertises its capacity and rejects incompatible lobbies.
-Future larger lobbies require paged rosters and a bounded visible interest set;
-they are not promised by simply raising one constant. Multiplayer battles would
-require separate battle mechanics and are outside this plan.
+Capacity changes must pass resource assertions. Beyond the fixed packet/render
+budgets, larger lobbies would need paged rosters and a bounded visible interest
+set; changing a constant must not silently overrun a resource. Multiplayer battles
+would require separate battle mechanics and are outside this plan.
 
 Proposed message families, not a frozen wire specification:
 
@@ -338,7 +353,7 @@ Proposed message families, not a frozen wire specification:
 | `POLL`, `HEARTBEAT`, `PRESENCE` | Bounded event delivery and position/status snapshots. |
 | `INTERACTION_REQUEST`, `ACCEPT`, `DECLINE`, `CANCEL` | Explicit caller/target/session and busy states. |
 | `BATTLE_READY`, `BATTLE_ACTION`, `BATTLE_ABORT` | Party setup, ordered turns, timeout cleanup. |
-| `TRANSFER_OFFER`, `PREPARED`, `COMMIT`, `APPLIED`, `STATUS` | Trade/gift agreement and durable recovery. |
+| `TRANSFER_OFFER`, `PREPARED`, `COMMIT`, `APPLIED`, `CANCEL` | Volatile trade/gift agreement, validation and live-session status. |
 
 Keep framing binary and explicitly serialized: protocol version, message type,
 bounded payload length, request/sequence ID, relevant session identity, and
@@ -369,8 +384,8 @@ or snap after a warp. Warps and connected-map transitions invalidate stale
 coordinates. A position snapshot and map identity must describe one consistent
 state; account for the engine's object-coordinate offsets.
 
-For the first sparse-map experiment, use available runtime object slots plus an
-explicit object-slot-to-player binding table. `TEMP_OBJECT` or another special
+For the generic resource-leasing prototype, use available runtime object slots
+plus an explicit object-slot-to-player binding table. `TEMP_OBJECT` or another special
 marker alone is insufficient: existing interaction code calls `GetMapObject`
 with the stored map-object index. Remote interaction must be intercepted before
 that lookup, and deletion/visibility routines must clear bindings safely.
@@ -382,8 +397,10 @@ Audit allocator behavior on crowded maps before declaring general overworld
 support complete. Preserve required NPCs; a capacity failure may temporarily
 hide a peer and expose them through the online roster with a visible indication.
 If this fallback is common, a dedicated remote rendering allocation is needed.
-Three lobby members does not by itself guarantee three visible avatars on every
-map. Start with an approved small avatar set and standing/walking states, then
+The four-player target requires actual same-map coexistence; lobby membership
+alone is insufficient. Per-map resource pressure must be tested, not hidden by
+silently retaining a two-peer renderer. Start with an approved small avatar set
+and standing/walking states, then
 add surfing, biking, stairs, ledges, weather, palette changes, and large sprites
 after checking their tile budget.
 
@@ -400,9 +417,9 @@ Use a feature-owned replaceability table and temporary suppression mask. Restore
 eligible decoration when visible-peer demand disappears; preserve stable map
 IDs, position/state, event flags, and required script actors. Do not use the
 story-mutating `Script_disappear` command for multiplayer eviction. With twelve
-nonplayer runtime slots, one/two remotes require ordinary demand at most eleven/
-ten; a one-effect reserve lowers that to ten/nine. Special last-slot sprite
-graphics can impose a tighter allocation rule. Define a protected camera/cutscene
+nonplayer runtime slots, one/two/three remotes require ordinary demand at most
+eleven/ten/nine; a one-effect reserve lowers that to ten/nine/eight. Special
+last-slot sprite graphics can impose a tighter allocation rule. Define a protected camera/cutscene
 policy and defer rendering if no eligible object can be reclaimed. This policy
 is necessary even for a robust two-player release, although ordinary maps mostly
 fit without hiding NPCs.
@@ -456,54 +473,38 @@ continuing the next turn. Do not relay old link bytes with guessed timing.
 
 The current `LinkBattleError` uses `SoftReset`; mobile disconnect needs a safe
 exit restoring prebattle state instead. Presence continues as busy/in battle.
-The third lobby member remains connected and can walk or see busy status; no
-spectator mode or three-person fight is implied. Audit all `wLinkMode` branches
+The two uninvolved lobby members remain connected and can walk or see busy
+status; no spectator mode or multi-person fight is implied. Audit all `wLinkMode` branches
 and give the new transport a distinct mode rather than accidentally selecting
 an old cable path.
 
-### Durable inventory operations
+### Live-session gifts and Pokemon trades
 
-Item gifting is feasible using `ReceiveItem` and `TossItem`, but only after
-capacity, quantity, target acceptance, and save recovery are handled. Begin with
-ordinary allowed bag items; exclude key items and special pockets until their
-semantics are designed. Use an explicit allowlist and bounded quantities.
+The user has explicitly rejected a transaction journal in `.sav` and removed the
+requirement for reliable cross-client recovery after interruption or unsaved-state
+loss. Users are responsible for ordinary saving after receiving a gift or finishing
+a trade. Do not add a sidecar, mandatory reconciliation on load, authoritative
+server inventory or durable transaction database to restore that dropped scope.
 
-Pokemon trading can reuse party-selection, display, animation, and appropriate
-save helpers. It needs an explicit transfer schema including species/form,
-personality, moves, held item, names, OT data, and any supported mail state.
-Preserve last-usable-Pokemon rules and trade evolution behavior. Do not reuse
-vanilla Crystal's Pokemon serialization without auditing Polished Crystal's
-changed structures and storage format.
+Use explicit participant and operation IDs within the live session. Validate
+recipient consent, current capacity, item quantities, allowed item types and the
+complete incoming Pokemon representation before any local mutation. Preserve
+last-usable-Pokemon rules and native inventory invariants. Use Polished Crystal's
+actual Pokemon schema, including supported forms, moves, held items and mail.
 
-Both operations need a durable protocol before changing either inventory. The
-earlier client-journal proposal below is historical and blocked by the newer
-requirement that `.sav` remain entirely independent of multiplayer. It must not
-be implemented without resolving that conflict with the user:
+Stage the complete change, then perform a bounded, consistent local application.
+Reject duplicate or stale messages using volatile session state. An unaccepted or
+invalid request must not mutate inventory. Disconnect must remain locally escapable
+at every phase; it does not require proving that both clients saved the same
+transaction. Do not guess a persistent rollback or replay transfers on reconnect.
+After restart, each client's ordinary `.sav` determines its inventory.
 
-- Server validates the offer and reserves both participants.
-- Both clients validate current source and destination capacity, write and save
-  a pending transaction record, and lock the relevant party/inventory operations.
-- Server persists a single commit or abort decision before replying.
-- Clients apply that decision once and durably save inventory and the applied
-  transaction marker in a recoverable order. A journal must distinguish intent,
-  partially applied state, and completed state; a lone "done" flag is insufficient.
-- Reconnect/load consults the journal and server decision to finish recovery.
-  A timeout after durable commit is not permission to restore the source item.
-- Tests inject crashes around every persistent write on each client and server.
-
-The recovery architecture and save ordering are unresolved and block this feature.
-`SaveAfterLinkTrade` saves Pokemon data and related checksums; it is not a generic
-bag-plus-network-journal save transaction. Checksum/backup selection on load must
-recover a consistent inventory/journal pair. Existing SRAM contains reserved
-unused padding, but using it for multiplayer metadata is no longer an authorized
-design. Preserve save sentinels, checksums, backup offsets, and migration behavior.
-See REQUIREMENTS.md for the conflict between save independence, durable transfer
-recovery and immediate offline continuation.
-
-Promise recovery for supported clients, not cheat prevention. Local save
-restoration, duplicated save files, and a malicious ROM can defeat economic
-ownership without an authoritative server inventory. Do not claim a central
-lobby coordinator alone prevents such duplication.
+Keep ordinary save functions and layout unchanged. Users may lose unsaved transfer
+results or produce inconsistent histories by restoring old saves; this is accepted
+scope, not a reason to compromise save-file validity or packet safety. Test consent,
+validation, duplicate delivery, consistent local state and cancellation. Persistent
+exactly-once application, global conservation after failures and recovery after
+independent save rollback are not acceptance requirements.
 
 ## Planned code organization and integration seams
 
@@ -538,7 +539,7 @@ mobile_adapter/
   tests/
     contracts/          assembler fixtures and byte/layout checks
     host_adapter/       pinned libmobile transcript tests
-    scenarios/          two/three-client TCP scenarios and fault injection
+    scenarios/          two/three/four-client TCP scenarios and fault injection
 ```
 
 The implementation directories are proposed; planning, research, and audit tools
@@ -564,7 +565,7 @@ entire upstream mobile subsystem or external emulator repositories by default.
 | `engine/phone/phone.asm` | Incoming network invitation scheduling at a safe point, separate from random NPC calls. |
 | `engine/link/link.asm:Gen2ToGen2LinkComms` | Mobile-specific setup and party/RNG exchange. |
 | `home/serial.asm:LinkTransfer`, `engine/battle/core.asm:LinkBattleSendReceiveAction` | Explicit mobile battle action exchange instead of cable nybbles and fixed delays. |
-| `engine/link/link.asm:LinkTrade`, `engine/menus/save.asm:SaveAfterLinkTrade` | Selected-peer trade path and durable completion/recovery. |
+| `engine/link/link.asm:LinkTrade`, `engine/menus/save.asm:SaveAfterLinkTrade` | Selected-peer trade path; preserve ordinary save semantics without a journal. |
 | `home/item.asm`, `engine/items/items.asm` | Existing inventory operations called by gift logic after validation. |
 | `engine/menus/save.asm`, `engine/events/checksave.asm`, `ram/sram.asm` | Audit save independence and compatibility; a multiplayer SRAM journal is not authorized. |
 
@@ -586,8 +587,8 @@ transaction and battle events may not. Capacity violations and slow clients
 have defined error/disconnect behavior. Lobby ownership is separate from network
 connection count and can later be partitioned by lobby.
 
-Local presence can initially be in memory. Before gifts or trades are enabled,
-add durable transaction decisions, for example with SQLite. Bind loopback by
+Presence and live transfer coordination can remain in memory. No durable
+transaction database is required by the revised gift/trade scope. Bind loopback by
 default. Configurable bind address/port supports later hosting. Public deployment
 needs its own identity, abuse, persistence, and transport design; libmobile's raw
 TCP path does not magically provide TLS. No cloud resources are created now.
@@ -596,16 +597,16 @@ Required normal unit tests:
 
 - Binary round trips, exact vectors, endian handling, length limits, unknown
   versions/types, partial frames, combined frames, malformed chunks.
-- Three-member roster, capacity limits, leave/reconnect, stale generations,
+- Four-member roster, fifth-client rejection, leave/reconnect, stale generations,
   target lookup independent of slot order, and presence map/epoch ordering.
-- A challenges B while C contacts B; crossed calls; busy, declined, expired,
-  canceled, and disconnected sessions; no events leaking to C's interaction.
+- A challenges B while C contacts B and D remains independent; crossed calls;
+  busy, declined, expired, canceled and disconnected sessions; no event leakage.
 - Battle readiness, duplicate/out-of-order turn submission, wrong participant,
   timeouts, and compatibility rejection.
-- Gift/trade preconditions, full bag/party, duplicate messages, durable commit
-  versus abort, restart/replay, and every persistence failure boundary.
+- Gift/trade consent and preconditions, full bag/party, malformed payloads, stale
+  or duplicate live-session messages, consistent local application and cancellation.
 
-Add loopback integration tests using two and three lightweight TCP clients,
+Add loopback integration tests using two, three and four lightweight TCP clients,
 without a Game Boy emulator, to exercise the real framing and runtime. Adapter
 tests should drive libmobile's serial C API with virtual time and socket callbacks,
 checking connect/poll/disconnect transcripts and empty-poll behavior. These
@@ -673,7 +674,7 @@ acceptance evidence exists. Five milestones are an organization of the work,
 not proof that the full feature already fits or a calendar estimate.
 
 The complete agreed deliverable is the Mobile Adapter-enabled Polished Crystal
-ROM plus a locally runnable Rust server for two or three connected players:
+ROM plus a locally runnable Rust server for up to four connected players:
 live overworld presence, adjacent interaction, distance-independent Pokegear
 calls opening the same action menu, two-person battles, Pokemon trades, and
 ordinary-item gifts. Use collections and explicit participant identities from
@@ -715,14 +716,17 @@ helper relocation, mapper change, or borrowing unsafe UNION storage is silently
 introduced to overcome a failed budget. Failed placement/timing is resolved here
 before building substantial feature UI.
 
-### 2. Three-player lobbies and live overworld presence
+### 2. Four-player lobbies and live overworld presence
 
 Expand the Rust server into the lobby/session service with bounded TCP queues,
 explicit player IDs, connection generations, compatibility negotiation, and
 reconnect/resynchronization. Add the ROM's connection/lobby controls, online
-state, two-entry remote peer table, coherent movement snapshots, and avatar
-bindings. Start with a two-player sparse-map demonstration and finish this
-milestone with three actual emulator processes connected to one server.
+state, a three-entry remote peer table, coherent movement snapshots and avatar
+bindings. The existing two/three-player proofs are intermediate evidence. Finish
+this milestone with four actual emulator processes connected to one server,
+including simultaneous 100%/200%/300%/400% speeds and a matched native-NPC timing
+control. See research/FOUR_PLAYER_FEASIBILITY.md for placement evidence and the
+generic object/graphics resource allocation to prototype.
 
 Handle walking, facing, relevant movement modes, warps, connected-map transitions,
 map-instance differences, and disconnect cleanup. Remote avatars are nonblocking
@@ -733,16 +737,16 @@ NPC suppression/restoration; preserve required actors and story flags.
 Use the all-611-map audit to guide capacity checks. Cover the crowded retained-
 object and special-sprite cases dynamically, including Snowtop Mountain and
 Cinnabar Volcano. Audit object slots, VRAM tiles, palettes, and per-scanline OAM.
-Normal supported overworld scenes must actually display both remote players;
+Normal supported overworld scenes must actually display all three remote players;
 a permanently hidden peer in an ordinary scene is not a completed solution.
 If safe NPC suppression cannot meet that requirement, implement the necessary
 rendering allocation here. Protected cutscenes or resource-critical effects may
 temporarily defer avatars with a defined visible status and roster access; record
 those exceptions explicitly rather than silently dropping maps from coverage.
 
-**Acceptance:** three distinct players can join, move, change maps, leave, and
-reconnect; each sees both peers when sharing the same supported map instance.
-The host model and real three-core scenarios demonstrate bounded queues and no
+**Acceptance:** four distinct players can join, move, change maps, leave and
+reconnect; each sees all three peers in the same supported map instance/viewport.
+The host model and real four-core scenarios demonstrate bounded queues and no
 single-global-peer assumption. Report both full input-to-visible delay and
 additional local-world-motion-to-remote-visible delay. The original full-input
 200/300-ms targets failed because unchanged vanilla turning precedes movement.
@@ -769,9 +773,9 @@ independent of the selected interaction partner.
 
 **Acceptance:** facing a peer and calling that same peer both open the same menu
 for the correct ID; calls ring and close/restore their screen correctly. In a
-three-player scenario, simultaneous requests, refusal, cancellation, expiration,
-map changes, and disconnects do not target the wrong player, steal an active
-script, leave a stuck menu, or disconnect the uninvolved third player. Unit and
+four-player scenario, simultaneous requests, refusal, cancellation, expiration,
+map changes and disconnects do not target the wrong player, steal an active script,
+leave a stuck menu or disconnect either uninvolved player. Unit and
 emulator scenarios verify intermediate UI states as well as completion.
 
 ### 4. Complete two-player battles through the server
@@ -784,75 +788,69 @@ numbers, readiness, turn progression, and state agreement.
 
 Replace cable-specific waits and mobile error/SoftReset paths with bounded
 network waits, clear cancellation, and safe cleanup. Keep adapter activity and
-busy presence through battle animations; the third player's lobby connection
-and ordinary gameplay continue. Preserve game state according to existing link-
+busy presence through battle animations; both uninvolved players' lobby
+connections and ordinary gameplay continue. Preserve game state according to existing link-
 battle rules and restore a consistent offline state after an aborted session.
 
 **Acceptance:** two selected clients complete a real battle with consistent
-outcomes while a third remains connected and can move. Party setup, supported
+outcomes while two others remain connected and can move. Party setup, supported
 battle mechanics, voluntary exit, latency, duplicate/stale events, disconnects,
 and desynchronization have automated checks. Abort returns both participants to
 usable gameplay without a soft reset or persistent party/inventory damage.
 
-### 5. Safe gifts and Pokemon trades, then complete-project acceptance
+### 5. Gifts and Pokemon trades, then complete-project acceptance
 
-First resolve the durability design against REQUIREMENTS.md: independent vanilla
-saves and unrestricted offline continuation conflict with the previous proposed
-client journal. Do not add multiplayer metadata to `.sav` or start inventory
-mutations before a compatible recovery design is demonstrated. Then implement durable
-server decisions and client application/recovery, audit main/backup save selection
-and checksums, and define resume/abort behavior at every phase. A disconnect after
-durable commit must not incorrectly restore the sender's item.
+Implement consent, validated transfer payloads, volatile operation IDs and
+consistent local inventory application. Follow the revised live-session transfer
+semantics above. Save journals, durable distributed transactions and reliable
+recovery after unsaved-state loss are explicitly excluded. Each user is responsible
+for ordinary saving; no multiplayer metadata enters `.sav`.
 
 Implement ordinary allowed-item gifts with quantity/capacity checks and recipient
-consent. Implement Pokemon selection, both parties' confirmation, transfer of
-Polished Crystal's full supported Pokemon schema, held items/mail rules, trade
-evolution, last-usable-Pokemon restrictions, animations, and normal saving.
-Exercise transfers between any selected pair while the third remains connected.
-Do not present a disabled action or host-only transfer as a finished ROM feature.
+consent. Implement Pokemon selection, both parties' confirmation, Polished Crystal's
+supported Pokemon schema, held items/mail rules, trade evolution, last-usable-
+Pokemon restrictions and animations. Exercise every selected pair in a four-player
+lobby while the uninvolved players remain connected. These must be usable ROM
+features rather than disabled menu entries or host-only simulations.
 
-Inject interruption around every durable client/server boundary, reload ordinary
-battery saves, and verify recovery, conservation, and exactly-once application.
-Audit the production frontend's battery-file flush behavior: an in-game SRAM
-write is not by itself proof that the host has persisted that file to disk.
-Document and test the supported restart/power-loss model; stale manual save
-restoration and malicious clients are not economy-integrity guarantees.
+Inject malformed/stale/duplicate messages and disconnect at each live phase.
+Require coherent local inventory, safe exit and valid ordinary saves. Check that
+saving and reloading preserves completed local changes, and that reconnect/load
+does not replay or reconcile old transfers. Do not require global conservation,
+cross-client atomicity or exactly-once recovery across independent save histories.
 
-Finally run the combined three-client acceptance suite: connect, meet, walk,
-interact, call across maps, battle, gift, trade, disconnect/reconnect, restart the
-server/clients, and recover pending transfers. Recheck memory/frame budgets,
-existing offline saves and game paths, and the disabled-build baseline. Cover the
-supported build matrix and reject incompatible peers; do not silently promise
-compatibility for untested cosmetic/debug/VC variants.
+Finally run the four-client suite: connect, meet on the same map, walk, interact,
+call across maps, battle, gift, trade, priority disconnect, automatic reconnect,
+server/client restart and compatible connected-state restore without an adapter.
+Recheck matched native-NPC frame timing through 400%, memory/graphics budgets,
+ordinary save compatibility and the disabled-build hash. Cover the supported build
+matrix and reject incompatible peers.
 
-**Acceptance:** every requested action is usable in the actual ROM, not a stub;
-normal supported failures do not lose or duplicate transferred items/Pokemon.
-All required host-only tests and separate native integration scenarios pass.
-Deliver the reproducible ROM/server builds, commands to start the local server
-and independent clients, endpoint/lobby configuration, protocol/setup/test and
-recovery documentation, source pins, and recorded acceptance results. Fresh-
-checkout instructions work using the documented native dependencies. All code
-is committed locally on `mobileadapter`; there is no upstream PR, cloud
-publication, or external deployment. Only then is the agreed project complete.
+**Acceptance:** every requested action is usable in the actual ROM. Invalid input
+and ROM-controlled failures preserve coherent local game structures and valid
+saves; unsaved transfer outcomes follow the user's normal saving responsibility.
+Required host-only tests and separate native integration scenarios pass. Deliver
+reproducible builds, server/client commands, configuration, documentation, source
+pins and evidence. Fresh-checkout instructions work with the native dependencies.
+Commit locally on `mobileadapter`; no upstream PR, cloud publication or external
+deployment is part of this task. Only then is the agreed project complete.
 
 ## Execution policy and current blockers
 
-Implementation started at the user's request. Keep milestone 1 open until the
-actual-game TCP exchange, failure/reconnect scenarios, disabled-build hash,
-resource measurements, and interrupt/bank checks have passed. Current changes
-and results must be recorded here before context compaction or stopping work.
+Milestone 1's actual-ROM transport, disabled hash and failure checks have passed.
+Current acceptance blockers are milestone 2's four-player expansion, matched-NPC
+frame timing through 400% and priority cancellation/recovery requirements. Record
+new evidence here before compaction. Historical three-player results do not prove
+the new acceptance criteria.
 
-No additional emulator installation, Rosetta, Wine, BGB, cloud account, or desktop
-app is required to start implementation. Tooling availability is established;
-the first unproven gate is the real game's asynchronous adapter/TCP path and its
-measured memory/interrupt behavior. Full ROM fit, safe crowded-scene rendering,
-and durable transfers remain technical risks to solve, not user permissions or
-already completed work. If an immutable hardware budget conflicts with a stated
-requirement, preserve the measured failure and identify the concrete design
-tradeoff; do not quietly relax the requirement or claim the milestone completed.
+No Rosetta, Wine, BGB, cloud account or desktop app is required. Full ROM fit,
+VRAM/palette placement, crowded-scene rendering and native timing remain technical
+work. Durable transfers are no longer required. If a measured hardware budget
+conflicts with a requirement, report the concrete case and design tradeoff instead
+of silently weakening the requirement.
 
 Work on this branch, implement and test each vertical slice, update this plan
-with results, and commit it locally. Begin with milestone 1's actual ROM-to-Rust
+with results, and commit it locally. Preserve milestone 1's actual ROM-to-Rust
 round trip. Reuse the verified native harness and feature-owned section layout.
 
 ## Evidence and external references
@@ -910,7 +908,8 @@ in `research/HOST_ENVIRONMENT.md`; they are not vendored into this branch.
   audit bank/interrupt safety.
 - [x] Freeze transport-v1 framing and bounded single-request echo reassembly
   after the actual-ROM experiment. Add lobby message credits/chunking in milestone 2.
-- [x] Resolve crowding behavior, map-instance rules, and avatar allocation.
+- [x] Establish initial crowding behavior, map-instance rules and avatar allocation
+  for the existing three-player implementation.
 - [x] Complete three-player presence, reconnection and 300% speed acceptance.
 - [ ] Meet strict native cadence using existing idle time and measured bounded
   hooks, including the new 400% mixed-speed requirement.
@@ -918,18 +917,22 @@ in `research/HOST_ENVIRONMENT.md`; they are not vendored into this branch.
   later battles, including compatible connected states restored without libmobile.
 - [ ] Prove corresponding enabled/disabled save compatibility and equivalent-state
   byte equality under injected transport failures.
-- [ ] Resolve save independence versus durable inventory recovery before coding
-  any inventory-changing multiplayer feature. A `.sav` journal is not authorized.
+- [ ] Expand capacity to four clients and three simultaneously visible peers with
+  one capacity setting and generic resource leasing; audit RAM, VRAM, palettes,
+  native actor restoration and packet bounds.
+- [ ] Implement live-session gifts/trades with user-managed ordinary saving.
+  Save journals and reliable cross-restart transfer recovery are out of scope.
 
-Current implementation step: resolve cadence and the new recovery acceptance gaps
-in REQUIREMENTS.md. Milestone 3 remains blocked. Its later scope is target selection,
+Current implementation step: expand to four players, resolve matched-NPC cadence
+and the priority recovery acceptance gaps in REQUIREMENTS.md. Milestone 3 remains
+blocked. Its later scope is target selection,
 invitation/acceptance/cancellation/timeout state and the shared adjacent/call
 interaction menu. Use the existing peer collection and connection generations;
 keep lobby presence independent of the selected action partner. Audit service
 points through menus and scripts before introducing invitations. Recheck ROM
-budgets: standard ROM0 has 7 bytes free and ROMX 6983 bytes overall. Continue in
-this worktree and branch; do not create another branch or PR. Milestones 1 and 2
-are complete, not the full multiplayer deliverable.
+budgets: standard ROM0 has 7 bytes free and ROMX 5945 bytes overall. Continue in
+this worktree and branch; do not create another branch or PR. Milestone 1 is
+complete; the revised milestone-2 acceptance is open.
 
 ## Milestone 1 implementation checkpoint
 
@@ -1037,7 +1040,7 @@ then actual Mac/Android one-command deployment. Rust fmt/clippy, 18 host Rust te
 RGBDS contracts, eight deployment contracts, standard/faithful/disabled builds,
 23373-symbol RAM layout and exact disabled hash already passed. Record final
 metrics, update evidence and locally commit after all gates pass. M3 calls and
-interactions, M4 battles and M5 durable gifts/trades remain out of scope.
+interactions, M4 battles and M5 gifts/trades remain out of scope for that historical proof.
 
 ### Strict positional latency and fast-forward gate
 
@@ -1187,7 +1190,7 @@ and stable Android paths. Owned GUI/server test processes were stopped afterward
 
 Next work is milestone 3 only when requested: adjacent/Pokegear target selection,
 invitations and one shared interaction menu. Presence can be reused, but battle
-and durable transfer behavior are not implemented or covered by the 3x proof.
+and gift/trade behavior are not implemented or covered by the 3x proof.
 
 
 ### Selected-avatar and manual-scenario follow-up, 2026-10-11
@@ -1238,7 +1241,9 @@ was left running. No upstream PR/push. Next work remains M3 when requested.
 
 The expanded, current wording and the compatible-savestate clarification are in
 [REQUIREMENTS.md](REQUIREMENTS.md). In particular the required speed target is now
-400%; historical 300% evidence below does not satisfy it.
+400%, the player count is four, and frame parity uses an equivalent native-NPC
+control. Durable transfer recovery is no longer required; historical evidence
+below does not satisfy the new acceptance criteria.
 
 - All feature assembly stays in mobile_adapter/rom. Existing game assembly may
   contain only surgical conditional integration hooks; do not move existing
@@ -1247,18 +1252,20 @@ The expanded, current wording and the compatible-savestate clarification are in
   without it must match the corresponding pristine upstream build byte for
   byte, including SHA-256. Tooling may be elsewhere. Compare equivalent standard
   variants: only baseline/disabled and enabled should be distinct ROM outputs.
-- Connected gameplay must retain the same 60 Hz world-update/frame cadence as
-  offline gameplay. CPU overhead is acceptable only within the existing frame
-  budget. Report every observed deviation to the user, including isolated
+- Connected gameplay must retain native world-update/frame cadence compared
+  with equivalent ordinary NPCs at the same rendering load. CPU overhead is
+  acceptable only within the existing frame budget. Report every observed
+  deviation to the user, including isolated
   missed frames. Do not accept a relaxed FPS threshold silently.
 - Save integrity is independent of multiplayer connection state. Adapter
   work buffers must never alias ordinary save data or native save scratch RAM;
   invalid packets, disconnects and transport failures must degrade to offline
   gameplay without resetting/crashing the game or writing a damaged save.
   Save while connected and disconnect/malformed-packet recovery require explicit
-  integration tests. Later trade/gift transactions must preserve recoverable
-  state across interruptions. Never claim absolute crash freedom from a finite
-  test suite; document what is protected and tested.
+  integration tests. Later gifts/trades use validated live-session state and
+  ordinary user-managed saves. Reliable transfer recovery across interruption or
+  restart is not required. Never claim absolute crash freedom from a finite test
+  suite; document what is protected and tested.
 - Maximize error tolerance and performance while keeping the repository footprint
   and native integration surface minimal.
 - The current performance follow-up is not complete. A strict matching-input

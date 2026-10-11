@@ -1,0 +1,37 @@
+{
+  "source_commit": "48676b25c",
+  "kind": "layout-only feasibility, no four-player driver or runtime test",
+  "native_symbols_preserved": 23373,
+  "native_symbols_changed": {},
+  "roster_payload_bytes": 56,
+  "roster_frame_bytes": 64,
+  "regions": {
+    "buffers": {
+      "bank": 2,
+      "start": "0xd4eb",
+      "end_exclusive": "0xda1b",
+      "bytes": 1328
+    },
+    "graphics": {
+      "bank": 2,
+      "start": "0xda1b",
+      "end_exclusive": "0xde9b",
+      "bytes": 1152
+    },
+    "render cache": {
+      "bank": 2,
+      "start": "0xde9b",
+      "end_exclusive": "0xdec8",
+      "bytes": 45
+    },
+    "scanline": {
+      "bank": 2,
+      "start": "0xdf00",
+      "end_exclusive": "0xdf91",
+      "bytes": 145
+    }
+  },
+  "additional_banked_ram_bytes": 480,
+  "remaining_bank2_free_bytes": 167,
+  "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/four-player-layout-5lonw4bt"
+}
