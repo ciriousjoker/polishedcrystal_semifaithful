@@ -1,6 +1,6 @@
 # Server ownership, hosting options and assurance
 
-Updated: 2026-10-11. Inspected source: `0fa37627d`; this follow-up changes
+Updated: 2026-10-11. Inspected source: `5df50d4d1`; this follow-up changes
 documentation only. Public deployment, a provider migration and new gameplay
 features are not being implemented. The user wants the current architecture to
 leave room for the desired features in [PLAN.md](../PLAN.md).
@@ -177,6 +177,93 @@ must grow with battles, transfers and travel. Preserve the stronger user goal as
 unresolved rather than silently substituting exact-source equality for it.
 
 ## Cloudflare assessment
+
+### Two responsibilities, one deployment
+
+The user wants this separation considered now and the completed cloud backend
+deployable with one terminal command. Use one Cloudflare Worker project exporting
+both the public routing handler and the lobby Durable Object class. Separate
+source modules and ownership do not require two independently deployed services.
+Cloudflare supports the Worker/DO binding and joint local development/deployment.
+[Getting started][do-start].
+
+| Component | Responsibility |
+| --- | --- |
+| Public Worker entry point | Handle the lobby API and incoming WebSocket upgrade, validate bounded routing/authentication inputs, resolve the canonical room identity and forward to its DO binding. Keep authoritative membership and four-player admission out of stateless Worker memory. |
+| One lobby Durable Object | Accept the forwarded WebSocket, own its member sessions, enforce compatibility/capacity/action rules and coordinate bounded updates for that room. Reconstruct transient state after hibernation or fail/rejoin safely. |
+| Cloudflare platform | Instantiate objects on demand and manage placement, activation and eviction. The routing Worker does not spawn a server process or deploy new code per room. |
+
+Bridge uses one configured public HTTPS/WSS origin. The Worker routes the initial
+request to the chosen room, whose DO handles the accepted connection's WebSocket
+events. Return the DO's upgrade response through the Worker; do not implement a
+second Worker-owned WebSocket relay. The routing handler is not invoked once per
+game message. Bridge keeps the established socket and public origin, without a
+redirect or second connection to a separately public DO IP. Other lobby API calls
+and reconnects still enter through the Worker. Lifecycle
+and empty-room expiry remain separate; a routing lookup alone is not permission
+to join. Resolve code collisions and room creation atomically at the room owner
+or an explicitly designed directory if the chosen code flow later requires one.
+Avoid an unexamined global lobby-manager object that couples every active room.
+[Getting started][do-start], [WebSockets][ws].
+
+The user prefers placement close to players. Start with room activation on the
+host's first real creation/join request, rather than pre-creating production rooms
+from deployment scripts or distant smoke-test runners. Cloudflare normally places
+an object near the first requesting location; the Worker can provide a supported
+regional `locationHint` on the initial lookup. Hints are best effort, not exact
+city/data-center selection. Validate any exposed region choice server-side.
+All members of one room must resolve to the same object. Do not choose a new object
+or placement per joining player. Current documentation says existing objects do
+not relocate and only the first lookup's hint is honored. A later player elsewhere
+therefore shares the existing room's location. Optional host-selected room regions
+and multi-region latency comparisons can improve group placement later; no single
+room location can be physically close to four globally dispersed users. Public
+placement and latency require hosted measurements; the local runtime does not
+prove them. [Data location][location].
+
+### Development and one-command delivery contract
+
+Account for the split before finishing the native Rust server. The current
+`mobile-server` crate still couples the lobby model to Tokio, sockets, a process
+clock and shared synchronization; it cannot simply be uploaded as a Worker.
+Extract the reusable codec and runtime-independent room rules, then exercise
+those same rules through both native and Cloudflare adapters.
+
+Proposed source responsibilities under `mobile_adapter/server`:
+
+- Existing protocol crate: bounded encoding/decoding and compatibility metadata.
+- Shared lobby-core crate: typed room events, injected time/entropy and effects;
+  no Tokio, Cloudflare bindings, sockets or process-global room ownership.
+- Native server adapter: current development TCP transport and room scheduling.
+- Cloudflare adapter: routing and lobby-DO modules in one Worker bundle, using
+  `workers-rs`/WASM and the platform's event model. Prove SDK WebSocket/hibernation
+  support against pinned versions during the milestone-2 foundation work.
+
+Keep fast core tests independent of Cloudflare. Also test the actual Worker/DO
+adapter locally with pinned Wrangler/workerd, not just an unrelated WebSocket
+mock: create/join, four-member admission, room isolation, compatible metadata,
+malformed input, disconnect/rejoin and state reconstruction. Include the Bridge
+in an end-to-end local path. Local tests must not require cloud credentials or
+public deployment. `wrangler dev` provides the local Worker/DO runtime.
+[Getting started][do-start], [Rust support][rust].
+
+Deliver one repository command, provisionally
+`make deploy-mobile-cloudflare MOBILE_ENV=production`, after one-time account
+authentication and environment configuration. This is a planned interface, not
+an existing command. It should validate the selected account/environment, run
+required checks, build pinned Rust/WASM dependencies, apply declared DO namespace
+configuration/class evolution and invoke pinned `wrangler deploy` for the joint
+bundle. It must report the resulting HTTPS/WSS endpoint and verify a health/join
+smoke test. Keep staging and production room namespaces separate. Updates may
+interrupt sessions; clients must reconnect safely without changing native saves.
+[Getting started][do-start], [Rust support][rust].
+
+Track Worker/DO class bindings and configuration in the repository. Current
+Cloudflare documentation uses class `exports` declarations; older projects use
+legacy migrations. Select configuration compatible with the pinned Wrangler/Rust
+toolchain and test upgrades without accidental namespace replacement. The Bridge
+remains a device-installed client configured with the published origin. This
+delivery requirement does not request an actual cloud deployment in this turn.
 
 Rust/WASM is supported through `workers-rs`, but the current Tokio TCP listener
 cannot become a Worker just by changing its compilation target. Workers expose
@@ -434,6 +521,7 @@ Keep the human one-command Python session independent from destructive test setu
 Measure behavior coverage against these invariants, not a cosmetic 100% line score.
 
 [rust]: https://developers.cloudflare.com/workers/languages/rust/
+[do-start]: https://developers.cloudflare.com/durable-objects/get-started/
 [tcp]: https://developers.cloudflare.com/workers/runtime-apis/tcp-sockets/
 [objects]: https://developers.cloudflare.com/durable-objects/concepts/what-are-durable-objects/
 [spectrum]: https://developers.cloudflare.com/spectrum/

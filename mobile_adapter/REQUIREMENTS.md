@@ -148,6 +148,14 @@ Select+B path, ordinary user-managed transfer saving and this ROM-control bounda
   input coverage and limitations; do not present a conservative fingerprint as
   fulfilling that stronger rule. Preserve protocol checks, live-session identity,
   server admission validation and the feature-disabled hash.
+- **D5 MUST:** Design public Worker routing and per-lobby Durable Object ownership
+  as distinct modules now, while delivering them as one Cloudflare project.
+  Share runtime-independent Rust room rules between the native and Cloudflare
+  adapters and test the real Worker/DO path locally. The finished cloud backend
+  must build/check and deploy through one repository terminal command after
+  one-time authentication/configuration, with versioned toolchains/bindings,
+  isolated environments and reported endpoint. The device Bridge connects to
+  that public origin. This is a delivery requirement, not an immediate rollout.
 - **T1 MUST:** Server assurance is based on behavior, invariants and adversarial
   input coverage, not a line-coverage percentage. Malformed frames, invalid action
   sequences or bounded traffic from an individual malicious client must not crash

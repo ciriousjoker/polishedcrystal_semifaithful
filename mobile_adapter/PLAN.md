@@ -200,6 +200,28 @@ target path is the ROM through libmobile to a device-local TCP bridge at
 per lobby. The same ROM endpoint works on Android and desktop without patching
 each device's LAN IP. The remote URL belongs in bridge configuration.
 
+Treat routing and lobby ownership as separate modules now, with one Cloudflare
+Worker project exporting both its public handler and lobby DO class. The Worker
+resolves a room and forwards the WebSocket upgrade; the DO owns its accepted
+connection events, membership and rules. Cloudflare activates objects on demand;
+no per-room deployment or separate publicly addressed server is needed. Bridge
+keeps the original upgraded socket; no per-message Worker relay or second direct
+DO connection is planned. Activate rooms from real host traffic with optional
+supported regional hints, not deployment-time precreation. All members share one
+room location; current placement hints are best effort and do not relocate an
+existing object. Measure regional/cross-region latency before acceptance. Extract
+runtime-independent lobby rules from the current Tokio server and share them
+between native and Cloudflare adapters. Test the actual Worker/DO path locally
+with pinned Wrangler/workerd during milestone 2, not only a WebSocket mock.
+
+The completed backend must have a single repository deployment command,
+provisionally `make deploy-mobile-cloudflare MOBILE_ENV=production`, after one-time
+authentication/configuration. It builds/checks and jointly deploys the Worker and
+DO class/bindings, then reports the Bridge's HTTPS/WSS origin and verifies a smoke
+test. Version toolchains/configuration, isolate staging/production namespaces and
+test safe session recovery across deployment. This command is not implemented yet;
+the current request records its delivery contract, not an immediate deployment.
+
 Share bridge framing, limits and reconnect behavior in a Rust core; use thin
 platform wrappers for Android service lifecycle and desktop startup. Retain the
 native backend for existing development/tests and add a local WebSocket/Worker
@@ -974,6 +996,9 @@ and avoid tile/palette corruption.
   process-wide outages and test both at their intended boundaries.
 - [ ] Bridge foundation proof: bounded TCP/WSS framing, ordering, credit handling,
   local POLL semantics and loss/reconnect in a headless local multi-client suite.
+  Establish the shared lobby-core/native/Cloudflare boundaries and exercise the
+  real local Worker-routing/DO adapter with pinned Wrangler/workerd. Record the
+  joint deployment configuration and one-command delivery path early.
   Demonstrate same-device loopback with Mac and Android libmobile, then Android
   service survival while RetroArch is foreground. Record feasible service type,
   launch/timeout rules and remaining desktop packaging work. No public deployment
@@ -1065,6 +1090,10 @@ saves; unsaved transfer outcomes follow the user's normal saving responsibility.
 Required host-only tests and separate native integration scenarios pass. Deliver
 reproducible builds, server/client commands, configuration, documentation, source
 pins and evidence. Fresh-checkout instructions work with the native dependencies.
+Deliver the one-command Cloudflare backend deployment interface and joint Worker/DO
+configuration, including reproducible build/checks, environment setup and endpoint
+output. Local adapter tests must pass; an actual cloud rollout remains a separate
+user-triggered action. Device Bridge packaging uses that deployed origin.
 Commit locally on `mobileadapter`; no upstream PR, cloud publication or external
 deployment is part of this task. Only then is the agreed project complete.
 
