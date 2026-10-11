@@ -1,7 +1,12 @@
 # Milestone 2: native four-player presence and household Bridge
 
-Completed 2026-10-11 on branch `mobileadapter` for the approved autonomous
-macOS/local-host scope. Phone and public deployment tests remain deferred.
+The recorded finite acceptance run completed 2026-10-11 on branch `mobileadapter`
+for the approved autonomous macOS/local-host scope. A subsequent audit reopened
+scanline-crowding and comprehensive future-map assurance; see
+[ROM_AND_RENDER_LIMITS.md](ROM_AND_RENDER_LIMITS.md). The new no-content-choice
+ROM requirement also has an unresolved capacity strategy. Do not read the earlier
+completion as proof of arbitrary player geometry or future map compatibility.
+Phone and public deployment tests remain deferred.
 This report supersedes the original three-player renderer and the selected-figure follow-up. Historical
 experiments and failures remain in PLAN.md and Git history.
 

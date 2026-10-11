@@ -1,7 +1,7 @@
 {
   "version": 2,
   "policy": "unreferenced-finite-dialogue-graph-only",
-  "generator_sha256": "082dc018c06a045bb7da571d73a1fd51ee12c174a57ce0c5bb1e1abf57991fc4",
+  "generator_sha256": "02bf45c70ecce38f8cf5c75f253ec741813303b634ff7cb016c975795eb214b7",
   "source_sha256": {
     "data/sprites/map_objects.asm": "de256a7e795e8e1d9ff0101a963918cd83e494aadcb0b694dd159981c50610b1",
     "constants/map_object_constants.asm": "8fc29b55fbaabef128634267a51f3f4b87d95d187c73c0daa5e5fc631879b303",

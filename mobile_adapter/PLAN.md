@@ -2,8 +2,12 @@
 
 Last updated: 2026-10-11.
 
-Current checkpoint: milestone 2 is complete for the approved autonomous macOS
-and local-host scope. The normal `make mobile` build uses schema 4, capacity four
+Current checkpoint: the milestone-2 local implementation passed its recorded
+finite suite. Assurance is reopened for native scanline crowding and comprehensive
+future-map gates; do not extend the earlier completion claim to those properties.
+The user's new no-content-choice ROM requirement also needs a capacity strategy.
+Read [research/ROM_AND_RENDER_LIMITS.md](research/ROM_AND_RENDER_LIMITS.md) before
+starting milestone 3. The normal `make mobile` build uses schema 4, capacity four
 and a generic native object lease pool. Flutter presents a native Rust household
 Bridge: embedded local hosting or one WebSocket per household to the routed room
 owner. The shared Rust owner runs embedded, in the native hosted simulator and
@@ -74,7 +78,8 @@ and approves local handling of frequent ROM polls. Lobby management is now
 preferred in the Bridge app. A build-generated, embedded compatibility hash is
 desired; the stronger claim that all semantically compatible versions necessarily
 hash alike remains an unresolved feasibility goal, not an established property.
-Status: milestones 1 and 2 complete for the approved local scope.
+Status: milestone 1 complete. Milestone 2's implemented local path passes its
+finite suite, with scanline/future-map assurance reopened by the latest audit.
 The normal mobile build now uses schema 4, four total players, native actor leases,
 the Flutter/native Rust Bridge and the shared embedded/hosted/WASM Owner.
 Historical three-player completion statements below do not establish this result.
