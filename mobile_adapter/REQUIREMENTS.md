@@ -139,6 +139,15 @@ Select+B path, ordinary user-managed transfer saving and this ROM-control bounda
   an unnecessary standalone Android launcher. Record and test transport, platform
   lifecycle and resource limits before claiming compatibility. No implementation
   or deployment is requested in this documentation follow-up.
+- **D4 DIRECTION:** Prefer lobby creation/selection/joining in the Bridge app.
+  Identify running emulator clients through a local handshake and optionally read
+  embedded metadata from a locally imported ROM. A build-generated compatibility
+  digest is desired, including incompatibility-relevant game inputs. The user's
+  stronger desired equivalence rule, that every compatible revision yields the
+  same digest, is not established by raw-source or binary hashing. Record actual
+  input coverage and limitations; do not present a conservative fingerprint as
+  fulfilling that stronger rule. Preserve protocol checks, live-session identity,
+  server admission validation and the feature-disabled hash.
 - **T1 MUST:** Server assurance is based on behavior, invariants and adversarial
   input coverage, not a line-coverage percentage. Malformed frames, invalid action
   sequences or bounded traffic from an individual malicious client must not crash
@@ -154,8 +163,14 @@ Select+B path, ordinary user-managed transfer saving and this ROM-control bounda
   and reconstructible. Loss of that server state must not destroy or invalidate
   local game/save state. No durable inventory ownership or save-recovery service
   is introduced. The user explicitly approved this transient-state model.
-  Cloudflare with a local bridge is the selected direction; public lobby UX and
-  the paid/free account choice remain open. Free-tier sufficiency is unproven.
+  Cloudflare with a local bridge is the selected direction. The user accepts the
+  documented Free-tier quota for the initial target; actual consumption remains
+  to be measured. Bridge is preferred for lobby management; exact joining UX is
+  open. No paid upgrade or deployment is authorized by this planning decision.
+
+The user also approved local handling of frequent ROM polls to reduce cloud
+traffic, while preserving real server liveness, acknowledgements and session
+semantics. This is an accepted design direction, not completed transport proof.
 
 See [research/SERVER_ARCHITECTURE.md](research/SERVER_ARCHITECTURE.md) for the
 current implementation, public-hosting options, cost assumptions and assurance

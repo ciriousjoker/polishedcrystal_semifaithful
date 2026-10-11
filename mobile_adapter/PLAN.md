@@ -17,6 +17,11 @@ plus Cloudflare Workers/Durable Objects as the critical hosting direction. Keep
 the working direct-TCP development workflow until its replacement is tested.
 The current milestone-2 checklist explicitly includes the remaining adversarial
 server and four-client performance/recovery tests below.
+Follow-up: the user accepts the documented Free-tier quota as the initial budget
+and approves local handling of frequent ROM polls. Lobby management is now
+preferred in the Bridge app. A build-generated, embedded compatibility hash is
+desired; the stronger claim that all semantically compatible versions necessarily
+hash alike remains an unresolved feasibility goal, not an established property.
 Status: milestone 1 complete; milestone 2 functionality is implemented, but its
 strict frame-cadence acceptance remains open. Three-player lobbies and live
 overworld presence are tested at 300%/100%/100% emulator speeds. Extra missed
@@ -201,16 +206,17 @@ native backend for existing development/tests and add a local WebSocket/Worker
 test backend. Bridge and backend listeners must use distinct ports in local tests;
 do not bind both to 17423. The one-command script orchestrates them. A publicly
 hosted raw-TCP gateway and Spectrum are unnecessary for this selected path.
-Free-tier sufficiency must be measured across all rooms, including keepalives,
-poll handling and 400% traffic. The architecture report records daily quota
-calculations; unlimited worldwide free operation is not an established premise.
+The user accepts the documented Free-tier quota as sufficient for the initial
+deployment target. Measure usage across rooms, keepalives, poll handling and 400%
+traffic; handle quota exhaustion safely. The architecture report records the
+assumptions. No paid upgrade or public deployment is authorized by this decision.
 
 The bridge is a critical compatibility boundary, not a stateless byte copier.
 TCP reads may split or combine application frames; bound reassembly, WebSocket
 messages and both directions' queues. Preserve ordered actions and the ROM's
-delivery credits. Investigate terminating local POLL requests in the bridge so
-every emulated poll does not become a billed cloud message, without fabricating
-server liveness or acknowledgements. Coalesce only obsolete presence, and measure
+delivery credits. The user approves terminating frequent local POLL requests in
+the bridge so every emulated poll does not become a billed cloud message, without
+fabricating server liveness or acknowledgements. Coalesce only obsolete presence, and measure
 end-to-end latency and behavior through 400% speed.
 
 The user approved this state model: clients own ordinary game state. The server
@@ -220,8 +226,16 @@ No database of authoritative saves/inventory is desired. A server crash interrup
 multiplayer, requires fresh session identity/resynchronization, and must leave
 ordinary local play and saving intact. Active interactions may cancel safely.
 
-A six-digit shared connection code in a future Multiplayer Options menu is a
-candidate UX, not an implemented password system. Keep a code distinct from
+Lobby creation, selection and joining are now preferred in the Bridge app instead
+of requiring a new in-ROM options screen. The user runs the emulator and opens
+Bridge; the local handshake identifies the running client. Optional local ROM
+import/share can display embedded build/compatibility metadata, but must not be
+mistaken for proof that this exact file is running. Compare imported metadata
+with the live handshake and require a real server join acknowledgement before
+showing online state. Ordinary game saves remain local.
+
+A six-digit shared connection code in Bridge remains a candidate UX, not an
+implemented password system. Keep a code distinct from
 internal room/session identity, validate capacity, expire unused room incarnations
 and limit attempts/creation. An idle-room timeout around ten minutes is a proposal,
 separate from short peer liveness deadlines. Decide before implementation whether
@@ -229,6 +243,18 @@ users choose a shared code that creates/joins, or one user creates a unique room
 code and others join. Address accidental collisions and guessing without treating
 a million possible PINs as a strong authentication secret. Do not store new
 multiplayer settings in the ordinary save without revisiting save independence.
+
+Desired build metadata: generate and embed a compatibility digest only in enabled
+ROMs, with format, protocol and game-profile identifiers readable by Bridge and
+reported by the ROM. The requested inputs cover incompatibility-relevant game
+code/data, not just multiplayer code. Define the actual coverage before claiming
+the digest is sufficient. Raw ASM hashing cannot meet the stronger request that
+every compatible revision necessarily has the same digest; includes, generated
+data, binary assets and build flags also affect semantics. See the architecture
+report for the proposed canonical manifest, conservative fallback and open limits.
+Keep all embedded assembly under `mobile_adapter/rom`, avoid self-referential hash
+inputs and retain the disabled-build identity. Lobby admission must validate the
+declared profile at the server too; a client-controlled digest is no anti-cheat proof.
 
 The initial emulator discussion included BGB with `libmobile-bgb`. The current
 decision is DoubleCherryGB with embedded libmobile, running natively on ARM64.
@@ -847,6 +873,13 @@ participants remain outside the previously agreed scope.
 
 ### 1. Working adapter connection, memory ownership, and test foundation
 
+Status reaffirmed on 2026-10-11: complete for the recorded transport-foundation
+scope. The acceptance evidence is in [research/MILESTONE_1.md](research/MILESTONE_1.md)
+and its JSON summary.
+The later four-player, frame-parity, priority-recovery, Bridge and compatibility
+requirements are open milestone-2 work. This historical acceptance does not claim
+that those expanded requirements or all future failure states are already covered.
+
 Implement the `MOBILE_ADAPTER` build, feature-owned code/RAM sections, serial
 ownership, bounded asynchronous Mobile Adapter commands, and an initial framed
 protocol. Add the Rust workspace, codec/domain test separation, and a minimal
@@ -947,6 +980,9 @@ and avoid tile/palette corruption.
   is needed for this milestone's proof.
 - [ ] Define transport/gameplay compatibility profiles and reject unknown unsafe
   combinations. Existing schema/mechanics checks are not a cross-ROM-version proof.
+  Investigate the desired generated/embedded hash, coverage and reproducibility;
+  test Bridge-visible metadata and live-client matching without claiming automatic
+  recognition of all semantically compatible source changes.
 
 These are open acceptance work for the current milestone, not a later backlog.
 Bridge installation/UX for all four platforms and the hosted rollout remain

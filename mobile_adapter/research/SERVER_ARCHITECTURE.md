@@ -1,6 +1,6 @@
 # Server ownership, hosting options and assurance
 
-Updated: 2026-10-11. Inspected source: `608d8cda4`; this follow-up changes
+Updated: 2026-10-11. Inspected source: `0fa37627d`; this follow-up changes
 documentation only. Public deployment, a provider migration and new gameplay
 features are not being implemented. The user wants the current architecture to
 leave room for the desired features in [PLAN.md](../PLAN.md).
@@ -132,6 +132,50 @@ not silently translate game semantics or claim an incompatible ROM is compatible
 Positive and negative compatibility fixtures belong in milestone 2; feature-specific
 mechanics/serialization checks grow when those features are implemented.
 
+### Desired build-generated compatibility digest
+
+The user would like the enabled build to derive and embed a compatibility hash
+from all incompatibility-relevant game assembly outside the multiplayer feature.
+The desired equivalence rule is stronger than exact-build matching: every pair
+of compatible versions should necessarily produce the same hash. This is a
+nice-to-have goal, not an implemented or proven property.
+
+Deterministic generation and embedding are feasible. Automatically recognizing
+all compatible source changes is a different problem that hashing does not solve.
+Comments, equivalent refactors and code relocation can change source/binary hashes
+without changing network-visible semantics. Hashing only `.asm` also misses inputs
+such as `INCBIN` assets, generated tables and build options. A hash cannot repair
+an incomplete choice of inputs or distinguish an irrelevant change on its own.
+
+Investigate a versioned, canonically encoded compatibility manifest covering the
+dimensions above. Derive resolved IDs, tables, layouts, schemas and mechanics
+options from build inputs where possible. Audit code dependencies and any excluded
+inputs; retain conservative fingerprints for relevant routines whose equivalence
+is not established. Unknown changes fail conservatively until reviewed. Keep exact
+artifact/build identity separate for diagnostics. This can avoid some unnecessary
+mismatches, but does not satisfy the universal equivalence rule automatically.
+The manifest's actual coverage and false-rejection limits must remain explicit.
+
+Generate a bounded metadata block with magic, schema, length and compatibility
+identifiers under `mobile_adapter/rom`, only for the enabled build. Measure the
+digest/metadata ROM and wire cost. Avoid a hash cycle: derive the manifest before
+embedding its digest and exclude the generated block from its own inputs. The
+final ROM checksum belongs in external build artifacts. Feature-disabled output
+must remain hash-identical to the native build.
+
+The live ROM handshake reports metadata to Bridge. Bridge can compare it before
+joining; the server must independently enforce compatible lobby admission. A
+declared digest is untrusted client input, not attestation or anti-cheat. Optional
+local ROM import can read the block, but cannot prove that imported file is running.
+Network compatibility across revisions also does not imply cross-revision `.sav`
+compatibility; the existing same-base enabled/disabled save guarantee is separate.
+
+Milestone 2 should test reproducibility, relevant/irrelevant input changes,
+mechanics flags, malformed/unknown metadata and imported-versus-live mismatches,
+alongside the disabled-ROM hash gate. Feature-specific compatibility coverage
+must grow with battles, transfers and travel. Preserve the stronger user goal as
+unresolved rather than silently substituting exact-source equality for it.
+
 ## Cloudflare assessment
 
 Rust/WASM is supported through `workers-rs`, but the current Tokio TCP listener
@@ -194,10 +238,11 @@ required for the core acceptance suite. No app code or deployment is added now.
 TCP-to-WebSocket conversion must respect application framing, not assume one TCP
 read is a packet. Preserve ordered action messages, session identity and delivery
 credits, with bounds on payloads, fragments, compression/decoding and queues.
-Prefer binary uncompressed frames initially. Investigate answering delivery POLLs
-from the latest bounded local receive cache, so each ROM poll does not cross the
-cloud. Coalesce only superseded presence, using real time independently of emulator
-speed. This is a proposed adaptation, not transparent tunneling already proven.
+Prefer binary uncompressed frames initially. The user approved local handling of
+frequent delivery POLLs from a bounded receive cache, so each ROM poll does not
+cross the cloud. Prove its exact session/credit behavior. Coalesce only superseded
+presence, using real time independently of emulator speed. This adaptation is
+accepted as a direction, but its transport behavior is not already proven.
 Local handling must not invent server acknowledgements, hide upstream failure,
 renew a dead ROM's presence forever or replay old actions after reconnect.
 
@@ -226,7 +271,21 @@ that the provider destroyed a worker. [Lifecycle][lifecycle], [WebSockets][ws].
 
 ## Lobby codes and reconnect
 
-A six-digit code is a plausible GBC-friendly UX. It has at most 1,000,000 values
+The preferred lobby UI now lives in the Bridge app. The emulator runs the ROM,
+which identifies its client and compatibility metadata through the local handshake.
+Bridge displays the client and lets the user create, select or join a lobby.
+Optional local ROM import/share can display embedded metadata and compare it with
+the running client's declaration. Only metadata needs to travel to the cloud.
+Show confirmed online membership only after an actual server join acknowledgement.
+An imported file or an open local TCP socket alone is not a confirmed lobby join.
+
+Changing rooms requires a fresh session and discarding stale room-specific pending
+events. Bridge must respect an explicit ROM disconnect instead of automatically
+rejoining it. Select+B remains available locally regardless of Bridge UI state.
+The earlier candidate in-ROM Multiplayer Options menu is superseded by this
+preferred app flow; exact UI and discovery implementation remain open.
+
+A six-digit code is a plausible Bridge UX. It has at most 1,000,000 values
 and is an invitation code, not strong authentication on its own. The current
 16-bit room field cannot represent every six-digit value; a future protocol must
 expand it or map a code to a separate opaque room identifier. Preserve leading
@@ -315,9 +374,10 @@ unfiltered polls, retries, routing-Worker/CPU/storage limits and abusive request
 also matter. The ten-message rate is an example, not the measured ROM rate or a
 selected update-frequency limit.
 
-A niche deployment may fit Free, but "the whole world fits Free" and "cheapest
-possible host" are not established. Measure total messages and runtime cost,
-including 400% emulation, and expose quota-exhaustion as a recoverable disconnect.
+The user accepts these documented quotas as sufficient for the initial target.
+Free is the starting hosting budget; this does not authorize a paid upgrade or
+public deployment. Measure total messages and runtime cost, including 400%
+emulation, and expose quota exhaustion as a recoverable disconnect.
 Use hibernation-aware connections and reconstructible state; do not keep objects
 active unnecessarily with polling timers. Actual provider integration/latency and
 metering should be checked before public rollout, without weakening frame or

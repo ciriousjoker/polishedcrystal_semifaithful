@@ -4,6 +4,13 @@ Date: 2026-10-10. Branch: `mobileadapter`. Status: complete for the implemented
 transport foundation. The full multiplayer project remains at milestone 2.
 Reproduction commands are in [../README.md](../README.md).
 
+Scope reaffirmed 2026-10-11: this records completed transport-foundation acceptance
+at the listed checkpoint, not a fresh run or proof of later four-player cadence,
+priority escape, Bridge/cloud transport or compatibility metadata. Those expanded
+checks belong to milestone 2. Future budget proposals below are historical;
+[REQUIREMENTS.md](../REQUIREMENTS.md) supersedes them, including its rejection of a
+durable save journal.
+
 ## Actual game, native adapter, Rust endpoint
 
 The feature-enabled Polished Crystal game executes START, blue ISP dial, PPP,
