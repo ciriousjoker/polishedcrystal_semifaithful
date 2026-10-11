@@ -7,6 +7,11 @@ Select+B disconnect, independent saves and compatible state recovery without
 libmobile. Durable transfer recovery and save journals are explicitly out of
 scope. These requirements supersede older proposals below. Feasibility boundaries
 are explicit and are not waivers.
+The gameplay wishlist and architecture outlook below were clarified on 2026-10-11:
+four-player coexistence is its sole absolute feature requirement. Other gameplay
+features remain desired, subject to feasibility and discussion. Foundational
+requirements remain binding. This update is planning only, not an instruction to
+implement the new wishlist or deploy cloud infrastructure.
 Status: milestone 1 complete; milestone 2 functionality is implemented, but its
 strict frame-cadence acceptance remains open. Three-player lobbies and live
 overworld presence are tested at 300%/100%/100% emulator speeds. Extra missed
@@ -88,6 +93,110 @@ requested. Commit completed changes locally. Do not use the GitHub plugin.
 - A desktop app, hosted deployment, unrestricted lobby sizes, and battles with
   more than two participants are later work.
 
+### Gameplay wishlist and architecture direction
+
+Only the four-player row is an absolute gameplay feature requirement. Preserve
+extension points for the remaining goals now, without building their UI or
+speculative infrastructure. Any proposed compromise should be explained with
+measured limits rather than silently removing a goal. The foundational quality
+requirements in REQUIREMENTS.md continue to apply to all implemented features.
+
+| Feature | Priority and architectural consequence |
+| --- | --- |
+| Up to four players at once, including the same map | MUST. Generic peer collections and three remote actor leases per client. |
+| Start-menu connection indicator in the top-right corner | Desired. Three ascending vertical bars based on Material Symbol `signal_cellular_alt`, adapted to the GBC tile grid. Expose connection status independently of UI; exact offline/connecting/online/error visuals remain to be designed. Adapter attachment alone must not imply a joined lobby. |
+| Move/run together in the overworld and talk | Desired. Preserve native movement, distinct peer identity and an explicit interaction target. Talking currently means the interaction menu, not free-text or voice chat. |
+| Compile-time overworld hitbox toggle, potentially an in-game option later | Desired. Initially interpreted as collision with remote avatars, not disabling native terrain/NPC collision. Keep collision policy separate from transport/rendering; clarify any broader noclip intent before implementation. Default remains nonblocking. All combinations with multiplayer disabled preserve the pristine build. |
+| Temporarily remove NPCs when peers need sprite resources; restore them on departure | Desired resource strategy. Allocate only for local visibility demand; use audited optional actors, preserve local state and event identity, and restore safely. Same-map membership need not reserve an offscreen sprite. |
+| Adjacent-player actions: Battle, Trade, Gift item | Desired. Share typed, validated action requests and explicit participant IDs. Keep inventory and save authority local. |
+| Call a player from anywhere | Desired. Reuse the common action menu and add context-specific actions without duplicating the transport/session model. |
+| Quick travel to a called player | Desired, new. Separate a travel request from presence updates and ordinary movement. The receiving game validates map/story compatibility, destination freshness, a safe entry tile and native warp lifecycle. No packet may force an arbitrary warp or mutate progression flags. Consent and exact restrictions need design before implementation. |
+
+Do not make local collision or travel rely on frame-perfect shared simulation.
+Mixed emulator speeds, delayed snapshots and different local story states remain
+supported constraints. Rendering bindings must not double as player identity or
+action authority. Shared protocol capability/version checks should allow later
+features and reject incompatible actions without changing the ordinary save.
+
+### NPC eligibility and restoration policy
+
+The current generated `rom/replaceable.asm` table supports frame-local rendering
+suppression only. `tools/audit_render_policy.py` recognizes pure-text scripts,
+generic trainers and no-op decoration; runtime guards protect nearby actors and
+unsafe scenes. This is not evidence that those actors can safely be deleted from
+runtime object storage. Do not automatically reuse it as a resource-eviction list.
+
+For native resource leasing, default every actor to protected. Keep a feature-owned
+allowlist keyed by map and stable map-object identity, with a reason and priority.
+Use analysis to propose candidates and detect script references; verify each
+accepted rule and exception. Decorative/no-op and pure-dialogue actors can qualify
+only if no external script or gameplay role depends on their continued presence.
+Keep plot actors, active or triggerable trainers, shops/healers, followers,
+puzzle objects, camera proxies and active movement/script targets protected unless
+an explicit safe lifecycle has been demonstrated. A simple script prefix, sprite
+type or offscreen position is insufficient proof.
+
+At runtime, prefer an empty eligible slot, then an approved offscreen actor, then
+the lowest-priority approved distant visible actor. Recheck current interactions,
+script ownership and special graphics before leasing. Hold a stable lease to avoid
+NPC flicker near viewport edges. Preserve the actor's current position, facing and
+other required runtime state, plus its map/event identity. Suppress native respawn
+temporarily without changing story/save flags; restore on release only if the
+current native map/event conditions still permit that actor to exist. Never
+resurrect an actor legitimately removed by game progression.
+
+The build audit must detect changes to allowlisted object definitions, references
+or map ordering and require review rather than silently reassign eligibility.
+Unknown/new actors remain protected. If no safe allocation can display four
+players, report the exact map/state and solve that case; do not silently weaken
+four-player support. No map event data needs new multiplayer flags.
+
+### Development experience and autonomous testing
+
+Keep `tools/dev_session.py` as the single human entry point. The current workflow
+is accepted for now; retain stable Android paths, scenario selection, correct
+intent/config/save selection, 5% Mac volume, visible connection logs and clean
+Ctrl+C/occupied-port handling as it evolves. No Android launcher app is needed.
+
+Every multiplayer feature needs an agent-runnable test path with bounded waits,
+semantic success/failure oracles, pinned tool/core versions, reproducible input
+and fault seeds, and machine-readable artifacts. Agent acceptance must not depend
+on someone unlocking a phone. Use native headless cores for automatic execution
+and retain ADB as a separate real-device compatibility path.
+
+The foundation already includes `make test-mobile-host`, native ROM probes,
+ordinary `.sav` scenarios, current-symbol memory observations, images, transport
+fault injection and cadence measurement. Improvements still needed: a unified
+ROM-suite command, four-client/400% scenarios, the matched-NPC control, priority
+disconnect and compatible-state recovery coverage, and server property/fuzz plus
+resource-isolation tests. Add scenarios when implementing each future action.
+Coverage of current probes must not be called coverage of the entire future game.
+
+### Server ownership, lobby UX and hosting outlook
+
+See [research/SERVER_ARCHITECTURE.md](research/SERVER_ARCHITECTURE.md) for source
+evidence, Cloudflare constraints, latency/cost assumptions and the planned test
+matrix. Keep Rust and a runtime-independent lobby state machine. Start with the
+existing native TCP endpoint and isolate lobbies logically with bounded ownership
+and work. Later deploy across processes/hosts or implement a Cloudflare runtime
+adapter without rewriting protocol and game rules.
+
+Clients own ordinary game state. The server keeps only reconstructible session
+coordination such as membership, routing, latest presence and pending interactions.
+No database of authoritative saves/inventory is desired. A server crash interrupts
+multiplayer, requires fresh session identity/resynchronization, and must leave
+ordinary local play and saving intact. Active interactions may cancel safely.
+
+A six-digit shared connection code in a future Multiplayer Options menu is a
+candidate UX, not an implemented password system. Keep a code distinct from
+internal room/session identity, validate capacity, expire unused room incarnations
+and limit attempts/creation. An idle-room timeout around ten minutes is a proposal,
+separate from short peer liveness deadlines. Decide before implementation whether
+users choose a shared code that creates/joins, or one user creates a unique room
+code and others join. Address accidental collisions and guessing without treating
+a million possible PINs as a strong authentication secret. Do not store new
+multiplayer settings in the ordinary save without revisiting save independence.
+
 The initial emulator discussion included BGB with `libmobile-bgb`. The current
 decision is DoubleCherryGB with embedded libmobile, running natively on ARM64.
 Keep the ROM's adapter protocol libmobile-compatible. An additional BGB target
@@ -105,7 +214,7 @@ The most important risks, in implementation order, are:
 1. Fitting an asynchronous serial driver into an almost full ROM and preserving
    bank registers, interrupt behavior, and frame timing.
 2. Keeping adapter activity alive through menus, scripts, animations, and battles.
-3. Rendering two remote avatars without corrupting NPC slots, sprite tiles, or
+3. Rendering three remote avatars without corrupting NPC slots, sprite tiles, or
    palettes on crowded maps.
 4. Replacing cable-specific waiting and acknowledgement behavior in battle and
    trade paths with explicit network sessions.
@@ -119,6 +228,11 @@ independent save histories is explicitly not required.
 No calendar estimate is justified before the serial and memory experiments.
 
 ## Verified baseline and resource limits
+
+Terminology: feature-owned or "adapter" working memory means ordinary Game Boy
+Color WRAM reserved for our ROM module. It is not memory inside the Mobile Adapter
+and adds no hardware RAM. Packet buffers, peer records and graphics caches use
+audited unused native WRAM ranges; see `rom/ram.asm` and the four-player report.
 
 The base commit built successfully with local RGBDS 1.0.1 and was rebuilt with
 the repository-required RGBDS 1.0.4. Both 2 MiB standard ROMs match the official
@@ -576,6 +690,12 @@ VC/printer/cable compatibility must be explicit, not silently assumed.
 
 ## Rust server design and tests
 
+The deployment/ownership explanation and assurance gaps are in
+[research/SERVER_ARCHITECTURE.md](research/SERVER_ARCHITECTURE.md). Full coverage
+means tested invariants and adversarial behaviors, not a line-count target.
+Volumetric DDoS is infrastructure scope; an individual client's malformed or
+abusive traffic must remain bounded and must not disable unrelated rooms.
+
 Use Rust with an asynchronous TCP runtime such as Tokio. Keep the domain core
 independent of the runtime and sockets. It consumes typed events and emits typed
 effects. Inject time and ID generation rather than sleeping in unit tests.
@@ -638,7 +758,8 @@ make mobile                build the adapter-enabled ROM with resource checks
 make test-mobile-rom       optional CPU execution or emulator integration tests
 ```
 
-These targets do not exist yet. Automated DoubleCherryGB integration will cover
+`make test-mobile-host` and `make mobile` exist. The unified `test-mobile-rom`
+target remains planned; the current probes run individually. Automated DoubleCherryGB integration will cover
 executed serial logic, modeled timing, rendering, menus, and end-to-end scenarios.
 The baseline automation probe already runs through an explicit Python command;
 see the host report. Add new scenarios with each feature. Human interaction is
@@ -673,11 +794,14 @@ verification until milestone 5. A checklist item is complete only when its
 acceptance evidence exists. Five milestones are an organization of the work,
 not proof that the full feature already fits or a calendar estimate.
 
-The complete agreed deliverable is the Mobile Adapter-enabled Polished Crystal
-ROM plus a locally runnable Rust server for up to four connected players:
-live overworld presence, adjacent interaction, distance-independent Pokegear
-calls opening the same action menu, two-person battles, Pokemon trades, and
-ordinary-item gifts. Use collections and explicit participant identities from
+The current target roadmap is the Mobile Adapter-enabled Polished Crystal ROM
+plus a locally runnable Rust server for up to four connected players. Four-player
+same-map support is the absolute gameplay requirement; adjacent interaction,
+Pokegear calls, battles, trades, gifts and the wishlist above are desired outcomes
+subject to feasibility and explicit discussion of compromises. Milestones 3 to 5
+describe how to deliver and test those desired features if retained, not a claim
+that the user refuses every feature tradeoff. Foundational quality requirements
+are binding throughout. Use collections and explicit participant identities from
 the beginning. New desktop apps, cloud deployment, free-text/voice chat, shared
 story progression, unrestricted lobby capacity, and battles with more than two
 participants remain outside the previously agreed scope.
@@ -697,7 +821,7 @@ bank preservation, and frame/audio cost. Keep existing helpers in place. The
 12-byte dispatch and 8-KiB reservation are starting evidence, not a completed
 implementation or a promise that all later UI and transfer logic fits. Establish
 budgets for adapter buffers, peer records, interactions, battle data, and future
-persistent records. Audit their lifetimes through existing menu/battle unions.
+transient session records. Audit their lifetimes through existing menu/battle unions.
 Recheck actual placement and budgets throughout subsequent milestones.
 
 Extend the native frontend with bounded state-driven inputs, intermediate video

@@ -6,6 +6,13 @@ in PLAN.md. An unmet requirement is an acceptance blocker, not permission to
 silently weaken it. Feasibility notes below are engineering assessments, not
 user-approved exceptions.
 
+Scope clarification (2026-10-11): four simultaneous players, including on the
+same map, is the only absolute requirement within the gameplay feature wishlist.
+The other gameplay features in PLAN.md are desired directions, subject to measured
+limits and discussion with the user. This does not relax the foundational
+footprint, save, input recovery, performance, stability or testability requirements.
+Do not implement wishlist features merely because they have been recorded.
+
 ## Minimal footprint
 
 - **F1 MUST:** Minimal integration surface with Polished Crystal.
@@ -105,6 +112,41 @@ The stability contract covers everything controlled by ROM code. Emulator,
 libmobile, host and physical hardware defects are outside this contract, as
 explicitly clarified by the user. Malformed data delivered to the ROM, internal
 ROM mistakes and software-created input starvation remain within scope.
+The user explicitly confirmed the matched-NPC performance comparison, priority
+Select+B path, ordinary user-managed transfer saving and this ROM-control boundary.
+
+## Development experience and server assurance
+
+- **D1 MUST:** Make every multiplayer component autonomously testable by an agent.
+  Deterministic host tests must run without a Game Boy emulator; actual ROM
+  execution has separate headless integration tests. No manual phone interaction
+  may be required for the core automated acceptance suite. Physical-device
+  verification remains a separate compatibility check.
+- **D2 MUST:** Preserve a single Python entry point for the human Mac/Android
+  development session: start the Rust server, launch the Mac emulator, update
+  stable Android files and launch the configured Android emulator via ADB.
+  The existing script is sufficient for now and is intended to evolve. Keep its
+  scenario selection, low Mac volume, connection logs and clean lifecycle behavior.
+- **T1 MUST:** Server assurance is based on behavior, invariants and adversarial
+  input coverage, not a line-coverage percentage. Malformed frames, invalid action
+  sequences or bounded traffic from an individual malicious client must not crash
+  the service, create unbounded work/memory, exhaust shared resources permanently
+  or corrupt another lobby. Use deterministic tests, property/fuzz tests and real
+  transport tests, with explicit resource budgets and evidence.
+- **T2 SCOPE:** Volumetric/distributed network attacks belong to deployment
+  infrastructure. Application-level denial of service from one client remains
+  in scope. Provider protection for the chosen transport must be verified;
+  ordinary Cloudflare HTTP proxying does not automatically protect our raw TCP.
+- **T3 MUST:** Clients retain authoritative ordinary game/save state. Server
+  membership, routing, presence and interaction coordination may be transient
+  and reconstructible. Loss of that server state must not destroy or invalidate
+  local game/save state. No durable inventory ownership or save-recovery service
+  is introduced. Cloud provider and public lobby UX are not selected yet.
+
+See [research/SERVER_ARCHITECTURE.md](research/SERVER_ARCHITECTURE.md) for the
+current implementation, public-hosting options, cost assumptions and assurance
+gaps. Existing tests are a foundation, not evidence of complete hostile-client
+coverage or proof that unimplemented features already work.
 
 ## Definitions and unresolved feasibility boundaries
 

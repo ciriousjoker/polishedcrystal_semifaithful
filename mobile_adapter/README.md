@@ -4,6 +4,10 @@ The current implementation adds three-player lobbies and live overworld avatars
 to the tested transport foundation. Milestone 2 now requires four-player support
 and the acceptance work below. Battles, calls, gifts and trades follow in
 milestones 3 to 5. The persistent scope is in [PLAN.md](PLAN.md).
+Four-player coexistence is the absolute gameplay feature requirement; the other
+gameplay goals are a wishlist subject to feasibility and discussion. Foundational
+quality requirements remain binding. The current server, state ownership, hosting
+options and test gaps are explained in [SERVER_ARCHITECTURE.md](research/SERVER_ARCHITECTURE.md).
 The binding requirements and explicit acceptance gaps are in
 [REQUIREMENTS.md](REQUIREMENTS.md). Strict frame parity remains open; 400% speed,
 priority escape and connected-state restoration without libmobile need additional
@@ -14,7 +18,8 @@ Historical milestone-2 acceptance and measured limits are in
 [research/MILESTONE_2.md](research/MILESTONE_2.md).
 The implementation is under `rom/`, the Rust workspace under `server/`, and native
 acceptance tools under `tools/`. Existing game code has small conditional hooks;
-no existing helper was moved into another ROM bank. No ROM or save is committed.
+no existing helper was moved into another ROM bank. No ROM is committed; portable
+ordinary-save test fixtures are in `tests/scenarios/`.
 
 For manual Mac and Android testing, use the single command in
 [MANUAL_TESTING.md](MANUAL_TESTING.md). It builds and starts the Rust server on

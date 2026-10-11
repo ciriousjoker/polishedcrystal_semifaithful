@@ -4,6 +4,14 @@ Date: 2026-10-11. Source checkpoint: `48676b25c` (production assembly unchanged)
 This is planning and a linker placement experiment, not four-player runtime
 acceptance. The current executable still advertises three total players.
 
+Terminology: "feature-owned WRAM" is ordinary Game Boy Color working RAM reserved
+for this ROM feature, not RAM inside the physical or emulated Mobile Adapter.
+The declarations are WRAM0 and WRAMX sections in `mobile_adapter/rom/ram.asm`.
+They hold packet buffers, peer records and graphics caches in previously unused
+native address ranges. The serial adapter is not a memory expansion for these
+allocations. Its internal implementation buffers are not directly addressable
+WRAM and were not used in this experiment.
+
 ## Required design
 
 Support four total players, including the local player, in the same map and
