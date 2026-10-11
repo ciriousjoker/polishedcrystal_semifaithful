@@ -3,7 +3,7 @@ MobileCodeStart::
 
 ; Foreground only: DelayFrame has completed its VBlank wait. Preserve all
 ; registers and WBK. This routine never waits, calls DelayFrame, or reenters.
-; Milestone 1 developer control: Select+B in safe overworld toggles the proof.
+; Select+B toggles the lobby; adding A runs the one-shot transport diagnostic.
 MobileTick::
 	push af
 	push bc
@@ -16,6 +16,33 @@ MobileTick::
 	ldh a, [hCGB]
 	cp 1
 	jp nz, .return
+	ldh a, [hVBlankCounter]
+	ld hl, wMobileLastFrame
+	cp [hl]
+	jr z, .same_frame
+	ld [hl], a
+	ld a, MOBILE_BURST_BYTES
+	ld [wMobileBurst], a
+	ld a, 1
+	ld [wMobileFrameTick], a
+	jr .new_frame
+.same_frame
+	xor a
+	ld [wMobileFrameTick], a
+	jr .key
+.new_frame
+	ld hl, wMobileKeepalive
+	ld a, [hl]
+	and a
+	jr z, .send_cooldown
+	dec [hl]
+.send_cooldown
+	ld hl, wMobileSendCooldown
+	ld a, [hl]
+	and a
+	jr z, .cooldown
+	dec [hl]
+.cooldown
 	ld a, [wMobileOwner]
 	and a
 	jr nz, .key
@@ -29,6 +56,7 @@ MobileTick::
 	and PAD_SELECT | PAD_B
 	cp PAD_SELECT | PAD_B
 	jr z, .pressed
+	; Physical input is never cleared by our mirrored-input filter.
 	xor a
 	ld [wMobileKeyLatch], a
 	jr .pump
@@ -41,6 +69,20 @@ MobileTick::
 	ld a, [wMobileOwner]
 	and a
 	jr z, .begin
+	ld a, [wMobileMode]
+	and a
+	jr z, .cancel
+	ld a, [wMobileOnline]
+	and a
+	jr z, .cancel
+	xor a
+	ld [wMobileWanted], a
+	ld a, 2
+	ld [wMobileKeyLatch], a
+	jr .pump
+.cancel
+	xor a
+	ld [wMobileWanted], a
 	ld a, 2
 	ld [wMobileKeyLatch], a
 	ld a, MOBILE_ERROR_CANCEL
@@ -57,17 +99,43 @@ MobileTick::
 	ldh a, [hInMenu]
 	and a
 	jr nz, .pump
-	ld a, [wScriptRunning]
-	and a
+	call MobileSceneIsSafe
 	jr nz, .pump
+	ldh a, [hJoypadDown]
+	and PAD_A
+	ld a, 0
+	jr nz, .mode
+	inc a
+.mode
+	ld [wMobileMode], a
+	ld [wMobileWanted], a
 	call MobileBegin
 .pump
 	ld a, [wMobileKeyLatch]
-	cp 2
-	call z, MobileConsumeKey
+	and a
+	call nz, MobileConsumeKey ; consume the entire held chord, including later frames
 	ld a, [wMobileOwner]
 	and a
+	jr nz, .owned
+	ld a, [wMobileWanted]
+	and a
 	jp z, .return
+	ld a, [wMobileCooldown]
+	and a
+	jp nz, .return
+	ld a, [wMapStatus]
+	cp MAPSTATUS_HANDLE
+	jp nz, .return
+	ldh a, [hInMenu]
+	and a
+	jp nz, .return
+	call MobileSceneIsSafe
+	jp nz, .return
+	call MobileBegin
+	jp .return
+.owned
+	ld a, 1
+	ldh [rWBK], a
 ; Existing link/printer state must not share the serial owner.
 	ld a, [wLinkMode]
 	and a
@@ -76,13 +144,44 @@ MobileTick::
 	bit PRINTER_CONNECTION_OPEN, a
 	jr z, .deadline
 .busy
+	xor a
+	ld [wMobileWanted], a
 	ld a, MOBILE_ERROR_BUSY
 	call MobileFail
 	jp .return
 .deadline
+	ld a, [wMobileOnline]
+	and a
+	jr nz, .active
+	ld a, [wMobileFrameTick]
+	and a
+	jr z, .active
 	ld hl, wMobileAttemptTicks
 	call MobileDecrement
 	jp z, .timeout
+.active
+	ld a, 1
+	ld [wMobileAvailability], a
+	ld a, [wMobileMenuState]
+	and a
+	jr nz, .paused
+	ldh a, [hInMenu]
+	and a
+	jr nz, .paused
+	call MobileSceneIsSafe
+	jr nz, .paused
+	ld a, [wMapStatus]
+	cp MAPSTATUS_HANDLE
+	jr nz, .paused
+	ld a, [wBattleMode]
+	and a
+	jr z, .available
+.paused
+	xor a
+	ld [wMobileAvailability], a
+	ld [wMobileLocalValid], a
+	ld [wMobileGraphicsReady], a
+.available
 	ld a, MOBILE_WRAM_BANK
 	ldh [rWBK], a
 	call MobileCheckGuards
@@ -91,9 +190,15 @@ MobileTick::
 	and a
 	jr z, .prepare
 	ld hl, wMobileDeadline
+	ld a, [wMobileFrameTick]
+	and a
+	jr z, .wire_state
 	dec [hl]
 	jp z, .timeout
+.wire_state
 	ld a, [wMobileWire]
+	cp MOBILE_WIRE_APP
+	jr z, .app_continue
 	cp MOBILE_WIRE_TX_DONE
 	jr z, .request_done
 	cp MOBILE_WIRE_DONE
@@ -103,13 +208,18 @@ MobileTick::
 	ld a, [wMobileTransferActive]
 	and a
 	jp nz, .return
-	ld a, MOBILE_BURST_BYTES
-	ld [wMobileBurst], a
 	call MobileClock
 	jp .return
 .prepare
 	call MobilePrepareCommand
 	jp .return
+.app_continue
+	call MobileAppendPending
+	jp c, .protocol_error
+	ld a, [wMobileWire]
+	cp MOBILE_WIRE_APP
+	jp z, .return
+	jr .command_complete
 .request_done
 ; In 8-bit full duplex, the two ACKs arrive on the first trailing clocks.
 	ld a, [wMobileTxSize]
@@ -129,8 +239,6 @@ MobileTick::
 	ld [wMobileWire], a
 	ld hl, wMobileRx
 	call MobileSetRxPointer
-	ld a, MOBILE_BURST_BYTES
-	ld [wMobileBurst], a
 	call MobileClock
 	jr .return
 .response_done
@@ -146,11 +254,17 @@ MobileTick::
 	jr nz, .packet_error
 	call MobileConsumeResponse
 	jr c, .protocol_error
+	ld a, [wMobileWire]
+	cp MOBILE_WIRE_APP
+	jr z, .return
+.command_complete
 	ld a, [wMobileOwner]
 	and a
 	jr z, .return
 	xor a
 	ld [wMobileWire], a
+	; Keep response parsing and the next request's checksum/copy in separate
+	; foreground pumps. The next MobileTick starts the request without waiting.
 	jr .return
 .adapter_error_detail
 	ld a, [wMobileRx + 7]
@@ -177,15 +291,15 @@ MobileTick::
 	pop af
 	ret
 
-; Consume an accepted developer chord so Select does not start an ordinary
-; registered-item script. Other buttons and unsafe-state input are untouched.
+; Filter mirrored game input, preserving physical input for held-key debounce.
+; MobileMenuInput pumps again after GetJoypad, before ordinary player events.
 MobileConsumeKey:
-	ldh a, [hJoypadDown]
+	ldh a, [hJoyDown]
 	and ~(PAD_SELECT | PAD_B)
-	ldh [hJoypadDown], a
-	ldh a, [hJoypadPressed]
+	ldh [hJoyDown], a
+	ldh a, [hJoyPressed]
 	and ~(PAD_SELECT | PAD_B)
-	ldh [hJoypadPressed], a
+	ldh [hJoyPressed], a
 	ret
 
 ; Cable/printer foreground entry points yield the serial port before touching
@@ -193,6 +307,8 @@ MobileConsumeKey:
 MobileYieldSerial::
 	push af
 	push bc
+	xor a
+	ld [wMobileWanted], a
 	ld a, [wMobileOwner]
 	and a
 	jr z, .done
@@ -219,6 +335,13 @@ MobileBegin:
 	ldh a, [rIE]
 	and IE_SERIAL
 	ld [wMobileSavedSerialIE], a
+	; Copy before claiming the serial interrupt. This fixed non-overlaid WRAM0
+	; trampoline avoids a general FarCall on every byte. IME stays disabled
+	; throughout the IRQ and its final jump returns to ROM0 before RETI.
+	ld hl, MobileIRQTrampolineSource
+	ld de, wMobileIRQTrampoline
+	ld bc, MOBILE_IRQ_TRAMPOLINE_SIZE
+	rst CopyBytes
 	ld hl, wMobileAttemptCount
 	inc [hl]
 	ld hl, wMobileSequence
@@ -235,6 +358,12 @@ MobileBegin:
 	ld [wMobilePingSent], a
 	ld [wMobileError], a
 	ld [wMobileAdapterError], a
+	ld [wMobileServerError], a
+	ld [wMobileOnline], a
+	ld [wMobilePeerCount], a
+	ld [wMobilePhase], a
+	ld [wMobileSendCooldown], a
+	ld [wMobileKeepalive], a
 	ld a, LOW(MOBILE_ATTEMPT_TICKS)
 	ld [wMobileAttemptTicks], a
 	ld a, HIGH(MOBILE_ATTEMPT_TICKS)
@@ -246,6 +375,9 @@ MobileBegin:
 	ld [wMobileGuardTx], a
 	ld [wMobileGuardRx], a
 	ld [wMobileGuardEnd], a
+	ld a, [wMobileMode]
+	and a
+	call nz, MobileBuildHello
 ; Claim/clear serial atomically. Other interrupt-enable bits are preserved.
 	di
 	ld a, 1
@@ -261,6 +393,18 @@ MobileBegin:
 	ei
 	ret
 
+MobileIRQTrampolineSource:
+	ldh a, [hROMBank]
+	push af
+	ld a, MOBILE_ROM_BANK
+	rst Bankswitch
+	call MobileSerialIRQ
+	pop af
+	rst Bankswitch
+	jp Serial.end
+MobileIRQTrampolineEnd:
+ASSERT MobileIRQTrampolineEnd - MobileIRQTrampolineSource == MOBILE_IRQ_TRAMPOLINE_SIZE
+
 MobileFail:
 	ld [wMobileError], a
 	ld a, MOBILE_COOLDOWN_TICKS
@@ -274,6 +418,8 @@ MobileRelease:
 	ld [wMobileOwner], a
 	ld [wMobileTransferActive], a
 	ld [wMobileWire], a
+	ld [wMobileOnline], a
+	ld [wMobilePeerCount], a
 	ldh a, [rIF]
 	and ~IE_SERIAL
 	ldh [rIF], a
@@ -350,6 +496,54 @@ MobilePrepareCommand:
 	ld a, [wMobileStep]
 	cp 4
 	jr nz, .size
+	ld a, [wMobileMode]
+	and a
+	jr z, .echo
+	ld a, [wMobilePhase]
+	and a
+	jr z, .hello
+	cp MOBILE_PHASE_LEAVE
+	jr z, .poll
+	ld a, [wMobileSendCooldown]
+	and a
+	jr nz, .poll
+	ld a, [wMobileWanted]
+	and a
+	jr z, .update
+	call MobilePresenceChanged
+	jr nz, .update
+	ld a, [wMobileKeepalive]
+	and a
+	jr nz, .poll
+.update
+	call MobileBuildUpdate
+	ld a, [wMobilePhase]
+	cp MOBILE_PHASE_LEAVE
+	call nz, MobileNextSequence
+	ld a, 1 ; one pending latest snapshot, bounded by serial frame budget
+	ld [wMobileSendCooldown], a
+	ld a, 30
+	ld [wMobileKeepalive], a
+	jr .outgoing
+.hello
+	ld a, [wMobilePingSent]
+	and a
+	jr nz, .poll
+.outgoing
+	ld hl, wMobileOutgoing
+	ld a, [wMobileOutgoingLength]
+	ld c, a
+	inc c
+	ld a, 1
+	ld [wMobilePingSent], a
+	jr .size
+.poll
+	; libmobile waits up to one second on an empty TCP receive. Sending an
+	; application POLL avoids that delay without generating roster traffic.
+	ld hl, MobilePollVector
+	ld c, 9
+	jr .size
+.echo
 	ld a, [wMobilePingSent]
 	and a
 	jr z, .first_ping
@@ -368,6 +562,24 @@ MobilePrepareCommand:
 	and a
 	jr z, .copied
 .copy
+	ld a, [wMobileMode]
+	and a
+	jr z, .copy_byte
+	ld a, [wMobileStep]
+	cp 4
+	jr nz, .copy_byte
+; Reserve the first payload byte for the connection ID, then copy the frame.
+	inc de
+	dec c
+	jr z, .copied
+.copy_mobile
+	ld a, [hli]
+	ld [de], a
+	inc de
+	dec c
+	jr nz, .copy_mobile
+	jr .copied
+.copy_byte
 	ld a, [hli]
 	ld [de], a
 	inc de
@@ -384,6 +596,9 @@ MobilePrepareCommand:
 	ld [wMobileTx + 6], a
 	ld a, [wMobileStep]
 	cp 4
+	jr nz, .header
+	ld a, [wMobileMode]
+	and a
 	jr nz, .header
 	ld a, [wMobileSequence + 1]
 	ld [wMobileTx + 11], a
@@ -435,8 +650,6 @@ MobilePrepareCommand:
 	ld [wMobileDeadline], a
 	ld a, MOBILE_WIRE_TX
 	ld [wMobileWire], a
-	ld a, MOBILE_BURST_BYTES
-	ld [wMobileBurst], a
 	jmp MobileClock
 
 MobileSetRxPointer:
@@ -461,6 +674,8 @@ MobileSerialIRQ::
 	inc hl
 	inc [hl]
 .counted
+	ld hl, wMobileBurst
+	dec [hl]
 	ldh a, [rSB]
 	ld d, a
 	ld a, [wMobileWire]
@@ -526,8 +741,8 @@ MobileSerialIRQ::
 	ld [wMobileWire], a
 	jr .return
 .next
-	ld hl, wMobileBurst
-	dec [hl]
+	ld a, [wMobileBurst]
+	and a
 	jr z, .return
 	call MobileClock
 	jr .return
@@ -564,6 +779,13 @@ MobileStoreRx:
 
 ; Start exactly one byte. Called with WBK=2; IRQ chains only within its budget.
 MobileClock:
+	ldh a, [hVBlankCounter]
+	ld hl, wMobileLastFrame
+	cp [hl]
+	ret nz ; foreground must replenish the new frame before IRQ chaining resumes
+	ld a, [wMobileBurst]
+	and a
+	ret z
 	ld a, [wMobileWire]
 	cp MOBILE_WIRE_TX
 	jr z, .tx
@@ -656,6 +878,9 @@ MobileConsumeResponse:
 	ld [wMobileConnection], a
 	jp .advance
 .data
+	ld a, [wMobileMode]
+	and a
+	jp nz, MobileAppendLobbyData
 	ld a, [wMobileRx + 5]
 	and a
 	jp z, .bad
@@ -688,6 +913,9 @@ MobileConsumeResponse:
 	dec c
 	jp nz, .copy
 .assembled
+	ld a, [wMobileMode]
+	and a
+	jp nz, MobileConsumeFrame
 	ld a, [wMobileAppCount]
 	cp 8
 	jp c, .incomplete
@@ -790,5 +1018,8 @@ MobileRequestVectorEnd::
 ASSERT MobileRequestVectorEnd - MobileRequestVector == 12
 MobileReplyHeader:
 	db $50, $43, 1, 2
+INCLUDE "mobile_adapter/rom/session.asm"
+INCLUDE "mobile_adapter/rom/overworld.asm"
+INCLUDE "mobile_adapter/rom/menu.asm"
 MobileCodeEnd::
 ASSERT MobileCodeEnd - MobileCodeStart <= 8192

@@ -32,6 +32,9 @@ static unsigned video_frames = 0, width = 0, height = 0;
 static uint64_t audio_samples = 0, audio_batches = 0;
 static retro_pixel_format pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
 static std::vector<unsigned char> image;
+static unsigned char video_oam[160] = {};
+static std::ofstream input_events;
+static std::set<std::pair<unsigned, unsigned>> logged_inputs;
 static std::vector<retro_memory_descriptor> memory_maps;
 struct InputAction { unsigned first, end, button; };
 static std::vector<InputAction> input_actions = {{700, 710, RETRO_DEVICE_ID_JOYPAD_START}};
@@ -90,7 +93,12 @@ static void load_bindings(const std::string& path) {
     const std::set<std::string> watched = {
         "hCGB", "hCrashCode", "hVBlankCounter", "hInMenu", "wJumptableIndex",
         "wSaveFileExists", "wMapGroup", "wMapNumber", "wXCoord", "wYCoord",
-        "wPlayerMapX", "wPlayerMapY", "wMapStatus", "wScriptRunning",
+        "wPlayerMapX", "wPlayerMapY", "wPlayerSpriteX", "wPlayerSpriteY",
+        "wPlayerSpriteXOffset", "wPlayerSpriteYOffset", "wPlayerFacing", "wPlayerDirection",
+        "wPlayerStepFrame", "wPlayerBGMapOffsetX", "wPlayerBGMapOffsetY", "wMapStatus", "wScriptRunning",
+        "wObjectStructs", "wEventFlags", "wCurBox", "wPlayerCurrentOAMSlot",
+        "wPlayerWalking", "wPlayerStepDuration", "wPlayerState", "wPanningAroundTinyMap",
+        "hUsedWeatherSpriteIndex", "hUsedOAMIndex",
         "wMenuCursorY", "wMenuSelection", "wOptionsMenuIsInitial",
         "sCheckValue1", "sCheckValue2", "sSaveVersion", "sChecksum",
         "sBackupCheckValue1", "sBackupCheckValue2"
@@ -112,7 +120,14 @@ static void load_bindings(const std::string& path) {
 
 static std::map<std::string, unsigned> capture(const unsigned char* sram, size_t sram_size) {
     const std::set<std::string> words = {"sChecksum", "wMobileRemaining", "wMobileTxPointer",
-        "wMobileRxPointer", "wMobileSequence", "wMobileAttemptTicks", "wMobileIRQCount"};
+        "wMobileRxPointer", "wMobileSequence", "wMobileAttemptTicks", "wMobileIRQCount",
+        "wMobilePresenceCount", "wMobileMapEpoch", "wMobilePeer1DrawX", "wMobilePeer1DrawY",
+        "wMobilePeer2DrawX", "wMobilePeer2DrawY"};
+    const std::set<std::string> wire_words = {"wMobilePlayerId", "wMobileGeneration", "wMobileInstanceKey",
+        "wMobilePeer1Id", "wMobilePeer1Generation", "wMobilePeer1Revision",
+        "wMobilePeer1Instance", "wMobilePeer1Epoch", "wMobilePeer1X", "wMobilePeer1Y",
+        "wMobilePeer2Id", "wMobilePeer2Generation", "wMobilePeer2Revision",
+        "wMobilePeer2Instance", "wMobilePeer2Epoch", "wMobilePeer2X", "wMobilePeer2Y"};
     std::map<std::string, unsigned> values;
     for (const auto& entry : bindings) {
         unsigned bank = entry.second.bank, address = entry.second.address;
@@ -121,7 +136,69 @@ static std::map<std::string, unsigned> capture(const unsigned char* sram, size_t
         unsigned value = observe(bank, address, sram, sram_size);
         if (entry.first == "sSaveVersion") value = (value << 8) | observe(bank, address + 1, sram, sram_size);
         if (words.count(entry.first)) value |= observe(bank, address + 1, sram, sram_size) << 8;
+        if (wire_words.count(entry.first)) value = (value << 8) | observe(bank, address + 1, sram, sram_size);
         values[entry.first] = value;
+    }
+    if (bindings.count("wMobileLocalStaging")) {
+        const auto local = bindings.at("wMobileLocalStaging");
+        for (unsigned axis = 0; axis < 2; ++axis) {
+            unsigned address = local.address + 6 + axis * 2;
+            values[axis ? "vMobileLocalY" : "vMobileLocalX"] =
+                (observe(local.bank, address, sram, sram_size) << 8) |
+                observe(local.bank, address + 1, sram, sram_size);
+        }
+    }
+    for (const char* peer : {"1", "2"}) {
+        std::string prefix = std::string("wMobilePeer") + peer;
+        if (!values.count(prefix + "OAMStart")) continue;
+        unsigned slot = values.at(prefix + "OAMStart");
+        if (slot > 144) {
+            values[std::string("vMobilePeer") + peer + "OAM0"] = 160;
+            for (unsigned i = 1; i < 16; ++i) values[std::string("vMobilePeer") + peer + "OAM" + std::to_string(i)] = 0;
+            continue;
+        }
+        for (unsigned i = 0; i < 16; ++i)
+            values[std::string("vMobilePeer") + peer + "OAM" + std::to_string(i)] = video_oam[slot + i];
+    }
+    if (bindings.count("wObjectStructs") && bindings.count("wMobileSavedFacings")) {
+        const auto objects = bindings.at("wObjectStructs");
+        const auto saved = bindings.at("wMobileSavedFacings");
+        unsigned occupied = 0, suppressed = 0, restored = 0;
+        for (unsigned i = 0; i < 13; ++i) {
+            unsigned start = objects.address + i * 34;
+            if (observe(objects.bank, start, sram, sram_size)) occupied |= 1u << i;
+            unsigned facing = observe(saved.bank, saved.address + i, sram, sram_size);
+            if (i && facing != 255) {
+                suppressed |= 1u << i;
+                if (facing == observe(objects.bank, start + 13, sram, sram_size)) restored |= 1u << i;
+            }
+        }
+        values["vNPCOccupiedMask"] = occupied;
+        values["vNPCSuppressedMask"] = suppressed;
+        values["vNPCRestoredMask"] = restored;
+    }
+    if (bindings.count("wEventFlags") && bindings.count("wCurBox")) {
+        const auto start = bindings.at("wEventFlags");
+        unsigned hash = 2166136261u;
+        for (unsigned address = start.address; address < bindings.at("wCurBox").address; ++address)
+            hash = (hash ^ observe(start.bank, address, sram, sram_size)) * 16777619u;
+        values["vStoryFlagsHash"] = hash;
+    }
+    unsigned scanlines[144] = {};
+    for (unsigned quad = 0; quad < 40; ++quad)
+        for (int line = int(video_oam[quad * 4]) - 16; line < int(video_oam[quad * 4]) - 8; ++line)
+            if (line >= 0 && line < 144) scanlines[line]++;
+    unsigned maximum = 0;
+    for (unsigned count : scanlines) maximum = std::max(maximum, count);
+    values["vOAMMaxScanline"] = maximum;
+    if (bindings.count("wMobileNPCOptional") && bindings.count("wMobileOAMOutput")) {
+        auto optional = bindings.at("wMobileNPCOptional");
+        auto output = bindings.at("wMobileOAMOutput");
+        unsigned clipped = 0;
+        for (unsigned quad = 0; quad < 40; ++quad)
+            if (observe(optional.bank, optional.address + quad, sram, sram_size) &&
+                !observe(output.bank, output.address + quad * 4, sram, sram_size)) clipped++;
+        values["vNPCClippedQuads"] = clipped;
     }
     return values;
 }
@@ -203,6 +280,7 @@ static bool environment(unsigned command, void* data) {
 
 static void video(const void* data, unsigned w, unsigned h, size_t pitch) {
     ++video_frames;
+    if (const auto* oam = descriptor(0xfe00)) std::memcpy(video_oam, oam, sizeof(video_oam));
     if (!data) return;
     width = w;
     height = h;
@@ -247,7 +325,15 @@ static void input_poll() {}
 static int16_t input_state(unsigned port, unsigned device, unsigned, unsigned id) {
     if (port != 0 || device != RETRO_DEVICE_JOYPAD) return 0;
     for (const auto& action : input_actions)
-        if (id == action.button && input_frame >= action.first && input_frame < action.end) return 1;
+        if (id == action.button && input_frame >= action.first && input_frame < action.end) {
+            if (input_events.is_open() && logged_inputs.insert({action.first, id}).second) {
+                auto timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now().time_since_epoch()).count();
+                input_events << "{\"frame\":" << input_frame << ",\"button\":" << id
+                             << ",\"wall_us\":" << timestamp << "}\n";
+            }
+            return 1;
+        }
     return 0;
 }
 
@@ -262,7 +348,7 @@ int main(int argc, char** argv) {
         std::cerr << "Usage: smoke-libretro CORE ROM OUTPUT.ppm SYSTEM_DIRECTORY [OPTION VALUE]...\n"
                      "Options: --frames N --input SCRIPT --symbols SYM --state-out JSON\n"
                      "         --save-in SAV --save-out SAV --adapter 0|1 --pace-from FRAME --trace-out JSONL\n"
-                     "         --checkpoint-dir EXISTING_DIRECTORY --profile-out JSON\n"
+                     "         --checkpoint-dir EXISTING_DIRECTORY --profile-out JSON --pace-multiplier 1|3\n"
                      "         --snapshot-out STATE --snapshot-in STATE (manual-play preparation only)\n"
                      "Input: FRAME BUTTON DURATION, or ON MIN_FRAME SYMBOL=VALUE[,SYMBOL=VALUE] BUTTON DURATION\n";
         return 1;
@@ -275,7 +361,8 @@ int main(int argc, char** argv) {
             key != "--state-out" && key != "--save-in" && key != "--save-out" &&
             key != "--adapter" && key != "--pace-from" && key != "--trace-out" &&
             key != "--checkpoint-dir" && key != "--profile-out" &&
-            key != "--snapshot-out" && key != "--snapshot-in") fail("Unknown option: " + key);
+            key != "--snapshot-out" && key != "--snapshot-in" && key != "--input-events" &&
+            key != "--finish-barrier" && key != "--pace-multiplier") fail("Unknown option: " + key);
         arguments[key] = argv[i + 1];
     }
     if (arguments.count("--frames")) {
@@ -288,6 +375,10 @@ int main(int argc, char** argv) {
         adapter_enabled = arguments.at("--adapter") == "1";
     }
     if (arguments.count("--symbols")) load_bindings(arguments.at("--symbols"));
+    if (arguments.count("--input-events")) {
+        input_events.open(arguments.at("--input-events"));
+        if (!input_events) fail("Cannot write input timestamps");
+    }
     if ((!conditional_actions.empty() || arguments.count("--trace-out")) && bindings.empty())
         fail("State observation requires matching symbols");
     if (arguments.count("--input")) {
@@ -337,17 +428,52 @@ int main(int argc, char** argv) {
         std::ifstream symbols(arguments.at("--symbols"));
         std::string location, name;
         bool configured = false;
+        std::map<std::string, std::pair<unsigned, unsigned>> native_addresses;
         std::string line;
         while (std::getline(symbols, line)) {
             std::istringstream row(line);
-            if (!(row >> location >> name) || name != "MobileTick") continue;
+            if (!(row >> location >> name)) continue;
             auto colon = location.find(':');
+            if (colon == std::string::npos) continue; // RGBDS comment/header lines
+            native_addresses[name] = {std::stoul(location.substr(0, colon), nullptr, 16),
+                std::stoul(location.substr(colon + 1), nullptr, 16)};
+            if (name == "hVBlankCounter") {
+                symbol<void(*)(unsigned)>(core, "mobile_profile_vblank")(
+                    std::stoul(location.substr(colon + 1), nullptr, 16));
+            }
+            if (name == "MobileRestoreFacingsEnd") {
+                symbol<void(*)(unsigned, unsigned, unsigned, unsigned)>(core, "mobile_profile_restore")(
+                    std::stoul(location.substr(0, colon), nullptr, 16),
+                    std::stoul(location.substr(colon + 1), nullptr, 16),
+                    bindings.at("wMobileSavedFacings").address, bindings.at("wObjectStructs").address);
+            }
+            if (name != "MobileTick") continue;
             symbol<void(*)(unsigned, unsigned)>(core, "mobile_profile_configure")(
                 std::stoul(location.substr(0, colon), nullptr, 16),
                 std::stoul(location.substr(colon + 1), nullptr, 16));
             configured = true;
         }
         if (!configured) fail("MobileTick symbol missing");
+        const std::pair<const char*, const char*> cursor_ranges[] = {
+            {"HBlankCopy1bpp", "ClearBGPalettes"},
+            {"UpdateBGMapBuffer", "WaitTop"},
+            {"UpdateBGMap.DoCustomSourceTiles", "LYOverrideStackCopy"},
+            {"_Serve2bppRequest", "AnimateTileset"},
+            {"AnimateFountainTile", "AnimateFountainTile.FountainTilePointers"},
+            {"AnimateTowerPillarTiles1", "AnimateTowerPillarTiles1.TowerPillarTiles1Pointers"},
+            {"AnimateTowerPillarTiles2", "AnimateTowerPillarTiles2.TowerPillarTiles2Pointers"},
+            {"AnimateTowerPillarTiles3", "AnimateTowerPillarTiles3.TowerPillarTiles3Pointers"},
+            {"AnimateTowerPillarTiles4", "AnimateTowerPillarTiles4.TowerPillarTiles4Pointers"},
+            {"WriteFourTilesHLToDE", "FlickeringCaveEntrancePalette"},
+        };
+        for (unsigned i = 0; i < sizeof(cursor_ranges) / sizeof(cursor_ranges[0]); ++i) {
+            auto start = native_addresses.at(cursor_ranges[i].first);
+            auto end = native_addresses.at(cursor_ranges[i].second);
+            if (start.first != end.first || start.second >= end.second || end.second > 0x8000)
+                fail("Invalid audited stack-copy range");
+            symbol<void(*)(unsigned, unsigned, unsigned, unsigned)>(core, "mobile_profile_stack_cursor")(
+                i, start.first, start.second, end.second);
+        }
     }
     symbol<void(*)(retro_environment_t)>(core, "retro_set_environment")(environment);
     symbol<void(*)(retro_video_refresh_t)>(core, "retro_set_video_refresh")(video);
@@ -390,13 +516,35 @@ int main(int argc, char** argv) {
     }
     unsigned pace_from = frame_limit;
     if (arguments.count("--pace-from")) pace_from = std::stoul(arguments.at("--pace-from"));
+    unsigned pace_multiplier = 1;
+    if (arguments.count("--pace-multiplier")) {
+        const auto& value = arguments.at("--pace-multiplier");
+        if (value != "1" && value != "3") fail("Pace multiplier must be 1 or 3");
+        pace_multiplier = std::stoul(value);
+    }
     if (av_info.timing.fps <= 0) fail("Invalid emulator frame rate");
     std::chrono::steady_clock::time_point paced_start;
     std::map<std::string, unsigned> previous;
-    for (input_frame = 0; input_frame < frame_limit; ++input_frame) {
+    const bool barrier_enabled = arguments.count("--finish-barrier");
+    bool announced_ready = false;
+    auto settle_started = std::chrono::steady_clock::time_point{};
+    for (input_frame = 0; input_frame < frame_limit ||
+         (barrier_enabled && std::ifstream(arguments.at("--finish-barrier")).good()); ++input_frame) {
+        if (input_frame >= frame_limit) {
+            if (input_frame == frame_limit) settle_started = std::chrono::steady_clock::now();
+            if (std::chrono::steady_clock::now() - settle_started > std::chrono::seconds(20))
+                fail("Lobby observation barrier did not settle");
+            auto live = capture(sram, sram_size);
+            if (!announced_ready && live.at("wMobileOnline") == 1 && live.at("wMobilePeerCount") == 2) {
+                std::ofstream(arguments.at("--state-out") + ".ready") << "ready\n";
+                announced_ready = true;
+            }
+            // Keep pumping until all clients are ready. Freezing an earlier
+            // client here would expire its wall-clock server presence lease.
+        }
         if (input_frame == pace_from) paced_start = std::chrono::steady_clock::now();
         if (input_frame >= pace_from) {
-            auto offset = std::chrono::duration<double>((input_frame - pace_from) / av_info.timing.fps);
+            auto offset = std::chrono::duration<double>((input_frame - pace_from) / (av_info.timing.fps * pace_multiplier));
             std::this_thread::sleep_until(paced_start + std::chrono::duration_cast<std::chrono::steady_clock::duration>(offset));
         }
         run();
@@ -418,10 +566,22 @@ int main(int argc, char** argv) {
         for (const auto& entry : values)
             if (entry.first == "wMobileStep" || entry.first == "wMobileOwner" || entry.first == "wMobileError" ||
                 entry.first == "wMobileSuccessCount" || entry.first == "wMobileRoundTrips" ||
-                entry.first == "wXCoord" || entry.first == "wYCoord" || entry.first == "hInMenu")
+                entry.first == "wXCoord" || entry.first == "wYCoord" || entry.first == "hInMenu" ||
+                entry.first == "wMobileOnline" || entry.first == "wMobilePeerCount" ||
+                entry.first == "wMobilePresenceCount" || entry.first == "wMobilePeer1X" ||
+                entry.first == "wMobilePeer1Y" || entry.first == "wMobilePeer2X" || entry.first == "wMobilePeer2Y" ||
+                entry.first == "wMobileIRQCount" || entry.first == "wMobileWire" ||
+                entry.first == "wMobileRenderedCount" || entry.first == "wMobileDeferred" ||
+                entry.first == "wMobilePeer1ScreenX" || entry.first == "wMobilePeer1ScreenY" ||
+                entry.first == "wMobilePeer2ScreenX" || entry.first == "wMobilePeer2ScreenY")
+                progress.insert(entry);
+        for (const auto& entry : values)
+            if (entry.first.rfind("vMobile", 0) == 0 || entry.first.rfind("vNPC", 0) == 0 || entry.first == "vOAMMaxScanline")
                 progress.insert(entry);
         if (trace.is_open() && progress != previous) {
-            trace << "{\"frame\":" << input_frame << ",\"symbols\":";
+            auto wall_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count();
+            trace << "{\"frame\":" << input_frame << ",\"wall_us\":" << wall_us << ",\"symbols\":";
             json_values(trace, values);
             trace << "}\n";
             previous = progress;
@@ -430,8 +590,13 @@ int main(int argc, char** argv) {
         }
     }
 
-    for (const auto& action : conditional_actions)
-        if (!action.fired) fail("Conditional input never reached its required state");
+    bool missing_input = false;
+    for (const auto& action : conditional_actions) {
+        if (action.fired) continue;
+        std::cerr << "Conditional input not reached: earliest=" << action.earliest
+                  << " button=" << action.button << '\n';
+        missing_input = true;
+    }
 
     std::set<unsigned> colors;
     for (size_t i = 0; i + 2 < image.size(); i += 3)
@@ -450,7 +615,9 @@ int main(int argc, char** argv) {
     if (metric) {
         const char* names[] = {"serial_count", "serial_max_cycles", "serial_total_cycles", "serial_failures",
             "serial_lowest_sp", "tick_count", "tick_max_cycles", "tick_total_cycles", "tick_failures",
-            "tick_lowest_sp", "serial_max_frame_cycles", "serial_normal_speed_count", "serial_bank_switch_completions"};
+            "tick_lowest_sp", "serial_max_frame_cycles", "serial_normal_speed_count", "serial_bank_switch_completions",
+            "serial_max_vblank_cycles", "npc_restore_count", "npc_restore_failures",
+            "tick_stack_cursor_samples", "tick_stack_cursor_lowest_sp"};
         std::ofstream profile(arguments.at("--profile-out"));
         profile << '{';
         for (unsigned i = 0; i < sizeof(names) / sizeof(names[0]); ++i)
@@ -490,7 +657,7 @@ int main(int argc, char** argv) {
         if (values.at("hCrashCode")) fail("ROM crash marker is nonzero");
         if (values.at("hCGB") != 1) fail("ROM did not detect Game Boy Color");
         std::ofstream state(arguments.at("--state-out"));
-        state << "{\n  \"frame_calls\": " << frame_limit << ",\n  \"symbols\": {";
+        state << "{\n  \"frame_calls\": " << input_frame << ",\n  \"symbols\": {";
         bool first = true;
         for (const auto& value : values) {
             state << (first ? "\n" : ",\n") << "    \"" << value.first << "\": " << value.second;
@@ -499,8 +666,20 @@ int main(int argc, char** argv) {
         state << "\n  }\n}\n";
         if (!state) fail("Cannot write observer result");
     }
+
+    if (barrier_enabled) {
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
+        while (std::ifstream(arguments.at("--finish-barrier") + ".exit").good()) {
+            if (std::chrono::steady_clock::now() >= deadline) fail("Final capture barrier timed out");
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+    }
     symbol<void(*)()>(core, "retro_unload_game")();
     symbol<void(*)()>(core, "retro_deinit")();
+    if (missing_input) {
+        dlclose(core);
+        return 1;
+    }
     std::cout << "Emulator probe passed: " << frame_limit << " frame calls, " << video_frames << " video frames, 160x144, " << colors.size()
               << " colors; Mobile Adapter " << (adapter_enabled ? "enabled" : "disabled") << ". Check scenario assertions separately.\n";
     dlclose(core);

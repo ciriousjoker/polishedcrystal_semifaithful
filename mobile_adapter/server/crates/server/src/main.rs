@@ -1,4 +1,4 @@
-use mobile_server::{serve_connection, TestFault};
+use mobile_server::{serve_session, Service, TestFault};
 use std::io::{self, Write};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -9,12 +9,24 @@ fn main() -> io::Result<()> {
     let mut bind: SocketAddr = "127.0.0.1:17423".parse().unwrap();
     let mut fault = TestFault::None;
     let mut fault_count = u64::MAX;
+    let mut test_delay_ms = 0u64;
     let mut args = std::env::args().skip(1);
     while let Some(option) = args.next() {
         let value = args
             .next()
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "missing option value"))?;
         match option.as_str() {
+            "--test-one-way-delay-ms" => {
+                test_delay_ms = value.parse().map_err(|_| {
+                    io::Error::new(io::ErrorKind::InvalidInput, "invalid test delay")
+                })?;
+                if test_delay_ms > 500 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "test delay exceeds 500 ms",
+                    ));
+                }
+            }
             "--test-fault-count" => {
                 fault_count = value.parse().map_err(|_| {
                     io::Error::new(io::ErrorKind::InvalidInput, "invalid fault count")
@@ -58,6 +70,9 @@ fn main() -> io::Result<()> {
             println!("READY {}", listener.local_addr()?);
             io::stdout().flush()?;
             let permits = Arc::new(Semaphore::new(16));
+            let service = Arc::new(Service::with_test_delay(std::time::Duration::from_millis(
+                test_delay_ms,
+            )));
             let mut sequence = 0u64;
             loop {
                 let (stream, peer) = listener.accept().await?;
@@ -77,9 +92,10 @@ fn main() -> io::Result<()> {
                 } else {
                     TestFault::None
                 };
+                let service = service.clone();
                 tokio::spawn(async move {
                     let _permit = permit;
-                    match serve_connection(stream, session, connection_fault).await {
+                    match serve_session(stream, session, connection_fault, service).await {
                         Ok(()) => println!(
                             "CLIENT_DISCONNECTED session={session} peer={peer} reason=closed"
                         ),

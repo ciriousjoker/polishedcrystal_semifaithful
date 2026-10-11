@@ -2728,8 +2728,14 @@ _UpdateSprites::
 	push af
 	ld a, 1
 	ldh [hOAMUpdate], a
+if DEF(MOBILE_ADAPTER)
+	farcall MobilePrepareSprites
+endc
 	call InitSprites
 	call .hide_unused_sprites
+if DEF(MOBILE_ADAPTER)
+	farcall MobileRenderSprites
+endc
 	pop af
 	ldh [hOAMUpdate], a
 	ret

@@ -13,7 +13,12 @@ args = parser.parse_args()
 with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
     out = Path(temporary)
     fixture = (REPO / "mobile_adapter/tests/driver.asm").read_text()
-    fixture += '\nDEF CopyBytes EQU $20\nDEF Bankswitch EQU $08\nDEF DoNothing EQU $0150\n'
+    fixture += '\nDEF CopyBytes EQU $20\nDEF ByteFill EQU $28\nDEF FarCall EQU $10\nDEF Bankswitch EQU $08\nDEF DoNothing EQU $0150\n'
+    fixture += 'SECTION "Serial return stub", ROM0[$200]\nSerial:\n.end: ret\n'
+    fixture += 'SECTION "Render link stubs", ROM0[$3000]\n'
+    fixture += 'GetFarByte:: ret\nSwapHLDE:: ret\nFarDecompressWRA6InB:: ret\nRequest2bppInWRA6:: ret\nClearJoypad:: ret\nOpenText:: ret\nCloseText:: ret\nPrintText:: ret\nLoadMenuHeader:: ret\nVerticalMenu:: ret\nExitMenu:: ret\nWaitButton:: ret\n'
+    fixture += 'SECTION "Native facing data", ROMX, BANK[2]\nINCLUDE "data/sprites/facings.asm"\n'
+    fixture += 'SECTION "Sprite link stub", ROMX, BANK[1]\nGetSprite:: ret\n'
     fixture += 'SECTION "LCD layout contracts", ROMX, BANK[$12]\n'
     oam = (REPO / "engine/gfx/load_push_oam.asm").read_text()
     fixture += oam[oam.index('LOAD "OAM DMA"'):oam.index("ENDL") + 4] + "\n"
@@ -36,9 +41,27 @@ with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
     rom = (out / "driver.gb").read_bytes()
     require(rom[offset:offset + 12] == bytes.fromhex("50 43 01 01 00 01 00 04 54 45 53 54"),
             "Actual ROM vector differs from Rust protocol")
+    bank, address = symbols["MobileHelloVector"]
+    offset = bank * 0x4000 + address - 0x4000
+    require(rom[offset:offset + 23] == bytes.fromhex(
+        "50 43 01 10 00 01 00 0f 02 00 03 00 01 00 00 00 00 00 00 00 00 00 00"),
+        "Actual ROM HELLO differs from the standard-build lobby protocol")
     require(symbols["wMobileResidentStart"] == (0, 0xcec4), "Resident placement changed")
     require(symbols["wMobileBufferStart"] == (2, 0xd4eb), "Buffer placement changed")
     require(symbols["wMobileBufferEnd"][1] <= 0xe000, "Buffer overflow")
+    def facing(table, index):
+        bank, address = symbols[table]
+        offset = bank * 0x4000 + address - 0x4000 + index * 2
+        pointer = int.from_bytes(rom[offset:offset + 2], "little")
+        offset = bank * 0x4000 + pointer - 0x4000
+        return bytearray(rom[offset:offset + 17])
+
+    for index in range(16):
+        native, remote = facing("Facings", index), facing("MobileSocialFacings", index)
+        require(native[0] == remote[0] == 4, "Approved avatar must contain four 8x8 quads")
+        for attribute in range(3, 17, 4):
+            native[attribute] &= 0xe0
+        require(native == remote, f"Remote facing {index} differs from native sprite geometry")
     # Existing save/object/stack symbols must still retain their baseline addresses.
     for name, expected in {"wStackBottom": (0, 0xc000), "wStackTop": (0, 0xc0ff),
                            "hROMBank": (0, 0xff87)}.items():

@@ -25,7 +25,7 @@ require(new["wMobileBufferStart"] == (2, 0xd4eb), "Buffer bank or start changed"
 resident = new["wMobileResidentEnd"][1] - new["wMobileResidentStart"][1]
 buffers = new["wMobileBufferEnd"][1] - new["wMobileBufferStart"][1]
 code = new["MobileCodeEnd"][1] - new["MobileCodeStart"][1]
-require(resident <= 96 and buffers <= 1536 and code <= 8192, "Mobile allocation exceeds initial caps")
+require(resident <= 128 and buffers <= 1536 and code <= 8192, "Mobile allocation exceeds caps")
 report = {"existing_ram_symbols_checked": len(ram), "existing_ram_symbols_changed": changed,
           "resident_bytes": resident, "buffer_bytes": buffers, "banked_driver_bytes": code}
 for name in ("baseline", "mobile", "faithful"):

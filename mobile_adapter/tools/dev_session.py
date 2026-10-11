@@ -159,8 +159,9 @@ def profile(root, target, base="", android=False, package=None):
         values.update({"video_driver": "glcore", "video_fullscreen": "false",
                        "video_scale": "3", "menu_driver": "rgui", "input_driver": "cocoa",
                        "audio_volume": "-26.0206",  # 20 * log10(0.05): 5% amplitude
+                       "pause_nonactive": "false",  # Keep presence alive while using the phone/terminal.
                        "input_player1_a": "x", "input_player1_b": "z",
-                       "input_player1_x": "nul", "input_player1_select": "rshift",
+                       "input_player1_x": "nul", "input_player1_select": "shift",
                        "input_player1_start": "enter", "input_player1_up": "up",
                        "input_player1_down": "down", "input_player1_left": "left",
                        "input_player1_right": "right", "input_exit_emulator": "escape",
@@ -390,7 +391,7 @@ def launch_android(device, launch):
         if device.exists(logfile):
             log = device.shell("tail", "-n", "150", logfile)
             if all(frontend_status(log).values()):
-                print("ANDROID START confirmed: core initialized; fresh state loaded. Select+B proves the server connection.", flush=True)
+                print("ANDROID START confirmed: core initialized; fresh state loaded. Select+B joins the three-player lobby.", flush=True)
                 return
         time.sleep(0.5)
     result = device.call("shell", "pidof", device.package, capture_output=True, text=True, check=False)
@@ -427,13 +428,13 @@ def start(args, mac, address, device=None, launch=None):
         def watch_mac():
             while not stopped.wait(0.5):
                 if all(frontend_status((mac / "play.log").read_text(errors="replace")).values()):
-                    print("MAC START confirmed: core initialized; fresh state loaded. Right Shift+Z (Select+B) proves the server connection.", flush=True)
+                    print("MAC START confirmed: core initialized; fresh state loaded. Left Shift+Z (Select+B) joins the lobby.", flush=True)
                     return
         threading.Thread(target=watch_mac, daemon=True).start()
         if device:
             launch_android(device, launch)
-        print("MAC READY: arrows, A=X, B=Z, Select=right Shift. Select+B tests transport.", flush=True)
-        print("MILESTONE 1: each test opens a TCP session, exchanges an echo and disconnects. Remote avatars are not implemented yet.", flush=True)
+        print("MAC READY: arrows, A=X, B=Z, Select=left Shift. Select+B joins/leaves; Select+A opens players/status.", flush=True)
+        print("MILESTONE 2: join on both clients, then move one tile to see the other avatar. Select+B+A runs the echo diagnostic.", flush=True)
         print("Press Ctrl+C here to stop this server and Mac game instance.", flush=True)
         while all(child.poll() is None for child in children):
             time.sleep(0.25)

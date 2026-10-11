@@ -1,7 +1,9 @@
 # Mobile Adapter development
 
-Milestone 1 is a working, tested transport foundation. This is not yet multiplayer
-overworld gameplay. The persistent scope and next milestones are in [PLAN.md](PLAN.md).
+Milestone 2 adds three-player lobbies and live overworld avatars to the tested
+transport foundation. Battles, calls, gifts and trades follow in milestones 3 to 5. The persistent scope and next milestones are in [PLAN.md](PLAN.md).
+Completed acceptance and measured limits are in
+[research/MILESTONE_2.md](research/MILESTONE_2.md).
 The implementation is under `rom/`, the Rust workspace under `server/`, and native
 acceptance tools under `tools/`. Existing game code has small conditional hooks;
 no existing helper was moved into another ROM bank. No ROM or save is committed.
@@ -28,9 +30,11 @@ mobile_adapter/server/target/debug/mobile-server
 The server prints `READY 127.0.0.1:17423`. Load
 `polishedcrystal-mobile-3.2.3.gbc` with DoubleCherryGB's Mobile Adapter enabled,
 blue adapter and telephone relay disabled. Continue a normal save into a safe
-idle overworld scene. Select+B performs a connect/echo/disconnect proof;
-pressing the chord again while active cancels. Repeat after release to reconnect.
-This temporary developer gesture has no production lobby/menu UI. Runtime
+idle overworld scene. Select+B joins or leaves lobby 1. Select+A opens status,
+players and connect/disconnect controls. Select+B+A runs the echo diagnostic.
+Three clients can join; each sees two peers in a compatible map instance.
+Initial saves share coordinates, so move a tile to separate overlapping avatars.
+Avatars use the approved Chris appearance and the local player palette. Runtime
 symbols expose success, error, ownership and guard state for automated oracles.
 
 The only currently supported feature builds are standard `make mobile` and
@@ -53,13 +57,16 @@ make test-mobile-host \
   MOBILE_CARGO=/Volumes/Storage/Cache/cargo/bin/cargo
 ```
 
-This launches no emulator. Eight Rust tests cover codec bounds/endian fields,
+This launches no emulator. Twenty Rust tests cover codec bounds/endian fields,
 fragmented and coalesced streams, malformed/truncated input and three independent
-TCP clients. RGBDS additionally compiles the production adapter and complete RAM
+TCP clients, lobby capacity, generations/resume, expiry, compatibility and
+latest-state coalescing. A real TCP push test also preserves partial inbound
+frames while sending deltas. RGBDS additionally compiles the production adapter and complete RAM
 layout with the actual LCD/OAM LOAD blocks, then checks emitted protocol vectors
 and memory bounds. It does not execute LR35902 instructions. Existing stack and HRAM
 addresses are explicit contract assertions.
-See [protocol/transport-v1.md](protocol/transport-v1.md).
+See [protocol/transport-v1.md](protocol/transport-v1.md) and
+[protocol/lobby-v2.md](protocol/lobby-v2.md).
 
 ## Explicit native integration tests
 
@@ -122,10 +129,53 @@ core revision and unchanged CPU source before copying. The source already needs
 the documented CMake dependency patch. Profiling changes no CPU state, networking
 or emulated timing. The source-audited interrupted Bankswitch case is recorded
 separately, because a far call can complete an already pending mapper write.
-Core instruction cycles exclude hardware interrupt-entry cycles; this is emulator
-evidence, not a physical hardware timing certification.
+The actual-VBlank metric includes a separate 20-cycle hardware IRQ-entry charge.
+Instruction-span and frontend-batch metrics remain available for comparison.
+This is emulator evidence, not a physical hardware timing certification.
 
 Measured placement, cycle figures, remaining budgets, limitations and test
-artifacts are in [research/MILESTONE_1.md](research/MILESTONE_1.md). Recheck them
+artifacts are in [research/MILESTONE_2.md](research/MILESTONE_2.md). Recheck them
 when the driver or hooks change. Menus/battles and transaction recovery receive
 their own acceptance scenarios in the subsequent milestones.
+
+## Three-player overworld acceptance
+
+Run the actual ROM with three independent native core processes:
+
+```sh
+python3 mobile_adapter/tools/probe_lobby.py \
+  --runner "$adapter_cache/smoke-libretro" \
+  --core "$adapter_cache/build/doublecherry/DoubleCherryGB_libretro.dylib" \
+  --server mobile_adapter/server/target/debug/mobile-server \
+  --battery "$adapter_cache/m1-baseline-regression/create/ingame.sav" \
+  --latency --port 17425 --output "$adapter_cache/new-lobby-test"
+```
+
+Add `--test-one-way-delay-ms 50` for the declared RTT100 experiment. The probe
+measures captured local motion to remote four-quad OAM motion, with 40 samples
+and enforced p95 limits of 200 ms local or 300 ms RTT100. It also reports the
+full input-to-remote delay, including the unchanged vanilla turn script.
+Add `--scenario speed` for 24 direction changes with one client at 300% and
+two at 100%; combine it with RTT100 to exercise independent delivery credits.
+`--scenario menu`, `rejoin`, `resume` and `warp` use the ordinary bedroom fixture.
+`resume` inserts a transparent TCP proxy and drops one live socket.
+
+`create_scene_save.py` generates other ordinary saves through New Game/in-game
+Save from a disposable spawn/clock producer ROM. Use Snowtop Outside (15,22,
+hour 20) for `camera`; Route17North (9,12) for bicycle mode;
+PalletTown (8,1) for `connection` and (8,6) for `running`;
+NewBarkTown (22,8) for surf mode; LakeOfRage (18,24) for the large Gyarados
+exception; CinnabarVolcano1F (14,15) for rocks; Goldenrod
+Game Corner (14,5) with `--exercise-pressure` for crowding. A Snowtop fixture
+with `--set-initial-event EVENT_OLIVINE_CITY_HIDDEN_RARE_CANDY` provides a
+different ordinary layout for `--scenario instance --different-battery PATH`.
+All initialization substitutions are recorded; battery SRAM is never edited.
+
+Pass the freshly prepared profiling core as `--core ... --profile` to check
+registers/banks, stack, serial VBlank budgets and every NPC restore return.
+Existing output directories are refused. ROM/SYM/save/core hashes, intermediate
+traces, server logs, PNGs and input events survive failures. No emulator save
+states or injected game RAM are used in acceptance.
+
+See [research/MILESTONE_2.md](research/MILESTONE_2.md) for measured evidence,
+rendering limits and protected-scene exceptions.

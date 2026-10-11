@@ -66,6 +66,8 @@ class DeploymentContracts(unittest.TestCase):
             session.profile(root, root)
             result = (root / "retroarch.cfg").read_text()
             self.assertIn('audio_volume = "-26.0206"', result)
+            self.assertIn('pause_nonactive = "false"', result)
+            self.assertIn('input_player1_select = "shift"', result)
             self.assertAlmostEqual(10 ** (-26.0206 / 20), .05, places=6)
 
     def test_core_marker_invalidates_after_core_or_app_replacement(self):

@@ -9,9 +9,7 @@ Serial::
 if DEF(MOBILE_ADAPTER)
 	ld a, [wMobileOwner]
 	and a
-	jr z, .legacy
-	farcall MobileSerialIRQ
-	jr .end
+	jp nz, wMobileIRQTrampoline
 .legacy
 endc
 

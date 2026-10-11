@@ -1,5 +1,6 @@
 //! Bounded framing shared by the ROM and Rust transport proof.
-//! Socket reads are not packet boundaries. Lobby messages are added in milestone 2.
+//! Socket reads are not packet boundaries.
+pub mod lobby;
 
 pub const HEADER_LEN: usize = 8;
 pub const MAX_PAYLOAD: usize = 120;

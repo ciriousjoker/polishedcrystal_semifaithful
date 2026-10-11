@@ -18,36 +18,44 @@ No RetroArch netplay, DNS or P2P telephone relay setting points to this server.
 
 The Mac instance starts at 5% emulator volume, using -26.0206 dB. This does not
 change macOS system volume. Keyboard controls are arrows, X for A, Z for B,
-Enter for Start and right Shift for Select. In an idle overworld scene,
-right Shift + Z runs the milestone 1 transport proof. The terminal should show
-`ECHO session=... sequence=... bytes=4`. On Android use the corresponding
-Select and B touch controls together: hold B, then press Select while B remains
-held. Release both before repeating the test. Close any dialog first.
+Enter for Start and left Shift for Select. In an idle overworld scene,
+left Shift + Z joins the lobby. On Android hold B, then press Select while B
+remains held. Release both afterwards. Join on both clients, then move one tile:
+the prepared saves initially place both players at the same coordinates.
+Select+B again leaves. Select+A opens status, players and connection controls;
+on Mac that is left Shift + X. Select+B+A retains the short echo diagnostic.
+Close ordinary dialogs before connecting.
 
-The terminal distinguishes frontend startup from real server sessions:
+The terminal distinguishes frontend startup from actual network membership:
 
 ```text
-ANDROID START confirmed: core initialized; fresh state loaded. Select+B proves the server connection.
+ANDROID START confirmed: core initialized; fresh state loaded. Select+B joins the three-player lobby.
 CLIENT_CONNECTED session=1 peer=192.168.2.23:51000 client=android
-ECHO session=1 sequence=1 bytes=4
-ECHO_REPLY session=1 sequence=1 bytes=4
+LOBBY_JOIN session=1 lobby=1 player=1 generation=1
+LOBBY_JOIN session=2 lobby=1 player=2 generation=1
+LOBBY_LEAVE session=1 player=1
 CLIENT_DISCONNECTED session=1 peer=192.168.2.23:51000 reason=closed client=android
 ```
 
-This is an example; session numbers and source ports vary. `CLIENT_CONNECTED`
-means the server accepted an actual TCP socket. `ECHO` means a valid ROM request
-arrived, and `ECHO_REPLY` means the response was written to that socket. It does
-not prove the ROM accepted the response. Mac/Android labels are inferred from
-their source IPs, not authenticated player identities. Unexpected peers are
-marked `unknown`; protocol errors and timeouts produce `SESSION_ERROR`.
+Numbers and source ports vary. CLIENT_CONNECTED confirms a real TCP socket;
+LOBBY_JOIN confirms compatibility and player membership. LOBBY_OFFLINE records
+a lost connection, and a later LOBBY_JOIN with the same player and a higher
+generation confirms token resume. Explicit leave removes identity, so rejoining
+gets a new player ID. Mac/Android labels are inferred from source IPs. They are
+not authentication. Errors appear as SESSION_ERROR or LOBBY_REJECTED.
 
-Milestone 1 opens a short-lived connection only when Select+B is pressed in the
-idle overworld, then deliberately closes it after the echo. The emulator's
-Mobile Adapter popup indicates attachment of the local peripheral. The core's
-`Adapter initialized` log appears even if its emulation option is disabled, so
-neither message proves a connection to our server. No automatic login,
-persistent lobby or remote player rendering is
-implemented yet. Seeing no other avatar is expected at this milestone.
+Three players can share lobby 1. They see the approved Chris avatars on the same
+map with compatible physical block layouts. Remote players do not block movement
+or run NPC scripts. World progress, items, puzzles and encounters remain local.
+Scripts, menus and Snowtop's camera temporarily pause rendering. Large Gyarados
+and Exeggutor sprites, or unavoidable required-NPC sprite pressure, also pause
+avatars. Select+A reports the reason and keeps the player roster accessible in
+a safe idle scene. Leaving the protected situation restores avatars.
+
+The Mobile Adapter popup describes the emulator peripheral. Its initialization
+log can appear with emulation disabled, so the popup alone does not prove a Rust
+server connection. Check LOBBY_JOIN and the in-game online/player status. Calling,
+interaction menus, battles, trading and gifts follow in milestones 3 to 5.
 
 ## Android files and direct start
 
@@ -164,7 +172,28 @@ Host-only deployment checks:
 python3 -m unittest discover -s mobile_adapter/tools -p test_dev_session.py
 ```
 
-This is still milestone 1: the playable clients can prove connectivity, but
-remote overworld avatars, lobbies, phone interactions, battles and transfers
-are subsequent milestones. A server ECHO log alone is not a complete gameplay
-acceptance condition.
+Milestone 2 adds the three-player lobby and live overworld avatars. The native
+three-core acceptance suite checks actual movement, map transitions, reconnects,
+rendering pressure and visible latency. Phone interactions, battles and transfers
+remain milestones 3 to 5. A server ECHO log alone is not gameplay acceptance.
+
+
+On 2026-10-11, the M2 ROM also ran simultaneously in the actual Mac RetroArch
+GUI and physical Pixel GUI. Both joined lobby 1 with distinct server-assigned
+IDs, displayed the other avatar and accepted normal arrows/touch movement.
+The GUI automation used a disposable Mac F2 mapping to send the Select+B chord;
+the shipped launcher profile uses left Shift+Z. GUI observer config was isolated
+from normal launch profiles. The normal Mac profile keeps running when the
+terminal is focused, so switching apps does not expire the presence lease.
+Proof is retained in the host cache as m2-gui-observer-server.log,
+m2-gui-observer-input.json and m2-gui-phone3.png.
+
+The same physical GUI check was repeated with the final 16-byte parser budget
+and final compiler ROM `725d94ee2e8adec0817a9398e9fa3a1056908943e429ccbdaa335384f3a7e3e8`.
+After an unlocked Pixel cold start, both real frontends joined and displayed
+each other. The LAN endpoint copy is
+`73203c64a9bbb6d1f44692c70b61c55947cc6cdab3d556d510ee2887ecd7900f`.
+Final proof: `m2-final16-gui-server.log`, `m2-final16-gui-input.json` and
+`m2-final16-phone-visible.png` in the host cache. The full automatic acceptance,
+including the separate 300% speed test, is recorded in
+[research/MILESTONE_2.md](research/MILESTONE_2.md).

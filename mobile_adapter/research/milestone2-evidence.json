@@ -1,0 +1,1745 @@
+{
+  "date": "2026-10-11",
+  "branch": "mobileadapter",
+  "status": "milestone 2 complete; milestones 3 through 5 remain",
+  "integration_model": "Native DoubleCherryGB processes boot ordinary battery saves and execute inputs. Current symbols provide read-only observers. No game RAM writes or emulator-state injection. Test endpoint/checksum copies normalize to the current compiler outputs.",
+  "layout": {
+    "existing_ram_symbols_checked": 23373,
+    "existing_ram_symbols_changed": {},
+    "resident_bytes": 121,
+    "buffer_bytes": 1473,
+    "banked_driver_bytes": 6924,
+    "baseline_rom_sha256": "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e",
+    "baseline_summary": "SUMMARY:\n\tROM0: 16366 bytes used / 18 free\n\tROMX: 2066825 bytes used / 13943 free in 127 banks\n\tSRAM: 30936 bytes used / 1832 free in 4 banks\n\tWRAM0: 3796 bytes used / 300 free\n\tWRAMX: 23760 bytes used / 4912 free in 7 banks\n\tHRAM: 122 bytes used / 5 free",
+    "mobile_rom_sha256": "725d94ee2e8adec0817a9398e9fa3a1056908943e429ccbdaa335384f3a7e3e8",
+    "mobile_summary": "SUMMARY:\n\tROM0: 16377 bytes used / 7 free\n\tROMX: 2073785 bytes used / 6983 free in 127 banks\n\tSRAM: 30936 bytes used / 1832 free in 4 banks\n\tWRAM0: 3917 bytes used / 179 free\n\tWRAMX: 25233 bytes used / 3439 free in 7 banks\n\tHRAM: 122 bytes used / 5 free",
+    "faithful_rom_sha256": "81e0664967741a11c30143379985df231bb97b2ef00fdde9049349664bbf36d7",
+    "faithful_summary": "SUMMARY:\n\tROM0: 16363 bytes used / 21 free\n\tROMX: 2073736 bytes used / 7032 free in 127 banks\n\tSRAM: 30936 bytes used / 1832 free in 4 banks\n\tWRAM0: 3917 bytes used / 179 free\n\tWRAMX: 25233 bytes used / 3439 free in 7 banks\n\tHRAM: 122 bytes used / 5 free"
+  },
+  "host_checks": {
+    "rust_tests": 20,
+    "deployment_tests": 8,
+    "cargo_fmt": "passed",
+    "clippy_all_targets_warnings_denied": "passed",
+    "rgbds_contract_vectors_layout": "passed",
+    "renderer_audit": "passed",
+    "assembled_maps": 611,
+    "maps_with_optional_actors": 407,
+    "render_policy_sha256": "ec4d18e49c6503958f2043c2ff0e954e4486e938d965c58beea7284c2588764e"
+  },
+  "runtime_summary": {
+    "serial_max_cycles": 1432,
+    "tick_max_cycles": 25268,
+    "serial_max_vblank_cycles": 67840,
+    "lowest_stack_pointer": "0xc091",
+    "preservation_failures": 0,
+    "npc_restore_failures": 0,
+    "profiled_processes": 19
+  },
+  "runtime_gates": {
+    "serial_cycles_less_than": 2048,
+    "foreground_cycles_less_than": 32768,
+    "stack_pointer_at_least": "0xc040",
+    "serial_vblank_cycles_less_than": 70224,
+    "stack_cursor_exclusions": "IME disabled and PC/bank in ten source-audited native graphics-copy ranges; raw exclusions retained separately."
+  },
+  "lobby_scenarios": [
+    {
+      "scenario": "basic",
+      "test_rom_sha256": "93163ef86645bfaa5ac811b094fbf685e31f29c87d6d9bbc11ed7d61c18dcb8b",
+      "symbols_sha256": "33101f72157cce0076dfb95a00678af2cb6fa9ea3a3e99c27c2225572246ccbd",
+      "core_sha256": "e26a7ecf08273a98fc04dcca7714a736a5fab9a73dce156464a8e5016b7c1ea0",
+      "battery_sha256": [
+        "5e1365948dca946281a22df4dc36eeae3b74e86dacb698d3f52a7878c676bbef",
+        "5e1365948dca946281a22df4dc36eeae3b74e86dacb698d3f52a7878c676bbef",
+        "5e1365948dca946281a22df4dc36eeae3b74e86dacb698d3f52a7878c676bbef"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/m2-accepted-final-crowding",
+      "kind": "profile",
+      "result": "passed",
+      "canonical_rom_sha256": "725d94ee2e8adec0817a9398e9fa3a1056908943e429ccbdaa335384f3a7e3e8",
+      "summary_sha256": "109a1276fd06460f92a70f7b93687cd4deb6175dea0ded85af0a471d09c4d59f",
+      "server_log_sha256": "49ea83235b53ff82ff006f2001097ab9b728a587f46c942909cf890b0dfec8bb",
+      "final_clients": [
+        {
+          "wMobilePlayerId": 3,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 11,
+          "wMapNumber": 23,
+          "wXCoord": 14,
+          "wYCoord": 5,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 2,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 11,
+          "wMapNumber": 23,
+          "wXCoord": 14,
+          "wYCoord": 6,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 1,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 11,
+          "wMapNumber": 23,
+          "wXCoord": 14,
+          "wYCoord": 5,
+          "hCrashCode": 0
+        }
+      ],
+      "profiles": [
+        {
+          "serial_count": 15093,
+          "serial_max_cycles": 1416,
+          "serial_total_cycles": 18637064,
+          "serial_failures": 0,
+          "serial_lowest_sp": 49338,
+          "tick_count": 11479,
+          "tick_max_cycles": 24560,
+          "tick_total_cycles": 11530048,
+          "tick_failures": 0,
+          "tick_lowest_sp": 49336,
+          "serial_max_frame_cycles": 67916,
+          "serial_normal_speed_count": 0,
+          "serial_bank_switch_completions": 479,
+          "serial_max_vblank_cycles": 67624,
+          "npc_restore_count": 2056,
+          "npc_restore_failures": 0,
+          "tick_stack_cursor_samples": 0,
+          "tick_stack_cursor_lowest_sp": 65535,
+          "video_frames": 4498,
+          "audio_batches": 4498,
+          "audio_samples": 3306030
+        },
+        {
+          "serial_count": 14997,
+          "serial_max_cycles": 1432,
+          "serial_total_cycles": 18482640,
+          "serial_failures": 0,
+          "serial_lowest_sp": 49332,
+          "tick_count": 11497,
+          "tick_max_cycles": 24768,
+          "tick_total_cycles": 11621244,
+          "tick_failures": 0,
+          "tick_lowest_sp": 49332,
+          "serial_max_frame_cycles": 64300,
+          "serial_normal_speed_count": 0,
+          "serial_bank_switch_completions": 488,
+          "serial_max_vblank_cycles": 65260,
+          "npc_restore_count": 2060,
+          "npc_restore_failures": 0,
+          "tick_stack_cursor_samples": 0,
+          "tick_stack_cursor_lowest_sp": 65535,
+          "video_frames": 4499,
+          "audio_batches": 4499,
+          "audio_samples": 3306765
+        },
+        {
+          "serial_count": 15233,
+          "serial_max_cycles": 1432,
+          "serial_total_cycles": 18819200,
+          "serial_failures": 0,
+          "serial_lowest_sp": 49338,
+          "tick_count": 11481,
+          "tick_max_cycles": 25268,
+          "tick_total_cycles": 11533904,
+          "tick_failures": 0,
+          "tick_lowest_sp": 49336,
+          "serial_max_frame_cycles": 75760,
+          "serial_normal_speed_count": 0,
+          "serial_bank_switch_completions": 496,
+          "serial_max_vblank_cycles": 67344,
+          "npc_restore_count": 2056,
+          "npc_restore_failures": 0,
+          "tick_stack_cursor_samples": 0,
+          "tick_stack_cursor_lowest_sp": 65535,
+          "video_frames": 4499,
+          "audio_batches": 4499,
+          "audio_samples": 3306765
+        }
+      ]
+    },
+    {
+      "scenario": "camera",
+      "test_rom_sha256": "93163ef86645bfaa5ac811b094fbf685e31f29c87d6d9bbc11ed7d61c18dcb8b",
+      "symbols_sha256": "33101f72157cce0076dfb95a00678af2cb6fa9ea3a3e99c27c2225572246ccbd",
+      "core_sha256": "e26a7ecf08273a98fc04dcca7714a736a5fab9a73dce156464a8e5016b7c1ea0",
+      "battery_sha256": [
+        "d168e4e00f7fa925760f7713f6f15276a3546df65f9ad7ec51af9f029057fce3",
+        "d168e4e00f7fa925760f7713f6f15276a3546df65f9ad7ec51af9f029057fce3",
+        "d168e4e00f7fa925760f7713f6f15276a3546df65f9ad7ec51af9f029057fce3"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/m2-accepted-final-camera",
+      "kind": "profile",
+      "result": "passed",
+      "canonical_rom_sha256": "725d94ee2e8adec0817a9398e9fa3a1056908943e429ccbdaa335384f3a7e3e8",
+      "summary_sha256": "b5b3f0f642376e10720802bc482c59cc8b30b8c986ad697e8f8b7a8f7677d80a",
+      "server_log_sha256": "1590898bd0fad33e468b4febc7d4f496de04e84f1988e646f2495d3582e00675",
+      "final_clients": [
+        {
+          "wMobilePlayerId": 3,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 36,
+          "wMapNumber": 4,
+          "wXCoord": 15,
+          "wYCoord": 22,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 1,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 36,
+          "wMapNumber": 4,
+          "wXCoord": 15,
+          "wYCoord": 22,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 2,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 36,
+          "wMapNumber": 4,
+          "wXCoord": 15,
+          "wYCoord": 22,
+          "hCrashCode": 0
+        }
+      ],
+      "profiles": [
+        {
+          "serial_count": 36213,
+          "serial_max_cycles": 1432,
+          "serial_total_cycles": 44160032,
+          "serial_failures": 0,
+          "serial_lowest_sp": 49297,
+          "tick_count": 15690,
+          "tick_max_cycles": 19168,
+          "tick_total_cycles": 20355412,
+          "tick_failures": 0,
+          "tick_lowest_sp": 49307,
+          "serial_max_frame_cycles": 64300,
+          "serial_normal_speed_count": 0,
+          "serial_bank_switch_completions": 1218,
+          "serial_max_vblank_cycles": 65260,
+          "npc_restore_count": 2998,
+          "npc_restore_failures": 0,
+          "tick_stack_cursor_samples": 3340,
+          "tick_stack_cursor_lowest_sp": 38048,
+          "video_frames": 5998,
+          "audio_batches": 5998,
+          "audio_samples": 4408530
+        },
+        {
+          "serial_count": 38718,
+          "serial_max_cycles": 1432,
+          "serial_total_cycles": 47516368,
+          "serial_failures": 0,
+          "serial_lowest_sp": 49334,
+          "tick_count": 15757,
+          "tick_max_cycles": 18176,
+          "tick_total_cycles": 20972096,
+          "tick_failures": 0,
+          "tick_lowest_sp": 49334,
+          "serial_max_frame_cycles": 65000,
+          "serial_normal_speed_count": 0,
+          "serial_bank_switch_completions": 1410,
+          "serial_max_vblank_cycles": 65960,
+          "npc_restore_count": 3181,
+          "npc_restore_failures": 0,
+          "tick_stack_cursor_samples": 1670,
+          "tick_stack_cursor_lowest_sp": 38048,
+          "video_frames": 6000,
+          "audio_batches": 6000,
+          "audio_samples": 4410000
+        },
+        {
+          "serial_count": 38604,
+          "serial_max_cycles": 1432,
+          "serial_total_cycles": 47377244,
+          "serial_failures": 0,
+          "serial_lowest_sp": 49330,
+          "tick_count": 15749,
+          "tick_max_cycles": 19312,
+          "tick_total_cycles": 20771904,
+          "tick_failures": 0,
+          "tick_lowest_sp": 49330,
+          "serial_max_frame_cycles": 64300,
+          "serial_normal_speed_count": 0,
+          "serial_bank_switch_completions": 1400,
+          "serial_max_vblank_cycles": 65260,
+          "npc_restore_count": 3179,
+          "npc_restore_failures": 0,
+          "tick_stack_cursor_samples": 2004,
+          "tick_stack_cursor_lowest_sp": 38048,
+          "video_frames": 5999,
+          "audio_batches": 5999,
+          "audio_samples": 4409265
+        }
+      ]
+    },
+    {
+      "scenario": "instance",
+      "test_rom_sha256": "93163ef86645bfaa5ac811b094fbf685e31f29c87d6d9bbc11ed7d61c18dcb8b",
+      "symbols_sha256": "33101f72157cce0076dfb95a00678af2cb6fa9ea3a3e99c27c2225572246ccbd",
+      "core_sha256": "e26a7ecf08273a98fc04dcca7714a736a5fab9a73dce156464a8e5016b7c1ea0",
+      "battery_sha256": [
+        "d168e4e00f7fa925760f7713f6f15276a3546df65f9ad7ec51af9f029057fce3",
+        "d168e4e00f7fa925760f7713f6f15276a3546df65f9ad7ec51af9f029057fce3",
+        "9bc6780a22ceea5f53f149064b5ec393c6ddee51f0ef0119bfab759b1af1ef32"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/m2-accepted-final-instance",
+      "kind": "profile",
+      "result": "passed",
+      "canonical_rom_sha256": "725d94ee2e8adec0817a9398e9fa3a1056908943e429ccbdaa335384f3a7e3e8",
+      "summary_sha256": "f22dbbb4358fbf6a7fc1dfd3d09265096c048743d220f28d8e478d10f501bb6d",
+      "server_log_sha256": "1660f85ef89e58fc19ce076bab7415cc3cf59dd032c184f0d26bec01d2a0e9f0",
+      "final_clients": [
+        {
+          "wMobilePlayerId": 3,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 1,
+          "wMobileDeferred": 0,
+          "wMapGroup": 36,
+          "wMapNumber": 4,
+          "wXCoord": 16,
+          "wYCoord": 22,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 2,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 1,
+          "wMobileDeferred": 0,
+          "wMapGroup": 36,
+          "wMapNumber": 4,
+          "wXCoord": 15,
+          "wYCoord": 23,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 1,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 0,
+          "wMobileDeferred": 0,
+          "wMapGroup": 36,
+          "wMapNumber": 4,
+          "wXCoord": 14,
+          "wYCoord": 22,
+          "hCrashCode": 0
+        }
+      ],
+      "profiles": [
+        {
+          "serial_count": 16826,
+          "serial_max_cycles": 1432,
+          "serial_total_cycles": 20627464,
+          "serial_failures": 0,
+          "serial_lowest_sp": 49334,
+          "tick_count": 11738,
+          "tick_max_cycles": 16340,
+          "tick_total_cycles": 12053380,
+          "tick_failures": 0,
+          "tick_lowest_sp": 49334,
+          "serial_max_frame_cycles": 72080,
+          "serial_normal_speed_count": 0,
+          "serial_bank_switch_completions": 584,
+          "serial_max_vblank_cycles": 67812,
+          "npc_restore_count": 2176,
+          "npc_restore_failures": 0,
+          "tick_stack_cursor_samples": 1336,
+          "tick_stack_cursor_lowest_sp": 38048,
+          "video_frames": 4498,
+          "audio_batches": 4498,
+          "audio_samples": 3306030
+        },
+        {
+          "serial_count": 16609,
+          "serial_max_cycles": 1432,
+          "serial_total_cycles": 20357708,
+          "serial_failures": 0,
+          "serial_lowest_sp": 49338,
+          "tick_count": 11733,
+          "tick_max_cycles": 22636,
+          "tick_total_cycles": 12096352,
+          "tick_failures": 0,
+          "tick_lowest_sp": 49339,
+          "serial_max_frame_cycles": 65016,
+          "serial_normal_speed_count": 0,
+          "serial_bank_switch_completions": 589,
+          "serial_max_vblank_cycles": 65976,
+          "npc_restore_count": 2175,
+          "npc_restore_failures": 0,
+          "tick_stack_cursor_samples": 1336,
+          "tick_stack_cursor_lowest_sp": 38048,
+          "video_frames": 4498,
+          "audio_batches": 4498,
+          "audio_samples": 3306030
+        },
+        {
+          "serial_count": 23188,
+          "serial_max_cycles": 1432,
+          "serial_total_cycles": 27746220,
+          "serial_failures": 0,
+          "serial_lowest_sp": 49338,
+          "tick_count": 13851,
+          "tick_max_cycles": 19596,
+          "tick_total_cycles": 15547544,
+          "tick_failures": 0,
+          "tick_lowest_sp": 49341,
+          "serial_max_frame_cycles": 64300,
+          "serial_normal_speed_count": 0,
+          "serial_bank_switch_completions": 607,
+          "serial_max_vblank_cycles": 65260,
+          "npc_restore_count": 2561,
+          "npc_restore_failures": 0,
+          "tick_stack_cursor_samples": 1503,
+          "tick_stack_cursor_lowest_sp": 38048,
+          "video_frames": 4498,
+          "audio_batches": 4498,
+          "audio_samples": 3306030
+        }
+      ]
+    },
+    {
+      "scenario": "basic",
+      "test_rom_sha256": "93163ef86645bfaa5ac811b094fbf685e31f29c87d6d9bbc11ed7d61c18dcb8b",
+      "symbols_sha256": "33101f72157cce0076dfb95a00678af2cb6fa9ea3a3e99c27c2225572246ccbd",
+      "core_sha256": "e26a7ecf08273a98fc04dcca7714a736a5fab9a73dce156464a8e5016b7c1ea0",
+      "battery_sha256": [
+        "c4f2d74b059e617392c3ca5afbd8f01a6a6dbacbf63a730aee13f6aa9bf17dd5",
+        "c4f2d74b059e617392c3ca5afbd8f01a6a6dbacbf63a730aee13f6aa9bf17dd5",
+        "c4f2d74b059e617392c3ca5afbd8f01a6a6dbacbf63a730aee13f6aa9bf17dd5"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/m2-accepted-final-volcano",
+      "kind": "profile",
+      "result": "passed",
+      "canonical_rom_sha256": "725d94ee2e8adec0817a9398e9fa3a1056908943e429ccbdaa335384f3a7e3e8",
+      "summary_sha256": "7df77c15958f530e3e80d1eaeb432b78c0e705334de0f0ccd544d8c93a651e5c",
+      "server_log_sha256": "3994fd76c42edd993809c4f36ab9b960e97c833b86814faf99ba556e6073684c",
+      "final_clients": [
+        {
+          "wMobilePlayerId": 1,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 6,
+          "wMapNumber": 13,
+          "wXCoord": 14,
+          "wYCoord": 15,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 2,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 6,
+          "wMapNumber": 13,
+          "wXCoord": 14,
+          "wYCoord": 15,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 3,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 1,
+          "wMobileDeferred": 0,
+          "wMapGroup": 6,
+          "wMapNumber": 13,
+          "wXCoord": 14,
+          "wYCoord": 15,
+          "hCrashCode": 0
+        }
+      ],
+      "profiles": [
+        {
+          "serial_count": 22156,
+          "serial_max_cycles": 1432,
+          "serial_total_cycles": 26854908,
+          "serial_failures": 0,
+          "serial_lowest_sp": 49344,
+          "tick_count": 13333,
+          "tick_max_cycles": 24852,
+          "tick_total_cycles": 15129380,
+          "tick_failures": 0,
+          "tick_lowest_sp": 49334,
+          "serial_max_frame_cycles": 64300,
+          "serial_normal_speed_count": 0,
+          "serial_bank_switch_completions": 732,
+          "serial_max_vblank_cycles": 65260,
+          "npc_restore_count": 2513,
+          "npc_restore_failures": 0,
+          "tick_stack_cursor_samples": 1478,
+          "tick_stack_cursor_lowest_sp": 17917,
+          "video_frames": 4498,
+          "audio_batches": 4498,
+          "audio_samples": 3306030
+        },
+        {
+          "serial_count": 22103,
+          "serial_max_cycles": 1432,
+          "serial_total_cycles": 26786144,
+          "serial_failures": 0,
+          "serial_lowest_sp": 49334,
+          "tick_count": 13319,
+          "tick_max_cycles": 25116,
+          "tick_total_cycles": 15140260,
+          "tick_failures": 0,
+          "tick_lowest_sp": 49332,
+          "serial_max_frame_cycles": 64300,
+          "serial_normal_speed_count": 0,
+          "serial_bank_switch_completions": 709,
+          "serial_max_vblank_cycles": 65260,
+          "npc_restore_count": 2512,
+          "npc_restore_failures": 0,
+          "tick_stack_cursor_samples": 1824,
+          "tick_stack_cursor_lowest_sp": 17917,
+          "video_frames": 4498,
+          "audio_batches": 4498,
+          "audio_samples": 3306030
+        },
+        {
+          "serial_count": 22144,
+          "serial_max_cycles": 1432,
+          "serial_total_cycles": 26838324,
+          "serial_failures": 0,
+          "serial_lowest_sp": 49334,
+          "tick_count": 13322,
+          "tick_max_cycles": 25012,
+          "tick_total_cycles": 15090544,
+          "tick_failures": 0,
+          "tick_lowest_sp": 49333,
+          "serial_max_frame_cycles": 64300,
+          "serial_normal_speed_count": 0,
+          "serial_bank_switch_completions": 720,
+          "serial_max_vblank_cycles": 65260,
+          "npc_restore_count": 2512,
+          "npc_restore_failures": 0,
+          "tick_stack_cursor_samples": 1308,
+          "tick_stack_cursor_lowest_sp": 17933,
+          "video_frames": 4498,
+          "audio_batches": 4498,
+          "audio_samples": 3306030
+        }
+      ]
+    },
+    {
+      "scenario": "basic",
+      "test_rom_sha256": "93163ef86645bfaa5ac811b094fbf685e31f29c87d6d9bbc11ed7d61c18dcb8b",
+      "symbols_sha256": "33101f72157cce0076dfb95a00678af2cb6fa9ea3a3e99c27c2225572246ccbd",
+      "core_sha256": "e26a7ecf08273a98fc04dcca7714a736a5fab9a73dce156464a8e5016b7c1ea0",
+      "battery_sha256": [
+        "8c5351e74ba2f05e4a8d3cf882aa50056c6c40af475979571b4aa2b6f994cf06",
+        "8c5351e74ba2f05e4a8d3cf882aa50056c6c40af475979571b4aa2b6f994cf06",
+        "8c5351e74ba2f05e4a8d3cf882aa50056c6c40af475979571b4aa2b6f994cf06"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 2,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/m2-accepted-final-gyarados",
+      "kind": "profile",
+      "result": "passed",
+      "canonical_rom_sha256": "725d94ee2e8adec0817a9398e9fa3a1056908943e429ccbdaa335384f3a7e3e8",
+      "summary_sha256": "0790d5761a46b5981c25c1ab39163445dfe37a43fe033df3adf4ebf13e2d3dca",
+      "server_log_sha256": "0c2a9af681bc3c01cd367528db2e9b8f25f17fc213d167cff9bd73f86239779c",
+      "final_clients": [
+        {
+          "wMobilePlayerId": 2,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 0,
+          "wMobileDeferred": 2,
+          "wMapGroup": 2,
+          "wMapNumber": 13,
+          "wXCoord": 18,
+          "wYCoord": 24,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 1,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 0,
+          "wMobileDeferred": 2,
+          "wMapGroup": 2,
+          "wMapNumber": 13,
+          "wXCoord": 18,
+          "wYCoord": 24,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 3,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 0,
+          "wMobileDeferred": 2,
+          "wMapGroup": 2,
+          "wMapNumber": 13,
+          "wXCoord": 18,
+          "wYCoord": 24,
+          "hCrashCode": 0
+        }
+      ],
+      "profiles": [
+        {
+          "serial_count": 23712,
+          "serial_max_cycles": 1432,
+          "serial_total_cycles": 27938216,
+          "serial_failures": 0,
+          "serial_lowest_sp": 49347,
+          "tick_count": 14663,
+          "tick_max_cycles": 13584,
+          "tick_total_cycles": 16078716,
+          "tick_failures": 0,
+          "tick_lowest_sp": 49337,
+          "serial_max_frame_cycles": 60504,
+          "serial_normal_speed_count": 0,
+          "serial_bank_switch_completions": 1221,
+          "serial_max_vblank_cycles": 64592,
+          "npc_restore_count": 2567,
+          "npc_restore_failures": 0,
+          "tick_stack_cursor_samples": 381,
+          "tick_stack_cursor_lowest_sp": 18005,
+          "video_frames": 4498,
+          "audio_batches": 4498,
+          "audio_samples": 3306030
+        },
+        {
+          "serial_count": 23402,
+          "serial_max_cycles": 1432,
+          "serial_total_cycles": 27519172,
+          "serial_failures": 0,
+          "serial_lowest_sp": 49347,
+          "tick_count": 14661,
+          "tick_max_cycles": 13712,
+          "tick_total_cycles": 16038452,
+          "tick_failures": 0,
+          "tick_lowest_sp": 49337,
+          "serial_max_frame_cycles": 60504,
+          "serial_normal_speed_count": 0,
+          "serial_bank_switch_completions": 1197,
+          "serial_max_vblank_cycles": 64592,
+          "npc_restore_count": 2567,
+          "npc_restore_failures": 0,
+          "tick_stack_cursor_samples": 466,
+          "tick_stack_cursor_lowest_sp": 18005,
+          "video_frames": 4498,
+          "audio_batches": 4498,
+          "audio_samples": 3306030
+        },
+        {
+          "serial_count": 23712,
+          "serial_max_cycles": 1432,
+          "serial_total_cycles": 27938216,
+          "serial_failures": 0,
+          "serial_lowest_sp": 49347,
+          "tick_count": 14663,
+          "tick_max_cycles": 13584,
+          "tick_total_cycles": 16078716,
+          "tick_failures": 0,
+          "tick_lowest_sp": 49337,
+          "serial_max_frame_cycles": 60504,
+          "serial_normal_speed_count": 0,
+          "serial_bank_switch_completions": 1221,
+          "serial_max_vblank_cycles": 64592,
+          "npc_restore_count": 2567,
+          "npc_restore_failures": 0,
+          "tick_stack_cursor_samples": 381,
+          "tick_stack_cursor_lowest_sp": 18005,
+          "video_frames": 4498,
+          "audio_batches": 4498,
+          "audio_samples": 3306030
+        }
+      ]
+    },
+    {
+      "scenario": "speed",
+      "test_rom_sha256": "93163ef86645bfaa5ac811b094fbf685e31f29c87d6d9bbc11ed7d61c18dcb8b",
+      "symbols_sha256": "33101f72157cce0076dfb95a00678af2cb6fa9ea3a3e99c27c2225572246ccbd",
+      "core_sha256": "e26a7ecf08273a98fc04dcca7714a736a5fab9a73dce156464a8e5016b7c1ea0",
+      "battery_sha256": [
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400",
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400",
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400"
+      ],
+      "declared_client_server_rtt_ms": 100,
+      "client_speed_multipliers": [
+        3,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/m2-accepted-final-speed3-rtt100",
+      "kind": "profile",
+      "result": "passed",
+      "canonical_rom_sha256": "725d94ee2e8adec0817a9398e9fa3a1056908943e429ccbdaa335384f3a7e3e8",
+      "summary_sha256": "9034848c65859a1a825a25a4e08a1085597007425a37dfcb15034ccf5e67bbc9",
+      "server_log_sha256": "64be446e503b76084ea16d1a75e85df811bb30f0704a435056aa71b666c3aced",
+      "final_clients": [
+        {
+          "wMobilePlayerId": 1,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 2,
+          "wYCoord": 3,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 3,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 3,
+          "wYCoord": 4,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 2,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 2,
+          "wYCoord": 3,
+          "hCrashCode": 0
+        }
+      ],
+      "profiles": [
+        {
+          "serial_count": 83571,
+          "serial_max_cycles": 1432,
+          "serial_total_cycles": 99810388,
+          "serial_failures": 0,
+          "serial_lowest_sp": 49343,
+          "tick_count": 26497,
+          "tick_max_cycles": 24132,
+          "tick_total_cycles": 41365248,
+          "tick_failures": 0,
+          "tick_lowest_sp": 49341,
+          "serial_max_frame_cycles": 65664,
+          "serial_normal_speed_count": 0,
+          "serial_bank_switch_completions": 2227,
+          "serial_max_vblank_cycles": 67624,
+          "npc_restore_count": 4975,
+          "npc_restore_failures": 0,
+          "tick_stack_cursor_samples": 0,
+          "tick_stack_cursor_lowest_sp": 65535,
+          "video_frames": 6999,
+          "audio_batches": 6999,
+          "audio_samples": 5144265
+        },
+        {
+          "serial_count": 31772,
+          "serial_max_cycles": 1432,
+          "serial_total_cycles": 40073860,
+          "serial_failures": 0,
+          "serial_lowest_sp": 49346,
+          "tick_count": 14013,
+          "tick_max_cycles": 22584,
+          "tick_total_cycles": 21533440,
+          "tick_failures": 0,
+          "tick_lowest_sp": 49333,
+          "serial_max_frame_cycles": 81816,
+          "serial_normal_speed_count": 0,
+          "serial_bank_switch_completions": 718,
+          "serial_max_vblank_cycles": 67816,
+          "npc_restore_count": 2560,
+          "npc_restore_failures": 0,
+          "tick_stack_cursor_samples": 0,
+          "tick_stack_cursor_lowest_sp": 65535,
+          "video_frames": 4499,
+          "audio_batches": 4499,
+          "audio_samples": 3306765
+        },
+        {
+          "serial_count": 32026,
+          "serial_max_cycles": 1416,
+          "serial_total_cycles": 40417360,
+          "serial_failures": 0,
+          "serial_lowest_sp": 49345,
+          "tick_count": 14004,
+          "tick_max_cycles": 22848,
+          "tick_total_cycles": 21502700,
+          "tick_failures": 0,
+          "tick_lowest_sp": 49333,
+          "serial_max_frame_cycles": 81816,
+          "serial_normal_speed_count": 0,
+          "serial_bank_switch_completions": 672,
+          "serial_max_vblank_cycles": 67840,
+          "npc_restore_count": 2560,
+          "npc_restore_failures": 0,
+          "tick_stack_cursor_samples": 0,
+          "tick_stack_cursor_lowest_sp": 65535,
+          "video_frames": 4499,
+          "audio_batches": 4499,
+          "audio_samples": 3306765
+        }
+      ]
+    },
+    {
+      "scenario": "menu",
+      "test_rom_sha256": "8a09de3e30a1c1ddca9e420e9ea08f51ab744ef0ffcc7aba6f01f61ef385d1ac",
+      "symbols_sha256": "33101f72157cce0076dfb95a00678af2cb6fa9ea3a3e99c27c2225572246ccbd",
+      "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+      "battery_sha256": [
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400",
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400",
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/m2-complete-final-menu",
+      "kind": "functional",
+      "result": "passed",
+      "canonical_rom_sha256": "725d94ee2e8adec0817a9398e9fa3a1056908943e429ccbdaa335384f3a7e3e8",
+      "summary_sha256": "0ee484dc3ce7ae1d18da1786d89e5c71ca72683587b97b1f22b48236502cfaf5",
+      "server_log_sha256": "e1682dd5f0208f3c2ef5445e05576953263a23c372226adcc930ac28acd63698",
+      "final_clients": [
+        {
+          "wMobilePlayerId": 1,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 4,
+          "wYCoord": 3,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 2,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 3,
+          "wYCoord": 4,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 3,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 2,
+          "wYCoord": 3,
+          "hCrashCode": 0
+        }
+      ]
+    },
+    {
+      "scenario": "rejoin",
+      "test_rom_sha256": "8a09de3e30a1c1ddca9e420e9ea08f51ab744ef0ffcc7aba6f01f61ef385d1ac",
+      "symbols_sha256": "33101f72157cce0076dfb95a00678af2cb6fa9ea3a3e99c27c2225572246ccbd",
+      "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+      "battery_sha256": [
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400",
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400",
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/m2-complete-final-rejoin",
+      "kind": "functional",
+      "result": "passed",
+      "canonical_rom_sha256": "725d94ee2e8adec0817a9398e9fa3a1056908943e429ccbdaa335384f3a7e3e8",
+      "summary_sha256": "09be99297a7671963fa734e90842c242f72373ccbe0fc2a3c65cb200fccccfc4",
+      "server_log_sha256": "f43b5a03ac8e92cad7c8476909044bee5c332e17f74b4e8f23a275b2fc32227a",
+      "final_clients": [
+        {
+          "wMobilePlayerId": 4,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 4,
+          "wYCoord": 3,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 3,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 3,
+          "wYCoord": 4,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 1,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 2,
+          "wYCoord": 3,
+          "hCrashCode": 0
+        }
+      ]
+    },
+    {
+      "scenario": "resume",
+      "test_rom_sha256": "8a09de3e30a1c1ddca9e420e9ea08f51ab744ef0ffcc7aba6f01f61ef385d1ac",
+      "symbols_sha256": "33101f72157cce0076dfb95a00678af2cb6fa9ea3a3e99c27c2225572246ccbd",
+      "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+      "battery_sha256": [
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400",
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400",
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/m2-complete-final-resume",
+      "kind": "functional",
+      "result": "passed",
+      "canonical_rom_sha256": "725d94ee2e8adec0817a9398e9fa3a1056908943e429ccbdaa335384f3a7e3e8",
+      "summary_sha256": "83f06943d17282d2ec2b7ab1697ad3fdbd5a6783e164593f4879f3d8ed676fe2",
+      "server_log_sha256": "e552389c966254d006cfb32fdd818342c7b29443bc383014b089e452ed3ba4a2",
+      "final_clients": [
+        {
+          "wMobilePlayerId": 3,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 4,
+          "wYCoord": 3,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 2,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 3,
+          "wYCoord": 4,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 1,
+          "wMobileGeneration": 2,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 2,
+          "wYCoord": 3,
+          "hCrashCode": 0
+        }
+      ]
+    },
+    {
+      "scenario": "warp",
+      "test_rom_sha256": "8a09de3e30a1c1ddca9e420e9ea08f51ab744ef0ffcc7aba6f01f61ef385d1ac",
+      "symbols_sha256": "33101f72157cce0076dfb95a00678af2cb6fa9ea3a3e99c27c2225572246ccbd",
+      "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+      "battery_sha256": [
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400",
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400",
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/m2-complete-final-warp",
+      "kind": "functional",
+      "result": "passed",
+      "canonical_rom_sha256": "725d94ee2e8adec0817a9398e9fa3a1056908943e429ccbdaa335384f3a7e3e8",
+      "summary_sha256": "dd5b4f0bfcf5f8ab360530713a295b6c5a60e0dd78444c2d073ab0aa851ad07e",
+      "server_log_sha256": "86037669ef1c9e896b0bcf24bbc6f9c1c859dff9ed6e1724ef0c2832f49038d5",
+      "final_clients": [
+        {
+          "wMobilePlayerId": 1,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 0,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 4,
+          "wXCoord": 11,
+          "wYCoord": 1,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 2,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 1,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 3,
+          "wYCoord": 4,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 3,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 1,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 2,
+          "wYCoord": 3,
+          "hCrashCode": 0
+        }
+      ]
+    },
+    {
+      "scenario": "connection",
+      "test_rom_sha256": "8a09de3e30a1c1ddca9e420e9ea08f51ab744ef0ffcc7aba6f01f61ef385d1ac",
+      "symbols_sha256": "33101f72157cce0076dfb95a00678af2cb6fa9ea3a3e99c27c2225572246ccbd",
+      "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+      "battery_sha256": [
+        "3c19f96a06e8f7ba0e68dab40b8b6f87b20701ceec77180cf76c5e8b5f9e5272",
+        "3c19f96a06e8f7ba0e68dab40b8b6f87b20701ceec77180cf76c5e8b5f9e5272",
+        "3c19f96a06e8f7ba0e68dab40b8b6f87b20701ceec77180cf76c5e8b5f9e5272"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/m2-complete-final-connection",
+      "kind": "functional",
+      "result": "passed",
+      "canonical_rom_sha256": "725d94ee2e8adec0817a9398e9fa3a1056908943e429ccbdaa335384f3a7e3e8",
+      "summary_sha256": "0527b0bbe6441d79a5b3d77aefe776c9fc14e820e9491024eaccece893b7e8b4",
+      "server_log_sha256": "8310b5ef349881e24d22245a37535cb2acec1ec66e2dfc4a9d64d94ec4826a2b",
+      "final_clients": [
+        {
+          "wMobilePlayerId": 3,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 0,
+          "wMobileDeferred": 0,
+          "wMapGroup": 13,
+          "wMapNumber": 1,
+          "wXCoord": 11,
+          "wYCoord": 35,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 2,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 1,
+          "wMobileDeferred": 0,
+          "wMapGroup": 13,
+          "wMapNumber": 2,
+          "wXCoord": 8,
+          "wYCoord": 2,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 1,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 1,
+          "wMobileDeferred": 0,
+          "wMapGroup": 13,
+          "wMapNumber": 2,
+          "wXCoord": 8,
+          "wYCoord": 1,
+          "hCrashCode": 0
+        }
+      ]
+    },
+    {
+      "scenario": "running",
+      "test_rom_sha256": "8a09de3e30a1c1ddca9e420e9ea08f51ab744ef0ffcc7aba6f01f61ef385d1ac",
+      "symbols_sha256": "33101f72157cce0076dfb95a00678af2cb6fa9ea3a3e99c27c2225572246ccbd",
+      "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+      "battery_sha256": [
+        "665cbe35c551249ea7b57aee0df88f7baadc4e6bf5684f4a99b17989657e5beb",
+        "665cbe35c551249ea7b57aee0df88f7baadc4e6bf5684f4a99b17989657e5beb",
+        "665cbe35c551249ea7b57aee0df88f7baadc4e6bf5684f4a99b17989657e5beb"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/m2-complete-final-running",
+      "kind": "functional",
+      "result": "passed",
+      "canonical_rom_sha256": "725d94ee2e8adec0817a9398e9fa3a1056908943e429ccbdaa335384f3a7e3e8",
+      "summary_sha256": "1d396d85e16d2751888ed715885a16b8588076ffe72922b52b21d90b61a41c3f",
+      "server_log_sha256": "cabd60bdf6dbd4fe40be4e75fb9ef1b03a5f15a63e0bc1ac772dec67ca18f5fd",
+      "final_clients": [
+        {
+          "wMobilePlayerId": 1,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 13,
+          "wMapNumber": 2,
+          "wXCoord": 10,
+          "wYCoord": 6,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 2,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 13,
+          "wMapNumber": 2,
+          "wXCoord": 8,
+          "wYCoord": 7,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 3,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 0,
+          "wMobileDeferred": 0,
+          "wMapGroup": 13,
+          "wMapNumber": 2,
+          "wXCoord": 7,
+          "wYCoord": 6,
+          "hCrashCode": 0
+        }
+      ]
+    },
+    {
+      "scenario": "basic",
+      "test_rom_sha256": "8a09de3e30a1c1ddca9e420e9ea08f51ab744ef0ffcc7aba6f01f61ef385d1ac",
+      "symbols_sha256": "33101f72157cce0076dfb95a00678af2cb6fa9ea3a3e99c27c2225572246ccbd",
+      "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+      "battery_sha256": [
+        "fbff2811cf467cf8b7e510db0c40344bdcc4ffa9e4bf8ac737930473a4ac9ac1",
+        "fbff2811cf467cf8b7e510db0c40344bdcc4ffa9e4bf8ac737930473a4ac9ac1",
+        "fbff2811cf467cf8b7e510db0c40344bdcc4ffa9e4bf8ac737930473a4ac9ac1"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/m2-complete-final-bike",
+      "kind": "functional",
+      "result": "passed",
+      "canonical_rom_sha256": "725d94ee2e8adec0817a9398e9fa3a1056908943e429ccbdaa335384f3a7e3e8",
+      "summary_sha256": "6efd5d496115faffdf63d0d4b5f9e8a10f9b00a9a2b077dba1fc0a3ba4783ba2",
+      "server_log_sha256": "c17b4fefa676eb0cf763931c9bc9102012246331083866dafb01998380d95352",
+      "final_clients": [
+        {
+          "wMobilePlayerId": 1,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 21,
+          "wMapNumber": 3,
+          "wXCoord": 9,
+          "wYCoord": 12,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 3,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 21,
+          "wMapNumber": 3,
+          "wXCoord": 9,
+          "wYCoord": 12,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 2,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 21,
+          "wMapNumber": 3,
+          "wXCoord": 8,
+          "wYCoord": 12,
+          "hCrashCode": 0
+        }
+      ]
+    },
+    {
+      "scenario": "basic",
+      "test_rom_sha256": "8a09de3e30a1c1ddca9e420e9ea08f51ab744ef0ffcc7aba6f01f61ef385d1ac",
+      "symbols_sha256": "33101f72157cce0076dfb95a00678af2cb6fa9ea3a3e99c27c2225572246ccbd",
+      "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+      "battery_sha256": [
+        "0458fc17f991d4af86a19b4d98d924207bd6caaa1de59a3a066ff968727fbc94",
+        "0458fc17f991d4af86a19b4d98d924207bd6caaa1de59a3a066ff968727fbc94",
+        "0458fc17f991d4af86a19b4d98d924207bd6caaa1de59a3a066ff968727fbc94"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/m2-complete-final-surf",
+      "kind": "functional",
+      "result": "passed",
+      "canonical_rom_sha256": "725d94ee2e8adec0817a9398e9fa3a1056908943e429ccbdaa335384f3a7e3e8",
+      "summary_sha256": "fe32eb532526cdc7afe8a04faf1a83ea90072c3c327fb36eaabd96d996f4d2b0",
+      "server_log_sha256": "762f54159737ce9bfe16e456a50c1677f4c6ab1fd4cfd3893f7122e3f45645f5",
+      "final_clients": [
+        {
+          "wMobilePlayerId": 1,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 2,
+          "wXCoord": 23,
+          "wYCoord": 8,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 2,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 2,
+          "wXCoord": 22,
+          "wYCoord": 9,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 3,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 2,
+          "wXCoord": 21,
+          "wYCoord": 8,
+          "hCrashCode": 0
+        }
+      ]
+    },
+    {
+      "scenario": "basic",
+      "test_rom_sha256": "7fd077323b4a91b263006067aa23c518950679cf4b0a97a55b26c07269f19b0b",
+      "symbols_sha256": "20f947e762934e7955335f48cc949b68c0328f2c491375750a21583b83b52648",
+      "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+      "battery_sha256": [
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400",
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400",
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/m2-complete-final-faithful",
+      "kind": "functional",
+      "result": "passed",
+      "canonical_rom_sha256": "81e0664967741a11c30143379985df231bb97b2ef00fdde9049349664bbf36d7",
+      "summary_sha256": "403d0905d4e0512a4508a5ec2b0926d5181df783ad48d0abbcc08929993925f1",
+      "server_log_sha256": "f85a74e3719cc29906113c82d51276b4b4658cc8202c064d8c39e8e9bac8035e",
+      "final_clients": [
+        {
+          "wMobilePlayerId": 2,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 4,
+          "wYCoord": 3,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 3,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 3,
+          "wYCoord": 4,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 1,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 2,
+          "wYCoord": 3,
+          "hCrashCode": 0
+        }
+      ]
+    },
+    {
+      "scenario": "basic",
+      "test_rom_sha256": "64ca7609c34851335b81835bac89c602eaa1ca16272ca9a92288a81517dd5a96",
+      "symbols_sha256": "33101f72157cce0076dfb95a00678af2cb6fa9ea3a3e99c27c2225572246ccbd",
+      "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+      "battery_sha256": [
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400",
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400",
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/m2-final16-latency-local",
+      "kind": "latency",
+      "result": "passed",
+      "canonical_rom_sha256": "725d94ee2e8adec0817a9398e9fa3a1056908943e429ccbdaa335384f3a7e3e8",
+      "summary_sha256": "910512d41d3f0fd52bdb1797fdbe5dbfb94471880e592683c28afc136cbef1b7",
+      "server_log_sha256": "2722f34b6fffc82d2cd1cc642146c31ffc2c6f6cb83711a46f2c27d3ca10db6c",
+      "final_clients": [
+        {
+          "wMobilePlayerId": 3,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 4,
+          "wYCoord": 3,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 1,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 3,
+          "wYCoord": 4,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 2,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 2,
+          "wYCoord": 3,
+          "hCrashCode": 0
+        }
+      ],
+      "latency": {
+        "samples": 40,
+        "p50_ms": 75.893,
+        "p95_ms": 93.879,
+        "max_ms": 124.737,
+        "added_client_server_rtt_ms": 0,
+        "input_to_remote_p95_ms": 244.252,
+        "input_to_remote_max_ms": 253.229,
+        "measurement": "first captured local world motion to first directional position change of four-quad remote avatar bounds at native video callback; input-to-remote includes unchanged vanilla turn delay"
+      }
+    },
+    {
+      "scenario": "basic",
+      "test_rom_sha256": "64ca7609c34851335b81835bac89c602eaa1ca16272ca9a92288a81517dd5a96",
+      "symbols_sha256": "33101f72157cce0076dfb95a00678af2cb6fa9ea3a3e99c27c2225572246ccbd",
+      "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+      "battery_sha256": [
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400",
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400",
+        "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400"
+      ],
+      "declared_client_server_rtt_ms": 100,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/m2-final16-latency-rtt100",
+      "kind": "latency",
+      "result": "passed",
+      "canonical_rom_sha256": "725d94ee2e8adec0817a9398e9fa3a1056908943e429ccbdaa335384f3a7e3e8",
+      "summary_sha256": "2f30b38ea6466aa449a56fe0cd1676a201257ce5ff4855a61af585105f2d0207",
+      "server_log_sha256": "10cb9bab8cb0cf58d72c1e2a22e90581af90c81ff07ead7e1c2320fbe5deaf46",
+      "final_clients": [
+        {
+          "wMobilePlayerId": 3,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 4,
+          "wYCoord": 3,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 2,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 3,
+          "wYCoord": 4,
+          "hCrashCode": 0
+        },
+        {
+          "wMobilePlayerId": 1,
+          "wMobileGeneration": 1,
+          "wMobilePeerCount": 2,
+          "wMobileVisibleCount": 2,
+          "wMobileDeferred": 0,
+          "wMapGroup": 24,
+          "wMapNumber": 5,
+          "wXCoord": 2,
+          "wYCoord": 3,
+          "hCrashCode": 0
+        }
+      ],
+      "latency": {
+        "samples": 40,
+        "p50_ms": 182.39,
+        "p95_ms": 198.846,
+        "max_ms": 214.328,
+        "added_client_server_rtt_ms": 100,
+        "input_to_remote_p95_ms": 350.064,
+        "input_to_remote_max_ms": 350.576,
+        "measurement": "first captured local world motion to first directional position change of four-quad remote avatar bounds at native video callback; input-to-remote includes unchanged vanilla turn delay"
+      }
+    }
+  ],
+  "native_processes": 65,
+  "echo_regression": {
+    "rom_sha256": "d29e0916e6e39fdaf9675a78361628d55dbafe320291814aab1bdd1d1273775d",
+    "symbols_sha256": "33101f72157cce0076dfb95a00678af2cb6fa9ea3a3e99c27c2225572246ccbd",
+    "runner_sha256": "fb909fab37e1aabc05b1921361bc5be5ce3b755e5bd3e4065d8c36d273f6d72d",
+    "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+    "profile_core_sha256": "e26a7ecf08273a98fc04dcca7714a736a5fab9a73dce156464a8e5016b7c1ea0",
+    "server_sha256": "514ffb8d082d3efcfa514d2aca23ada0b6b66c2597fcf2542f9b43a1e4dcbc37",
+    "battery": {
+      "bytes": 32768,
+      "save_version": 10,
+      "checksums": {
+        "s": 40314,
+        "sBackup": 40314
+      },
+      "sha256": "c2a3508e1b822f0585e368579bd9331a300b93b0a8e607e0f951ebdc723f5400"
+    },
+    "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/m2-final16-echo",
+    "report_sha256": "49a5462e92f890aa75411d2936c915f69038ba16dfdb6e82f18cf721538a02f2",
+    "result": "passed",
+    "processes": 14,
+    "scenarios": 12,
+    "canonical_rom_sha256": "725d94ee2e8adec0817a9398e9fa3a1056908943e429ccbdaa335384f3a7e3e8",
+    "cases": [
+      {
+        "case": "reconnect",
+        "frame_calls": 4000,
+        "input_sha256": "13b2ed84272e3e00838206fc7d26103e72c5219a445190ab9c00676805012ff1",
+        "checkpoints": 38,
+        "profile": {
+          "serial_count": 648,
+          "serial_max_cycles": 1416,
+          "serial_total_cycles": 798312,
+          "serial_failures": 0,
+          "serial_lowest_sp": 49347,
+          "tick_count": 12253,
+          "tick_max_cycles": 5404,
+          "tick_total_cycles": 6627864,
+          "tick_failures": 0,
+          "tick_lowest_sp": 49344,
+          "serial_max_frame_cycles": 53192,
+          "serial_normal_speed_count": 0,
+          "serial_bank_switch_completions": 38,
+          "serial_max_vblank_cycles": 54032,
+          "npc_restore_count": 2074,
+          "npc_restore_failures": 0,
+          "tick_stack_cursor_samples": 0,
+          "tick_stack_cursor_lowest_sp": 65535,
+          "video_frames": 3997,
+          "audio_batches": 3997,
+          "audio_samples": 2937795
+        }
+      },
+      {
+        "case": "three-clients",
+        "frame_calls": 4000,
+        "input_sha256": "b41219a7957db19abfc8dc25c261fbceff16fdccb21ba2d2951a6b3f12673821",
+        "checkpoints": 27,
+        "profile": null
+      },
+      {
+        "case": "three-clients",
+        "frame_calls": 4000,
+        "input_sha256": "b41219a7957db19abfc8dc25c261fbceff16fdccb21ba2d2951a6b3f12673821",
+        "checkpoints": 27,
+        "profile": null
+      },
+      {
+        "case": "three-clients",
+        "frame_calls": 4000,
+        "input_sha256": "b41219a7957db19abfc8dc25c261fbceff16fdccb21ba2d2951a6b3f12673821",
+        "checkpoints": 27,
+        "profile": null
+      },
+      {
+        "case": "split",
+        "frame_calls": 4000,
+        "input_sha256": "b41219a7957db19abfc8dc25c261fbceff16fdccb21ba2d2951a6b3f12673821",
+        "checkpoints": 38,
+        "profile": null
+      },
+      {
+        "case": "bad-magic",
+        "frame_calls": 4000,
+        "input_sha256": "77418bdaa050200afbe405d84654fac50410045ddbf42442b76b8e52a3dcc55c",
+        "checkpoints": 23,
+        "profile": null
+      },
+      {
+        "case": "silent",
+        "frame_calls": 4250,
+        "input_sha256": "8b85e5722851f24006f3ec51a069b84593a494ac6100e53401b7cf3f2c9ddf6d",
+        "checkpoints": 616,
+        "profile": null
+      },
+      {
+        "case": "close",
+        "frame_calls": 4000,
+        "input_sha256": "04d388654e476f7cd03160387714ce2e26e0a2cc79d053e969a4d9f237e26005",
+        "checkpoints": 23,
+        "profile": null
+      },
+      {
+        "case": "no-server",
+        "frame_calls": 4000,
+        "input_sha256": "392dde54beebb96c6af324957625118cd7e4618965bb6bdb68b753ca66d85665",
+        "checkpoints": 21,
+        "profile": null
+      },
+      {
+        "case": "no-adapter",
+        "frame_calls": 4000,
+        "input_sha256": "392dde54beebb96c6af324957625118cd7e4618965bb6bdb68b753ca66d85665",
+        "checkpoints": 17,
+        "profile": null
+      },
+      {
+        "case": "cancel",
+        "frame_calls": 4000,
+        "input_sha256": "f17a8689a3357159df3b0b0f01438db1d7e8849a43496766ad2e3b01703249c3",
+        "checkpoints": 37,
+        "profile": null
+      },
+      {
+        "case": "recover",
+        "frame_calls": 4000,
+        "input_sha256": "568222ecddb8ec1ff84dfbda4c05ab63c1bce4f1e96a9b3b992ca9ae2f364bbe",
+        "checkpoints": 34,
+        "profile": null
+      },
+      {
+        "case": "oversize",
+        "frame_calls": 4000,
+        "input_sha256": "77418bdaa050200afbe405d84654fac50410045ddbf42442b76b8e52a3dcc55c",
+        "checkpoints": 25,
+        "profile": null
+      },
+      {
+        "case": "truncated",
+        "frame_calls": 4000,
+        "input_sha256": "04d388654e476f7cd03160387714ce2e26e0a2cc79d053e969a4d9f237e26005",
+        "checkpoints": 24,
+        "profile": null
+      }
+    ]
+  },
+  "hardware": {
+    "platforms": [
+      "Apple M2 macOS RetroArch with native DoubleCherryGB",
+      "Pixel 9 Pro Android ARM64 RetroArch 1.19.1 with native DoubleCherryGB"
+    ],
+    "test_rom_sha256": "73203c64a9bbb6d1f44692c70b61c55947cc6cdab3d556d510ee2887ecd7900f",
+    "canonical_rom_sha256": "725d94ee2e8adec0817a9398e9fa3a1056908943e429ccbdaa335384f3a7e3e8",
+    "endpoint": "192.168.2.25:17423",
+    "players": [
+      1,
+      2
+    ],
+    "result": "Both joined the same lobby and visibly displayed local plus remote avatar. Real Mac arrows and Android touch D-pad moved players. Final Pixel cold start succeeded after unlock.",
+    "mac_automation_binding": {
+      "F2": [
+        "Select",
+        "B"
+      ]
+    },
+    "production_bindings": "Mac left Shift+Z; Android hold B then Select.",
+    "server_log": "/Volumes/Storage/Cache/mobileadapter/m2-final16-gui-server.log",
+    "server_log_sha256": "7a9cc605d6f7ef1e1a8622e6888b5a5641178fda5e44c2c396ca2b11558c0408",
+    "phone_image": "/Volumes/Storage/Cache/mobileadapter/m2-final16-phone-visible.png",
+    "phone_image_sha256": "5336265201df845dbb6d7ad70d5f7841d4de02135095dc9b1df922c7bb2858d2",
+    "mac_image": "Observed through CUA; no saved screenshot file."
+  },
+  "limits": [
+    "Original full-input p95 targets of 200/300 ms failed. Acceptance was explicitly revised to additional delay after local world motion; measured full-input delay is also retained.",
+    "RTT tests use a bounded independent 50-ms one-way TCP bridge. They are not measured WAN or phone latency.",
+    "300% validation covers absolute-state convergence in the current presence protocol, not future battle or transfer features.",
+    "All 611 maps have a static policy audit; dynamic coverage is representative, not exhaustive gameplay of every map.",
+    "Menus/scripts/cameras, overlapping large sprite tiles and unavoidable required actor pressure temporarily defer social drawing.",
+    "The 16-bit physical-layout key is a visual hint, not collision-free instance identity or synchronized world progress."
+  ]
+}

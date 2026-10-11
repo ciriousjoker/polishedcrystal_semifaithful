@@ -64,6 +64,9 @@ StartMap:
 	farcall InitCallReceiveDelay
 	call ClearJoypad
 EnterMap:
+if DEF(MOBILE_ADAPTER)
+	farcall MobileMapEntered
+endc
 	call SetUpFiveStepWildEncounterCooldown
 	farcall RunMapSetupScript
 	call DisableEvents
@@ -87,6 +90,9 @@ EnterMap:
 
 HandleMap:
 	call HandleMapTimeAndJoypad
+if DEF(MOBILE_ADAPTER)
+	farcall MobileMenuInput
+endc
 	call HandleStoneTable
 	call MapEvents
 
@@ -96,6 +102,10 @@ HandleMap:
 	ret nz
 
 	call HandleMapObjects
+if DEF(MOBILE_ADAPTER)
+	farcall MobileCapture
+	farcall MobileTick
+endc
 	call NextOverworldFrame
 	call HandleMapBackground
 	call CheckPlayerState

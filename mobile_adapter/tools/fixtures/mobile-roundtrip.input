@@ -17,6 +17,8 @@
 # State-driven developer control: two complete connections, then normal movement.
 ON 3300 wMapStatus=2,wScriptRunning=0,hInMenu=0 SELECT 8
 ON 3300 wMapStatus=2,wScriptRunning=0,hInMenu=0 B 8
+ON 3300 wMapStatus=2,wScriptRunning=0,hInMenu=0 A 8
 ON 3500 wMobileSuccessCount=1,wMobileOwner=0 SELECT 8
 ON 3500 wMobileSuccessCount=1,wMobileOwner=0 B 8
+ON 3500 wMobileSuccessCount=1,wMobileOwner=0 A 8
 ON 3750 wMobileSuccessCount=2,wMobileOwner=0 RIGHT 20
