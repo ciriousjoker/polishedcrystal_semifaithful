@@ -8,17 +8,19 @@ patch game RAM or battery saves. Failures retain every diagnostic artifact.
 import argparse
 from core_runtime import CORE_SOURCE, OBSERVED_CORE, PROFILE_CORE
 import json
+import hashlib
 from pathlib import Path
 import socket
 import subprocess
 import time
-from probe_emulator import BASELINE_SHA256, require
+from probe_emulator import BASELINE_SHA256, require, read_symbols
+from save_scenarios import choose, session_battery, AVATARS
 from prepare_native_controls import compare_reference
 
 REPO = Path(__file__).resolve().parents[2]
 CACHE = Path("/Volumes/Storage/Cache/mobileadapter")
 CASES = ("cadence", "local-latency", "hosted-latency", "priority", "saves",
-         "running", "start-menu", "warp", "rejoin", "save-caches")
+         "running", "start-menu", "warp", "rejoin", "save-caches", "duplicate-ids")
 
 
 def main():
@@ -64,8 +66,16 @@ def main():
 
     for case in cases:
         print("ACCEPTANCE " + case, flush=True)
-        scene = "bedroom" if case in ("local-latency", "hosted-latency", "warp", "rejoin", "save-caches") else "game-corner"
+        scene = "bedroom" if case in ("local-latency", "hosted-latency", "warp", "rejoin", "save-caches", "duplicate-ids") else "game-corner"
         batteries = [saves / scene / (name + ".sav") for name in ("chris", "kris", "crys", "beta")]
+        if case == "duplicate-ids":
+            symbols = read_symbols(args.symbols)
+            batteries = [session_battery(choose(scene), name, symbols,
+                args.output / "duplicate-id-seeds" / f"{name}.sav", 12345) for name in AVATARS]
+            (args.output / "duplicate-id-fixtures.json").write_text(json.dumps({
+                "trainer_id": 12345, "players": 4, "figures": list(AVATARS),
+                "save_sha256": [hashlib.sha256(path.read_bytes()).hexdigest() for path in batteries],
+            }, indent=2) + "\n")
         tail = ["--port", args.port, "--output", args.output / case]
         if case == "priority":
             peers = [item for path in batteries[1:] for item in ("--peer-battery", path)]
@@ -90,7 +100,7 @@ def main():
             values += ["--speeds", "1,2,3,4", "--profile", "--profile-window-start", 3300,
                        "--require-npc-motion", "--observation-frames", 5500]
         else:
-            values += ["--scenario", case]
+            values += ["--scenario", "start-menu" if case == "duplicate-ids" else case]
         if case not in ("cadence", "hosted-latency"):
             run("probe_lobby.py", values)
             continue

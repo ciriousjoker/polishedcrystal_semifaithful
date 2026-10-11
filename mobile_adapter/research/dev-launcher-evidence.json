@@ -1,0 +1,177 @@
+{
+  "schema": 1,
+  "date": "2026-10-12",
+  "requirements": [
+    "R6",
+    "interactive scenario/count/optional ADB choice",
+    "GUI-owned Bridge/emulators, terminal-owned hosted server"
+  ],
+  "ports": {
+    "bridge_tcp": 17423,
+    "hosted_ws_default": 8787,
+    "isolated_gui_test_hosted_ws": 17793
+  },
+  "four_gui_launch": {
+    "profile": "/Volumes/Storage/Cache/mobileadapter/dev-session/runs/20261012-003648-241250",
+    "bridge_join_lines": [
+      "BRIDGE_JOINED stream=1 player=1 generation=1",
+      "BRIDGE_JOINED stream=2 player=2 generation=1",
+      "BRIDGE_JOINED stream=3 player=3 generation=1",
+      "BRIDGE_JOINED stream=4 player=4 generation=1"
+    ],
+    "ctrl_c_exit": 0,
+    "surviving_gui_processes": 5,
+    "server_port_reusable": true,
+    "test_gui_cleanup": "Only owned test processes terminated after survival verification"
+  },
+  "final_two_gui_launch": {
+    "profile": "/Volumes/Storage/Cache/mobileadapter/dev-session/runs/20261012-004003-443400",
+    "current_core_auto_load_confirmed": 2,
+    "ctrl_c_exit": 0,
+    "surviving_gui_processes": 3,
+    "server_port_reusable": true
+  },
+  "same_trainer_id": {
+    "trainer_id": 12345,
+    "artifact": "/Volumes/Storage/Cache/mobileadapter/dev-launcher-tests/duplicate-ids-appearance-v3",
+    "passed": true,
+    "clients": [
+      {
+        "figure": 0,
+        "network_player_id": 1,
+        "local_palette_hash": 1209861261,
+        "peers": 3
+      },
+      {
+        "figure": 1,
+        "network_player_id": 3,
+        "local_palette_hash": 2734546651,
+        "peers": 3
+      },
+      {
+        "figure": 2,
+        "network_player_id": 2,
+        "local_palette_hash": 1371015959,
+        "peers": 3
+      },
+      {
+        "figure": 3,
+        "network_player_id": 4,
+        "local_palette_hash": 4134130324,
+        "peers": 3
+      }
+    ]
+  },
+  "all_scenario_appearance_comparisons": [
+    {
+      "scenario": "bedroom",
+      "avatar": "chris",
+      "native_sprite": 1,
+      "native_palette_hash": 1209861261,
+      "passed": true
+    },
+    {
+      "scenario": "bedroom",
+      "avatar": "kris",
+      "native_sprite": 4,
+      "native_palette_hash": 2734546651,
+      "passed": true
+    },
+    {
+      "scenario": "bedroom",
+      "avatar": "crys",
+      "native_sprite": 199,
+      "native_palette_hash": 1371015959,
+      "passed": true
+    },
+    {
+      "scenario": "bedroom",
+      "avatar": "beta",
+      "native_sprite": 209,
+      "native_palette_hash": 4134130324,
+      "passed": true
+    },
+    {
+      "scenario": "game-corner",
+      "avatar": "chris",
+      "native_sprite": 1,
+      "native_palette_hash": 1209861261,
+      "passed": true
+    },
+    {
+      "scenario": "game-corner",
+      "avatar": "kris",
+      "native_sprite": 4,
+      "native_palette_hash": 2734546651,
+      "passed": true
+    },
+    {
+      "scenario": "game-corner",
+      "avatar": "crys",
+      "native_sprite": 199,
+      "native_palette_hash": 1371015959,
+      "passed": true
+    },
+    {
+      "scenario": "game-corner",
+      "avatar": "beta",
+      "native_sprite": 209,
+      "native_palette_hash": 4134130324,
+      "passed": true
+    },
+    {
+      "scenario": "goldenrod-city",
+      "avatar": "chris",
+      "native_sprite": 1,
+      "native_palette_hash": 1209861261,
+      "passed": true
+    },
+    {
+      "scenario": "goldenrod-city",
+      "avatar": "kris",
+      "native_sprite": 4,
+      "native_palette_hash": 2734546651,
+      "passed": true
+    },
+    {
+      "scenario": "goldenrod-city",
+      "avatar": "crys",
+      "native_sprite": 199,
+      "native_palette_hash": 1371015959,
+      "passed": true
+    },
+    {
+      "scenario": "goldenrod-city",
+      "avatar": "beta",
+      "native_sprite": 209,
+      "native_palette_hash": 4134130324,
+      "passed": true
+    }
+  ],
+  "host_suite": {
+    "passed": true,
+    "log": "/Volumes/Storage/Cache/mobileadapter/dev-launcher-tests/host-tests.log"
+  },
+  "flutter_widget_tests": {
+    "passed": true,
+    "count": 3
+  },
+  "flutter_native_ffi_loopback": {
+    "passed": true
+  },
+  "rom_hashes": {
+    "polishedcrystal-mobile-3.2.3.gbc": "cfc57e531f839c2a58bc202fe730ec74832c0d16a923421e9f2833a8329a8a20",
+    "polishedcrystal-3.2.3.gbc": "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e"
+  },
+  "not_validated": [
+    "physical Android with the new core and launcher",
+    "previously open protected-NPC scanline issue"
+  ],
+  "flutter_native_ffi_lan": {
+    "passed": true,
+    "interface": "en6",
+    "address": "192.168.2.25",
+    "test_listener_port": 53594,
+    "listener_released": true
+  }
+}

@@ -21,7 +21,7 @@ import time
 
 from probe_emulator import read_symbols, require
 from core_runtime import CORE_REVISION, CORE_SOURCE, RELEASE_CORE, CORE_SHA256, CPU_SHA256
-from save_scenarios import AVATARS, battery, choose, expected
+from save_scenarios import AVATARS, choose, expected, session_battery
 
 REPO = Path(__file__).resolve().parents[2]
 TOOLS = Path(__file__).resolve().parent
@@ -119,6 +119,68 @@ def config(path, values, base=""):
         text = str(value).replace("\\", "\\\\").replace('"', '\\"')
         lines.append(f'{key} = "{text}"')
     path.write_text("\n".join(lines) + "\n")
+
+
+def choose_instances(requested=None, *, maximum=4, interactive=None, ask=input):
+    if requested is not None:
+        require(1 <= requested <= maximum, f"Choose 1..{maximum} Mac game instances")
+        return requested
+    if interactive is None:
+        interactive = sys.stdin.isatty()
+    require(interactive, "Pass --instances 1..4 when stdin is not a terminal")
+    while True:
+        value = ask("How many Mac game instances? [2]: ").strip() or "2"
+        if value.isdigit() and 1 <= int(value) <= maximum:
+            return int(value)
+        print(f"Choose a number between 1 and {maximum}.")
+
+
+def adb_devices(args):
+    adb = shutil.which("adb") or str(args.sdk / "platform-tools/adb")
+    if not Path(adb).is_file():
+        return []
+    devices = output([adb, "devices"]).splitlines()[1:]
+    return [parts[0] for line in devices if len(parts := line.split()) > 1 and parts[1] == "device"]
+
+
+def choose_android(args, *, interactive=None, ask=input):
+    if args.mac_only:
+        return False
+    devices = adb_devices(args)
+    if args.serial:
+        require(args.serial in devices, "Selected ADB device is not connected and authorized")
+    if not devices:
+        require(not args.android, "No authorized Android device connected through ADB")
+        print("No authorized ADB phone detected; using Mac instances only.")
+        return False
+    if args.android:
+        return True
+    if interactive is None:
+        interactive = sys.stdin.isatty()
+    require(interactive, "Pass --android or --mac-only when stdin is not a terminal")
+    while True:
+        value = ask("Android detected. Update and open the game on it as well? [y/N]: ").strip().lower()
+        if value in ("", "n", "no"):
+            return False
+        if value in ("y", "yes"):
+            return True
+        print("Choose yes or no.")
+
+
+def player_avatars(count, first="chris"):
+    start = AVATARS.index(first)
+    return [AVATARS[(start + index) % len(AVATARS)] for index in range(count)]
+
+
+def bridge_application(args):
+    if args.bridge_app:
+        executable = args.bridge_app / "Contents/MacOS/mobile_adapter_bridge"
+    else:
+        run([sys.executable, TOOLS / "build_bridge_app.py", "--debug", "--cargo", CARGO,
+             "--flutter", args.flutter], timeout=300)
+        executable = REPO / "mobile_adapter/bridge_app/build/macos/Build/Products/Debug/mobile_adapter_bridge.app/Contents/MacOS/mobile_adapter_bridge"
+    require(executable.is_file(), "Flutter Bridge executable missing")
+    return executable
 
 
 def server_address(args):
@@ -277,8 +339,8 @@ def android_intent(package, target):
             "--es", "ROM", target + f"/{NAME}.gbc"]
 
 
-def mac_profile(args, runner, seed, address, expected_state):
-    root = args.cache / "dev-session/mac"
+def mac_profile(args, runner, seed, address, expected_state, index=1, avatar=None):
+    root = args.session_root / f"mac-{index}"
     profile(root, root)
     destination = root / f"roms/{NAME}.gbc"
     checksum = lan_rom(REPO / "polishedcrystal-mobile-3.2.3.gbc",
@@ -287,7 +349,7 @@ def mac_profile(args, runner, seed, address, expected_state):
     if save.exists():
         backup = args.cache / "dev-session/backups" / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         backup.mkdir(parents=True)
-        shutil.copyfile(save, backup / "mac.srm")
+        shutil.copyfile(save, backup / f"mac-{index}.srm")
     shutil.copyfile(seed, save)
     with (root / "prepare.log").open("w") as log:
         run([runner, args.core,
@@ -300,7 +362,7 @@ def mac_profile(args, runner, seed, address, expected_state):
     (root / "build.json").write_text(json.dumps({"endpoint": f"{address}:{PORT}",
         "rom_sha256": checksum, "core_revision": CORE_REVISION,
         "core_sha256": hashlib.sha256(args.core.read_bytes()).hexdigest(),
-        "scenario": args.scenario_record["id"], "avatar": args.mac_avatar,
+        "scenario": args.scenario_record["id"], "avatar": avatar or args.mac_avatar,
         "snapshot_regenerated": True}, indent=2) + "\n")
     return root
 
@@ -342,7 +404,7 @@ class Android:
 
 
 def deploy(args, device, mac, seed, core, runner, expected_state):
-    root = args.cache / "dev-session/android"
+    root = args.session_root / "android"
     root.mkdir(parents=True, exist_ok=True)
     existing = f"/storage/emulated/0/Android/data/{device.package}/files/retroarch.cfg"
     require(device.exists(existing), "Open RetroArch once to initialize its configuration and touch controls")
@@ -383,10 +445,8 @@ def deploy(args, device, mac, seed, core, runner, expected_state):
             previous = json.loads(device.shell("cat", stamp))
         except ValueError:
             pass
-    require(args.reinstall_core or previous == install,
-            "Android core installation is missing or changed; run once with --reinstall-core to install it explicitly")
-    if args.reinstall_core:
-        print("ANDROID CORE: explicit installation requested; RetroArch briefly opens for installation.", flush=True)
+    if args.reinstall_core or previous != install:
+        print("ANDROID CORE: installing the matching custom core; RetroArch briefly opens for installation.", flush=True)
         # Use RetroArch's own exported installer to copy the core into private storage.
         device.shell("am", "start", "-n", f"{device.package}/com.retroarch.browser.debug.CoreSideloadActivity",
                      "--es", "LIBRETRO", temporary + "/DoubleCherryGB_libretro.so")
@@ -464,61 +524,124 @@ def launch_android(device, launch):
                      "Use --reinstall-core if the installed core was replaced or removed manually.")
 
 
-def start(args, mac, address, device=None, launch=None):
-    children = []
+def stop_process(process):
+    if process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+
+
+def wait_ready(process, log, prefix, timeout=20):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if any(line.startswith(prefix) for line in log.read_text(errors="replace").splitlines()):
+            return
+        require(process.poll() is None, f"Process exited before readiness; see {log}")
+        time.sleep(.05)
+    raise ValueError(f"Process did not become ready; see {log}")
+
+
+def start(args, macs, address, device=None, launch=None):
+    """The terminal owns the server; detached GUI apps own their lifetimes."""
+    servers, windows = [], []
     android_address = None
+    logs = []
+    preserve_windows = False
     stopped = threading.Event()
-    log = (mac / "play.log").open("w")
+    session = getattr(args, "session_root", args.cache / "dev-session")
+    session.mkdir(parents=True, exist_ok=True)
     try:
-        for command, prefix in bridge_commands(args, address):
-            process = subprocess.Popen(command,
-                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
-                                   start_new_session=True)
-            children.append(process)
-            ready = process.stdout.readline().strip()
-            require(ready.startswith(prefix), f"Bridge/hosted model failed to start: {ready}")
+        commands = bridge_commands(args, address)
+        # The Flutter shell embeds the native Bridge. Only the hosted server is
+        # a terminal-owned child; never start a duplicate CLI Bridge listener.
+        for command, prefix in commands[:-1]:
+            process = subprocess.Popen(command, stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, text=True, bufsize=1, start_new_session=True)
+            servers.append(process)
+            # Bound the initial read as well as later startup checks. A child
+            # that never prints readiness must not strand the interactive tool.
+            import queue
+            readiness = queue.Queue(maxsize=1)
+            def initial_line(source=process):
+                readiness.put(source.stdout.readline().strip())
+            threading.Thread(target=initial_line, daemon=True).start()
+            try:
+                ready = readiness.get(timeout=20)
+            except queue.Empty:
+                raise ValueError("Server readiness timed out") from None
+            require(ready.startswith(prefix), f"Server failed to start: {ready}")
+            print(ready, flush=True)
             def forward(source=process):
                 for line in source.stdout:
-                    print(labelled_server_line(line, address, android_address), end="", flush=True)
+                    print(line, end="", flush=True)
             threading.Thread(target=forward, daemon=True).start()
-        print(f"BRIDGE tcp://{address}:{PORT} (fixed port {PORT}), mode={args.mode}, lobby={args.lobby}", flush=True)
-        android_address = None
+        environment = dict(os.environ, MOBILE_BRIDGE_AUTOSTART="1",
+            MOBILE_BRIDGE_PORT=str(PORT), MOBILE_BRIDGE_BIND_ADDRESS=address,
+            MOBILE_BRIDGE_LOBBY=str(args.lobby), MOBILE_BRIDGE_MODE=args.mode,
+            MOBILE_BRIDGE_ORIGIN=(args.upstream or f"ws://127.0.0.1:{args.hosted_port}"))
+        bridge_log = session / "bridge.log"
+        with bridge_log.open("w") as log:
+            bridge = subprocess.Popen([str(args.bridge_executable)], env=environment,
+                stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+        windows.append(bridge)
+        wait_ready(bridge, bridge_log, f"BRIDGE_READY {address}:{PORT} ")
+        print(f"BRIDGE tcp://{address}:{PORT}, mode={args.mode}, lobby={args.lobby}", flush=True)
         if device:
             route = device.shell("ip", "-4", "route", "get", address)
             match = re.search(r"\bsrc\s+(\S+)", route)
             android_address = match.group(1) if match else None
-            print(f"CLIENT ADDRESSES mac={address} android={android_address or 'unknown'} (labels by source IP)", flush=True)
-        children.append(subprocess.Popen([str(args.frontend), "-v", "-c", str(mac / "retroarch.cfg"),
-            "-L", str(args.core),
-            str(mac / f"roms/{NAME}.gbc")], stdout=log, stderr=subprocess.STDOUT,
-            start_new_session=True))
-        def watch_mac():
-            while not stopped.wait(0.5):
-                if all(frontend_status((mac / "play.log").read_text(errors="replace")).values()):
-                    print("MAC START confirmed: core initialized; fresh state loaded. Left Shift+Z (Select+B) joins the lobby.", flush=True)
-                    return
-        threading.Thread(target=watch_mac, daemon=True).start()
+        def forward_bridge():
+            with bridge_log.open() as stream:
+                while not stopped.is_set():
+                    line = stream.readline()
+                    if line:
+                        print(labelled_server_line(line, address, android_address), end="", flush=True)
+                    else:
+                        stopped.wait(.1)
+        threading.Thread(target=forward_bridge, daemon=True).start()
+        for index, mac in enumerate(macs, 1):
+            with (mac / "play.log").open("w") as log:
+                window = subprocess.Popen([str(args.frontend), "-v", "-c", str(mac / "retroarch.cfg"),
+                    "-L", str(args.core), str(mac / f"roms/{NAME}.gbc")],
+                    stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+            windows.append(window)
+            logs.append((index, mac / "retroarch.log", window))
         if device:
             launch_android(device, launch)
-        print("MAC READY: arrows, A=X, B=Z, Select=left Shift. Select+B joins/leaves; Select+A opens players/status.", flush=True)
-        print("MILESTONE 2: join on both clients, then move one tile to see the other avatar. Select+B+A runs the echo diagnostic.", flush=True)
-        print("Press Ctrl+C here to stop this server and Mac game instance.", flush=True)
-        while all(child.poll() is None for child in children):
-            time.sleep(0.25)
-        require(all(child.returncode in (None, 0, -signal.SIGINT, -signal.SIGTERM) for child in children),
-                "Server or Mac frontend exited with an error; see play.log")
-        print("Development session stopped.", flush=True)
+        preserve_windows = True
+        print(f"MAC READY: {len(macs)} independent windows at 5% volume. Arrows, A=X, B=Z, Select=left Shift.", flush=True)
+        print("Select+B joins/leaves; move apart to see initially overlapping players.", flush=True)
+        print("Ctrl+C stops only the terminal-owned server. Close Bridge/emulator windows yourself.", flush=True)
+        if servers:
+            print(f"SERVER ws://127.0.0.1:{args.hosted_port}; its port is released on Ctrl+C. Bridge TCP port {PORT} stays active until its window closes.", flush=True)
+        else:
+            print("This mode has no terminal-owned local server; Ctrl+C ends log monitoring only.", flush=True)
+        confirmed = set()
+        while not servers or all(server.poll() is None for server in servers):
+            for index, path, window in logs:
+                if index not in confirmed and path.exists() and all(frontend_status(path.read_text(errors="replace")).values()):
+                    confirmed.add(index)
+                    print(f"MAC {index} START confirmed: core initialized; fresh state loaded.", flush=True)
+                require(window.poll() in (None, 0), f"Mac {index} frontend exited with an error; see {path}")
+            time.sleep(.25)
+        require(all(server.returncode == 0 for server in servers), "Server exited with an error")
+    except KeyboardInterrupt:
+        preserve_windows = True
+        print("Server stopped; Bridge and emulator windows remain open.", flush=True)
     finally:
         stopped.set()
-        for child in reversed(children):
-            if child.poll() is None:
-                child.terminate()
-                try:
-                    child.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    child.kill()
-                    child.wait()
-        log.close()
+        for server in reversed(servers):
+            stop_process(server)
+            if server.stdout:
+                server.stdout.close()
+        if not preserve_windows:
+            for window in reversed(windows):
+                stop_process(window)
+        if servers:
+            print(f"Server port {args.hosted_port} released: {port_available('127.0.0.1', args.hosted_port)}", flush=True)
 
 
 def bridge_commands(args, address):
@@ -541,19 +664,23 @@ def bridge_commands(args, address):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scenario", help="Starting save: bedroom, game-corner or goldenrod-city; otherwise ask interactively")
-    parser.add_argument("--mac-avatar", choices=AVATARS, default="chris")
-    parser.add_argument("--mode", choices=("local", "hosted", "remote"), default="local",
+    parser.add_argument("--mac-avatar", choices=AVATARS, default="chris", help="First Mac figure; later instances cycle through the remaining figures")
+    parser.add_argument("--instances", type=int, help="Number of Mac game windows (1..4); otherwise ask")
+    parser.add_argument("--android", action="store_true", help="Update and open a detected Android without asking")
+    parser.add_argument("--flutter", default=shutil.which("flutter"), help="Flutter executable for the native Bridge shell")
+    parser.add_argument("--bridge-app", type=Path, help="Use an already built Flutter Bridge app bundle")
+    parser.add_argument("--mode", choices=("local", "hosted", "remote"), default="hosted",
                         help="Embedded local lobby, local Worker/DO simulation, or an external WS origin")
     parser.add_argument("--lobby", type=int, default=1)
     parser.add_argument("--upstream", help="WSS origin for remote mode, or WS loopback for a local host")
     parser.add_argument("--hosted-port", type=int, default=8787)
     parser.add_argument("--test-one-way-delay-ms", type=int, default=0, help="Hosted-mode test delay, 0..1000ms per direction")
-    parser.add_argument("--android-avatar", choices=AVATARS, default="kris")
+    parser.add_argument("--android-avatar", choices=AVATARS, help="Phone figure; defaults to the next unused figure")
     parser.add_argument("--server-ip", help="Mac LAN IPv4; otherwise detect its default interface")
     parser.add_argument("--interface", help="Network interface to use instead of the default route")
     parser.add_argument("--serial", help="ADB device serial when several devices are connected")
     parser.add_argument("--package", choices=PACKAGES)
-    parser.add_argument("--reinstall-core", action="store_true", help="Explicitly install the Android core; normal starts never open its installer")
+    parser.add_argument("--reinstall-core", action="store_true", help="Force Android core reinstallation; otherwise install only when its core/app stamp changed")
     parser.add_argument("--mac-only", action="store_true", help="Prepare/start Mac without an Android device")
     parser.add_argument("--prepare-only", action="store_true", help="Prepare artifacts without starting the server or GUI")
     parser.add_argument("--core", type=Path, default=RELEASE_CORE, help="Checksum-pinned MBC30 macOS library")
@@ -570,7 +697,17 @@ def main():
     require(not args.upstream or args.mode == "remote", "--upstream requires remote mode")
     require(args.mode != "remote" or args.upstream, "Remote mode requires --upstream")
     args.scenario_record = choose(args.scenario)
-    print(f"SCENARIO: {args.scenario_record['label']}; Mac={args.mac_avatar}, Android={args.android_avatar}", flush=True)
+    args.instances = choose_instances(args.instances)
+    require(not (args.mac_only and args.android), "--android and --mac-only are mutually exclusive")
+    use_android = choose_android(args)
+    if args.instances + int(use_android) > 4:
+        require(sys.stdin.isatty(), "Four-player limit: use at most three Mac instances with Android")
+        print("Android takes one of the four player slots. Choose up to three Mac instances.")
+        args.instances = choose_instances(maximum=3)
+    args.mac_only = not use_android
+    avatars = player_avatars(args.instances, args.mac_avatar)
+    args.android_avatar = args.android_avatar or player_avatars(args.instances + int(use_android), args.mac_avatar)[-1]
+    print(f"SCENARIO: {args.scenario_record['label']}; Mac={','.join(avatars)}; Android={args.android_avatar if use_android else 'off'}", flush=True)
     require(sys.platform == "darwin", "This launcher is for the configured native macOS host")
     require(args.frontend.is_file(), "RetroArch frontend missing; pass --frontend")
     address = server_address(args)
@@ -581,23 +718,31 @@ def main():
     device = None if args.mac_only else Android(args)
     if device:
         device.shell("am", "force-stop", device.package)
-    (args.cache / "dev-session").mkdir(parents=True, exist_ok=True)
+    args.session_root = args.cache / "dev-session/runs" / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    args.session_root.mkdir(parents=True, exist_ok=False)
     print(f"Preparing current build for tcp://{address}:{PORT} ...", flush=True)
     run(["make", "-j4", "mobile", f"RGBDS={args.cache}/rgbds-1.0.4/"], cwd=REPO)
     run([CARGO, "build", "--locked", "--manifest-path", REPO / "mobile_adapter/server/Cargo.toml"], cwd=REPO)
+    if not args.prepare_only:
+        require(args.bridge_app or args.flutter, "Install Flutter or pass --flutter /path/to/flutter")
+        args.bridge_executable = bridge_application(args)
     runner = native_tools(args)
     symbols = read_symbols(REPO / "polishedcrystal-mobile-3.2.3.sym")
-    seed = battery(args.scenario_record, args.mac_avatar, symbols)
-    mac = mac_profile(args, runner, seed, address, expected(args.scenario_record, args.mac_avatar))
+    macs = []
+    for index, avatar in enumerate(avatars, 1):
+        seed = session_battery(args.scenario_record, avatar, symbols,
+            args.session_root / f"seeds/mac-{index}.sav", 10000 + index)
+        macs.append(mac_profile(args, runner, seed, address, expected(args.scenario_record, avatar), index, avatar))
     launch = None
     if device:
         core, android_runner = native_tools(args, android=True)
-        phone_seed = battery(args.scenario_record, args.android_avatar, symbols)
-        launch = deploy(args, device, mac, phone_seed, core, android_runner,
+        phone_seed = session_battery(args.scenario_record, args.android_avatar, symbols,
+            args.session_root / "seeds/android.sav", 10000 + args.instances + 1)
+        launch = deploy(args, device, macs[0], phone_seed, core, android_runner,
                         expected(args.scenario_record, args.android_avatar))
-    print(f"Prepared ROM + battery save + fresh start snapshot: {mac}", flush=True)
+    print("Prepared ROM + battery save + fresh start snapshot: " + ", ".join(map(str, macs)), flush=True)
     if not args.prepare_only:
-        start(args, mac, address, device, launch)
+        start(args, macs, address, device, launch)
 
 
 def entrypoint():

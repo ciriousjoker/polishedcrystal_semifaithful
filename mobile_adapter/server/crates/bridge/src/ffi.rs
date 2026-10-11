@@ -26,7 +26,16 @@ fn start(port: u16, room: u16, mode: Mode) -> io::Result<()> {
         return Err(io::Error::other("Invalid port or room"));
     }
     let config = Config {
-        bind: ([127, 0, 0, 1], port).into(),
+        // Development launchers may expose the household Bridge on a selected
+        // LAN interface. Standalone app launches remain loopback-only.
+        bind: (
+            std::env::var("MOBILE_BRIDGE_BIND_ADDRESS")
+                .unwrap_or_else(|_| "127.0.0.1".into())
+                .parse::<std::net::Ipv4Addr>()
+                .map_err(io::Error::other)?,
+            port,
+        )
+            .into(),
         lobby: room,
         mode,
     };

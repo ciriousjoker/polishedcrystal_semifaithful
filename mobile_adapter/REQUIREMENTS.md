@@ -136,6 +136,11 @@ fingerprints and finite script-graph checks gate every mobile build.
   escapable through the same button combination when restored without a usable
   Mobile Adapter, including an emulator build without libmobile.
 
+- **R6 MUST:** Multiple players may have the same ordinary trainer ID, including
+  all four members of one lobby. Trainer IDs are game data, never network
+  identities, authentication credentials, routing keys or unique player keys.
+  Duplicate IDs must not merge players, misroute messages or invalidate saves.
+
 The user explicitly clarified R5: state-format compatibility is already assumed.
 The receiving emulator must successfully load the state; libmobile/adapter
 availability may differ. Generic conversion between incompatible emulator state

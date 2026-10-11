@@ -6,24 +6,31 @@ On the configured development host, run this from any directory:
 python3 /Volumes/Storage/Cache/codex_worktrees/mobileadapter/polishedcrystal/mobile_adapter/tools/dev_session.py
 ```
 
-At startup, choose the ordinary save scenario for both devices:
+At startup, choose the ordinary starting scenario (bedroom, crowded Game Corner,
+or Goldenrod City), then the number of **Mac** game windows (1..4, default 2).
+If an authorized phone is detected through ADB, the launcher asks whether to
+update and open Android too. Android adds one player, leaving at most three Mac
+slots. With no phone, the Android question is omitted.
 
-1. Starter bedroom.
-2. Crowded Goldenrod Game Corner with wandering patrons.
-3. Goldenrod City with wandering and patrolling NPCs.
+Figures cycle Chris, Kris, Crys, Beta. `--mac-avatar` chooses the first one and
+`--android-avatar` optionally overrides the next unused phone figure. All session
+batteries share the same progress, name, party, clock and initial position. Only
+figure, trainer ID and ordinary save checksums differ. Different trainer IDs are
+a fixture convenience; duplicate IDs must work too. Fresh emulator snapshots
+are regenerated from these batteries with the current ROM and exact device core.
+Every run gets independent timestamped Mac profiles.
 
-Press Enter for the bedroom. The default figures are Chris on Mac and Kris on
-Android. Each uses its own normal character-choice save. To skip the prompt or
-choose different figures, use e.g. `--scenario game-corner --mac-avatar crys
---android-avatar beta`. Unattended starts require an explicit `--scenario`.
-The portable saves and their provenance are committed in
-[tests/scenarios](tests/scenarios/README.md). Stable deployed filenames stay the
-same regardless of the selected scene. Each update resets that scene's initial
-progress and regenerates platform-specific auto-states.
+To skip prompts, use `--scenario game-corner --instances 2 --mac-only`, or replace
+`--mac-only` with `--android` to include an authorized device. The portable source
+saves are committed in [tests/scenarios](tests/scenarios/README.md). Deployed
+Android filenames stay stable. Each update resets the chosen test scenario.
 
-The command builds the current feature ROM and Rust Bridge, detects the Mac's
-LAN IPv4 address, prepares an isolated Mac game, updates the connected Android
-phone through ADB, and starts both RetroArch instances with DoubleCherryGB.
+The command builds the current MBC30 feature ROM, Rust server/Bridge and Flutter
+shell. It starts the local Worker/lobby server on loopback port **8787**, opens
+one shared Flutter Bridge, and launches all selected RetroArch windows using the
+custom checksum-pinned MBC30 DoubleCherryGB core. Android's matching custom core
+is installed if its installation stamp changed; ordinary launches skip the
+installer. `--reinstall-core` forces reinstallation.
 The Bridge binds the detected LAN address on fixed TCP port **17423** and prints
 `BRIDGE tcp://<address>:17423`. Both ROM copies use this same endpoint. The ROM's
 small feature-owned endpoint table and cartridge checksum are adapted in a copy
@@ -144,9 +151,9 @@ replace this core, use the same flag once. No automatic installer restart is
 part of the normal command.
 
 For diagnosis, the exact generated direct-start ADB command is in the host
-cache's `dev-session/android/launch-adb.txt`. Android frontend logs are in the
+cache's `dev-session/runs/<run>/android/launch-adb.txt`. Android frontend logs are in the
 Download folder's `retroarch.log`; Mac preparation and frontend logs are in
-`dev-session/mac`. Core debug logging is enabled in these isolated profiles,
+`dev-session/runs/<run>/mac-<number>`. Core debug logging is enabled in these isolated profiles,
 including libmobile's TCP connect, outgoing request and incoming reply bytes.
 The script accepts `--server-ip 192.168.x.y` or
 `--interface en6` to override automatic LAN detection. A DHCP change requires
@@ -155,15 +162,24 @@ does not change.
 
 ## Shutdown and verification
 
-Keep the terminal open while testing. Ctrl+C stops the server and this Mac game
-instance. Stop the previous session before rerunning the command or the automatic
-integration suite. If the fixed port is occupied, the command lists its listener PID/name and
-asks before stopping it with SIGTERM. The default is No; a noninteractive
-launch never kills it. Ctrl+C is a normal stop and releases this session's
-server and Mac frontend.
-`--mac-only` runs without Android; `--prepare-only` prepares artifacts without
-starting the games or server. Only explicitly requesting `--reinstall-core`
-opens the Android installer in preparation mode.
+Keep the terminal open to see server logs and Bridge connection/join/disconnect
+logs. **Ctrl+C stops only the local server and frees its port 8787.** It leaves
+the Flutter Bridge and emulator windows running. The Bridge keeps TCP port 17423
+until you stop/close its window; it waits to reconnect after the server stops.
+Close the emulator windows yourself when finished.
+
+If a port is occupied on the next launch, the command lists its listener PID/name
+and asks before stopping it with SIGTERM. The default is No; noninteractive runs
+never kill an existing listener. Each run's profiles are separate, so old open
+emulators cannot overwrite a newly prepared Mac instance's save.
+`--prepare-only` prepares the artifacts without opening games or listeners.
+`--mode local` uses only the Bridge's embedded lobby; `--mode remote --upstream
+wss://your-origin.example` uses an external server. Ctrl+C in those modes ends
+terminal monitoring and leaves the GUI apps running.
+
+The earlier verification records below describe their dated builds. Current
+MBC30 phone validation is still deferred; the updated native Mac workflow is
+validated separately in the plan.
 
 Verified on 2026-10-10 with native Apple M2 macOS and a real Pixel 9 Pro using
 ARM64 RetroArch 1.19.1. Both platforms booted their regenerated states. Separate

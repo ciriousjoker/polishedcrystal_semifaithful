@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from probe_emulator import read_symbols, validate_battery
+
 import dev_session
 import save_scenarios as scenes
 
@@ -25,6 +27,43 @@ class ScenarioContracts(unittest.TestCase):
                 self.assertEqual(record["checksums"]["s"], record["checksums"]["sBackup"])
                 hashes.add(record["sha256"])
             self.assertEqual(len(hashes), 4)
+
+    def test_session_saves_differ_only_in_figure_id_and_checksums(self):
+        symbols = read_symbols(dev_session.REPO / "polishedcrystal-mobile-3.2.3.sym")
+        def offset(name):
+            bank, address = symbols[name]
+            return bank * 8192 + address - 0xa000
+        allowed = set()
+        for prefix in ("s", "sBackup"):
+            start = offset(prefix + "PlayerData")
+            allowed.update(range(start, start + 2))
+            allowed.update(start + symbols[name][1] - symbols["wPlayerData"][1]
+                           for name in scenes.APPEARANCE_FIELDS)
+            checksum = offset(prefix + "Checksum")
+            allowed.update(range(checksum, checksum + 2))
+        with tempfile.TemporaryDirectory() as folder:
+            for entry in scenes.catalog():
+                source = scenes.battery(entry, "chris", symbols).read_bytes()
+                for index, avatar in enumerate(scenes.AVATARS):
+                    path = Path(folder) / f"{entry['id']}-{avatar}.sav"
+                    scenes.session_battery(entry, avatar, symbols, path, 10001 + index)
+                    result = path.read_bytes()
+                    changed = {i for i, (a, b) in enumerate(zip(source, result)) if a != b}
+                    self.assertTrue(changed <= allowed)
+                    validate_battery(path, symbols)
+                    for prefix in ("s", "sBackup"):
+                        start = offset(prefix + "PlayerData")
+                        self.assertEqual(result[start:start + 2], (10001 + index).to_bytes(2, "big"))
+                        self.assertEqual(result[start + 2], index)
+
+    def test_duplicate_trainer_ids_are_supported_by_fixture_generation(self):
+        symbols = read_symbols(dev_session.REPO / "polishedcrystal-mobile-3.2.3.sym")
+        with tempfile.TemporaryDirectory() as folder:
+            for avatar in scenes.AVATARS:
+                path = scenes.session_battery(scenes.choose("bedroom"), avatar, symbols,
+                    Path(folder) / f"{avatar}.sav", 12345)
+                validate_battery(path, symbols)
+                self.assertEqual(path.read_bytes()[0x2008:0x200a], bytes((0x30, 0x39)))
 
     def test_prompt_retries_bad_choice_and_accepts_number_or_id(self):
         replies = iter(["0", "four", "2"])

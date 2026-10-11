@@ -49,19 +49,45 @@ From this worktree:
 python3 mobile_adapter/tools/dev_session.py
 ```
 
-The launcher asks for bedroom, crowded Game Corner or Goldenrod City saves and
-uses Chris on Mac and Kris on Android by default. It builds the ROM and Rust
-Bridge, starts the Mac at 5% volume, updates stable Android filenames through ADB,
-and starts RetroArch with the correct core, intent and freshly generated state.
-Ctrl+C cleans up; an occupied port requires approval before its listener is stopped.
-See [MANUAL_TESTING.md](MANUAL_TESTING.md) for device prerequisites and shortcuts.
+The launcher asks, in order, for a starting scenario and the number of **Mac**
+game windows (1..4, default 2). It detects authorized ADB devices and asks whether
+to update/open Android only when a device is available. Android adds one player,
+so at most three Mac instances may accompany it. Offline/unauthorized devices do
+not trigger the question. `--serial` selects among multiple authorized devices.
 
-Use `--mac-only --scenario bedroom` without a phone. Local mode embeds the owner.
-`--mode hosted --test-one-way-delay-ms 50` starts the separate local router and
-lobby model with approximately 100ms added RTT. `--mode remote --upstream
-wss://your-origin.example` selects a hosted origin. The development port is 17423.
-Phone development currently reaches the Mac over LAN; a device-local Android
-Bridge and background-service packaging are future delivery work.
+All instances use the same scenario's progress, party, name, clock and position.
+The development fixtures change only the selected figure, trainer ID and ordinary
+main/backup checksums. Mac figures cycle Chris, Kris, Crys, Beta, starting at
+`--mac-avatar`; Android takes the next figure unless `--android-avatar` is given.
+IDs 10001..10004 differ for convenience, but equal trainer IDs are fully supported
+and are never network identities. Every instance gets its own save and fresh
+core snapshot in a new timestamped run directory, so an older open emulator
+cannot overwrite a newly prepared instance's save.
+
+By default, the command builds the ROM, native Rust engine and Flutter shell;
+starts the local Worker/lobby simulator on **8787**; auto-connects the separate
+Flutter Bridge on **17423**; opens the requested RetroArch windows with the
+checksum-pinned custom MBC30 DoubleCherryGB core at 5% volume; and optionally
+updates/opens Android with the existing stable filenames and ES-DE-style intent.
+Missing/outdated Android cores are installed as part of the approved update;
+unchanged core/app stamps skip installation. `--reinstall-core` forces it.
+
+Server logs and Bridge connection/join/disconnect logs appear in the terminal.
+**Ctrl+C stops only the local server and frees port 8787.** Bridge and emulator
+windows remain open. The Bridge's emulator TCP port 17423 remains active until
+you stop/close the Bridge. With the server stopped, it waits to reconnect. Close
+emulator windows yourself. An occupied port still requires interactive approval
+before its identified listener is stopped.
+
+Use `--mac-only --instances 2 --scenario bedroom` for an unattended Mac launch.
+`--prepare-only` generates artifacts without opening GUIs/listeners.
+`--mode hosted --test-one-way-delay-ms 50` adds approximately 100ms RTT.
+`--mode local` embeds the lobby in the Bridge without a separate server;
+`--mode remote --upstream wss://your-origin.example` uses an external server.
+In these two modes Ctrl+C ends terminal monitoring only.
+Phone development reaches the Mac over LAN. A device-local Android Bridge and
+background-service packaging remain future delivery work.
+See [MANUAL_TESTING.md](MANUAL_TESTING.md) for device prerequisites and shortcuts.
 
 ## Build and Bridge app
 

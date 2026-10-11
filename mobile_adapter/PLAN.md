@@ -1,5 +1,61 @@
 # Mobile Adapter multiplayer plan
 
+## 2026-10-12: interactive multi-window development launcher
+
+The single Python command now asks for scenario, Mac instance count (1..4,
+default 2), and an Android update/open choice only when ADB reports an authorized
+device. Android adds a player; selecting four Macs plus Android re-prompts for
+at most three Macs. Explicit CLI switches keep autonomous runs noninteractive.
+
+The default is the local Worker/lobby simulation: the terminal owns the Rust
+hosted server on loopback port 8787. A detached Flutter window embeds the native
+Rust Bridge, listens on the selected LAN address at stable TCP port 17423, and
+automatically joins the hosted origin. It manages all selected emulator streams
+in one household session. Mac windows use the checksum-pinned custom MBC30 core
+through RetroArch, each at 5% volume. Logs from server and Bridge are visible in
+the terminal; each GUI keeps its own log file after the terminal command exits.
+
+Ctrl+C stops only the owned hosted server and releases its port. Bridge and
+emulator windows remain open until the user closes them. The Bridge's separate
+TCP listener remains active while its window is open. Local embedded and remote
+modes have no terminal-owned server; Ctrl+C stops monitoring only. Existing port
+owners still require interactive approval. A new timestamped profile per run
+and Mac instance protects saves belonging to older open emulator windows.
+
+Session batteries clone the same validated Chris scenario, preserving party,
+progress, name, clock and coordinates. Allowed changes are trainer ID, seven
+native appearance bytes and ordinary main/backup checksums. Appearance includes
+`wPlayerGender`, `wPlayerSprite`, `wPlayerObjectSprite`, `wPlayerObjectPalette`,
+`wPlayerPalIndex`, `wLoadedObjPal0` and `wNeededPalIndex`. Changing only gender
+leaves stale native colors in a persisted player object; native palette tests
+caught that and require the full appearance mapping. This transformation is
+host-side test-fixture preparation. Production save code and committed original
+scenario batteries are unchanged. Every snapshot is regenerated with the current
+ROM and the exact platform core. Android core installation is automatic only
+when the approved update detects a missing/changed core/app stamp, or when forced.
+
+New **R6 MUST**: ordinary trainer IDs may collide between any or all players.
+Network identity, authorization and routing must remain independent of them.
+The explicit `duplicate-ids` native acceptance case uses four figures with trainer
+ID 12345 and checks distinct server-assigned player identities, remote native
+sprite/color equality and the Start-menu lifecycle. It is part of the default
+milestone-2 suite. `probe_session_saves.py` boots all 12 normalized batteries and
+compares their native player sprite and hardware colors with the original ordinary
+character-choice saves, while host tests enforce the exact allowed byte delta.
+
+Validation: host/assembly/Rust suite passes; Flutter widget autostart and native
+FFI tests pass on loopback and the actual LAN interface; all 12 scenario/figure native comparisons pass; the four-identical
+trainer-ID acceptance passes. Four real Mac frontend windows and one real Flutter
+Bridge launched together, with four separate lobby joins visible in logs. Terminal
+Ctrl+C exited successfully and left all five GUI processes alive while releasing
+the server socket. The final appearance fixture revision was also launched with
+two real frontend windows, both reporting successful current-core auto-state load.
+No feature or native game assembly changed; enabled and disabled ROM hashes remain
+those of the MBC30 migration. Evidence is in `research/dev-launcher-evidence.json`.
+Physical Android remains unavailable; no new device validation is claimed. This
+launcher work does not resolve the existing protected-NPC scanline blocker.
+
+
 Last updated: 2026-10-12.
 
 Latest footprint directive (2026-10-12): the user approves a 4 MiB MBC30

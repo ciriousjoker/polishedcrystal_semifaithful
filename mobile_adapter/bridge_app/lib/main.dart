@@ -11,13 +11,25 @@ void main() {
   } catch (failure) {
     error = failure.toString();
   }
-  runApp(BridgeApp(engine: engine, startupError: error));
+  runApp(
+    BridgeApp(
+      engine: engine,
+      startupError: error,
+      launchEnvironment: Platform.environment,
+    ),
+  );
 }
 
 class BridgeApp extends StatelessWidget {
-  const BridgeApp({super.key, required this.engine, this.startupError});
+  const BridgeApp({
+    super.key,
+    required this.engine,
+    this.startupError,
+    this.launchEnvironment = const {},
+  });
   final BridgeEngine? engine;
   final String? startupError;
+  final Map<String, String> launchEnvironment;
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'Polished Crystal Bridge',
@@ -26,14 +38,24 @@ class BridgeApp extends StatelessWidget {
       colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff286153)),
       useMaterial3: true,
     ),
-    home: BridgePage(engine: engine, startupError: startupError),
+    home: BridgePage(
+      engine: engine,
+      startupError: startupError,
+      launchEnvironment: launchEnvironment,
+    ),
   );
 }
 
 class BridgePage extends StatefulWidget {
-  const BridgePage({super.key, required this.engine, this.startupError});
+  const BridgePage({
+    super.key,
+    required this.engine,
+    this.startupError,
+    this.launchEnvironment = const {},
+  });
   final BridgeEngine? engine;
   final String? startupError;
+  final Map<String, String> launchEnvironment;
   @override
   State<BridgePage> createState() => _BridgePageState();
 }
@@ -47,11 +69,22 @@ class _BridgePageState extends State<BridgePage> {
   String? error;
   Timer? timer;
   int get port =>
-      int.tryParse(Platform.environment['MOBILE_BRIDGE_PORT'] ?? '') ?? 17423;
+      int.tryParse(widget.launchEnvironment['MOBILE_BRIDGE_PORT'] ?? '') ??
+      17423;
   @override
   void initState() {
     super.initState();
     error = widget.startupError;
+    final environment = widget.launchEnvironment;
+    room.text = environment['MOBILE_BRIDGE_LOBBY'] ?? '1';
+    origin.text = environment['MOBILE_BRIDGE_ORIGIN'] ?? 'ws://127.0.0.1:8787';
+    internet = (environment['MOBILE_BRIDGE_MODE'] ?? 'local') != 'local';
+    if (environment['MOBILE_BRIDGE_AUTOSTART'] == '1' &&
+        widget.engine != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) start();
+      });
+    }
     timer = Timer.periodic(const Duration(milliseconds: 250), (_) {
       if (!mounted || !running) {
         return;
@@ -168,7 +201,9 @@ class _BridgePageState extends State<BridgePage> {
                   ),
                   const SizedBox(height: 20),
                 ],
-                Text('Emulator address: 127.0.0.1:$port'),
+                Text(
+                  'Emulator address: ${widget.launchEnvironment['MOBILE_BRIDGE_BIND_ADDRESS'] ?? '127.0.0.1'}:$port',
+                ),
                 const SizedBox(height: 8),
                 Text(
                   running

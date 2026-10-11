@@ -11,13 +11,14 @@ APP = ROOT / "mobile_adapter/bridge_app"
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--flutter", default=shutil.which("flutter"))
+    parser.add_argument("--cargo", default=shutil.which("cargo") or "/Volumes/Storage/Cache/cargo/bin/cargo")
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--run", action="store_true")
     args = parser.parse_args()
     if not args.flutter:
         parser.error("Install Flutter or pass --flutter /path/to/flutter")
     profile = "debug" if args.debug else "release"
-    command = ["cargo", "build", "--locked", "--manifest-path", str(ROOT / "mobile_adapter/server/Cargo.toml"),
+    command = [args.cargo, "build", "--locked", "--manifest-path", str(ROOT / "mobile_adapter/server/Cargo.toml"),
                "-p", "mobile-bridge", "--lib"]
     if not args.debug:
         command += ["--release"]

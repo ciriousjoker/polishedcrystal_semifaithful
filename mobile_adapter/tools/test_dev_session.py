@@ -109,47 +109,59 @@ class DeploymentContracts(unittest.TestCase):
         self.assertIn("cancelled", output.call_args.args[0])
         self.assertNotIn("failed", output.call_args.args[0])
 
-    def test_terminal_ctrl_c_stops_both_owned_children_with_success_exit(self):
+    def test_terminal_ctrl_c_releases_server_but_keeps_gui_processes_alive(self):
         with tempfile.TemporaryDirectory() as folder, socket.socket() as reservation:
             root = Path(folder)
             reservation.bind(("127.0.0.1", 0))
             port = reservation.getsockname()[1]
             reservation.close()
-            server = root / "mobile_adapter/server/target/debug/mobile-bridge"
+            server = root / "mobile_adapter/server/target/debug/mobile-hosted"
             server.parent.mkdir(parents=True)
             server.write_text(f'#!{sys.executable}\nimport os, socket, sys, time\n'
                               f'open({str(root / "server.pid")!r}, "w").write(str(os.getpid()))\n'
                               'address, port = sys.argv[2].split(":")\n'
                               'listener = socket.socket()\nlistener.bind((address, int(port)))\nlistener.listen()\n'
-                              'print("BRIDGE_READY " + sys.argv[2] + " mode=local", flush=True)\ntime.sleep(30)\n')
+                              'print("MOBILE_HOSTED_READY " + sys.argv[2] + " ready", flush=True)\ntime.sleep(30)\n')
+            bridge = root / "bridge"
+            bridge.write_text(f'#!{sys.executable}\nimport os, time\n'
+                              f'open({str(root / "bridge.pid")!r}, "w").write(str(os.getpid()))\n'
+                              'print("BRIDGE_READY 127.0.0.1:17423 mode=internet", flush=True)\ntime.sleep(30)\n')
             frontend = root / "frontend"
             frontend.write_text(f'#!{sys.executable}\nimport os, time\n'
-                                f'open({str(root / "frontend.pid")!r}, "w").write(str(os.getpid()))\ntime.sleep(30)\n')
-            server.chmod(0o755)
-            frontend.chmod(0o755)
+                                'from pathlib import Path\n'
+                                'root = Path(__import__("sys").argv[3]).parent\n'
+                                '(root / "frontend.pid").write_text(str(os.getpid()))\ntime.sleep(30)\n')
+            for file in (server, frontend, bridge):
+                file.chmod(0o755)
+            macs = [root / "mac-1", root / "mac-2"]
+            for mac in macs:
+                mac.mkdir()
             code = (f'import sys; sys.path.insert(0, {str(Path(session.__file__).parent)!r}); '
                     'import dev_session as s; from pathlib import Path; from types import SimpleNamespace; '
-                    f's.REPO=Path({str(root)!r}); s.PORT={port}; '
-                    f's.main=lambda: s.start(SimpleNamespace(mode="local", lobby=1, core=s.RELEASE_CORE, frontend=Path({str(frontend)!r}), cache=Path({str(root)!r})), Path({str(root)!r}), "127.0.0.1"); '
+                    f's.REPO=Path({str(root)!r}); '
+                    f's.main=lambda: s.start(SimpleNamespace(mode="hosted", lobby=1, upstream=None, hosted_port={port}, test_one_way_delay_ms=0, '
+                    f'bridge_executable=Path({str(bridge)!r}), core=s.RELEASE_CORE, frontend=Path({str(frontend)!r}), cache=Path({str(root)!r})), '
+                    f'[Path(mac) for mac in {list(map(str, macs))!r}], "127.0.0.1"); '
                     'sys.exit(s.entrypoint())')
             parent = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE,
                                       stderr=subprocess.STDOUT, text=True, start_new_session=True)
             children = []
             try:
                 deadline = time.monotonic() + 5
-                while len(children) < 2 and time.monotonic() < deadline:
-                    children = [int(path.read_text()) for path in root.glob("*.pid") if path.read_text()]
+                while len(children) < 4 and time.monotonic() < deadline:
+                    children = [int(path.read_text()) for path in root.rglob("*.pid") if path.read_text()]
                     time.sleep(.02)
-                self.assertEqual(len(children), 2)
+                self.assertEqual(len(children), 4)
                 os.killpg(parent.pid, signal.SIGINT)
                 output, _ = parent.communicate(timeout=8)
                 self.assertEqual(parent.returncode, 0, output)
-                self.assertIn("Development session stopped.", output)
+                self.assertIn("windows remain open", output)
                 self.assertNotIn("failed", output.lower())
                 self.assertTrue(session.port_available("127.0.0.1", port))
-                for pid in children:
-                    with self.assertRaises(ProcessLookupError):
-                        os.kill(pid, 0)
+                with self.assertRaises(ProcessLookupError):
+                    os.kill(int((root / "server.pid").read_text()), 0)
+                for path in [root / "bridge.pid", *[mac / "frontend.pid" for mac in macs]]:
+                    os.kill(int(path.read_text()), 0)
             finally:
                 if parent.poll() is None:
                     parent.kill()
@@ -159,6 +171,45 @@ class DeploymentContracts(unittest.TestCase):
                         os.kill(pid, signal.SIGTERM)
                     except ProcessLookupError:
                         pass
+
+    def test_instance_prompt_retries_and_unattended_requires_an_explicit_count(self):
+        replies = iter(["0", "five", "5", "3"])
+        with patch("builtins.print"):
+            self.assertEqual(session.choose_instances(interactive=True, ask=lambda _: next(replies)), 3)
+        self.assertEqual(session.choose_instances(interactive=True, ask=lambda _: ""), 2)
+        self.assertEqual(session.choose_instances(4, interactive=False), 4)
+        with self.assertRaisesRegex(ValueError, "--instances"):
+            session.choose_instances(interactive=False)
+        for value in (0, 5):
+            with self.assertRaises(ValueError):
+                session.choose_instances(value)
+        self.assertEqual(session.player_avatars(4), list(session.AVATARS))
+        self.assertEqual(session.player_avatars(2, "beta"), ["beta", "chris"])
+
+    def test_android_prompt_only_appears_for_authorized_devices(self):
+        args = SimpleNamespace(mac_only=False, android=False, serial=None)
+        with patch.object(session, "adb_devices", return_value=[]), patch("builtins.print"):
+            self.assertFalse(session.choose_android(args, interactive=True, ask=lambda _: self.fail("Unexpected phone prompt")))
+        with patch.object(session, "adb_devices", return_value=["pixel"]):
+            self.assertTrue(session.choose_android(args, interactive=True, ask=lambda _: "yes"))
+            self.assertFalse(session.choose_android(args, interactive=True, ask=lambda _: ""))
+            with self.assertRaisesRegex(ValueError, "--android"):
+                session.choose_android(args, interactive=False)
+            args.serial = "missing"
+            with self.assertRaisesRegex(ValueError, "not connected"):
+                session.choose_android(args, interactive=True)
+            args.serial = None
+            args.android = True
+            self.assertTrue(session.choose_android(args, interactive=False))
+        args.mac_only = True
+        with patch.object(session, "adb_devices") as detect:
+            self.assertFalse(session.choose_android(args, interactive=False))
+            detect.assert_not_called()
+
+    def test_adb_discovery_ignores_offline_and_unauthorized_devices(self):
+        args = SimpleNamespace(sdk=Path("/unavailable"))
+        with patch.object(session.shutil, "which", return_value=sys.executable), patch.object(session, "output", return_value="List of devices attached\nready\tdevice\noffline\toffline\nlocked\tunauthorized\n"):
+            self.assertEqual(session.adb_devices(args), ["ready"])
 
     def test_lan_patch_changes_only_owned_endpoint_and_global_checksum(self):
         with tempfile.TemporaryDirectory() as folder:
