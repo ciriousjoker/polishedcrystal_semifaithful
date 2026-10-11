@@ -12,6 +12,11 @@ four-player coexistence is its sole absolute feature requirement. Other gameplay
 features remain desired, subject to feasibility and discussion. Foundational
 requirements remain binding. This update is planning only, not an instruction to
 implement the new wishlist or deploy cloud infrastructure.
+The user subsequently selected a local TCP-to-WebSocket bridge on each device
+plus Cloudflare Workers/Durable Objects as the critical hosting direction. Keep
+the working direct-TCP development workflow until its replacement is tested.
+The current milestone-2 checklist explicitly includes the remaining adversarial
+server and four-client performance/recovery tests below.
 Status: milestone 1 complete; milestone 2 functionality is implemented, but its
 strict frame-cadence acceptance remains open. Three-player lobbies and live
 overworld presence are tested at 300%/100%/100% emulator speeds. Extra missed
@@ -90,8 +95,10 @@ requested. Commit completed changes locally. Do not use the GitHub plugin.
 - Use native DoubleCherryGB as the primary emulator and integration backend.
   The user explicitly rejects installing Rosetta. Wine and BGB are not required
   for development or acceptance; do not install them or leave them as blockers.
-- A desktop app, hosted deployment, unrestricted lobby sizes, and battles with
-  more than two participants are later work.
+- Local bridge applications for Android, macOS, Windows and Linux are now in the
+  infrastructure plan. Full app packaging and hosted rollout are later delivery
+  work; their transport/lifecycle feasibility must be proven early. Unrestricted
+  lobby sizes and battles with more than two participants remain outside scope.
 
 ### Gameplay wishlist and architecture direction
 
@@ -119,6 +126,9 @@ action authority. Shared protocol capability/version checks should allow later
 features and reject incompatible actions without changing the ordinary save.
 
 ### NPC eligibility and restoration policy
+
+User-approved on 2026-10-11: protected-by-default eligibility, an audited
+feature-owned allowlist, free/offscreen/distant selection and safe restoration.
 
 The current generated `rom/replaceable.asm` table supports frame-local rendering
 suppression only. `tools/audit_render_policy.py` recognizes pure-text scripts,
@@ -156,7 +166,10 @@ four-player support. No map event data needs new multiplayer flags.
 Keep `tools/dev_session.py` as the single human entry point. The current workflow
 is accepted for now; retain stable Android paths, scenario selection, correct
 intent/config/save selection, 5% Mac volume, visible connection logs and clean
-Ctrl+C/occupied-port handling as it evolves. No Android launcher app is needed.
+Ctrl+C/occupied-port handling as it evolves. The future version also starts the
+local bridges and local backend. An Android bridge service is now planned; a
+separate app merely to launch RetroArch is still unnecessary. Do not replace the
+current working workflow during this planning-only follow-up.
 
 Every multiplayer feature needs an agent-runnable test path with bounded waits,
 semantic success/failure oracles, pinned tool/core versions, reproducible input
@@ -175,13 +188,33 @@ Coverage of current probes must not be called coverage of the entire future game
 ### Server ownership, lobby UX and hosting outlook
 
 See [research/SERVER_ARCHITECTURE.md](research/SERVER_ARCHITECTURE.md) for source
-evidence, Cloudflare constraints, latency/cost assumptions and the planned test
-matrix. Keep Rust and a runtime-independent lobby state machine. Start with the
-existing native TCP endpoint and isolate lobbies logically with bounded ownership
-and work. Later deploy across processes/hosts or implement a Cloudflare runtime
-adapter without rewriting protocol and game rules.
+evidence, compatibility policy, transport design, cost assumptions and the test
+matrix. Keep Rust and a runtime-independent lobby state machine. The selected
+target path is the ROM through libmobile to a device-local TCP bridge at
+`127.0.0.1:17423`, then secure WebSocket to a routing Worker and a Durable Object
+per lobby. The same ROM endpoint works on Android and desktop without patching
+each device's LAN IP. The remote URL belongs in bridge configuration.
 
-Clients own ordinary game state. The server keeps only reconstructible session
+Share bridge framing, limits and reconnect behavior in a Rust core; use thin
+platform wrappers for Android service lifecycle and desktop startup. Retain the
+native backend for existing development/tests and add a local WebSocket/Worker
+test backend. Bridge and backend listeners must use distinct ports in local tests;
+do not bind both to 17423. The one-command script orchestrates them. A publicly
+hosted raw-TCP gateway and Spectrum are unnecessary for this selected path.
+Free-tier sufficiency must be measured across all rooms, including keepalives,
+poll handling and 400% traffic. The architecture report records daily quota
+calculations; unlimited worldwide free operation is not an established premise.
+
+The bridge is a critical compatibility boundary, not a stateless byte copier.
+TCP reads may split or combine application frames; bound reassembly, WebSocket
+messages and both directions' queues. Preserve ordered actions and the ROM's
+delivery credits. Investigate terminating local POLL requests in the bridge so
+every emulated poll does not become a billed cloud message, without fabricating
+server liveness or acknowledgements. Coalesce only obsolete presence, and measure
+end-to-end latency and behavior through 400% speed.
+
+The user approved this state model: clients own ordinary game state. The server
+keeps only reconstructible session
 coordination such as membership, routing, latest presence and pending interactions.
 No database of authoritative saves/inventory is desired. A server crash interrupts
 multiplayer, requires fresh session identity/resynchronization, and must leave
@@ -477,11 +510,15 @@ onto the wire. IDs, sequence wrap, unknown commands, bad lengths, and stale
 generations require defined behavior. Large Pokemon or party payloads use
 bounded chunks with transfer ID, chunk index, total length, and integrity checks.
 
-The handshake checks gameplay compatibility, not just the displayed release
+The target handshake must check gameplay compatibility, not just the displayed release
 version. Faithful and standard builds have different mechanics and must be
 rejected for incompatible interactions unless a compatibility policy is later
 implemented. Include a protocol revision, gameplay/schema revision, and build
 capabilities. Parties and gifts use Polished Crystal's own schema.
+The current handshake only checks transport/lobby schema, capacity and the
+standard/faithful flag. Identical multiplayer code does not establish safe
+cross-revision maps, battles or transfers. Define and test compatibility profiles
+as described in research/SERVER_ARCHITECTURE.md before supporting mixed revisions.
 
 ## Overworld behavior
 
@@ -802,7 +839,9 @@ subject to feasibility and explicit discussion of compromises. Milestones 3 to 5
 describe how to deliver and test those desired features if retained, not a claim
 that the user refuses every feature tradeoff. Foundational quality requirements
 are binding throughout. Use collections and explicit participant identities from
-the beginning. New desktop apps, cloud deployment, free-text/voice chat, shared
+the beginning. Companion bridge apps and Cloudflare hosting are now part of the
+infrastructure direction; their full rollout follows the early bridge proof.
+Cloud deployment is not authorized by this planning request. Free-text/voice chat, shared
 story progression, unrestricted lobby capacity, and battles with more than two
 participants remain outside the previously agreed scope.
 
@@ -879,6 +918,40 @@ approximately 100-ms client/server RTT. This is a changed acceptance definition,
 not evidence that the original targets passed. Static all-map checks and representative dynamic
 crowding/transition scenarios preserve required NPCs, restore suppressed objects,
 and avoid tile/palette corruption.
+
+**Current milestone-2 TODO and acceptance additions (2026-10-11):**
+
+- [ ] Four real clients simultaneously at 100%, 200%, 300% and 400%, including
+  the same viewport, crowded maps, joins/leaves, transitions and fifth-client
+  rejection. Recheck generic peer/resource bounds and explicit target identity.
+- [ ] Matched ordinary-NPC control: equal actor count, movement, geometry, camera,
+  palette/effect load and input sequence. Compare per-frame world updates, gaps,
+  input/audio timing and remote freshness; retain the pristine control separately.
+- [ ] Codec fuzz/property tests and arbitrary model event sequences with
+  reproducible seeds and fake time. Cover partial/coalesced frames, invalid fields,
+  stale generations, wrong participants, identifier exhaustion and time advance.
+- [ ] Bounded resources and fair service with one aggressive client: valid and
+  invalid messages, slow readers/writers, socket admission, log pressure and queue
+  saturation. Healthy clients behind the same NAT and at 400% must remain usable.
+- [ ] Repeated connection churn, expiry, server restarts and fresh room/session
+  incarnations. Verify recovery, priority disconnect and native save independence;
+  an explicit exit must not silently reconnect or replay an old action.
+- [ ] Cross-lobby isolation: one room's hostile traffic, errors and disconnects
+  neither reach nor starve another room. Distinguish logical isolation from
+  process-wide outages and test both at their intended boundaries.
+- [ ] Bridge foundation proof: bounded TCP/WSS framing, ordering, credit handling,
+  local POLL semantics and loss/reconnect in a headless local multi-client suite.
+  Demonstrate same-device loopback with Mac and Android libmobile, then Android
+  service survival while RetroArch is foreground. Record feasible service type,
+  launch/timeout rules and remaining desktop packaging work. No public deployment
+  is needed for this milestone's proof.
+- [ ] Define transport/gameplay compatibility profiles and reject unknown unsafe
+  combinations. Existing schema/mechanics checks are not a cross-ROM-version proof.
+
+These are open acceptance work for the current milestone, not a later backlog.
+Bridge installation/UX for all four platforms and the hosted rollout remain
+delivery work after the early proof. The other recorded emergency-exit and save
+acceptance requirements also remain open; this list does not replace them.
 
 ### 3. Adjacent interaction, Pokegear calls, and the common action menu
 
@@ -967,7 +1040,9 @@ frame timing through 400% and priority cancellation/recovery requirements. Recor
 new evidence here before compaction. Historical three-player results do not prove
 the new acceptance criteria.
 
-No Rosetta, Wine, BGB, cloud account or desktop app is required. Full ROM fit,
+The existing native proof needs no Rosetta, Wine, BGB, cloud account or companion
+app. The selected future path adds local bridge wrappers and eventually a
+Cloudflare deployment; its core tests must also run locally. Full ROM fit,
 VRAM/palette placement, crowded-scene rendering and native timing remain technical
 work. Durable transfers are no longer required. If a measured hardware budget
 conflicts with a requirement, report the concrete case and design tradeoff instead
@@ -1044,11 +1119,16 @@ in `research/HOST_ENVIRONMENT.md`; they are not vendored into this branch.
 - [ ] Expand capacity to four clients and three simultaneously visible peers with
   one capacity setting and generic resource leasing; audit RAM, VRAM, palettes,
   native actor restoration and packet bounds.
+- [ ] Complete milestone 2's explicit fuzz/model, resource/fairness, connection
+  churn, server-restart and cross-lobby isolation checklist above.
+- [ ] Prove the selected device-local TCP/WSS bridge and define safe compatibility
+  profiles as part of milestone 2; retain the existing human launcher meanwhile.
 - [ ] Implement live-session gifts/trades with user-managed ordinary saving.
   Save journals and reliable cross-restart transfer recovery are out of scope.
 
-Current implementation step: expand to four players, resolve matched-NPC cadence
-and the priority recovery acceptance gaps in REQUIREMENTS.md. Milestone 3 remains
+Current implementation step: complete milestone 2's checklist, including four
+players, matched-NPC cadence, adversarial server tests, the bridge proof and
+priority recovery acceptance gaps in REQUIREMENTS.md. Milestone 3 remains
 blocked. Its later scope is target selection,
 invitation/acceptance/cancellation/timeout state and the shared adjacent/call
 interaction menu. Use the existing peer collection and connection generations;

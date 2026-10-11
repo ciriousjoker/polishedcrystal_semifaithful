@@ -51,6 +51,9 @@ release is required; hiding an NPC's OAM alone does not release its object slot 
 tile allocation. Connected peers on other maps need records but no local sprite
 lease. Preserve script actors, map/event identity and NPC state. Three remote
 players require at most three such actor leases, not four extra actors.
+The user approved the protected-by-default, audited NPC allowlist and runtime
+selection/restoration policy in PLAN.md on 2026-10-11. This approves the design;
+it does not make the current render-suppression table safe for object eviction.
 
 ## Save files and recovery
 
@@ -127,6 +130,15 @@ Select+B path, ordinary user-managed transfer saving and this ROM-control bounda
   stable Android files and launch the configured Android emulator via ADB.
   The existing script is sufficient for now and is intended to evolve. Keep its
   scenario selection, low Mac volume, connection logs and clean lifecycle behavior.
+- **D3 DECISION:** A local TCP-to-secure-WebSocket bridge is a critical component
+  of the selected Cloudflare hosting direction. Each supported device runs its
+  own bridge; the ROM uses the stable loopback endpoint `127.0.0.1:17423`.
+  Plan a shared Rust core with Android, macOS, Windows and Linux integration.
+  Cloudflare Workers route to a Durable Object per lobby. This supersedes the
+  earlier deferral of companion bridge applications, not the request to avoid
+  an unnecessary standalone Android launcher. Record and test transport, platform
+  lifecycle and resource limits before claiming compatibility. No implementation
+  or deployment is requested in this documentation follow-up.
 - **T1 MUST:** Server assurance is based on behavior, invariants and adversarial
   input coverage, not a line-coverage percentage. Malformed frames, invalid action
   sequences or bounded traffic from an individual malicious client must not crash
@@ -141,7 +153,9 @@ Select+B path, ordinary user-managed transfer saving and this ROM-control bounda
   membership, routing, presence and interaction coordination may be transient
   and reconstructible. Loss of that server state must not destroy or invalidate
   local game/save state. No durable inventory ownership or save-recovery service
-  is introduced. Cloud provider and public lobby UX are not selected yet.
+  is introduced. The user explicitly approved this transient-state model.
+  Cloudflare with a local bridge is the selected direction; public lobby UX and
+  the paid/free account choice remain open. Free-tier sufficiency is unproven.
 
 See [research/SERVER_ARCHITECTURE.md](research/SERVER_ARCHITECTURE.md) for the
 current implementation, public-hosting options, cost assumptions and assurance

@@ -8,6 +8,10 @@ Four-player coexistence is the absolute gameplay feature requirement; the other
 gameplay goals are a wishlist subject to feasibility and discussion. Foundational
 quality requirements remain binding. The current server, state ownership, hosting
 options and test gaps are explained in [SERVER_ARCHITECTURE.md](research/SERVER_ARCHITECTURE.md).
+The selected future hosting path uses a local TCP/WSS bridge on each device and
+Cloudflare Workers/Durable Objects. The current launcher still uses direct TCP;
+bridge implementation and the expanded milestone-2 tests remain open. Protocol
+compatibility alone does not establish compatibility across game revisions.
 The binding requirements and explicit acceptance gaps are in
 [REQUIREMENTS.md](REQUIREMENTS.md). Strict frame parity remains open; 400% speed,
 priority escape and connected-state restoration without libmobile need additional

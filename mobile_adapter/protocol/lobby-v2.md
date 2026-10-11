@@ -24,6 +24,14 @@ trainer IDs, runtime objects and socket sessions. Rooms permit three connected
 players. The service retains at most 128 identities globally and accepts 16
 sockets. IDs are not reused in a server lifetime; generations never wrap.
 
+These are protocol/build-option checks, not full Polished Crystal release
+compatibility checks. HELLO currently carries no source revision or gameplay/map
+compatibility profile. Identical multiplayer code alone does not guarantee matching
+map IDs, battle rules or Pokemon/item semantics across ROM revisions. The planned
+profile policy is in [SERVER_ARCHITECTURE.md](../research/SERVER_ARCHITECTURE.md).
+This note changes no current wire bytes. The planned local TCP/WSS bridge is a
+separate transport boundary and is not implemented by this protocol document.
+
 A peer record contains ID u16, generation u16, revision u16, then its snapshot.
 A full roster contains up to two peers and has a maximum 39-byte payload. It
 replaces membership and removes absent peers. Membership/generation changes

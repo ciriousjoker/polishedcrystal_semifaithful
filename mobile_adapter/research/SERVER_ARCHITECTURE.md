@@ -1,9 +1,12 @@
 # Server ownership, hosting options and assurance
 
-Updated: 2026-10-11. Inspected source: `f8bf5339a`; this follow-up changes
+Updated: 2026-10-11. Inspected source: `608d8cda4`; this follow-up changes
 documentation only. Public deployment, a provider migration and new gameplay
 features are not being implemented. The user wants the current architecture to
 leave room for the desired features in [PLAN.md](../PLAN.md).
+The selected hosting direction is now a device-local TCP/WSS bridge with
+Cloudflare Workers and one Durable Object per lobby. This is a critical planned
+component, superseding the earlier optional-bridge/unspecified-provider discussion.
 
 ## What runs today
 
@@ -43,6 +46,8 @@ Source anchors: `server/crates/server/src/main.rs`, `src/lib.rs`, `src/lobby.rs`
 
 ## State ownership
 
+The user explicitly approved this transient server-state model on 2026-10-11.
+
 | State | Owner and intended failure behavior |
 | --- | --- |
 | Local world, story flags, party, inventory and current native simulation | Each ROM's native game memory. Ordinary local saving determines persistence. A network failure must not reset or overwrite it. |
@@ -78,14 +83,54 @@ Cloudflare APIs. One logical room owner serializes typed events through bounded
 queues and emits effects. Share the tested codec/model across deployment adapters:
 
 1. Native TCP/Tokio for the current libmobile clients and local development.
-2. Optionally a Worker/Durable Object adapter for a future compatible transport.
+2. The planned Worker/Durable Object adapter reached through the local bridge.
 
 One process may host many four-person rooms. Separating room ownership and work
 budgets first avoids requiring a dedicated VM/container per tiny lobby. Later,
 route rooms to different processes/hosts for a smaller process-failure impact and
 regional placement. Async tasks do not isolate a process crash; a shared gateway,
 host or provider incident can still affect multiple rooms. An independent logical
-room is not a claim of physically independent infrastructure.
+room is not a claim of physically independent infrastructure. Native multi-host
+deployment remains an architectural alternative, not the selected public path.
+
+## Protocol versions versus game compatibility
+
+A protocol version defines the format and interpretation of network messages;
+it is independent of the Polished Crystal release number. The current code checks
+transport version 1, lobby schema 3, capacity 3 and the standard/faithful mechanics
+flag. An incompatible schema or capacity is rejected; a room cannot mix mechanics
+flags. There is no Polished Crystal source revision or full gameplay compatibility
+fingerprint in the current HELLO. Being accepted today is not proof that different
+ROM revisions are safe together.
+
+Identical multiplayer assembly is insufficient if native game content changed.
+Separate compatibility dimensions and conservative acceptance rules:
+
+| Dimension | Examples that need matching semantics |
+| --- | --- |
+| Wire protocol | Header/message layout, lengths, field interpretation, session and sequence rules. |
+| Overworld presence/travel | Map IDs, coordinate systems, map identity/layout, avatar/movement enums, collision and allowed travel destinations. |
+| Battles | Species/move/ability/item meanings, formulas, turn rules, RNG contract and build options. |
+| Trades/gifts | Serialized Pokemon fields, forms, item IDs, limits and local validation rules. |
+
+The existing 16-bit map-layout key is a visibility hint and can collide. It is not
+a gameplay compatibility fingerprint. Never treat a matching protocol number,
+map key or standard/faithful byte as authorization for arbitrary cross-version
+battles, transfers or travel.
+
+Different ROM revisions may eventually interoperate if their relevant compatibility
+profiles are explicitly equal and tested. A text-only change is a plausible
+compatible case; a changed map numbering or battle formula is not automatically
+compatible. Define compact versioned profile/capability identifiers, initially
+reject unknown combinations, and retain exact build identity for diagnostics or
+as a conservative fallback. Broader compatibility is an opportunity, not a new
+absolute feature requirement or something already implemented. Do not require
+identical binary hashes forever when only irrelevant assets/text differ.
+
+Bridge/cloud protocol compatibility is a separate boundary. A bridge update must
+not silently translate game semantics or claim an incompatible ROM is compatible.
+Positive and negative compatibility fixtures belong in milestone 2; feature-specific
+mechanics/serialization checks grow when those features are implemented.
 
 ## Cloudflare assessment
 
@@ -95,28 +140,81 @@ event-driven platform I/O. The official TCP API currently supports outgoing TCP,
 not incoming raw TCP listeners. Our current ROM/libmobile protocol is raw TCP,
 not an HTTP/WebSocket handshake. [Rust support][rust], [TCP sockets][tcp].
 
-The closest Cloudflare model to the proposed room-per-worker idea is a routing
+The selected Cloudflare model for the proposed room-per-worker idea is a routing
 Worker plus one named Durable Object per room. An object is created on access
 and coordinates its room's connections/events. It is not a separately deployed
 server binary for every PIN. Durable Objects may use transient memory without
 making the server authoritative over game saves. [Durable Objects][objects].
 
-However, that model needs a transport path:
+The user selected the local-bridge solution:
 
-- A TCP-to-WebSocket gateway keeps current emulator compatibility but remains
-  running infrastructure, adds cost and an extra hop, and needs its own limits,
-  protection and failure recovery. Multiple gateways can reduce shared impact.
-- A WebSocket-capable emulator/libmobile bridge avoids that gateway but is not
-  currently implemented or assumed available on Mac and Android.
-- Implementing a web transport in the ROM is another substantial compatibility,
-  authentication and footprint project; it is not a free consequence of using
-  libmobile. Do not silently add it to the current ROM scope.
+```text
+Each player's device:
+  ROM -> libmobile -> TCP 127.0.0.1:17423 -> local bridge
+                                              |
+                                      secure WebSocket (WSS)
+                                              |
+Cloudflare: routing Worker -> room Durable Object -> other players' WSS connections
+```
+
+Each device runs its own bridge. The phone's localhost means the phone, not the
+Mac. The normal host network stack, including Android's standard shared host
+networking, should allow the emulator to reach the local listener; verify this
+with the actual supported core/app combinations before claiming acceptance.
+No emulator fork or ROM WebSocket/TLS implementation is assumed. A wrapper using
+a separate network namespace would need explicit loopback routing configuration.
+
+The endpoint remains fixed in the ROM, while the bridge owns the remote WSS URL
+and TLS certificate validation. This avoids per-device LAN-IP ROM patches. One
+local listener can serve multiple emulator sockets with isolated bridge sessions,
+initially one upstream WSS per emulator connection. No network message may supply
+an arbitrary upstream destination. Bind to loopback, bound local admission too,
+and do not expose a public proxy. Other local applications are not automatically
+trusted merely because they can reach localhost.
+
+A shared Rust bridge core handles bounded protocol framing and queues; thin
+Android/macOS/Windows/Linux wrappers handle installation and lifecycle. On Android,
+plan a user-started foreground service with the required notification while
+RetroArch is foreground. Select and verify a valid service type and permissions.
+`dataSync` is not an assumed permanent relay mechanism: Android 15+ documents a
+six-hour background budget in 24 hours for relevant targets. No misuse of unrelated
+service types to bypass restrictions is selected. Test startup, long sessions,
+network changes, process death, restart and clean shutdown. [Android launch][android-launch],
+[service types][android-types], [timeouts][android-timeout].
+
+This extends the earlier deferred app scope to necessary bridge wrappers; it does
+not require a standalone Android launcher replacement. Desktop starts can initially
+use a CLI. Evolve the existing Python command to start the backend and bridges,
+publish stable ROM/save files and launch both emulators only after readiness.
+Keep the current working direct-TCP command unchanged until the new path passes.
+For offline automated tests, use a local WebSocket/Worker backend on a separate
+port, pinned runtime and ephemeral room IDs; public Cloudflare access must not be
+required for the core acceptance suite. No app code or deployment is added now.
+
+TCP-to-WebSocket conversion must respect application framing, not assume one TCP
+read is a packet. Preserve ordered action messages, session identity and delivery
+credits, with bounds on payloads, fragments, compression/decoding and queues.
+Prefer binary uncompressed frames initially. Investigate answering delivery POLLs
+from the latest bounded local receive cache, so each ROM poll does not cross the
+cloud. Coalesce only superseded presence, using real time independently of emulator
+speed. This is a proposed adaptation, not transparent tunneling already proven.
+Local handling must not invent server acknowledgements, hide upstream failure,
+renew a dead ROM's presence forever or replay old actions after reconnect.
+
+An upstream WebSocket failure must invalidate the affected transport/session:
+close or fail its local socket in a defined way, discard stale pending data and
+let the ROM establish a fresh valid session. Avoid reconnect storms with bounded
+retry/backoff. Select+B remains a ROM-owned local escape even if the bridge is
+missing or broken. Log adapter readiness, local TCP connection, upstream WSS
+connection and confirmed lobby join as distinct states, without logging secrets.
 
 Do not assume Cloudflare's ordinary HTTP proxy protects an arbitrary TCP listener.
 The documented Spectrum product for custom TCP/UDP requires Enterprise plus a
 paid add-on; it does not turn a Worker into a raw-TCP listener. Infrastructure
-attack protection can remain outside game code, but the actual transport needs
-a compatible provider arrangement before public release. [Spectrum][spectrum].
+attack protection can remain outside game code. With the selected bridge, public
+ingress is WSS and raw TCP stays on loopback, so neither a publicly hosted TCP
+gateway nor Spectrum is required. Application abuse limits still apply to the
+Worker/object. [Spectrum][spectrum].
 
 Worker/object lifecycle is controlled by the platform, not a guarantee that a
 process stays alive until ten minutes after its last packet. Hibernation can
@@ -142,8 +240,9 @@ coordinate concurrent creation, enforce four-member capacity, rate-limit guesses
 and creation, expire unused incarnations, and avoid leaking reconnect secrets.
 Per-session unguessable credentials and room incarnations remain distinct from
 the human code. Six-digit codes alone cannot promise private rooms against a
-determined guesser. Public transport confidentiality also needs a design; the
-current raw TCP is not encrypted by merely choosing a private-looking code.
+determined guesser. The planned bridge provides certificate-validated WSS on the
+Internet segment; the current direct-TCP implementation has no such encryption.
+Do not confuse a human invitation code with transport encryption or a session token.
 
 Ten minutes after the last member leaves could expire a room, but that value is
 only a proposal. Live players need much shorter liveness checks, and idle connected
@@ -157,7 +256,9 @@ Assessment: four-player presence and turn-based interactions are plausible on a
 regional server or Durable Object, but there is no measured Cloudflare result.
 The input-to-remote-display path includes local game timing, adapter transfer,
 client-to-room travel, room processing, room-to-peer travel and peer rendering.
-Adding a gateway adds another segment. A worldwide edge entry point does not
+The selected device-local bridge adds local processing, not a separately hosted
+public TCP gateway hop. That overhead and Android scheduling still need measurement.
+A worldwide edge entry point does not
 place a room's coordinator next to all four players. Location hints can influence
 initial placement but are not guarantees. [Data location][location].
 
@@ -167,7 +268,9 @@ and matched-NPC frame gate; do not use a fast HTTP ping or low server CPU as pro
 of playable end-to-end latency. No lockstep movement or global frame clock is
 required; superseded presence can be replaced, unlike accepted actions.
 
-Provider prices checked 2026-10-11, USD, before tax and any gateway. Workers Paid
+Provider prices checked 2026-10-11, USD, before tax. No hosted gateway cost is
+required by the local-bridge design; application distribution/maintenance still
+requires work. Workers Paid
 has a $5/month minimum. Durable Objects include 1 million request units and
 400,000 GB-seconds monthly, then $0.15/million requests and $12.50/million
 GB-seconds. Incoming WebSocket messages use a 20:1 billing ratio; outgoing messages
@@ -184,13 +287,41 @@ Illustrative calculation, not a benchmark or deployment quote:
   `100 * 3600 * 0.128 = 46,080 GB-seconds`.
 - With modest other account usage, these assumed object totals fit the paid
   included quotas. A small deployment could therefore fit the $5 base platform
-  charge, before gateway, storage, routing-Worker extras or other services.
+  charge, before storage, routing-Worker extras or other services.
 
 That example assumes WebSockets; one HTTP/RPC call per update has different request
 accounting. Hibernation eligibility may reduce duration, but a tiny/no-database
 room is not automatically free. WASM is not a discount category. Actual cost
-depends on aggregate lobby-hours, message rate, runtime design and the missing
-TCP transport solution. No vendor, paid plan or deployment is selected here.
+depends on aggregate lobby-hours, message rate and runtime design. Cloudflare is
+selected as the direction; no paid plan or public deployment is selected here.
+
+### Free-tier planning bound
+
+The free Durable Object quotas currently include 100,000 request units and 13,000
+GB-seconds per day, shared across the account. SQLite-backed objects are available
+on Free; using that object class does not require storing game data. Excess
+operations fail rather than automatically obtaining unlimited capacity.
+[Object pricing][object-pricing], [Object limits][object-limits].
+
+At the illustrative ten upstream application messages per second for each of four
+players, one room generates `4 * 10 * 3600 / 20 = 7,200` request units per hour.
+The request allowance therefore covers about `100,000 / 7,200 = 13.89` aggregate
+lobby-hours per day before other requests. Ten simultaneous rooms consume that
+allowance in about 1.39 hours at that rate. This is a request-only bound, not a
+promised capacity. At continuously billed duration, the duration quota independently
+covers `13,000 / 0.128 / 3600 = 28.21` aggregate lobby-hours. Hibernation can improve
+the duration side, not erase application-message usage. Handshakes, heartbeats,
+unfiltered polls, retries, routing-Worker/CPU/storage limits and abusive requests
+also matter. The ten-message rate is an example, not the measured ROM rate or a
+selected update-frequency limit.
+
+A niche deployment may fit Free, but "the whole world fits Free" and "cheapest
+possible host" are not established. Measure total messages and runtime cost,
+including 400% emulation, and expose quota-exhaustion as a recoverable disconnect.
+Use hibernation-aware connections and reconstructible state; do not keep objects
+active unnecessarily with polling timers. Actual provider integration/latency and
+metering should be checked before public rollout, without weakening frame or
+presence-freshness requirements to fit an unmeasured cost assumption.
 
 ## Current assurance and missing tests
 
@@ -221,6 +352,11 @@ Visible gaps to close before claiming public hostile-client readiness:
 
 Required test families as the system develops:
 
+The existing codec/model, resource/fairness, connection churn, restart and
+cross-room cases below are explicitly current milestone-2 work in PLAN.md, not
+deferred until later feature milestones. Include the selected bridge foundation
+and compatibility boundary in that milestone's transport proof.
+
 | Family | Observable requirement |
 | --- | --- |
 | Codec fuzz/property tests | Arbitrary bytes, malformed lengths, unknown fields and fragmented/coalesced streams never panic or allocate beyond a fixed bound. |
@@ -246,3 +382,7 @@ Measure behavior coverage against these invariants, not a cosmetic 100% line sco
 [location]: https://developers.cloudflare.com/durable-objects/reference/data-location/
 [workers-pricing]: https://developers.cloudflare.com/workers/platform/pricing/
 [object-pricing]: https://developers.cloudflare.com/durable-objects/platform/pricing/
+[object-limits]: https://developers.cloudflare.com/durable-objects/platform/limits/
+[android-launch]: https://developer.android.com/develop/background-work/services/fgs/launch
+[android-types]: https://developer.android.com/develop/background-work/services/fgs/service-types
+[android-timeout]: https://developer.android.com/develop/background-work/services/fgs/timeout
