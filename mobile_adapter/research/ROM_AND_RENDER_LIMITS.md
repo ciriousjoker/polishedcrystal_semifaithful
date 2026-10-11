@@ -5,6 +5,16 @@ qualifies the earlier milestone-2 completion claim: its finite local acceptance
 results remain valid, but scanline crowding and comprehensive future-map gates
 are unresolved. No rendering policy or cartridge mapper was changed in this audit.
 
+## Subsequent implementation
+
+The follow-up in [SCANLINE_AND_MBC30_FOLLOWUP.md](SCANLINE_AND_MBC30_FOLLOWUP.md)
+adds current native selection checks, all-map/geometry guards and failing
+post-link map gates. It records the Route 37 visibility failure and the actual
+MBC30 layout/core probes. The missing-test and partial-source-coverage statements
+below describe the earlier audit state and are superseded by that follow-up.
+Production ROM code and hashes remain unchanged; unresolved rendering policies
+and MBC30 adoption remain open.
+
 ## New binding direction
 
 The user requires physical-cartridge playability and no forced choice between

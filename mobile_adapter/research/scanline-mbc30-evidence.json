@@ -1,0 +1,214 @@
+{
+  "date": "2026-10-11",
+  "production_rom_sha256": "fdb237ff7a3bf88d20236ca18a33f239a158b6ca0b9b0edd8193ee6d62bde138",
+  "disabled_rom_sha256": "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e",
+  "core_revision": "03f58ca3dfb4b716f7e66a0e0467f9e85ef82abb",
+  "map_scanlines": {
+    "rom_sha256": "fdb237ff7a3bf88d20236ca18a33f239a158b6ca0b9b0edd8193ee6d62bde138",
+    "map_count": 611,
+    "flagged_maps": 269,
+    "flagged_pairs": 698,
+    "protected_pairs": 355,
+    "unconditional_initial_protected_pairs": 123,
+    "limitations": [
+      "Candidates ignore collision/reachability and mutually exclusive story states; they require review.",
+      "Ordinary wandering envelopes include continuous movement; script-repositioned actors need runtime fixtures.",
+      "Special/variable assets, partial pixel-row overlaps and effects need separate geometry/lifecycle tests.",
+      "Protected is a safety default, not a claim that every protected actor is indispensable.",
+      "Optional admission is approved but not implemented; flagged pairs remain unresolved."
+    ]
+  },
+  "native_capacity": {
+    "rom_sha256": "fdb237ff7a3bf88d20236ca18a33f239a158b6ca0b9b0edd8193ee6d62bde138",
+    "map_count": 611,
+    "bounded_maps": 607,
+    "reviewed_bounded_maps": 611,
+    "unresolved_maps": [],
+    "limitations": [
+      "The original static bounds ignore story flags and retain actors across disconnected regions.",
+      "Refined bounds depend on fingerprinted native entry, story and camera lifecycle contracts.",
+      "Snowtop panning is a protected deferred scene; off-screen shared-tile window records may be leased afterward.",
+      "Native script-created actors and dynamic movement/asset changes need separate lifecycle fixtures.",
+      "This is a slot bound, not a scanline/OAM, timing or full gameplay proof."
+    ]
+  },
+  "ordinary_start_menu_control": {
+    "passed": true,
+    "object_height": 8,
+    "model": "first ten Y-matching hardware OAM entries",
+    "clients": [
+      {
+        "client": 0,
+        "samples": 1772,
+        "maximum_demand": 8,
+        "failing_samples": 0,
+        "witnesses": [],
+        "final_missing_peers": []
+      },
+      {
+        "client": 1,
+        "samples": 1781,
+        "maximum_demand": 8,
+        "failing_samples": 0,
+        "witnesses": [],
+        "final_missing_peers": []
+      },
+      {
+        "client": 2,
+        "samples": 1780,
+        "maximum_demand": 8,
+        "failing_samples": 0,
+        "witnesses": [],
+        "final_missing_peers": []
+      },
+      {
+        "client": 3,
+        "samples": 1789,
+        "maximum_demand": 8,
+        "failing_samples": 0,
+        "witnesses": [],
+        "final_missing_peers": []
+      }
+    ]
+  },
+  "route37_pressure": {
+    "acceptance_passed": false,
+    "rom_sha256": "fdb237ff7a3bf88d20236ca18a33f239a158b6ca0b9b0edd8193ee6d62bde138",
+    "core_sha256": "4b08fa1655bdc53802d417dff429a2c02216264ef2e3a4fcf4272365b767fe4d",
+    "map": "Route37",
+    "protected_map_indices": [
+      2,
+      3
+    ],
+    "player_positions": [
+      [
+        8,
+        12
+      ],
+      [
+        8,
+        12
+      ],
+      [
+        8,
+        12
+      ],
+      [
+        8,
+        12
+      ]
+    ],
+    "battery_sha256": [
+      "83da1a796757f5e1a37eea1f041673a324c09b1c7ddbe6a3ba6127b7a08cd6ef",
+      "4304fa29449babbcb5c676b90a9ab77c1865f09091ad53d7dca278dd470cb757",
+      "a97e339eb9ef61b7635173c043ca7e251312bd1480299783ef135e42b7969f72",
+      "1f2ed8c51927216469206b96c11156a1f581448443c9170ff66c04c97ec10da8"
+    ],
+    "note": "Distinct live players may overlap because remote hitboxes are disabled. X overlap does not reduce OAM selection demand.",
+    "scanlines": {
+      "passed": false,
+      "object_height": 8,
+      "model": "first ten Y-matching hardware OAM entries",
+      "clients": [
+        {
+          "client": 0,
+          "samples": 1116,
+          "maximum_demand": 10,
+          "failing_samples": 0,
+          "witnesses": [],
+          "final_missing_peers": [
+            2
+          ]
+        },
+        {
+          "client": 1,
+          "samples": 1113,
+          "maximum_demand": 10,
+          "failing_samples": 0,
+          "witnesses": [],
+          "final_missing_peers": [
+            3
+          ]
+        },
+        {
+          "client": 2,
+          "samples": 1116,
+          "maximum_demand": 10,
+          "failing_samples": 0,
+          "witnesses": [],
+          "final_missing_peers": [
+            2
+          ]
+        },
+        {
+          "client": 3,
+          "samples": 1117,
+          "maximum_demand": 10,
+          "failing_samples": 0,
+          "witnesses": [],
+          "final_missing_peers": [
+            2
+          ]
+        }
+      ]
+    }
+  },
+  "mapper_core": {
+    "supports_upper_rom_banks": false,
+    "observed": {
+      "01": 49,
+      "80": 240,
+      "FF": 127
+    },
+    "expected": {
+      "01": 49,
+      "80": 165,
+      "FF": 90
+    },
+    "core_sha256": "4b08fa1655bdc53802d417dff429a2c02216264ef2e3a4fcf4272365b767fe4d",
+    "probe_rom_sha256": "2f8fb4eda3a017fdde6a5b8ee5fcca8e5e1ce2dc4bcad366107168dfb986b0de",
+    "scope": "Live ROM bank reads only; RTC, save serialization and mapper state restore need separate tests."
+  },
+  "mapper_layout": {
+    "layout_passed": true,
+    "production_postlink_passed": false,
+    "postlink_limitation": "Native tools/bankends rejects bank 128; the diagnostic checks linked sections independently.",
+    "rom_bytes": 4194304,
+    "save_ram_bytes": 32768,
+    "rom_sha256": "f36b806eadce5abb5ebe233ffa800c63b77b73b295abb62e3d3a37ad05cc8fbd",
+    "feature_sections": [
+      {
+        "section": "Mobile Adapter",
+        "bank": 128
+      },
+      {
+        "section": "Mobile Native Palettes",
+        "bank": 128
+      },
+      {
+        "section": "Mobile Native Lease Policy",
+        "bank": 128
+      },
+      {
+        "section": "Mobile Native Save Isolation",
+        "bank": 128
+      },
+      {
+        "section": "Mobile Native Tile Backups",
+        "bank": 128
+      },
+      {
+        "section": "Mobile Native Map Fingerprint",
+        "bank": 128
+      }
+    ],
+    "scope": "All banked feature assembly in bank 128; guarded ROM0 integration remains below 2 MiB. Runtime not accepted."
+  },
+  "host_tests_passed": true,
+  "scanline_map_host_tests": 14,
+  "rendering_acceptance_passed": false,
+  "scope": "Tests and capacity investigation only. No production ROM code or mapper migration. Mid-frame PPU, protected crowding policy and MBC30 runtime/RTC/state compatibility are unresolved.",
+  "full_rom_acceptance_command": "make test-mobile-rom RGBDS=/Volumes/Storage/Cache/mobileadapter/rgbds-1.0.4/ MOBILE_TEST_OUTPUT=/Volumes/Storage/Cache/mobileadapter/full-rendering-gate-20261011",
+  "full_rom_acceptance_exit_code": 2,
+  "full_rom_acceptance_failure": "Unresolved map scanline conflicts; test-mobile-rom requires the strict map gate."
+}

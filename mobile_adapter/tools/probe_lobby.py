@@ -16,6 +16,7 @@ import subprocess
 import threading
 import time
 from probe_emulator import convert_png, digest, read_symbols, require, trace_text, validate_battery
+from scanline_selection import verify_native_scanlines
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -139,7 +140,7 @@ def run_client(args, index):
         script += args.primary_route.read_text()
     script += f"\nON {args.join_frame} wMapStatus=2,wScriptRunning=0,hInMenu=0 SELECT 8\n"
     script += f"ON {args.join_frame} wMapStatus=2,wScriptRunning=0,hInMenu=0 B 8\n"
-    if not args.deferred and args.scenario != "camera":
+    if not args.deferred and args.scenario not in ("camera", "scanline"):
         script += f"ON {args.join_frame + 250} wMobileOnline=1,wMobilePeerCount={args.players - 1} {('RIGHT', 'DOWN', 'LEFT', 'UP')[index]} 12\n"
     if index == 0 and args.scenario == "menu":
         script += "3750 SELECT 8\n3750 A 8\n"
@@ -220,7 +221,7 @@ def run_client(args, index):
         require(state[key] == expected, f"Client {index}: {key}={state[key]}, expected {expected}")
     # A stationary protected scene can receive just one full roster. Heartbeats
     # intentionally do not produce redundant pushed state.
-    require(state["wMobilePresenceCount"] >= (1 if args.deferred else 2) and state["wMobileSequence"] > 3,
+    require(state["wMobilePresenceCount"] >= (1 if args.deferred or args.scenario == "scanline" else 2) and state["wMobileSequence"] > 3,
             "Missing live presence traffic")
     if args.profile:
         metrics = json.loads((directory / "profile.json").read_text())
@@ -340,7 +341,7 @@ def main():
     parser.add_argument("--native-actor-probe", action="store_true", help="Enforce native actor resource and background cadence checks")
     parser.add_argument("--cadence-baseline", type=Path, help="Fail on any extra missed world frame relative to matching baseline profiles")
     parser.add_argument("--port", type=int, default=17425)
-    parser.add_argument("--scenario", choices=("basic", "menu", "start-menu", "rejoin", "disconnect", "warp", "connection", "running", "camera", "resume", "instance", "speed"), default="basic")
+    parser.add_argument("--scenario", choices=("basic", "menu", "start-menu", "rejoin", "disconnect", "warp", "connection", "running", "camera", "resume", "instance", "speed", "scanline"), default="basic")
     parser.add_argument("--second-battery", type=Path, help="Second player's ordinary character-choice save")
     parser.add_argument("--require-npc-motion", action="store_true")
     parser.add_argument("--different-battery", type=Path, help="Third player's ordinary save for instance isolation")
@@ -556,6 +557,7 @@ def main():
     if args.require_npc_motion:
         verify_npc_motion(args.output, args.players)
     if args.native_actor_probe:
+        verify_native_scanlines(args.output, args.players)
         for state in states:
             require(state["wMobileFacingsSuppressed"] == 1, "Native actor experiment was not enabled")
             for peer in range(1, state["wMobilePeerCount"] + 1):

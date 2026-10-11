@@ -62,6 +62,13 @@ release is required; hiding an NPC's OAM alone does not release its object slot 
 tile allocation. Connected peers on other maps need records but no local sprite
 lease. Preserve script actors, map/event identity and NPC state. Three remote
 players require at most three such actor leases, not four extra actors.
+The user additionally approved temporarily omitting an explicitly replaceable
+NPC's entire displayed figure under scanline pressure, then automatically
+restoring its display when resources return. This does not permit hiding protected
+actors or changing NPC/game/save state. Required/protected conflict pairs must be
+flagged for review. The current native path still needs this presentation policy;
+its new runtime/strict map gates expose unresolved failures. See
+[research/SCANLINE_AND_MBC30_FOLLOWUP.md](research/SCANLINE_AND_MBC30_FOLLOWUP.md).
 The user approved the protected-by-default, audited NPC allowlist and runtime
 selection/restoration policy in PLAN.md on 2026-10-11. The generated native lease
 allowlist is separate from the removed legacy render-suppression table. Source

@@ -193,6 +193,7 @@ def main():
     require(not args.output.exists(), 'Choose a new audit output')
     args.output.write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps({k: v for k, v in result.items() if k != 'maps'}, indent=2))
+    require(not result['unresolved_maps'], 'Unresolved native map capacity; see ' + str(args.output))
 
 
 if __name__ == '__main__':

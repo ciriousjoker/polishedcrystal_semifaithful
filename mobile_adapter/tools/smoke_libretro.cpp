@@ -337,9 +337,11 @@ static std::map<std::string, unsigned> capture(const unsigned char* sram, size_t
         values["vStoryFlagsHash"] = hash;
     }
     unsigned scanlines[144] = {};
-    for (unsigned quad = 0; quad < 40; ++quad)
+    for (unsigned quad = 0; quad < 40; ++quad) {
+        values["vOAM" + std::to_string(quad) + "Y"] = video_oam[quad * 4];
         for (int line = int(video_oam[quad * 4]) - 16; line < int(video_oam[quad * 4]) - 8; ++line)
             if (line >= 0 && line < 144) scanlines[line]++;
+    }
     unsigned maximum = 0;
     for (unsigned count : scanlines) maximum = std::max(maximum, count);
     values["vOAMMaxScanline"] = maximum;
@@ -815,7 +817,7 @@ int main(int argc, char** argv) {
                 entry.first == "wMobilePeer2ScreenX" || entry.first == "wMobilePeer2ScreenY")
                 progress.insert(entry);
         for (const auto& entry : values)
-            if (entry.first.rfind("vMobile", 0) == 0 || entry.first.rfind("vNPC", 0) == 0 || entry.first == "vOAMMaxScanline")
+            if (entry.first.rfind("vMobile", 0) == 0 || entry.first.rfind("vNPC", 0) == 0 || entry.first.rfind("vOAM", 0) == 0)
                 progress.insert(entry);
         if (trace_enabled && progress != previous) {
             auto wall_us = std::chrono::duration_cast<std::chrono::microseconds>(

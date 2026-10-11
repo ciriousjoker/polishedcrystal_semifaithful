@@ -10,6 +10,11 @@ are shared by the embedded owner, native hosted simulator and WASM Durable Objec
 Scope and binding requirements are in [PLAN.md](PLAN.md) and
 [REQUIREMENTS.md](REQUIREMENTS.md). Current measured acceptance, hashes and finite
 coverage boundaries are in [research/MILESTONE_2.md](research/MILESTONE_2.md).
+Native rendering assurance is currently open: a new protected-trainer fixture
+finds a missing remote figure, and strict map scanline gates flag unresolved
+conflicts. Use `make test-mobile-maps` and `make test-mobile-scanlines`; their
+current failures are recorded in
+[research/SCANLINE_AND_MBC30_FOLLOWUP.md](research/SCANLINE_AND_MBC30_FOLLOWUP.md).
 Public Cloudflare deployment and phone testing are deferred. Calls, interaction
 menus, battles, gifts, trades and travel remain later milestones.
 

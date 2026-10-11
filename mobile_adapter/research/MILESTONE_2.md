@@ -6,6 +6,11 @@ scanline-crowding and comprehensive future-map assurance; see
 [ROM_AND_RENDER_LIMITS.md](ROM_AND_RENDER_LIMITS.md). The new no-content-choice
 ROM requirement also has an unresolved capacity strategy. Do not read the earlier
 completion as proof of arbitrary player geometry or future map compatibility.
+The newer native selector and strict all-map gate now expose Route 37's missing
+remote figure beside protected trainers. Whole-character admission and protected
+crowding still require work; this is a failing acceptance case. See
+[SCANLINE_AND_MBC30_FOLLOWUP.md](SCANLINE_AND_MBC30_FOLLOWUP.md) for new source
+coverage, diagnostics and the multiplayer-only MBC30 investigation.
 Phone and public deployment tests remain deferred.
 This report supersedes the original three-player renderer and the selected-figure follow-up. Historical
 experiments and failures remain in PLAN.md and Git history.

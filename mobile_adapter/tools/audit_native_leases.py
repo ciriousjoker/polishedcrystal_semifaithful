@@ -163,16 +163,22 @@ def generate(rom_path, sym_path):
         if number == 1:
             offsets.append(len(indices))
         indices.append((name, masks.index(mask)))
-        if approved:
-            sources[str(source.relative_to(REPO))] = hashlib.sha256(source.read_bytes()).hexdigest()
+        # Every map can introduce protected scanline or slot pressure, including
+        # maps with no currently replaceable actors. Guard its geometry too.
+        sources[str(source.relative_to(REPO))] = hashlib.sha256(source.read_bytes()).hexdigest()
         rows.append({"map": name, "group": group, "number": number,
                      "objects": count, "approved_indices": approved})
     for path in ("macros/scripts/events.asm", "macros/scripts/maps.asm", "macros/data.asm",
                  "data/maps/maps.asm", "constants/map_constants.asm",
                  "data/sprites/sprites.asm", "constants/map_object_constants.asm",
-                 "home/header.asm"):
+                 "home/header.asm", "data/maps/blocks.asm", "data/maps/attributes.asm",
+                 "data/sprites/facings.asm", "engine/overworld/map_objects.asm"):
         source = REPO / path
         sources[path] = hashlib.sha256(source.read_bytes()).hexdigest()
+    # Several maps share block data. Guard original inputs and alias definitions,
+    # not the timestamp-dependent generated compressed files.
+    for source in sorted((REPO / "maps").glob("*.ablk")) + sorted((REPO / "data/tilesets").glob("*_collision.asm")):
+        sources[str(source.relative_to(REPO))] = hashlib.sha256(source.read_bytes()).hexdigest()
     require(len(masks) <= 256, "Lease mask dictionary exceeds one-byte indices")
     assembly = ["; Audited native leases. Generated separately from render suppression.",
                 "PUSHS", 'SECTION "Mobile Native Lease Policy", ROMX', "MobileNativePolicyStart::", "MobileNativeLoadLeasePolicy:",

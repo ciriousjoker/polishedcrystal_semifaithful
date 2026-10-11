@@ -2,8 +2,20 @@
 
 Last updated: 2026-10-11.
 
-Current checkpoint: the milestone-2 local implementation passed its recorded
-finite suite. Assurance is reopened for native scanline crowding and comprehensive
+Current checkpoint: the new native scanline/visibility gate finds a missing
+remote figure on Route 37 with four live players beside protected trainers.
+The whole-character display rule for approved replaceable NPCs is accepted but
+not implemented. The strict all-map gate flags 698 conservative pair candidates
+on 269 maps (355 protected pairs). Every map source and geometry input is now
+guarded. Keep rendering assurance open and do not start milestone-3 ROM features.
+An isolated 4 MiB layout places all six banked feature sections in bank 128;
+original game sections stay below 2 MiB. The unmodified DoubleCherryGB core fails
+live upper-bank reads and native bankends rejects bank 128. MBC30 adoption needs
+a separate verified migration. Production ROM hashes remain unchanged.
+Read [research/SCANLINE_AND_MBC30_FOLLOWUP.md](research/SCANLINE_AND_MBC30_FOLLOWUP.md)
+and its evidence/inventory for reproduction and next steps.
+
+The milestone-2 local implementation passed its earlier recorded finite suite. Assurance is reopened for native scanline crowding and comprehensive
 future-map gates; do not extend the earlier completion claim to those properties.
 The user's new no-content-choice ROM requirement also needs a capacity strategy.
 Read [research/ROM_AND_RENDER_LIMITS.md](research/ROM_AND_RENDER_LIMITS.md) before
@@ -2423,3 +2435,23 @@ pass, and the human preparation path produces the same ROM and a fresh normal
 Continue snapshot in an isolated cache. No manual listener, user profile, phone
 or public cloud was changed. The milestone is complete for the latest authorized
 scope; future features must preserve the gates and address the small ROM budget.
+
+
+## Native scanline and MBC30 follow-up, 2026-10-11
+
+The user approved whole-figure temporary hiding/restoration only for reviewed
+replaceable NPCs. Required/protected pairs must be flagged. The native selection
+and final visibility checks now run in current headless acceptance, independent
+of DoubleCherryGB's missing hardware selection cap. Route 37 demonstrates an
+unresolved missing figure before the theoretical twelve-object line can be
+measured; Game Corner's four-core menu control passes at maximum eight objects.
+The all-map strict gate fails on unreviewed candidates. New source coverage is
+611 map ASM files, 457 block inputs and collision/alias/facing/renderer definitions.
+
+The user's multiplayer-only 4 MiB proposal passed an isolated link-placement
+probe without moving original game sections above bank 127. Upper bank access
+fails in the stock pinned core. No production mapper switch, required-NPC hiding,
+cartridge claim or rendering acceptance was introduced. Results and actionable
+remaining work are in research/SCANLINE_AND_MBC30_FOLLOWUP.md. Completed tooling
+and reviewable findings are committed locally; known-failing acceptance gates
+stay visible instead of being waived.

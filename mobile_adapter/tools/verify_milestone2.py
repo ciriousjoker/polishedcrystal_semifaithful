@@ -43,7 +43,12 @@ def main():
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", port))
     args.output.mkdir(parents=True)
-    runner = args.cache / "smoke-libretro-m2"
+    # Compile the current read-only observer so new assertions cannot silently
+    # run against an older cached executable with missing observation fields.
+    runner = args.output / "smoke-libretro"
+    subprocess.run(["clang++", "-std=c++17", "-O2", "-I",
+                    str(args.cache / "sources/doublecherry/libretro/DoubleCherryEngine"),
+                    str(REPO / "mobile_adapter/tools/smoke_libretro.cpp"), "-lz", "-o", str(runner)], check=True)
     core = args.cache / "build/doublecherry/DoubleCherryGB_libretro.dylib"
     profile = args.cache / "build/doublecherry-profile-cadence/DoubleCherryGB_libretro.dylib"
     binaries = REPO / "mobile_adapter/server/target/debug"
