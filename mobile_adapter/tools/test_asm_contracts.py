@@ -49,6 +49,12 @@ with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
     require(symbols["wMobileResidentStart"] == (0, 0xcec4), "Resident placement changed")
     require(symbols["wMobileBufferStart"] == (2, 0xd4eb), "Buffer placement changed")
     require(symbols["wMobileBufferEnd"][1] <= 0xe000, "Buffer overflow")
+    bank, address = symbols["MobileNativeCopyFourTiles"]
+    offset = bank * 0x4000 + address - 0x4000
+    require(rom[offset:offset + 5] == bytes.fromhex("f3 e0 4f 06 04"),
+            "Native tile copy must select VRAM bank only after disabling interrupts")
+    require(symbols["wMobileAvatarBank"] == symbols["wMobileNativeOriginalsEnd"] and
+            symbols["wMobileAvatarBank"][1] < 0xd000, "Private VRAM bank latch escaped unbanked feature RAM")
     def facing(table, index):
         bank, address = symbols[table]
         offset = bank * 0x4000 + address - 0x4000 + index * 2

@@ -6,6 +6,7 @@ Native runtime and matched-control paths are explicit dependencies. Tests never
 patch game RAM or battery saves. Failures retain every diagnostic artifact.
 """
 import argparse
+from core_runtime import CORE_SOURCE, OBSERVED_CORE, PROFILE_CORE
 import json
 from pathlib import Path
 import socket
@@ -29,8 +30,10 @@ def main():
     parser.add_argument("--control", type=Path, help="Optional validated controls for this exact reference; otherwise generate them after cadence")
     parser.add_argument("--port", type=int, default=17584)
     parser.add_argument("--cases", default=",".join(CASES))
+    parser.add_argument("--core", type=Path, default=OBSERVED_CORE)
+    parser.add_argument("--profile-core", type=Path, default=PROFILE_CORE)
     args = parser.parse_args()
-    for name in ("cache", "output", "rom", "symbols", "control"):
+    for name in ("cache", "output", "rom", "symbols", "control", "core", "profile_core"):
         value = getattr(args, name)
         if value is not None:
             setattr(args, name, value.resolve())
@@ -47,10 +50,10 @@ def main():
     # run against an older cached executable with missing observation fields.
     runner = args.output / "smoke-libretro"
     subprocess.run(["clang++", "-std=c++17", "-O2", "-I",
-                    str(args.cache / "sources/doublecherry/libretro/DoubleCherryEngine"),
+                    str(CORE_SOURCE / "libretro/DoubleCherryEngine"),
                     str(REPO / "mobile_adapter/tools/smoke_libretro.cpp"), "-lz", "-o", str(runner)], check=True)
-    core = args.cache / "build/doublecherry/DoubleCherryGB_libretro.dylib"
-    profile = args.cache / "build/doublecherry-profile-cadence/DoubleCherryGB_libretro.dylib"
+    core = args.core
+    profile = args.profile_core
     binaries = REPO / "mobile_adapter/server/target/debug"
     shared = ["--runner", runner, "--core", core, "--rom", args.rom, "--symbols", args.symbols]
     saves = REPO / "mobile_adapter/tests/scenarios"
@@ -109,7 +112,7 @@ def main():
     if "cadence" in cases:
         control = args.control or args.output / "native-controls"
         if args.control is None:
-            run("prepare_native_controls.py", ["--cache", args.cache,
+            run("prepare_native_controls.py", ["--cache", args.cache, "--core", args.core, "--profile-core", args.profile_core, "--runner", runner,
                 "--reference", args.output / "cadence", "--output", control])
         comparison = compare_reference(args.output / "cadence", control)
         (args.output / "cadence-comparison.json").write_text(json.dumps(

@@ -1,34 +1,38 @@
 # Mobile Adapter multiplayer plan
 
-Last updated: 2026-10-11.
+Last updated: 2026-10-12.
 
-Latest footprint directive: the user sets a **10 KB** limit for the complete
-multiplayer ROM component, conservatively recorded as **10,000 bytes**, including
-data and net integration. Current cost is 11,112 bytes, requiring 1,112 bytes of
-optimization. `make test-mobile-budget` now gates full ROM acceptance and fails
-on the unchanged production build. Size-only cumulative link experiments save
-939 bytes, reaching 10,173; their menu/diagnostic changes are not adopted and
-runtime/timing/save acceptance is untested. A host-only all-map check finds a
-free ROM object-type bit that could replace much of the 1,005-byte policy section
-without growing map records. Estimated 800-900-byte savings need a reviewed
-reader/normalization design and full save/cadence validation. The 10 KB target is
-credible for the current four-player core but not a proved budget for the entire
-wishlist or arbitrary future upstream growth. Production assembly is unchanged.
-Read [research/ROM_BUDGET.md](research/ROM_BUDGET.md) before footprint work; do not
-fund the budget by weakening save isolation, packet safety or frame deadlines.
+Latest footprint directive (2026-10-12): the user approves a 4 MiB MBC30
+multiplayer target and explicitly replaces the 10,000-byte total addon cap.
+The ordinary disabled target remains 2 MiB and hash-identical. All six banked
+feature sections now share bank 128; original game sections remain below 128.
+Every mobile link checks those rules and the unchanged 32 KiB RTC battery header.
+The counterpart budget gate protects a 256-byte net lower integration ceiling;
+current integration is 174 bytes. No original helper is relocated. Additional
+feature capacity does not relax RAM, OAM, frame timing or save constraints.
+Use the supplied DoubleCherryGB fork revision ef247c6, installed with checksum
+verification by tools/prepare_mbc30_core.py. Mac launchers use the supplied
+universal library; headless color/instruction observations use separate native
+builds from its matching pinned source. Old cores cannot run the expanded ROM.
+All new artifacts use the Storage volume, as requested by the user.
+Final standard mobile SHA-256:
+cfc57e531f839c2a58bc202fe730ec74832c0d16a923421e9f2833a8329a8a20.
+Feature storage is 10,946 upper bytes; lower integration remains 174 bytes. A
+migration test exposed a VBK/VBlank race in tile restore. Bank selection now
+occurs under DI, with an explicit private latch (eight ROM bytes, one WRAM byte).
+Priority/offline snapshot recovery, all five Save fault scenarios, exact native
+save-copy observations, four-client 100..400% cadence and matched native controls
+pass. Six four-client interaction/latency groups and supplied-library transport
+pass. The manual launcher prepares a fresh snapshot with the supplied core.
+Read [research/MBC30_MIGRATION.md](research/MBC30_MIGRATION.md) for the current
+migration checkpoint and retained validation artifacts before future work.
 
-Current checkpoint: the new native scanline/visibility gate finds a missing
-remote figure on Route 37 with four live players beside protected trainers.
-The whole-character display rule for approved replaceable NPCs is accepted but
-not implemented. The strict all-map gate flags 698 conservative pair candidates
-on 269 maps (355 protected pairs). Every map source and geometry input is now
-guarded. Keep rendering assurance open and do not start milestone-3 ROM features.
-An isolated 4 MiB layout places all six banked feature sections in bank 128;
-original game sections stay below 2 MiB. The unmodified DoubleCherryGB core fails
-live upper-bank reads and native bankends rejects bank 128. MBC30 adoption needs
-a separate verified migration. Production ROM hashes remain unchanged.
-Read [research/SCANLINE_AND_MBC30_FOLLOWUP.md](research/SCANLINE_AND_MBC30_FOLLOWUP.md)
-and its evidence/inventory for reproduction and next steps.
+Rendering assurance remains open: the protected Route 37 fixture loses a remote
+figure and the strict map scanline gate flags 698 conservative pair candidates
+on 269 maps, including 355 protected pairs. Whole-character display suppression
+for approved replaceable NPCs is accepted but not implemented. Do not start
+milestone-3 ROM features or treat a mapper migration as closing these blockers.
+The previous 2 MiB budget and mapper feasibility reports below are historical.
 
 The milestone-2 local implementation passed its earlier recorded finite suite. Assurance is reopened for native scanline crowding and comprehensive
 future-map gates; do not extend the earlier completion claim to those properties.
@@ -41,16 +45,19 @@ owner. The shared Rust owner runs embedded, in the native hosted simulator and
 in the locally tested Rust/WASM Durable Object adapter. Public deployment and the
 unavailable phone are deferred by the user.
 
-Final standard mobile SHA-256:
+Historical 2 MiB standard mobile SHA-256:
 fdb237ff7a3bf88d20236ca18a33f239a158b6ca0b9b0edd8193ee6d62bde138.
+Current 4 MiB hashes are recorded in research/MBC30_MIGRATION.md.
 Disabled standard remains hash-identical to the baseline:
 314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e.
 No original helper was relocated; all feature assembly stays in rom/ with small
 conditional integration seams. All 23,373 checked native RAM symbols stay fixed.
-Total ROM headroom is 2,849 bytes, including 39 in ROM0. Budget later features
-before implementing them.
+Historical 2 MiB mobile headroom was 2,849 bytes. The MBC30 migration now
+leaves 13,787 bytes in the original half, including 39 in ROM0, and almost 2 MiB
+in the upper half. Budget RAM, ROM0 and graphics before implementing later features.
 
-Four actual cores at 100/200/300/400 percent pass the strict cold 800-frame window
+The historical 2 MiB milestone-2 run used four actual cores at 100/200/300/400
+percent and passed the strict cold 800-frame window
 with 800/800 world updates, zero duplicates and no VBlank overruns. Fresh native
 controls verify equal ten-actor inventory, actual reclaimed objects, correct peer
 figures/final positions and measured movement inputs. They are an actor-load
@@ -62,7 +69,7 @@ palettes avoid both runtime-object and native palette-cache contamination.
 Physical Select+B works through menus and an online compatible state restored
 without an adapter. Later changes must retain these gates.
 
-Measured additional movement p95 is 188.997ms local and 298.842ms with 100ms added
+Historical additional movement p95 was 188.997ms local and 298.842ms with 100ms added
 RTT. Full input p95 is 306.721ms and 417.990ms; hosted margin is thin. Finite tests
 are not universal fault freedom, all-story-state coverage or a WAN guarantee.
 Read research/MILESTONE_2.md and research/milestone2-evidence.json before historical

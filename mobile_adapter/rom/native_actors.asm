@@ -1060,7 +1060,7 @@ MobileNativeUpload:
 .tile_ready
 	ld [hl], a
 	ld a, b
-	ldh [rVBK], a
+	ld [wMobileAvatarBank], a
 	ld a, c
 	ld l, a
 	ld h, 0
@@ -1072,7 +1072,7 @@ endr
 	ld a, [wMobileAvatarTile]
 	cp 3
 	jr c, .standing
-	ldh a, [rVBK]
+	ld a, [wMobileAvatarBank]
 	and a
 	ld bc, $800
 	jr z, .walk_offset
@@ -1110,6 +1110,7 @@ endr
 	ld d, h
 	ld e, l
 	pop hl
+	ld a, [wMobileAvatarBank]
 	call MobileNativeCopyFourTiles
 	push af
 	xor a
@@ -1159,6 +1160,7 @@ endr
 	dec a
 	push hl
 	farcall MobileNativeRawChunk
+	ld a, b
 	call MobileNativeCopyFourTiles
 	push af
 	xor a
@@ -1175,12 +1177,14 @@ endr
 	ret
 
 MobileNativeCopyFourTiles:
-; Aligned DE source in private WRAM, HL native destination, VBK already selected.
+; Aligned DE source, HL native destination, A=VRAM bank. Select only under DI:
+; native VBlank writes VBK while drawing menus and background attributes.
 ; Four single-tile GDMA blocks fit four HBlanks. Never call a frame-wait helper or
 ; leave a DMA pending after returning. Only the short copy owns IME; VBlank has
 ; priority outside this bounded interval. Native DMA requests were checked above.
-	ld b, 4
 	di
+	ldh [rVBK], a
+	ld b, 4
 .tile
 	ld a, d
 	ldh [rVDMA_SRC_HIGH], a

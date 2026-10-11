@@ -1,0 +1,578 @@
+{
+  "updated": "2026-10-12",
+  "source_base_commit": "8f3c7e9651e988d876e32a4c7ad9ef1bb76702a8",
+  "status": "MBC30 migration validated; existing scanline blockers remain open",
+  "core_revision": "ef247c6545c61358cd8679a78c95c2e92daae13d",
+  "release_core_sha256": "e26383c5151d68716e973c4fd540b43b7c476d267f4078058a0f7bdb5d28e96d",
+  "observed_core_sha256": "6c9e291f93a70744d49f2ed6d9c015f8ad1d7b3dab6d9ff50caae3d130d7310d",
+  "profile_core_sha256": "a974ba2a004d1b74902c125446463801813e16c16dc2cc03274ea3affad76ebe",
+  "mapper": {
+    "supports_upper_rom_banks": true,
+    "observed": {
+      "01": 49,
+      "80": 165,
+      "FF": 90
+    },
+    "expected": {
+      "01": 49,
+      "80": 165,
+      "FF": 90
+    },
+    "core_sha256": "e26383c5151d68716e973c4fd540b43b7c476d267f4078058a0f7bdb5d28e96d",
+    "probe_rom_sha256": "2f8fb4eda3a017fdde6a5b8ee5fcca8e5e1ce2dc4bcad366107168dfb986b0de",
+    "scope": "Live ROM bank reads only; RTC, save serialization and mapper state restore need separate tests."
+  },
+  "budget": {
+    "budget_bytes": 2097152,
+    "lower_integration_limit_bytes": 256,
+    "net_addon_bytes": 11120,
+    "feature_section_bytes": 10946,
+    "integration_net_bytes": 174,
+    "accounted_bytes": 11120,
+    "within_budget": true,
+    "required_savings_bytes": 0,
+    "remaining_budget_bytes": 2086032,
+    "baseline_free_bytes": 13961,
+    "mobile_free_bytes": 2099993,
+    "mobile_rom0_free_bytes": 39,
+    "lower_free_bytes": 13787,
+    "upper_free_bytes": 2086206,
+    "feature_sections": [
+      {
+        "name": "Mobile Adapter",
+        "kind": "ROMX",
+        "bank": 128,
+        "bytes": 8019
+      },
+      {
+        "name": "Mobile Native Palettes",
+        "kind": "ROMX",
+        "bank": 128,
+        "bytes": 1258
+      },
+      {
+        "name": "Mobile Native Lease Policy",
+        "kind": "ROMX",
+        "bank": 128,
+        "bytes": 1005
+      },
+      {
+        "name": "Mobile Native Save Isolation",
+        "kind": "ROMX",
+        "bank": 128,
+        "bytes": 257
+      },
+      {
+        "name": "Mobile Native Tile Backups",
+        "kind": "ROMX",
+        "bank": 128,
+        "bytes": 237
+      },
+      {
+        "name": "Mobile Native Map Fingerprint",
+        "kind": "ROMX",
+        "bank": 128,
+        "bytes": 170
+      }
+    ],
+    "baseline_sha256": "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e",
+    "mobile_sha256": "cfc57e531f839c2a58bc202fe730ec74832c0d16a923421e9f2833a8329a8a20",
+    "scope": "Matching source/options, freshly linked maps. Placement/bytes only; no runtime acceptance."
+  },
+  "faithful_budget": {
+    "budget_bytes": 2097152,
+    "lower_integration_limit_bytes": 256,
+    "net_addon_bytes": 11120,
+    "feature_section_bytes": 10946,
+    "integration_net_bytes": 174,
+    "accounted_bytes": 11120,
+    "within_budget": true,
+    "required_savings_bytes": 0,
+    "remaining_budget_bytes": 2086032,
+    "baseline_free_bytes": 14024,
+    "mobile_free_bytes": 2100056,
+    "mobile_rom0_free_bytes": 53,
+    "lower_free_bytes": 13850,
+    "upper_free_bytes": 2086206,
+    "feature_sections": [
+      {
+        "name": "Mobile Adapter",
+        "kind": "ROMX",
+        "bank": 128,
+        "bytes": 8019
+      },
+      {
+        "name": "Mobile Native Palettes",
+        "kind": "ROMX",
+        "bank": 128,
+        "bytes": 1258
+      },
+      {
+        "name": "Mobile Native Lease Policy",
+        "kind": "ROMX",
+        "bank": 128,
+        "bytes": 1005
+      },
+      {
+        "name": "Mobile Native Save Isolation",
+        "kind": "ROMX",
+        "bank": 128,
+        "bytes": 257
+      },
+      {
+        "name": "Mobile Native Tile Backups",
+        "kind": "ROMX",
+        "bank": 128,
+        "bytes": 237
+      },
+      {
+        "name": "Mobile Native Map Fingerprint",
+        "kind": "ROMX",
+        "bank": 128,
+        "bytes": 170
+      }
+    ],
+    "baseline_sha256": "aa11039c00d5aff48c4a009db91164714b93bdfca645a3773f56a35407427905",
+    "mobile_sha256": "323c795817c863ff67d61c7ab3fa2d8ffca3a4e424a731870aaa604fd2bbc481",
+    "scope": "Matching source/options, freshly linked maps. Placement/bytes only; no runtime acceptance."
+  },
+  "ram_layout": {
+    "banked_near_calls_checked": 126,
+    "native_original_view_bytes": 121,
+    "private_palette_bytes": 53,
+    "private_palette_code_bytes": 1258,
+    "existing_ram_symbols_checked": 23373,
+    "existing_ram_symbols_changed": {},
+    "avatar_cache_bytes": 1152,
+    "removed_legacy_renderer_bytes": 456,
+    "resident_bytes": 128,
+    "buffer_bytes": 1070,
+    "banked_driver_bytes": 8019,
+    "feature_helper_bytes": 664,
+    "lease_policy_bytes": 1005,
+    "raw_native_tile_backup_bytes": 1152,
+    "baseline_rom_sha256": "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e",
+    "baseline_summary": "SUMMARY:\n\tROM0: 16366 bytes used / 18 free\n\tROMX: 2066825 bytes used / 13943 free in 127 banks\n\tSRAM: 30936 bytes used / 1832 free in 4 banks\n\tWRAM0: 3796 bytes used / 300 free\n\tWRAMX: 23760 bytes used / 4912 free in 7 banks\n\tHRAM: 122 bytes used / 5 free",
+    "mobile_mbc30": {
+      "rom_bytes": 4194304,
+      "save_ram_bytes": 32768,
+      "upper_feature_bytes": 10946,
+      "lower_free_bytes": 13787,
+      "feature_sections": [
+        {
+          "name": "Mobile Adapter",
+          "kind": "ROMX",
+          "bank": 128,
+          "bytes": 8019
+        },
+        {
+          "name": "Mobile Native Palettes",
+          "kind": "ROMX",
+          "bank": 128,
+          "bytes": 1258
+        },
+        {
+          "name": "Mobile Native Lease Policy",
+          "kind": "ROMX",
+          "bank": 128,
+          "bytes": 1005
+        },
+        {
+          "name": "Mobile Native Save Isolation",
+          "kind": "ROMX",
+          "bank": 128,
+          "bytes": 257
+        },
+        {
+          "name": "Mobile Native Tile Backups",
+          "kind": "ROMX",
+          "bank": 128,
+          "bytes": 237
+        },
+        {
+          "name": "Mobile Native Map Fingerprint",
+          "kind": "ROMX",
+          "bank": 128,
+          "bytes": 170
+        }
+      ],
+      "upper_placement_passed": true
+    },
+    "mobile_rom_sha256": "cfc57e531f839c2a58bc202fe730ec74832c0d16a923421e9f2833a8329a8a20",
+    "mobile_summary": "SUMMARY:\n\tROM0: 16345 bytes used / 39 free\n\tROMX: 2077966 bytes used / 19186 free in 128 banks\n\tSRAM: 30936 bytes used / 1832 free in 4 banks\n\tWRAM0: 4046 bytes used / 50 free\n\tWRAMX: 27313 bytes used / 1359 free in 7 banks\n\tHRAM: 122 bytes used / 5 free",
+    "faithful_mbc30": {
+      "rom_bytes": 4194304,
+      "save_ram_bytes": 32768,
+      "upper_feature_bytes": 10946,
+      "lower_free_bytes": 13850,
+      "feature_sections": [
+        {
+          "name": "Mobile Adapter",
+          "kind": "ROMX",
+          "bank": 128,
+          "bytes": 8019
+        },
+        {
+          "name": "Mobile Native Palettes",
+          "kind": "ROMX",
+          "bank": 128,
+          "bytes": 1258
+        },
+        {
+          "name": "Mobile Native Lease Policy",
+          "kind": "ROMX",
+          "bank": 128,
+          "bytes": 1005
+        },
+        {
+          "name": "Mobile Native Save Isolation",
+          "kind": "ROMX",
+          "bank": 128,
+          "bytes": 257
+        },
+        {
+          "name": "Mobile Native Tile Backups",
+          "kind": "ROMX",
+          "bank": 128,
+          "bytes": 237
+        },
+        {
+          "name": "Mobile Native Map Fingerprint",
+          "kind": "ROMX",
+          "bank": 128,
+          "bytes": 170
+        }
+      ],
+      "upper_placement_passed": true
+    },
+    "faithful_rom_sha256": "323c795817c863ff67d61c7ab3fa2d8ffca3a4e424a731870aaa604fd2bbc481",
+    "faithful_summary": "SUMMARY:\n\tROM0: 16331 bytes used / 53 free\n\tROMX: 2077917 bytes used / 19235 free in 128 banks\n\tSRAM: 30936 bytes used / 1832 free in 4 banks\n\tWRAM0: 4046 bytes used / 50 free\n\tWRAMX: 27313 bytes used / 1359 free in 7 banks\n\tHRAM: 122 bytes used / 5 free"
+  },
+  "cases": {
+    "start-menu": {
+      "passed": true,
+      "evidence": "/Volumes/Storage/Cache/mobileadapter/mbc30-tests/runtime/start-menu/evidence.json",
+      "allowed_endpoint_changes": [
+        335,
+        2099118,
+        2099119
+      ]
+    },
+    "running": {
+      "passed": true,
+      "evidence": "/Volumes/Storage/Cache/mobileadapter/mbc30-tests/runtime/running/evidence.json",
+      "allowed_endpoint_changes": [
+        335,
+        2099118,
+        2099119
+      ]
+    },
+    "warp": {
+      "passed": true,
+      "evidence": "/Volumes/Storage/Cache/mobileadapter/mbc30-tests/runtime/warp/evidence.json",
+      "allowed_endpoint_changes": [
+        335,
+        2099118,
+        2099119
+      ]
+    },
+    "rejoin": {
+      "passed": true,
+      "evidence": "/Volumes/Storage/Cache/mobileadapter/mbc30-tests/runtime/rejoin/evidence.json",
+      "allowed_endpoint_changes": [
+        335,
+        2099118,
+        2099119
+      ]
+    },
+    "local-latency": {
+      "passed": true,
+      "evidence": "/Volumes/Storage/Cache/mobileadapter/mbc30-tests/runtime/local-latency/evidence.json",
+      "allowed_endpoint_changes": [
+        335,
+        2099118,
+        2099119
+      ]
+    },
+    "hosted-latency": {
+      "passed": true,
+      "evidence": "/Volumes/Storage/Cache/mobileadapter/mbc30-tests/runtime/hosted-latency/evidence.json",
+      "allowed_endpoint_changes": [
+        335,
+        2099118,
+        2099119
+      ]
+    }
+  },
+  "cadence": {
+    "speeds": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "profiles": [
+      {
+        "world_frames_with_update": 800,
+        "world_duplicate_updates": 0,
+        "world_max_frame_gap": 1,
+        "native_upload_vblank_crossings": 0,
+        "native_idle_vblank_crossings": 0,
+        "serial_failures": 0,
+        "tick_failures": 0
+      },
+      {
+        "world_frames_with_update": 800,
+        "world_duplicate_updates": 0,
+        "world_max_frame_gap": 1,
+        "native_upload_vblank_crossings": 0,
+        "native_idle_vblank_crossings": 0,
+        "serial_failures": 0,
+        "tick_failures": 0
+      },
+      {
+        "world_frames_with_update": 800,
+        "world_duplicate_updates": 0,
+        "world_max_frame_gap": 1,
+        "native_upload_vblank_crossings": 0,
+        "native_idle_vblank_crossings": 0,
+        "serial_failures": 0,
+        "tick_failures": 0
+      },
+      {
+        "world_frames_with_update": 800,
+        "world_duplicate_updates": 0,
+        "world_max_frame_gap": 1,
+        "native_upload_vblank_crossings": 0,
+        "native_idle_vblank_crossings": 0,
+        "serial_failures": 0,
+        "tick_failures": 0
+      }
+    ],
+    "matched_native_controls": [
+      {
+        "figure": "chris",
+        "speed": 1,
+        "actor_count": 10,
+        "mobile_update_frames": 800,
+        "native_update_frames": 784,
+        "mobile_max_gap": 1,
+        "native_max_gap": 2,
+        "mobile_duplicates": 0,
+        "native_duplicates": 16
+      },
+      {
+        "figure": "kris",
+        "speed": 2,
+        "actor_count": 10,
+        "mobile_update_frames": 800,
+        "native_update_frames": 784,
+        "mobile_max_gap": 1,
+        "native_max_gap": 2,
+        "mobile_duplicates": 0,
+        "native_duplicates": 16
+      },
+      {
+        "figure": "crys",
+        "speed": 3,
+        "actor_count": 10,
+        "mobile_update_frames": 800,
+        "native_update_frames": 783,
+        "mobile_max_gap": 1,
+        "native_max_gap": 2,
+        "mobile_duplicates": 0,
+        "native_duplicates": 17
+      },
+      {
+        "figure": "beta",
+        "speed": 4,
+        "actor_count": 10,
+        "mobile_update_frames": 800,
+        "native_update_frames": 783,
+        "mobile_max_gap": 1,
+        "native_max_gap": 2,
+        "mobile_duplicates": 0,
+        "native_duplicates": 17
+      }
+    ]
+  },
+  "priority": {
+    "passed": true,
+    "cases": [
+      "connected-menu-exit",
+      "online-menu-state-restored-without-adapter"
+    ],
+    "actual_peers": 3,
+    "rom_sha256": "cfc57e531f839c2a58bc202fe730ec74832c0d16a923421e9f2833a8329a8a20",
+    "battery_sha256": "8b39edc0ba9225375d351fad36defa1ae7a1d7ff6649ca52c9d288f7692cb725"
+  },
+  "save_faults": {
+    "passed": true,
+    "cases": [
+      {
+        "case": "connected",
+        "same_state_save_copy": {
+          "save_copy_count": 3,
+          "save_copy_register_failures": 0,
+          "save_copy_byte_failures": 0,
+          "save_projected_objects": 6,
+          "save_copy_max_cycles": 5212,
+          "save_copy_lowest_sp": 49341
+        },
+        "passed": true,
+        "native_palette_save_equal": true
+      },
+      {
+        "case": "peer-disconnect",
+        "same_state_save_copy": {
+          "save_copy_count": 3,
+          "save_copy_register_failures": 0,
+          "save_copy_byte_failures": 0,
+          "save_projected_objects": 6,
+          "save_copy_max_cycles": 5212,
+          "save_copy_lowest_sp": 49341
+        },
+        "passed": true,
+        "native_palette_save_equal": true
+      },
+      {
+        "case": "server-close",
+        "same_state_save_copy": {
+          "save_copy_count": 3,
+          "save_copy_register_failures": 0,
+          "save_copy_byte_failures": 0,
+          "save_projected_objects": 0,
+          "save_copy_max_cycles": 940,
+          "save_copy_lowest_sp": 49343
+        },
+        "passed": true,
+        "native_palette_save_equal": true
+      },
+      {
+        "case": "malformed",
+        "same_state_save_copy": {
+          "save_copy_count": 3,
+          "save_copy_register_failures": 0,
+          "save_copy_byte_failures": 0,
+          "save_projected_objects": 6,
+          "save_copy_max_cycles": 5212,
+          "save_copy_lowest_sp": 49341
+        },
+        "passed": true,
+        "native_palette_save_equal": true
+      },
+      {
+        "case": "emergency",
+        "same_state_save_copy": {
+          "save_copy_count": 3,
+          "save_copy_register_failures": 0,
+          "save_copy_byte_failures": 0,
+          "save_projected_objects": 0,
+          "save_copy_max_cycles": 940,
+          "save_copy_lowest_sp": 49343
+        },
+        "passed": true,
+        "native_palette_save_equal": true
+      }
+    ],
+    "report": "/Volumes/Storage/Cache/mobileadapter/mbc30-tests/saves-final/evidence.json",
+    "native_palette_control": {
+      "actual_disabled_rom_save": true,
+      "compared_primary_and_backup": true,
+      "ranges": [
+        [
+          "wUsedObjectPals",
+          "wEmotePal"
+        ],
+        [
+          "wNeededMonPalLight",
+          "wObjectGlowFadeActive"
+        ]
+      ],
+      "passed": true
+    }
+  },
+  "release_transport": {
+    "cases": [
+      "reconnect",
+      "no-adapter"
+    ],
+    "passed": true,
+    "log": "/Volumes/Storage/Cache/mobileadapter/mbc30-tests/release-transport-final.log"
+  },
+  "manual_launcher_prepare": {
+    "endpoint": "127.0.0.1:17423",
+    "rom_sha256": "cfc57e531f839c2a58bc202fe730ec74832c0d16a923421e9f2833a8329a8a20",
+    "core_revision": "ef247c6545c61358cd8679a78c95c2e92daae13d",
+    "core_sha256": "e26383c5151d68716e973c4fd540b43b7c476d267f4078058a0f7bdb5d28e96d",
+    "scenario": "bedroom",
+    "avatar": "chris",
+    "snapshot_regenerated": true
+  },
+  "map_capacity": {
+    "rom_sha256": "f36b806eadce5abb5ebe233ffa800c63b77b73b295abb62e3d3a37ad05cc8fbd",
+    "map_count": 611,
+    "bounded_maps": 607,
+    "reviewed_bounded_maps": 611,
+    "unresolved_maps": [],
+    "limitations": [
+      "The original static bounds ignore story flags and retain actors across disconnected regions.",
+      "Refined bounds depend on fingerprinted native entry, story and camera lifecycle contracts.",
+      "Snowtop panning is a protected deferred scene; off-screen shared-tile window records may be leased afterward.",
+      "Native script-created actors and dynamic movement/asset changes need separate lifecycle fixtures.",
+      "This is a slot bound, not a scanline/OAM, timing or full gameplay proof."
+    ],
+    "full_report": {
+      "path": "/Volumes/Storage/Cache/mobileadapter/mbc30-tests/map-capacity.json",
+      "sha256": "476f34fef0adbc253582978256eb0a6011a0a1f317425fb82edc2fdcbd834b05"
+    }
+  },
+  "map_scanlines": {
+    "rom_sha256": "cfc57e531f839c2a58bc202fe730ec74832c0d16a923421e9f2833a8329a8a20",
+    "map_count": 611,
+    "flagged_maps": 269,
+    "flagged_pairs": 698,
+    "protected_pairs": 355,
+    "unconditional_initial_protected_pairs": 123,
+    "limitations": [
+      "Candidates ignore collision/reachability and mutually exclusive story states; they require review.",
+      "Ordinary wandering envelopes include continuous movement; script-repositioned actors need runtime fixtures.",
+      "Special/variable assets, partial pixel-row overlaps and effects need separate geometry/lifecycle tests.",
+      "Protected is a safety default, not a claim that every protected actor is indispensable.",
+      "Optional admission is approved but not implemented; flagged pairs remain unresolved."
+    ],
+    "full_report": {
+      "path": "/Volumes/Storage/Cache/mobileadapter/mbc30-tests/map-scanlines.json",
+      "sha256": "65a75ca5b66430489f0857889cb73377e25108d92870a93ea67f55f4665e03e5"
+    }
+  },
+  "protected_pressure": {
+    "acceptance_passed": false,
+    "report": "/Volumes/Storage/Cache/mobileadapter/mbc30-tests/scanline-pressure/evidence.json"
+  },
+  "initial_failure": {
+    "report": "/Volumes/Storage/Cache/mobileadapter/mbc30-tests/initial/runtime.log",
+    "reason": "VRAM bank changed by native VBlank before copy locked interrupts",
+    "previous_2m_control_passed": true,
+    "control": "/Volumes/Storage/Cache/mobileadapter/mbc30-tests/legacy-priority-control/summary.json"
+  },
+  "artifact_root": "/Volumes/Storage/Cache/mobileadapter/mbc30-tests",
+  "limitations": [
+    "Finite test windows only; no universal runtime proof",
+    "Scanline/protected NPC conflicts remain open",
+    "No phone, public Cloudflare or physical cartridge validation"
+  ],
+  "cached_invalid_layout_rejected": {
+    "passed": true,
+    "exit_code": 2,
+    "log": "/Volumes/Storage/Cache/mobileadapter/mbc30-tests/cached-invalid-layout/process.log",
+    "rom_was_not_relinked": true
+  },
+  "host_checks": {
+    "rom_budget_unit_tests": 11,
+    "dev_session_tests": 19,
+    "native_lease_tests": 8,
+    "production_asm_contracts": "passed",
+    "diff_check": "passed"
+  }
+}

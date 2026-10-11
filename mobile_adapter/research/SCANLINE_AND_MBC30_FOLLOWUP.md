@@ -1,5 +1,9 @@
 # Native scanline gates and multiplayer-only MBC30 investigation
 
+> MBC30 adoption was implemented on 2026-10-12 using the supplied fork.
+> See [MBC30_MIGRATION.md](MBC30_MIGRATION.md) for current mapper/core evidence.
+> Scanline blockers below remain open; mapper feasibility notes are historical.
+
 Date: 2026-10-11. Branch: `mobileadapter`.
 This follow-up supersedes the missing-test/source-guard statements in the earlier
 ROM/render audit. It does not establish complete four-player rendering acceptance.

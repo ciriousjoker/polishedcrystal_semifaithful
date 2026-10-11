@@ -1,6 +1,6 @@
 ; Native saves include runtime object records. Project the original leased
 ; records into the ordinary save copy without changing live game memory.
-SECTION "Mobile Native Save Isolation", ROMX
+SECTION "Mobile Native Save Isolation", ROMX, BANK[MOBILE_ROM_BANK]
 MobileNativeSaveCodeStart::
 
 MobileNativeCaptureFree::

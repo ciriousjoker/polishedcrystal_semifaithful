@@ -6,6 +6,7 @@ The current known conflict fails acceptance. --diagnostic records that failure
 without treating it as renderer success. User listeners and saves are untouched.
 """
 import argparse
+from core_runtime import CORE_SOURCE, OBSERVED_CORE, PROFILE_CORE
 import json
 from pathlib import Path
 import subprocess
@@ -20,6 +21,8 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--port", type=int, default=17640)
     parser.add_argument("--diagnostic", action="store_true")
+    parser.add_argument("--core", type=Path, default=OBSERVED_CORE)
+    parser.add_argument("--profile-core", type=Path, default=PROFILE_CORE)
     args = parser.parse_args()
     args.output = args.output.resolve()
     args.cache = args.cache.resolve()
@@ -29,9 +32,9 @@ def main():
     args.output.mkdir(parents=True)
     runner = args.output / "smoke-libretro"
     subprocess.run(["clang++", "-std=c++17", "-O2", "-I",
-        str(args.cache / "sources/doublecherry/libretro/DoubleCherryEngine"),
+        str(CORE_SOURCE / "libretro/DoubleCherryEngine"),
         str(REPO / "mobile_adapter/tools/smoke_libretro.cpp"), "-lz", "-o", str(runner)], check=True)
-    core = args.cache / "build/doublecherry/DoubleCherryGB_libretro.dylib"
+    core = args.core
     batteries = []
     for figure in ("chris", "kris", "crys", "beta"):
         directory = args.output / figure

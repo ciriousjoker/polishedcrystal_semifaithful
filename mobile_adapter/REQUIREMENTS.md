@@ -1,6 +1,6 @@
 # Binding project requirements
 
-Updated: 2026-10-11. This document records the user's requirements and subsequent
+Updated: 2026-10-12. This document records the user's requirements and subsequent
 clarifications in English. It takes precedence over older implementation proposals
 in PLAN.md. An unmet requirement is an acceptance blocker, not permission to
 silently weaken it. Feasibility notes below are engineering assessments, not
@@ -23,24 +23,25 @@ Do not implement wishlist features merely because they have been recorded.
   tooling and minimal integration code. Any deviation requires an explicit human
   decision after demonstrating why it is absolutely necessary and why alternatives
   do not suffice. Existing game helpers must not be relocated as a shortcut.
-- **F5 MUST:** Preserve physical-cartridge playability and future upstream game
-  content. Multiplayer must not force a choice between the latest corresponding
-  game content and the addon. This is binding but its long-term capacity strategy
-  is unresolved: the current fixed 2 MiB build cannot guarantee arbitrary future
-  growth. Do not silently discard content or claim the guarantee already holds.
-  Cartridge/mapper compatibility changes need a reviewed design.
-- **F6 MUST:** The complete multiplayer ROM addon must fit within **10,000 bytes**
-  at the current 2 MiB target. This conservatively interprets the user's 10 KB
-  limit. Include executable code, embedded feature data and net integration
-  cost against the matching disabled build. Also cap feature-owned ROM sections;
-  do not fund them by deleting ordinary game code. Tooling, Rust/Flutter and
-  standalone test fixtures are excluded. The current addon costs 11,112 bytes,
-  so the budget is unmet by 1,112 bytes. It is an acceptance blocker, not an
-  approved exception. A larger mapper must not silently waive this cap.
+- **F5 MUST:** Preserve the corresponding original game content and its ordinary
+  2 MiB physical-cartridge build. The user approved a separate **4 MiB MBC30**
+  cartridge target for enabled multiplayer builds on 2026-10-12. That target
+  needs an MBC30-capable emulator or board; an ordinary MBC3 board is insufficient.
+  Do not remove game content to make the addon fit. This solves feature storage
+  within the upper 2 MiB, not arbitrary growth of the original game or RAM/OAM.
+- **F6 MUST:** MBC30 **replaces** the previous 10,000-byte total addon limit,
+  explicitly confirmed by the user on 2026-10-12. All banked feature code/data
+  must occupy banks 128..255, and original game sections must remain below bank
+  128. The lower half contains only minimal conditional integration. The build
+  guard checks placement; the matching-counterpart budget gate additionally
+  enforces a 256-byte net lower integration ceiling as an engineering regression
+  guard. Current measured integration is 174 bytes. Ordinary game helpers must
+  not be relocated to fund that integration.
 
-Read [research/ROM_BUDGET.md](research/ROM_BUDGET.md) for the linked savings
-experiments, the ROM-only NPC metadata opportunity and their validation limits.
-The strict `test-mobile-budget` gate is included in full ROM acceptance.
+Read [research/MBC30_MIGRATION.md](research/MBC30_MIGRATION.md) for current mapper,
+core and validation evidence. [research/ROM_BUDGET.md](research/ROM_BUDGET.md) is a
+historical 2 MiB savings investigation, not the current acceptance cap.
+The strict `test-mobile-budget` gate remains included in full ROM acceptance.
 
 The latest measured ROM budget, scanline limits and missing future-map gates are
 recorded in [research/ROM_AND_RENDER_LIMITS.md](research/ROM_AND_RENDER_LIMITS.md).

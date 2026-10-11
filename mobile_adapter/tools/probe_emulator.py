@@ -27,7 +27,7 @@ def trace_text(path):
 
 
 BASELINE_SHA256 = "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e"
-CORE_REVISION = "03f58ca3dfb4b716f7e66a0e0467f9e85ef82abb"
+from core_runtime import CORE_REVISION
 REPO = Path(__file__).resolve().parents[2]
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 

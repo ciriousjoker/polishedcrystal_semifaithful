@@ -9,6 +9,7 @@ Builds temporarily change fixture/map source; do not run another build concurren
 Save tests must snapshot their disabled inputs before this tool starts.
 """
 import argparse
+from core_runtime import CORE_SOURCE, OBSERVED_CORE, PROFILE_CORE
 import json
 from pathlib import Path
 import subprocess
@@ -65,9 +66,17 @@ def main():
     parser.add_argument('--cache', type=Path, default=Path('/Volumes/Storage/Cache/mobileadapter'))
     parser.add_argument('--reference', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument("--core", type=Path, default=OBSERVED_CORE)
+    parser.add_argument("--profile-core", type=Path, default=PROFILE_CORE)
+    parser.add_argument("--runner", type=Path)
     args = parser.parse_args()
     require(not args.output.exists(), 'Choose a fresh control directory')
     args.output.mkdir(parents=True)
+    if args.runner is None:
+        args.runner = args.output / "smoke-libretro"
+        subprocess.run(["clang++", "-std=c++17", "-O2", "-I",
+                        str(CORE_SOURCE / "libretro/DoubleCherryEngine"),
+                        str(REPO / "mobile_adapter/tools/smoke_libretro.cpp"), "-lz", "-o", str(args.runner)], check=True)
     states = [json.loads((args.reference / str(i) / 'state.json').read_text())['symbols'] for i in range(4)]
     reports = []
     reference_symbols = read_symbols(args.reference / 'test.sym')
@@ -91,8 +100,8 @@ def main():
         # Generate the control's own real New Game/Save rather than editing SRAM.
         scene = args.output / (name + '-save')
         subprocess.run(['python3', str(REPO / 'mobile_adapter/tools/create_scene_save.py'),
-                        '--runner', str(args.cache / 'smoke-libretro-m2'),
-                        '--core', str(args.cache / 'build/doublecherry/DoubleCherryGB_libretro.dylib'),
+                        '--runner', str(args.runner),
+                        '--core', str(args.core),
                         '--rom', str(build / 'control.gbc'), '--symbols', str(build / 'control.sym'),
                         '--map', 'GoldenrodGameCorner', '--x', '14', '--y', '5', '--hour', '10',
                         '--avatar', name, '--output', str(scene)], check=True, cwd=REPO)
@@ -105,8 +114,8 @@ def main():
         script += '\n' + ''.join(f"{event['frame']} {BUTTONS[event['button']]} 12\n" for event in moves)
         (directory / 'input.txt').write_text(script)
         frames = 3250 + (5500 - 3250) * (i + 1)
-        command = [str(args.cache / 'smoke-libretro-m2'),
-                   str(args.cache / 'build/doublecherry-profile-cadence/DoubleCherryGB_libretro.dylib'),
+        command = [str(args.runner),
+                   str(args.profile_core),
                    str(build / 'control.gbc'), str(directory / 'screen.ppm'), str(directory),
                    '--frames', str(frames), '--input', str(directory / 'input.txt'),
                    '--symbols', str(build / 'control.sym'), '--adapter', '0',

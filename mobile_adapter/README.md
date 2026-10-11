@@ -18,6 +18,29 @@ current failures are recorded in
 Public Cloudflare deployment and phone testing are deferred. Calls, interaction
 menus, battles, gifts, trades and travel remain later milestones.
 
+## MBC30 core and ROM layout
+
+The mobile flag now selects a **4 MiB MBC30** ROM. All banked feature sections
+occupy the upper half, starting at bank 128. The ordinary game stays below 2 MiB;
+only minimal guarded integration remains there. Battery allocation is unchanged
+at 32 KiB. Disabled builds retain their original 2 MiB target and exact hash.
+The previous 10,000-byte cap was explicitly replaced by the user. See
+[research/MBC30_MIGRATION.md](research/MBC30_MIGRATION.md) for current evidence.
+
+Install the supplied `DoubleCherryGB-mbc30-macos-universal.zip` from Downloads
+and build its separate read-only headless observers once:
+
+```sh
+python3 mobile_adapter/tools/prepare_mbc30_core.py --profile
+```
+
+The core and all test builds live in `/Volumes/Storage/Cache/mobileadapter/`.
+The release library is checksum-pinned to fork revision `ef247c6`. Launchers and
+acceptance tools select this fork by default; the old core cannot read bank 128.
+Fresh start snapshots are regenerated for the new ROM/core. An Android core must
+also be rebuilt from this fork and installed with `--reinstall-core`; the old
+phone installation is incompatible. Device validation remains deferred.
+
 ## Human development command
 
 From this worktree:
@@ -43,7 +66,7 @@ Bridge and background-service packaging are future delivery work.
 ## Build and Bridge app
 
 Use RGBDS 1.0.4, Cargo 1.85 or later and the pinned native ARM64 DoubleCherryGB
-core in [research/HOST_ENVIRONMENT.md](research/HOST_ENVIRONMENT.md).
+core in [research/MBC30_MIGRATION.md](research/MBC30_MIGRATION.md).
 BGB, Wine and Rosetta are unnecessary. On the configured host:
 
 ```sh

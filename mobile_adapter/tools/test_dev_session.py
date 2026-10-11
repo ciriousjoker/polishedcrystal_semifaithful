@@ -130,7 +130,7 @@ class DeploymentContracts(unittest.TestCase):
             code = (f'import sys; sys.path.insert(0, {str(Path(session.__file__).parent)!r}); '
                     'import dev_session as s; from pathlib import Path; from types import SimpleNamespace; '
                     f's.REPO=Path({str(root)!r}); s.PORT={port}; '
-                    f's.main=lambda: s.start(SimpleNamespace(mode="local", lobby=1, frontend=Path({str(frontend)!r}), cache=Path({str(root)!r})), Path({str(root)!r}), "127.0.0.1"); '
+                    f's.main=lambda: s.start(SimpleNamespace(mode="local", lobby=1, core=s.RELEASE_CORE, frontend=Path({str(frontend)!r}), cache=Path({str(root)!r})), Path({str(root)!r}), "127.0.0.1"); '
                     'sys.exit(s.entrypoint())')
             parent = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE,
                                       stderr=subprocess.STDOUT, text=True, start_new_session=True)
@@ -163,12 +163,13 @@ class DeploymentContracts(unittest.TestCase):
     def test_lan_patch_changes_only_owned_endpoint_and_global_checksum(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            data = bytearray([0xff]) * (2 * 1024 * 1024)
-            location = 0x7f * 0x4000 + 0x557
+            data = bytearray([0xff]) * (4 * 1024 * 1024)
+            data[0x147:0x14a] = bytes((0x10, 7, 3))
+            location = 0x80 * 0x4000 + 0x557
             data[location:location + 6] = ipaddress.IPv4Address("127.0.0.1").packed + session.PORT.to_bytes(2, "big")
             source, symbols, destination = root / "source", root / "symbols", root / "output"
             source.write_bytes(data)
-            symbols.write_text("7f:4557 MobileEndpoint\n")
+            symbols.write_text("80:4557 MobileEndpoint\n")
             session.lan_rom(source, symbols, destination, "192.168.2.25")
             result = destination.read_bytes()
             self.assertEqual(source.read_bytes(), data)
@@ -183,7 +184,7 @@ class DeploymentContracts(unittest.TestCase):
             root = Path(folder)
             source, symbols, destination = root / "source", root / "symbols", root / "output"
             source.write_bytes(bytes(2 * 1024 * 1024))
-            for value in ("00:4557", "7f:4557", "7f:7fff"):
+            for value in ("00:4557", "7f:4557", "80:7fff", "100:4557"):
                 symbols.write_text(value + " MobileEndpoint\n")
                 with self.assertRaises(ValueError):
                     session.lan_rom(source, symbols, destination, "192.168.2.25")

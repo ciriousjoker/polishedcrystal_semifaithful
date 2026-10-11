@@ -1,6 +1,6 @@
 ; Audited native leases. Generated separately from render suppression.
 PUSHS
-SECTION "Mobile Native Lease Policy", ROMX
+SECTION "Mobile Native Lease Policy", ROMX, BANK[MOBILE_ROM_BANK]
 MobileNativePolicyStart::
 MobileNativeLoadLeasePolicy:
 ; Bank 1 on entry/exit. Fetch the protected-default map mask once.

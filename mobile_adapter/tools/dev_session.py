@@ -20,6 +20,7 @@ import threading
 import time
 
 from probe_emulator import read_symbols, require
+from core_runtime import CORE_REVISION, CORE_SOURCE, RELEASE_CORE, CORE_SHA256, CPU_SHA256
 from save_scenarios import AVATARS, battery, choose, expected
 
 REPO = Path(__file__).resolve().parents[2]
@@ -31,7 +32,6 @@ CARGO = Path("/Volumes/Storage/Cache/cargo/bin/cargo")
 PORT = 17423
 NAME = "polishedcrystal-mobile"
 PACKAGES = ("com.retroarch.aarch64", "com.retroarch")
-CORE_REVISION = "03f58ca3dfb4b716f7e66a0e0467f9e85ef82abb"
 
 
 class SessionCancelled(Exception):
@@ -141,10 +141,11 @@ def server_address(args):
 def lan_rom(source, symbols, destination, address):
     """Change only our endpoint table and the global cartridge checksum."""
     bank, location = read_symbols(symbols)["MobileEndpoint"]
-    require(1 <= bank < 128 and 0x4000 <= location <= 0x7ffa, "Invalid MobileEndpoint symbol")
+    require(128 <= bank <= 255 and 0x4000 <= location <= 0x7ffa, "Invalid MobileEndpoint symbol")
     offset = bank * 0x4000 + location - 0x4000
     data = bytearray(source.read_bytes())
-    require(len(data) == 2 * 1024 * 1024, "Expected the supported 2 MiB feature ROM")
+    require(len(data) == 4 * 1024 * 1024 and data[0x147:0x14a] == bytes((0x10, 7, 3)),
+            "Expected the supported 4 MiB MBC30 feature ROM")
     require(data[offset:offset + 6] == bytes([127, 0, 0, 1]) + PORT.to_bytes(2, "big"),
             "Default endpoint changed; update the deployment contract before patching")
     data[offset:offset + 6] = ipaddress.IPv4Address(address).packed + PORT.to_bytes(2, "big")
@@ -155,9 +156,13 @@ def lan_rom(source, symbols, destination, address):
 
 
 def native_tools(args, android=False):
-    source = args.cache / "sources/doublecherry"
-    require(output(["git", "-C", source, "rev-parse", "HEAD"]) == CORE_REVISION,
-            "DoubleCherryGB source is not the pinned tested revision")
+    source = CORE_SOURCE
+    require(source.is_dir() and args.core.is_file(),
+            "Prepare the pinned core first: python3 mobile_adapter/tools/prepare_mbc30_core.py --profile")
+    require(hashlib.sha256(args.core.read_bytes()).hexdigest() == CORE_SHA256,
+            "Mac core is not the supplied checksum-pinned MBC30 release")
+    require(hashlib.sha256((source / "gb_core/cpu.cpp").read_bytes()).hexdigest() == CPU_SHA256,
+            "DoubleCherryGB source CPU differs from the pinned revision")
     from observe_core_palettes import prepare
     prepare(source)
     runner = args.cache / "smoke-libretro"
@@ -167,7 +172,7 @@ def native_tools(args, android=False):
         return runner
     ndk = args.sdk / "ndk/29.0.14206865"
     require(ndk.exists(), "Install Android NDK 29.0.14206865, or pass --sdk with that NDK")
-    build = args.cache / "build/doublecherry-android-arm64"
+    build = args.cache / "build/doublecherry-mbc30-android-arm64"
     run(["cmake", "-S", source, "-B", build, "-DCMAKE_BUILD_TYPE=Release",
          f"-DCMAKE_TOOLCHAIN_FILE={ndk}/build/cmake/android.toolchain.cmake",
          "-DANDROID_ABI=arm64-v8a", "-DANDROID_PLATFORM=android-23",
@@ -285,7 +290,7 @@ def mac_profile(args, runner, seed, address, expected_state):
         shutil.copyfile(save, backup / "mac.srm")
     shutil.copyfile(seed, save)
     with (root / "prepare.log").open("w") as log:
-        run([runner, args.cache / "build/doublecherry/DoubleCherryGB_libretro.dylib",
+        run([runner, args.core,
              destination, root / "start.ppm", root / "system", "--frames", "3500",
              "--input", TOOLS / "fixtures/continue.input", "--save-in", save,
              "--symbols", REPO / "polishedcrystal-mobile-3.2.3.sym",
@@ -294,6 +299,7 @@ def mac_profile(args, runner, seed, address, expected_state):
     verify_idle(root / "start.json", expected_state)
     (root / "build.json").write_text(json.dumps({"endpoint": f"{address}:{PORT}",
         "rom_sha256": checksum, "core_revision": CORE_REVISION,
+        "core_sha256": hashlib.sha256(args.core.read_bytes()).hexdigest(),
         "scenario": args.scenario_record["id"], "avatar": args.mac_avatar,
         "snapshot_regenerated": True}, indent=2) + "\n")
     return root
@@ -483,7 +489,7 @@ def start(args, mac, address, device=None, launch=None):
             android_address = match.group(1) if match else None
             print(f"CLIENT ADDRESSES mac={address} android={android_address or 'unknown'} (labels by source IP)", flush=True)
         children.append(subprocess.Popen([str(args.frontend), "-v", "-c", str(mac / "retroarch.cfg"),
-            "-L", str(args.cache / "build/doublecherry/DoubleCherryGB_libretro.dylib"),
+            "-L", str(args.core),
             str(mac / f"roms/{NAME}.gbc")], stdout=log, stderr=subprocess.STDOUT,
             start_new_session=True))
         def watch_mac():
@@ -550,6 +556,7 @@ def main():
     parser.add_argument("--reinstall-core", action="store_true", help="Explicitly install the Android core; normal starts never open its installer")
     parser.add_argument("--mac-only", action="store_true", help="Prepare/start Mac without an Android device")
     parser.add_argument("--prepare-only", action="store_true", help="Prepare artifacts without starting the server or GUI")
+    parser.add_argument("--core", type=Path, default=RELEASE_CORE, help="Checksum-pinned MBC30 macOS library")
     parser.add_argument("--cache", type=Path, default=CACHE)
     parser.add_argument("--sdk", type=Path, default=SDK)
     parser.add_argument("--android-dir", default="/storage/emulated/0/Download/polishedcrystal_mobile_adapter",

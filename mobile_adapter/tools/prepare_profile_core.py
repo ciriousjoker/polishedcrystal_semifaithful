@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
 """Create a separate, read-only profiled copy of the pinned native core."""
 import argparse
+import hashlib
+from core_runtime import CORE_REVISION, CPU_SHA256
 from pathlib import Path
 import shutil
 import subprocess
 
-REVISION = "03f58ca3dfb4b716f7e66a0e0467f9e85ef82abb"
+REVISION = CORE_REVISION
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--source", type=Path, required=True)
 parser.add_argument("--output", type=Path, required=True)
 args = parser.parse_args()
 source, output = args.source.resolve(), args.output.resolve()
-assert subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip() == REVISION
+if (source / ".git").exists():
+    assert subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip() == REVISION
 assert not output.exists(), "Output already exists"
-original = subprocess.check_output(["git", "-C", str(source), "show", f"{REVISION}:gb_core/cpu.cpp"])
-assert (source / "gb_core/cpu.cpp").read_bytes() == original, "Unreviewed CPU modifications"
+original = (source / "gb_core/cpu.cpp").read_bytes()
+assert hashlib.sha256(original).hexdigest() == CPU_SHA256, "Unreviewed CPU modifications"
 code = original.decode()
 newline = "\r\n" if "\r\n" in code else "\n"
 code = code.replace("\r\n", "\n")

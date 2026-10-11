@@ -1,5 +1,5 @@
 ; Keep native palette metadata and buffers independent of remote rendering.
-SECTION "Mobile Native Palettes", ROMX
+SECTION "Mobile Native Palettes", ROMX, BANK[MOBILE_ROM_BANK]
 MobileNativePaletteCodeStart::
 
 MobileEmergencyInput::

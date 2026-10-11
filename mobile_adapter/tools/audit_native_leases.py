@@ -181,7 +181,7 @@ def generate(rom_path, sym_path):
         sources[str(source.relative_to(REPO))] = hashlib.sha256(source.read_bytes()).hexdigest()
     require(len(masks) <= 256, "Lease mask dictionary exceeds one-byte indices")
     assembly = ["; Audited native leases. Generated separately from render suppression.",
-                "PUSHS", 'SECTION "Mobile Native Lease Policy", ROMX', "MobileNativePolicyStart::", "MobileNativeLoadLeasePolicy:",
+                "PUSHS", 'SECTION "Mobile Native Lease Policy", ROMX, BANK[MOBILE_ROM_BANK]', "MobileNativePolicyStart::", "MobileNativeLoadLeasePolicy:",
                 "; Bank 1 on entry/exit. Fetch the protected-default map mask once.",
                 "\tld a, [wMapGroup]", "\tdec a", "\tadd a", "\tld e, a", "\tld d, 0",
                 "\tld hl, MobileLeaseGroupOffsets", "\tadd hl, de",

@@ -1,5 +1,5 @@
 ; Feature-owned native tile snapshots. No native decompressor state is borrowed.
-SECTION "Mobile Native Tile Backups", ROMX
+SECTION "Mobile Native Tile Backups", ROMX, BANK[MOBILE_ROM_BANK]
 MobileNativeTileCodeStart::
 
 MobileNativeBackupTiles:
@@ -41,8 +41,10 @@ MobileNativeBackupTiles:
 	push hl
 	call MobileNativeRawChunk
 	call SwapHLDE
-	ld b, 16
+	ld a, b
 	di
+	ldh [rVBK], a
+	ld b, 16
 .burst
 	ldh a, [rLY]
 	cp 136
@@ -92,7 +94,7 @@ endr
 	ret
 
 MobileNativeRawChunk::
-; A=0..5 chunk, current pool/slot resident. Return HL=VRAM, DE=bank-5 source.
+; A=0..5 chunk, current pool/slot resident. Return HL=VRAM, DE=bank-5 source, B=VRAM bank.
 ; Captures and restores use the same standing/walking native-slot mapping.
 	ld [wMobileAvatarTile], a
 	ld hl, wMobileActorTiles1
@@ -139,8 +141,6 @@ rept 4
 endr
 	ld de, vTiles0
 	add hl, de
-	ld a, b
-	ldh [rVBK], a
 	ld a, [wMobileAvatarTile]
 	cp 3
 	jr c, .standing

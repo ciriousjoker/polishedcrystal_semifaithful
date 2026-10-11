@@ -1,5 +1,10 @@
 # Multiplayer ROM budget and optimization audit
 
+> Historical checkpoint: on 2026-10-12 the user replaced the 10,000-byte cap
+> with an approved 4 MiB MBC30 split. See [MBC30_MIGRATION.md](MBC30_MIGRATION.md)
+> for the current requirements and production layout. The experiments below
+> describe the previous 2 MiB target.
+
 Audited 2026-10-11 against production checkpoint `0dcc9022f`. This is an analysis
 and acceptance-gate change. Production assembly, ROMs, gameplay and transport
 remain unchanged. Size-only candidate ROMs are not runtime-tested releases.

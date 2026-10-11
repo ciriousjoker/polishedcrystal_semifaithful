@@ -122,7 +122,10 @@ crystal: $$(ROM_NAME).$$(EXTENSION)
 faithful: crystal
 mobile: crystal
 ifdef MOBILE_OBJ_DIR
-.PHONY: mobile-lease-policy
+.PHONY: mobile-lease-policy mobile-layout-check
+mobile: mobile-layout-check
+mobile-layout-check: $$(ROM_NAME).$$(EXTENSION)
+	python3 mobile_adapter/tools/audit_rom_budget.py --mobile "$(ROM_NAME).gbc" --layout-only
 mobile-lease-policy:
 	python3 mobile_adapter/tools/audit_native_leases.py --check-sources
 	python3 mobile_adapter/tools/audit_native_capacity.py --check-sources
@@ -140,9 +143,25 @@ test-mobile-host:
 	python3 -m unittest discover -s mobile_adapter/tools -p 'test_rom_budget.py'
 # Emulator acceptance is deliberately separate from host-only unit/ASM tests.
 MOBILE_TEST_CACHE ?= /Volumes/Storage/Cache/mobileadapter
+MOBILE_TEST_CORE ?=
+MOBILE_TEST_PROFILE_CORE ?=
+MOBILE_CORE_ARGS = $(if $(MOBILE_TEST_CORE),--core "$(MOBILE_TEST_CORE)") $(if $(MOBILE_TEST_PROFILE_CORE),--profile-core "$(MOBILE_TEST_PROFILE_CORE)")
 MOBILE_TEST_CONTROL ?=
 MOBILE_TEST_OUTPUT ?= $(MOBILE_TEST_CACHE)/acceptance-$(shell date +%Y%m%d-%H%M%S)
 MOBILE_TEST_CASES ?= cadence,local-latency,hosted-latency,priority,saves,running,start-menu,warp,rejoin,save-caches
+.PHONY: prepare-mobile-core
+prepare-mobile-core:
+	python3 mobile_adapter/tools/prepare_mbc30_core.py --profile
+.PHONY: test-mobile-mbc30
+test-mobile-mbc30:
+	$(MAKE) -B crystal RGBDS="$(RGBDS)"
+	$(MAKE) mobile RGBDS="$(RGBDS)"
+	$(MAKE) faithful mobile RGBDS="$(RGBDS)"
+	python3 mobile_adapter/tools/audit_rom_budget.py --output "$(MOBILE_TEST_OUTPUT)-budget.json" --strict
+	python3 mobile_adapter/tools/check_layout.py --output "$(MOBILE_TEST_OUTPUT)-layout.json"
+	python3 mobile_adapter/tools/probe_mbc30.py --cache "$(MOBILE_TEST_CACHE)" --output "$(MOBILE_TEST_OUTPUT)-mapper" --require-supported
+	$(MOBILE_CARGO) build --locked --manifest-path mobile_adapter/server/Cargo.toml
+	python3 mobile_adapter/tools/verify_milestone2.py --cache "$(MOBILE_TEST_CACHE)" $(MOBILE_CORE_ARGS) --output "$(MOBILE_TEST_OUTPUT)" --cases "$(MOBILE_TEST_CASES)"
 .PHONY: test-mobile-maps
 test-mobile-maps:
 	$(MAKE) mobile RGBDS="$(RGBDS)"
@@ -157,13 +176,13 @@ test-mobile-budget:
 test-mobile-scanlines:
 	$(MAKE) mobile RGBDS="$(RGBDS)"
 	$(MOBILE_CARGO) build --locked --manifest-path mobile_adapter/server/Cargo.toml --bin mobile-bridge
-	python3 mobile_adapter/tools/probe_scanline_pressure.py --cache "$(MOBILE_TEST_CACHE)" --output "$(MOBILE_TEST_OUTPUT)-scanlines"
+	python3 mobile_adapter/tools/probe_scanline_pressure.py --cache "$(MOBILE_TEST_CACHE)" $(MOBILE_CORE_ARGS) --output "$(MOBILE_TEST_OUTPUT)-scanlines"
 test-mobile-rom:
 	$(MAKE) test-mobile-budget RGBDS="$(RGBDS)" MOBILE_TEST_OUTPUT="$(MOBILE_TEST_OUTPUT)"
 	$(MAKE) test-mobile-maps RGBDS="$(RGBDS)" MOBILE_TEST_OUTPUT="$(MOBILE_TEST_OUTPUT)"
 	$(MOBILE_CARGO) build --locked --manifest-path mobile_adapter/server/Cargo.toml
-	python3 mobile_adapter/tools/verify_milestone2.py --cache "$(MOBILE_TEST_CACHE)" $(if $(MOBILE_TEST_CONTROL),--control "$(MOBILE_TEST_CONTROL)") --output "$(MOBILE_TEST_OUTPUT)" --cases "$(MOBILE_TEST_CASES)"
-	python3 mobile_adapter/tools/probe_scanline_pressure.py --cache "$(MOBILE_TEST_CACHE)" --output "$(MOBILE_TEST_OUTPUT)-pressure"
+	python3 mobile_adapter/tools/verify_milestone2.py --cache "$(MOBILE_TEST_CACHE)" $(MOBILE_CORE_ARGS) $(if $(MOBILE_TEST_CONTROL),--control "$(MOBILE_TEST_CONTROL)") --output "$(MOBILE_TEST_OUTPUT)" --cases "$(MOBILE_TEST_CASES)"
+	python3 mobile_adapter/tools/probe_scanline_pressure.py --cache "$(MOBILE_TEST_CACHE)" $(MOBILE_CORE_ARGS) --output "$(MOBILE_TEST_OUTPUT)-pressure"
 
 monochrome: crystal
 noir: crystal
@@ -188,7 +207,11 @@ tidy:
 		$(wildcard $(NAME)-*.map) $(wildcard $(NAME)-*.sym) $(wildcard $(NAME)-*.patch) rgbdscheck.o $(wildcard gfx/title/version.2bpp*)
 
 freespace: crystal tools/bankends
+ifdef MOBILE_OBJ_DIR
+	python3 mobile_adapter/tools/audit_rom_budget.py --mobile "$(ROM_NAME).gbc" --layout-only
+else
 	tools/bankends $(ROM_NAME).map > bank_ends.txt
+endif
 
 bsp: $(ROM_NAME).bsp
 
@@ -227,7 +250,11 @@ $(ROM_NAME).patch: $(ROM_NAME)_vc.gbc $(ROM_NAME).$(EXTENSION) vc.patch.template
 $(ROM_NAME).$(EXTENSION): $(crystal_obj) layout.link
 	$Q$(RGBLINK) $(RGBLINKFLAGS) -l layout.link -o $@ $(filter %.o,$^)
 	$Q$(RGBFIX) $(RGBFIXFLAGS) $@
+ifdef MOBILE_OBJ_DIR
+	$Qpython3 mobile_adapter/tools/audit_rom_budget.py --mobile "$@" --layout-only
+else
 	$Qtools/bankends -q $(ROM_NAME).map >&2
+endif
 
 $(ROM_NAME)_vc.gbc: $(crystal_vc_obj) layout.link
 	$Q$(RGBLINK) $(RGBLINKVCFLAGS) -l layout.link -o $@ $(filter %.o,$^)

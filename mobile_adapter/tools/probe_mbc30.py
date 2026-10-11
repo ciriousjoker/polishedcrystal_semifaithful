@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Execute a real 4 MiB mapper diagnostic with the chosen headless core."""
 import argparse
+from core_runtime import RELEASE_CORE, CORE_SOURCE
 import json
 from pathlib import Path
 import subprocess
@@ -32,9 +33,9 @@ def main():
     require(len(rom.read_bytes()) == 4 * 1024 * 1024, "Mapper probe is not 4 MiB")
     runner = args.output / "smoke-libretro"
     subprocess.run(["clang++", "-std=c++17", "-O2", "-I",
-        str(args.cache / "sources/doublecherry/libretro/DoubleCherryEngine"),
+        str(CORE_SOURCE / "libretro/DoubleCherryEngine"),
         str(REPO / "mobile_adapter/tools/smoke_libretro.cpp"), "-lz", "-o", str(runner)], check=True)
-    core = args.core or args.cache / "build/doublecherry/DoubleCherryGB_libretro.dylib"
+    core = args.core or RELEASE_CORE
     with (args.output / "process.log").open("w") as log:
         subprocess.run([str(runner), str(core), str(rom), str(args.output / "screen.ppm"), str(args.output),
             "--frames", "1200", "--adapter", "0", "--symbols", str(symbols), "--state-out", str(args.output / "state.json")],

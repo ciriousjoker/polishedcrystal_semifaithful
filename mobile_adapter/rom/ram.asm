@@ -94,6 +94,8 @@ wMobilePrivatePalCurrent:: db
 wMobilePrivatePalSavedUpdate:: db
 wMobileNativePaletteOwners:: ds NUM_OBJECT_STRUCTS
 wMobileNativeOriginalsEnd::
+wMobileAvatarBank:: db ; private bank decision, never inferred from mutable VBK
+ASSERT @ <= $d000
 ASSERT wMobileNativeOriginalsEnd <= $d000
 
 SECTION "Mobile Buffers", WRAMX[$d4eb], BANK[MOBILE_WRAM_BANK]

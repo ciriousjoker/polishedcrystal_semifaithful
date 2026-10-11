@@ -5,6 +5,7 @@ import json
 import re
 from pathlib import Path
 from probe_emulator import BASELINE_SHA256, digest, read_symbols, require
+from audit_rom_budget import layout, validate_mobile
 
 REPO = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser(description=__doc__)
@@ -59,6 +60,8 @@ require(new['wMobilePrivatePalTemporary'] == new['wMobileActorTilesEnd'] and
         private_colors == 53 and new['wMobilePrivatePalEnd'][1] <= 0xdd00,
         'Private palette storage overlaps native memory')
 require(palette_code <= 1536, 'Private palette ROM budget exceeded')
+require(new['wMobileAvatarBank'] == new['wMobileNativeOriginalsEnd'] and
+        new['wMobileAvatarBank'][1] < 0xd000, 'VRAM bank latch escaped private unbanked memory')
 near_calls = 0
 for source in sorted((REPO / 'mobile_adapter/rom').rglob('*.asm')):
     owner = None
@@ -79,6 +82,8 @@ report = {"banked_near_calls_checked": near_calls, "native_original_view_bytes":
           "avatar_cache_bytes": avatar_bytes, "removed_legacy_renderer_bytes": 456, "resident_bytes": resident, "buffer_bytes": buffers, "banked_driver_bytes": code, "feature_helper_bytes": helpers, "lease_policy_bytes": policy_bytes, "raw_native_tile_backup_bytes": 1152}
 for name in ("baseline", "mobile", "faithful"):
     path = getattr(args, name)
+    if name != "baseline":
+        report[name + "_mbc30"] = validate_mobile(path.read_bytes(), layout(path.with_suffix(".map").read_text()))
     report[name + "_rom_sha256"] = digest(path)
     report[name + "_summary"] = path.with_suffix(".map").read_text().split("\n\n")[0]
 args.output.write_text(json.dumps(report, indent=2) + "\n")

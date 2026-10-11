@@ -303,13 +303,13 @@ def main():
         policy = compact_policy(sources)
         build('compact_policy', 'Bounded prefix/bitmap policy lookup; same approved indices on all 611 maps.')
         for name in ('native_lease_policy.asm', 'native_instance.asm', 'native_tile_backup.asm', 'native_save.asm', 'native_palettes.asm'):
-            sources[name], count = re.subn(r'(SECTION "Mobile [^"\n]+", ROMX)\s*\n', r'\1, BANK[MOBILE_ROM_BANK]\n', sources[name])
+            sources[name], count = re.subn(r'(SECTION "Mobile [^"\n]+", ROMX)(?:, BANK\[MOBILE_ROM_BANK\])?\s*\n', r'\1, BANK[MOBILE_ROM_BANK]\n', sources[name])
             require(count == 1, 'Feature section placement changed')
         near = 0
         for name in sources:
             sources[name], count = re.subn(r'\bfar(call|jp)(\s+Mobile\w+)', r'\1\2', sources[name])
             near += count
-        build('single_bank', f'All six feature sections in bank 127; {near} internal banked calls become near calls. Callee bank/register contracts need runtime validation.')
+        build('single_bank', f'All six feature sections in bank 128; {near} internal banked calls become near calls. Callee bank/register contracts need runtime validation.')
         no_echo(sources)
         build('without_echo', 'Move one-shot transport diagnostic to separate test ROM; persistent protocol and emergency recovery retained in candidate source.')
         sources['menu.asm'] = '''; Size-only candidate: retain chord consumption, move prototype controls to Bridge.

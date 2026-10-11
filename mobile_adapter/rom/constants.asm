@@ -1,5 +1,7 @@
 ; Bounded transport and lobby fields. Raw bytes do not use the text charmap.
-DEF MOBILE_ROM_BANK EQU $7f
+; MBC30: keep banked feature code out of the original 2 MiB.
+DEF MOBILE_ROM_BANK EQU $80
+ASSERT MOBILE_ROM_BANK >= $80 && MOBILE_ROM_BANK <= $ff
 DEF MOBILE_WRAM_BANK EQU 2
 DEF MOBILE_BACKUP_BANK EQU 5
 DEF MOBILE_NATIVE_ROLE EQU 35
