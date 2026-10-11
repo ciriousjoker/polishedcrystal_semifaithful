@@ -3,8 +3,11 @@
 Last updated: 2026-10-11.
 Status: milestones 1 and 2 complete. Three-player lobbies and live overworld
 presence are implemented and tested, including 300%/100%/100% emulator speeds.
-Next: milestone 3, adjacent interactions and Pokegear calls. Current measured
-evidence: research/MILESTONE_2.md and research/milestone2-evidence.json.
+Next feature work when requested: milestone 3, adjacent interactions and Pokegear
+calls. Selected figures and three selectable manual-save scenes are complete.
+Current measured evidence: research/AVATAR_SCENARIOS.md and
+research/avatar-scenarios-evidence.json. Historical milestone-2 acceptance:
+research/MILESTONE_2.md and research/milestone2-evidence.json.
 Working branch: `mobileadapter`.
 Base commit: `8f3c7e9651e988d876e32a4c7ad9ef1bb76702a8`.
 
@@ -1166,3 +1169,48 @@ and stable Android paths. Owned GUI/server test processes were stopped afterward
 Next work is milestone 3 only when requested: adjacent/Pokegear target selection,
 invitations and one shared interaction menu. Presence can be reused, but battle
 and durable transfer behavior are not implemented or covered by the 3x proof.
+
+
+### Selected-avatar and manual-scenario follow-up, 2026-10-11
+
+User requested actual selected local/remote figures, three selectable manual
+scenes committed with ordinary saves, and an explanation/test of Start-menu
+avatar disappearance. Follow-up complete after M2 commit 33aecff32. Keep working
+in the same worktree and branch. Detailed current acceptance is in
+research/AVATAR_SCENARIOS.md and research/avatar-scenarios-evidence.json.
+
+Current changes: lobby schema 3 (11-byte snapshot, 17-byte wire peer), explicit
+wPlayerGender 0..3, native PlayerStateSprites table including running/bike/surf,
+independent 24-tile caches at bank 2 dac0..ddbf, four current-frame VRAM0 tiles
+per peer at 64..67 and 68..6b. Native MarkUsedPal is exported (no code moved) and
+used only when there is free palette capacity or an exact loaded match. Palette
+exhaustion defers a peer rather than overwriting a required actor's palette.
+Ordinary saves are in mobile_adapter/tests/scenarios with a hash/provenance
+manifest. Launcher prompts for bedroom, game-corner or goldenrod-city and supports
+--scenario, --mac-avatar and --android-avatar; default Mac Chris / Android Kris.
+Auto-states remain regenerated from the selected ordinary saves per current
+ROM/core. Starter spawn was corrected to 3,3 so the downward test step is clear.
+
+Start-menu pause is deliberate: vanilla maintains a still local background and
+clears sprites under its panel. Remote players have independent movement. The
+menu uses wScriptRunning=255 in this path, not hInMenu=1. Actual paused frames and
+two restored figures pass in both bedroom and Game Corner. Eleven final-source
+cases pass with 33 native processes: mixed four-choice figures, crowded/moving
+NPC scenes, Start menus, 3x speed at RTT100, native running/bike/surf, faithful
+gameplay and 40 local latency samples. NPC motion is checked per stationary
+client with unchanged actor membership. Six profiled cores show zero preservation
+or NPC-restore failures, max Tick 25392 / ISR 1432 / VBlank 67840 cycles, minimum
+SP c0ac. Local movement p95 is 100.643 ms; input-to-remote p95 276.534 ms includes
+the native turn delay. Rust 20, deployment 8, scenario 6 host tests, Clippy/fmt,
+production RGBDS vectors and renderer audit pass. make test-mobile-host now also
+includes the deployment/scenario suites without starting an emulator.
+
+All accepted endpoint/checksum test copies normalize to current standard SHA256
+3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87 or faithful
+6cd3a3997c33bb04bee19abbeb70c55d2c13e42077a9b8df7d1498e4966ee657.
+The fresh disabled rebuild still matches the exact baseline. Existing 23373 RAM
+symbols are unchanged; driver 7196, resident 122, protocol/OAM 1473, new graphics
+768 bytes. Bank-2 graphics end ddc0, leaving 576 tail bytes. Current Mac/Pixel
+Game Corner preparation has Chris/Kris respectively; read-only live screenshots
+also show their correct local and remote figures. The user's manual session
+was left running. No upstream PR/push. Next work remains M3 when requested.

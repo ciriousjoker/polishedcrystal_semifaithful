@@ -140,16 +140,20 @@ MobilePackSnapshot:
 	ld b, a
 	ld a, [hli]
 	ld c, a
-	inc hl ; avatar 0 is implicit in this schema
+	inc hl ; avatar follows the packed state byte
 	ld a, [hl]
 	add a
 	or b
 	or c
 	ld [de], a
+	inc de
+	dec hl
+	ld a, [hl]
+	ld [de], a
 	ret
 
 MobileExpandRoster:
-; The validated packed roster is at most 45 bytes. Its last 16 buffer bytes
+; The validated packed roster is at most 47 bytes. Its last 17 buffer bytes
 ; are private scratch here. Expand backwards to retain overlapping peer data.
 	ld a, [wMobileApp + 12]
 	and a
@@ -208,7 +212,8 @@ MobileExpandPeer:
 	and 1
 	ld [de], a
 	inc de
-	xor a
+	inc hl
+	ld a, [hl]
 	ld [de], a
 	inc de
 	ld a, b
@@ -633,8 +638,8 @@ MobileValidatePeer:
 	cp 2
 	jr nc, .bad
 	ld a, [hli]
-	and a
-	jr nz, .bad
+	cp NUM_PLAYER_GENDERS
+	jr nc, .bad
 	ld a, [hl]
 	cp 6
 	jr nc, .bad
@@ -747,7 +752,7 @@ MobileCapture::
 	ld a, 1
 	ld [de], a
 	inc de
-	xor a ; approved social avatar 0
+	ld a, [wPlayerGender]
 	ld [de], a
 	inc de
 	ld a, [wPlayerState]

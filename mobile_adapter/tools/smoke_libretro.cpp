@@ -33,6 +33,7 @@ static uint64_t audio_samples = 0, audio_batches = 0;
 static retro_pixel_format pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
 static std::vector<unsigned char> image;
 static unsigned char video_oam[160] = {};
+static unsigned char video_peer_tiles[128] = {};
 static std::ofstream input_events;
 static std::set<std::pair<unsigned, unsigned>> logged_inputs;
 static std::vector<retro_memory_descriptor> memory_maps;
@@ -97,6 +98,7 @@ static void load_bindings(const std::string& path) {
         "wPlayerSpriteXOffset", "wPlayerSpriteYOffset", "wPlayerFacing", "wPlayerDirection",
         "wPlayerStepFrame", "wPlayerBGMapOffsetX", "wPlayerBGMapOffsetY", "wMapStatus", "wScriptRunning",
         "wObjectStructs", "wEventFlags", "wCurBox", "wPlayerCurrentOAMSlot",
+        "wPlayerGender", "wPlayerSprite", "wPlayerPalette",
         "wPlayerWalking", "wPlayerStepDuration", "wPlayerState", "wPanningAroundTinyMap",
         "hUsedWeatherSpriteIndex", "hUsedOAMIndex",
         "wMenuCursorY", "wMenuSelection", "wOptionsMenuIsInitial",
@@ -110,7 +112,7 @@ static void load_bindings(const std::string& path) {
         std::istringstream row(line);
         std::string location, name;
         if (!(row >> location >> name) || location[0] == ';') continue;
-        if (!watched.count(name) && name.rfind("wMobile", 0) != 0) continue;
+        if (!watched.count(name) && name.rfind("wMobile", 0) != 0 && name.rfind("wLoadedObjPal", 0) != 0) continue;
         auto colon = location.find(':');
         if (colon == std::string::npos) fail("Invalid symbol location");
         bindings[name] = {static_cast<unsigned>(std::stoul(location.substr(0, colon), nullptr, 16)),
@@ -149,6 +151,18 @@ static std::map<std::string, unsigned> capture(const unsigned char* sram, size_t
         }
     }
     for (const char* peer : {"1", "2"}) {
+        unsigned tile_hash = 2166136261u;
+        unsigned tile_start = peer[0] == '1' ? 0 : 64;
+        for (unsigned i = 0; i < 64; ++i)
+            tile_hash = (tile_hash ^ video_peer_tiles[tile_start + i]) * 16777619u;
+        values[std::string("vMobilePeer") + peer + "TileHash"] = tile_hash;
+        if (bindings.count(std::string("wMobileAvatarCache") + peer)) {
+            auto cache = bindings.at(std::string("wMobileAvatarCache") + peer);
+            unsigned cache_hash = 2166136261u;
+            for (unsigned i = 0; i < 384; ++i)
+                cache_hash = (cache_hash ^ observe(cache.bank, cache.address + i, sram, sram_size)) * 16777619u;
+            values[std::string("vMobilePeer") + peer + "CacheHash"] = cache_hash;
+        }
         std::string prefix = std::string("wMobilePeer") + peer;
         if (!values.count(prefix + "OAMStart")) continue;
         unsigned slot = values.at(prefix + "OAMStart");
@@ -163,16 +177,23 @@ static std::map<std::string, unsigned> capture(const unsigned char* sram, size_t
     if (bindings.count("wObjectStructs") && bindings.count("wMobileSavedFacings")) {
         const auto objects = bindings.at("wObjectStructs");
         const auto saved = bindings.at("wMobileSavedFacings");
-        unsigned occupied = 0, suppressed = 0, restored = 0;
+        unsigned occupied = 0, suppressed = 0, restored = 0, positions = 2166136261u;
         for (unsigned i = 0; i < 13; ++i) {
             unsigned start = objects.address + i * 34;
-            if (observe(objects.bank, start, sram, sram_size)) occupied |= 1u << i;
+            if (observe(objects.bank, start, sram, sram_size)) {
+                occupied |= 1u << i;
+                if (i) {
+                    positions = (positions ^ observe(objects.bank, start + 16, sram, sram_size)) * 16777619u;
+                    positions = (positions ^ observe(objects.bank, start + 17, sram, sram_size)) * 16777619u;
+                }
+            }
             unsigned facing = observe(saved.bank, saved.address + i, sram, sram_size);
             if (i && facing != 255) {
                 suppressed |= 1u << i;
                 if (facing == observe(objects.bank, start + 13, sram, sram_size)) restored |= 1u << i;
             }
         }
+        values["vNPCPositionsHash"] = positions;
         values["vNPCOccupiedMask"] = occupied;
         values["vNPCSuppressedMask"] = suppressed;
         values["vNPCRestoredMask"] = restored;
@@ -281,6 +302,7 @@ static bool environment(unsigned command, void* data) {
 static void video(const void* data, unsigned w, unsigned h, size_t pitch) {
     ++video_frames;
     if (const auto* oam = descriptor(0xfe00)) std::memcpy(video_oam, oam, sizeof(video_oam));
+    if (const auto* vram = descriptor(0x8000)) std::memcpy(video_peer_tiles, vram + 0x640, sizeof(video_peer_tiles));
     if (!data) return;
     width = w;
     height = h;

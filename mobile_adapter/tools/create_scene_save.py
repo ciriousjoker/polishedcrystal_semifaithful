@@ -26,6 +26,7 @@ def main():
     parser.add_argument("--x", type=int, required=True)
     parser.add_argument("--y", type=int, required=True)
     parser.add_argument("--hour", type=int, default=10)
+    parser.add_argument("--avatar", choices=("chris", "kris", "crys", "beta"), default="kris")
     parser.add_argument("--reveal-initial-event", action="append", default=[],
                         help="Stress fixture: omit an initial hide flag before ordinary New Game/Save")
     parser.add_argument("--set-initial-event", action="append", default=[],
@@ -48,6 +49,12 @@ def main():
     data = bytearray(args.rom.read_bytes())
     spawn = offset("SpawnPoints")
     data[spawn:spawn + 4] = bytes([record["group"], record["number"], args.x, args.y])
+    # Set the initial ordinary character-choice menu selection in this disposable
+    # producer only. Replace its initial cosmetic fade, retaining GenderMenu.
+    avatar = ("chris", "kris", "crys", "beta").index(args.avatar)
+    gender = offset("InitGender")
+    require(data[gender:gender + 3] == bytes([0x0e, 15, 0xcd]), "Gender initialization changed")
+    data[gender:gender + 5] = bytes([0x3e, avatar, 0xea]) + symbols["wPlayerGender"][1].to_bytes(2, "little")
     clock = offset("InitClock")
     hour_address = symbols["wInitHourBuffer"][1]
     pattern = bytes([0x3e, 10, 0xea]) + hour_address.to_bytes(2, "little")
@@ -94,7 +101,7 @@ def main():
     state = json.loads((args.output / "state.json").read_text())["symbols"]
     for key, expected in {"hCrashCode": 0, "hInMenu": 0, "wMapGroup": record["group"],
                           "wMapNumber": record["number"], "wXCoord": args.x, "wYCoord": args.y,
-                          "wSaveFileExists": 1}.items():
+                          "wSaveFileExists": 1, "wPlayerGender": avatar}.items():
         require(state[key] == expected, f"Scene producer: {key}={state[key]}, expected {expected}")
     metadata = validate_battery(args.output / "ingame.sav", symbols)
     metadata.update({"map": args.map, "x": args.x, "y": args.y, "hour": args.hour,
@@ -102,7 +109,8 @@ def main():
                      "substituted_initial_events": args.set_initial_event,
                      "production_rom_sha256": digest(args.rom), "producer_rom_sha256": digest(rom),
                      "changed_rom_bytes": [index for index, (old, new) in enumerate(zip(args.rom.read_bytes(), data)) if old != new],
-                     "source": "ordinary New Game and in-game Save menu"})
+                     "avatar": args.avatar, "player_gender": avatar,
+                     "source": "ordinary New Game, character-choice menu and in-game Save menu"})
     (args.output / "fixture.json").write_text(json.dumps(metadata, indent=2) + "\n")
     convert_png(args.output / "screen.ppm", args.output / "screen.png")
     print(f"Created ordinary {args.map} battery: {args.output / 'ingame.sav'}")

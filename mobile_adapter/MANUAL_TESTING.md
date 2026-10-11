@@ -6,6 +6,21 @@ On the configured development host, run this from any directory:
 python3 /Volumes/Storage/Cache/codex_worktrees/mobileadapter/polishedcrystal/mobile_adapter/tools/dev_session.py
 ```
 
+At startup, choose the ordinary save scenario for both devices:
+
+1. Starter bedroom.
+2. Crowded Goldenrod Game Corner with wandering patrons.
+3. Goldenrod City with wandering and patrolling NPCs.
+
+Press Enter for the bedroom. The default figures are Chris on Mac and Kris on
+Android. Each uses its own normal character-choice save. To skip the prompt or
+choose different figures, use e.g. `--scenario game-corner --mac-avatar crys
+--android-avatar beta`. Unattended starts require an explicit `--scenario`.
+The portable saves and their provenance are committed in
+[tests/scenarios](tests/scenarios/README.md). Stable deployed filenames stay the
+same regardless of the selected scene. Each update resets that scene's initial
+progress and regenerates platform-specific auto-states.
+
 The command builds the current feature ROM and Rust server, detects the Mac's
 LAN IPv4 address, prepares an isolated Mac game, updates the connected Android
 phone through ADB, and starts both RetroArch instances with DoubleCherryGB.
@@ -44,12 +59,18 @@ generation confirms token resume. Explicit leave removes identity, so rejoining
 gets a new player ID. Mac/Android labels are inferred from source IPs. They are
 not authentication. Errors appear as SESSION_ERROR or LOBBY_REJECTED.
 
-Three players can share lobby 1. They see the approved Chris avatars on the same
+Three players can share lobby 1. They see each player's actual selected figure and movement sprite on the same
 map with compatible physical block layouts. Remote players do not block movement
 or run NPC scripts. World progress, items, puzzles and encounters remain local.
-Scripts, menus and Snowtop's camera temporarily pause rendering. Large Gyarados
+Scripts, menus and Snowtop's camera temporarily pause rendering.
+The Start menu keeps the local scene still and clears sprites under its panel.
+Remote players can keep moving in their own emulator; social drawing is deliberately
+paused on the menu owner's screen and that player publishes busy availability.
+Closing the menu recaptures the world and restores current remote figures. This
+behavior is tested in the bedroom and the crowded Game Corner. Large Gyarados
 and Exeggutor sprites, or unavoidable required-NPC sprite pressure, also pause
-avatars. Select+A reports the reason and keeps the player roster accessible in
+avatars. A peer without an available matching hardware palette is also deferred;
+this uses the generic scene-pause status. Select+A shows rendering status and keeps the player roster accessible in
 a safe idle scene. Leaving the protected situation restores avatars.
 
 The Mobile Adapter popup describes the emulator peripheral. Its initialization
@@ -89,7 +110,7 @@ Android using the Android core, not copied from the Mac. Old CPU/WRAM snapshots
 are never reused with a new build. The normal acceptance suite continues to boot
 from battery saves without snapshot input.
 
-The update intentionally resets both test clients to the prepared bedroom save.
+The update intentionally resets both test clients to the selected scenario's ordinary saves.
 Previous `.srm` files are backed up in the host cache's `dev-session/backups`.
 Only this workflow's named files and game-specific settings are replaced. Other
 files in the Download folder and other RetroArch games are preserved.

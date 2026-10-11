@@ -1,0 +1,433 @@
+{
+  "schema": 1,
+  "scenarios": [
+    {
+      "id": "bedroom",
+      "label": "Starter bedroom",
+      "description": "Simple avatar and menu test",
+      "map": "PlayersHouse2F",
+      "x": 3,
+      "y": 3,
+      "saves": {
+        "chris": {
+          "bytes": 32768,
+          "save_version": 10,
+          "checksums": {
+            "s": 40531,
+            "sBackup": 40531
+          },
+          "sha256": "74033d785badb7c7fd4ea65cb49627aa33e704241a144bac82bdc1120dca31e5",
+          "map": "PlayersHouse2F",
+          "x": 3,
+          "y": 3,
+          "hour": 10,
+          "revealed_initial_events": [],
+          "substituted_initial_events": [],
+          "production_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+          "producer_rom_sha256": "03775505a19841ffb56cc09f8844b02c116c13d17a63f59303b45f7d760a64b3",
+          "changed_rom_bytes": [
+            334,
+            335,
+            25532,
+            25533,
+            25534,
+            25535,
+            25536
+          ],
+          "avatar": "chris",
+          "player_gender": 0,
+          "source": "ordinary New Game, character-choice menu and in-game Save menu",
+          "file": "bedroom/chris.sav"
+        },
+        "kris": {
+          "bytes": 32768,
+          "save_version": 10,
+          "checksums": {
+            "s": 40299,
+            "sBackup": 40299
+          },
+          "sha256": "9dd9004d782855111ba43d0b676f79d2bbd0dcb29b450f36a4c7e6fa1a16dc12",
+          "map": "PlayersHouse2F",
+          "x": 3,
+          "y": 3,
+          "hour": 10,
+          "revealed_initial_events": [],
+          "substituted_initial_events": [],
+          "production_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+          "producer_rom_sha256": "9b2319bdd71b9e2a1cb1678eb2037125e0b78d08dbee96671d05be2af4324705",
+          "changed_rom_bytes": [
+            334,
+            335,
+            25532,
+            25533,
+            25534,
+            25535,
+            25536
+          ],
+          "avatar": "kris",
+          "player_gender": 1,
+          "source": "ordinary New Game, character-choice menu and in-game Save menu",
+          "file": "bedroom/kris.sav"
+        },
+        "crys": {
+          "bytes": 32768,
+          "save_version": 10,
+          "checksums": {
+            "s": 40822,
+            "sBackup": 40822
+          },
+          "sha256": "8fd272258112650a4babc41a3f85867023d86db1cafae8bfa464c9dc709f9b92",
+          "map": "PlayersHouse2F",
+          "x": 3,
+          "y": 3,
+          "hour": 10,
+          "revealed_initial_events": [],
+          "substituted_initial_events": [],
+          "production_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+          "producer_rom_sha256": "a930648db28689411d70ca170bafde3d6013594afe8df65f0eca1315e33549bd",
+          "changed_rom_bytes": [
+            334,
+            335,
+            25532,
+            25533,
+            25534,
+            25535,
+            25536
+          ],
+          "avatar": "crys",
+          "player_gender": 2,
+          "source": "ordinary New Game, character-choice menu and in-game Save menu",
+          "file": "bedroom/crys.sav"
+        },
+        "beta": {
+          "bytes": 32768,
+          "save_version": 10,
+          "checksums": {
+            "s": 40846,
+            "sBackup": 40846
+          },
+          "sha256": "c4f43c79f0cb16aecd5ad419e43b701f663f8d6e4f0b1cc1a63d1428ba1e36d4",
+          "map": "PlayersHouse2F",
+          "x": 3,
+          "y": 3,
+          "hour": 10,
+          "revealed_initial_events": [],
+          "substituted_initial_events": [],
+          "production_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+          "producer_rom_sha256": "c409ccaf06962594d21536b6a1c594e92d550b178dbaf5af53888f19bde9383c",
+          "changed_rom_bytes": [
+            334,
+            335,
+            25532,
+            25533,
+            25534,
+            25535,
+            25536
+          ],
+          "avatar": "beta",
+          "player_gender": 3,
+          "source": "ordinary New Game, character-choice menu and in-game Save menu",
+          "file": "bedroom/beta.sav"
+        }
+      },
+      "group": 24,
+      "number": 5
+    },
+    {
+      "id": "game-corner",
+      "label": "Goldenrod Game Corner",
+      "description": "Crowded interior with wandering patrons",
+      "map": "GoldenrodGameCorner",
+      "x": 14,
+      "y": 5,
+      "saves": {
+        "chris": {
+          "bytes": 32768,
+          "save_version": 10,
+          "checksums": {
+            "s": 51225,
+            "sBackup": 51225
+          },
+          "sha256": "8b39edc0ba9225375d351fad36defa1ae7a1d7ff6649ca52c9d288f7692cb725",
+          "map": "GoldenrodGameCorner",
+          "x": 14,
+          "y": 5,
+          "hour": 10,
+          "revealed_initial_events": [],
+          "substituted_initial_events": [],
+          "production_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+          "producer_rom_sha256": "e10a7ea9102c13454ccfffc62c66fc1ef6274128cfd097c75fc5ca16f70a9deb",
+          "changed_rom_bytes": [
+            334,
+            335,
+            25532,
+            25533,
+            25534,
+            25535,
+            25536,
+            85026,
+            85027,
+            85028,
+            85029
+          ],
+          "avatar": "chris",
+          "player_gender": 0,
+          "source": "ordinary New Game, character-choice menu and in-game Save menu",
+          "file": "game-corner/chris.sav"
+        },
+        "kris": {
+          "bytes": 32768,
+          "save_version": 10,
+          "checksums": {
+            "s": 51300,
+            "sBackup": 51300
+          },
+          "sha256": "9fa4f3ecc5f3b2a86143374f76ea2eea7a164df5630619ba8e6b5e79647102ff",
+          "map": "GoldenrodGameCorner",
+          "x": 14,
+          "y": 5,
+          "hour": 10,
+          "revealed_initial_events": [],
+          "substituted_initial_events": [],
+          "production_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+          "producer_rom_sha256": "e0969731a80fc9e3e98c8f57ea4983a0844ee13cc94d991ab363d9ad9a760edd",
+          "changed_rom_bytes": [
+            334,
+            335,
+            25532,
+            25533,
+            25534,
+            25535,
+            25536,
+            85026,
+            85027,
+            85028,
+            85029
+          ],
+          "avatar": "kris",
+          "player_gender": 1,
+          "source": "ordinary New Game, character-choice menu and in-game Save menu",
+          "file": "game-corner/kris.sav"
+        },
+        "crys": {
+          "bytes": 32768,
+          "save_version": 10,
+          "checksums": {
+            "s": 51795,
+            "sBackup": 51795
+          },
+          "sha256": "94f2bb21ebe58ca6dbe4bd119bb24bb0eca3fb8f92946df814bf51858b486ca7",
+          "map": "GoldenrodGameCorner",
+          "x": 14,
+          "y": 5,
+          "hour": 10,
+          "revealed_initial_events": [],
+          "substituted_initial_events": [],
+          "production_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+          "producer_rom_sha256": "f047d39b9ac5a1ba93e9dd618b2273e087bba859bed6db35cca1f85f803d1aa1",
+          "changed_rom_bytes": [
+            334,
+            335,
+            25532,
+            25533,
+            25534,
+            25535,
+            25536,
+            85026,
+            85027,
+            85028,
+            85029
+          ],
+          "avatar": "crys",
+          "player_gender": 2,
+          "source": "ordinary New Game, character-choice menu and in-game Save menu",
+          "file": "game-corner/crys.sav"
+        },
+        "beta": {
+          "bytes": 32768,
+          "save_version": 10,
+          "checksums": {
+            "s": 51562,
+            "sBackup": 51562
+          },
+          "sha256": "5157ddb2765122d05bff95b7bbbb67a83ea5d5f9f5dee1bdb856eec51b9224cc",
+          "map": "GoldenrodGameCorner",
+          "x": 14,
+          "y": 5,
+          "hour": 10,
+          "revealed_initial_events": [],
+          "substituted_initial_events": [],
+          "production_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+          "producer_rom_sha256": "92694c3f6deb777f3dd7c3bb8b6c6ad56ede913984a352b282faebd51ad57eb6",
+          "changed_rom_bytes": [
+            334,
+            335,
+            25532,
+            25533,
+            25534,
+            25535,
+            25536,
+            85026,
+            85027,
+            85028,
+            85029
+          ],
+          "avatar": "beta",
+          "player_gender": 3,
+          "source": "ordinary New Game, character-choice menu and in-game Save menu",
+          "file": "game-corner/beta.sav"
+        }
+      },
+      "group": 11,
+      "number": 23
+    },
+    {
+      "id": "goldenrod-city",
+      "label": "Goldenrod City",
+      "description": "Outdoor scene with wandering and patrolling NPCs",
+      "map": "GoldenrodCity",
+      "x": 25,
+      "y": 18,
+      "saves": {
+        "chris": {
+          "bytes": 32768,
+          "save_version": 10,
+          "checksums": {
+            "s": 51618,
+            "sBackup": 51618
+          },
+          "sha256": "fd8e99c8cbf5567e9e9a7e8e7666515410c9c6813c1ee7689820d801371629a5",
+          "map": "GoldenrodCity",
+          "x": 25,
+          "y": 18,
+          "hour": 10,
+          "revealed_initial_events": [],
+          "substituted_initial_events": [],
+          "production_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+          "producer_rom_sha256": "f85f91addc9bd5e65ba5d12fff35efc19d72f1e53252d05e8e60a0012ffbd13c",
+          "changed_rom_bytes": [
+            334,
+            335,
+            25532,
+            25533,
+            25534,
+            25535,
+            25536,
+            85026,
+            85027,
+            85028,
+            85029
+          ],
+          "avatar": "chris",
+          "player_gender": 0,
+          "source": "ordinary New Game, character-choice menu and in-game Save menu",
+          "file": "goldenrod-city/chris.sav"
+        },
+        "kris": {
+          "bytes": 32768,
+          "save_version": 10,
+          "checksums": {
+            "s": 51327,
+            "sBackup": 51327
+          },
+          "sha256": "135bef21946800f1ac53ddf9bd84f4f2113275eb68369076eb18d1bbdb5824ea",
+          "map": "GoldenrodCity",
+          "x": 25,
+          "y": 18,
+          "hour": 10,
+          "revealed_initial_events": [],
+          "substituted_initial_events": [],
+          "production_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+          "producer_rom_sha256": "02298e1a9e1851c84355fb6eed15f12f98b0b9daf79d0ba7708413a49ddd3cf4",
+          "changed_rom_bytes": [
+            334,
+            335,
+            25532,
+            25533,
+            25534,
+            25535,
+            25536,
+            85026,
+            85027,
+            85028,
+            85029
+          ],
+          "avatar": "kris",
+          "player_gender": 1,
+          "source": "ordinary New Game, character-choice menu and in-game Save menu",
+          "file": "goldenrod-city/kris.sav"
+        },
+        "crys": {
+          "bytes": 32768,
+          "save_version": 10,
+          "checksums": {
+            "s": 51784,
+            "sBackup": 51784
+          },
+          "sha256": "0697420e24ec227a957ae1d72ff499675f009070c67a17a29055b6c73743f463",
+          "map": "GoldenrodCity",
+          "x": 25,
+          "y": 18,
+          "hour": 10,
+          "revealed_initial_events": [],
+          "substituted_initial_events": [],
+          "production_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+          "producer_rom_sha256": "8f96357b3325cb392bab56ca55f4aa0755e52ead055e6374247a73ff6fac564c",
+          "changed_rom_bytes": [
+            334,
+            335,
+            25532,
+            25533,
+            25534,
+            25535,
+            25536,
+            85026,
+            85027,
+            85028,
+            85029
+          ],
+          "avatar": "crys",
+          "player_gender": 2,
+          "source": "ordinary New Game, character-choice menu and in-game Save menu",
+          "file": "goldenrod-city/crys.sav"
+        },
+        "beta": {
+          "bytes": 32768,
+          "save_version": 10,
+          "checksums": {
+            "s": 51387,
+            "sBackup": 51387
+          },
+          "sha256": "8db21af584e8cdf494dd8045e82fd424e8cb402509fb2f593b5379cc8365ee04",
+          "map": "GoldenrodCity",
+          "x": 25,
+          "y": 18,
+          "hour": 10,
+          "revealed_initial_events": [],
+          "substituted_initial_events": [],
+          "production_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+          "producer_rom_sha256": "6ac6c69db92fb088809fb81f15f43e59f9fc8a4b07ed5fe764d76f695faf075a",
+          "changed_rom_bytes": [
+            334,
+            335,
+            25532,
+            25533,
+            25534,
+            25535,
+            25536,
+            85026,
+            85027,
+            85028,
+            85029
+          ],
+          "avatar": "beta",
+          "player_gender": 3,
+          "source": "ordinary New Game, character-choice menu and in-game Save menu",
+          "file": "goldenrod-city/beta.sav"
+        }
+      },
+      "group": 11,
+      "number": 6
+    }
+  ]
+}

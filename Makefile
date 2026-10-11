@@ -125,6 +125,8 @@ MOBILE_CARGO ?= cargo
 test-mobile-host:
 	$(MOBILE_CARGO) test --locked --manifest-path mobile_adapter/server/Cargo.toml
 	python3 mobile_adapter/tools/test_asm_contracts.py --rgbds "$(or $(RGBDS),./)"
+	python3 -m unittest discover -s mobile_adapter/tools -p 'test_dev_session.py'
+	python3 -m unittest discover -s mobile_adapter/tools -p 'test_save_scenarios.py'
 monochrome: crystal
 noir: crystal
 hgss: crystal

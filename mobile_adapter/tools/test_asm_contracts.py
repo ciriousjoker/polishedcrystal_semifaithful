@@ -16,9 +16,9 @@ with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
     fixture += '\nDEF CopyBytes EQU $20\nDEF ByteFill EQU $28\nDEF FarCall EQU $10\nDEF Bankswitch EQU $08\nDEF DoNothing EQU $0150\n'
     fixture += 'SECTION "Serial return stub", ROM0[$200]\nSerial:\n.end: ret\n'
     fixture += 'SECTION "Render link stubs", ROM0[$3000]\n'
-    fixture += 'GetFarByte:: ret\nSwapHLDE:: ret\nFarDecompressWRA6InB:: ret\nRequest2bppInWRA6:: ret\nClearJoypad:: ret\nOpenText:: ret\nCloseText:: ret\nPrintText:: ret\nLoadMenuHeader:: ret\nVerticalMenu:: ret\nExitMenu:: ret\nWaitButton:: ret\n'
+    fixture += 'GetFarByte:: ret\nSwapHLDE:: ret\nFarDecompressWRA6InB:: ret\nGet2bpp:: ret\nFarDecompressToDE:: ret\nClearJoypad:: ret\nOpenText:: ret\nCloseText:: ret\nPrintText:: ret\nLoadMenuHeader:: ret\nVerticalMenu:: ret\nExitMenu:: ret\nWaitButton:: ret\n'
     fixture += 'SECTION "Native facing data", ROMX, BANK[2]\nINCLUDE "data/sprites/facings.asm"\n'
-    fixture += 'SECTION "Sprite link stub", ROMX, BANK[1]\nGetSprite:: ret\n'
+    fixture += 'SECTION "Sprite link stub", ROMX, BANK[1]\nGetSprite:: ret\nMarkUsedPal:: ret\nINCLUDE "data/player/state_sprites.asm"\n'
     fixture += 'SECTION "LCD layout contracts", ROMX, BANK[$12]\n'
     oam = (REPO / "engine/gfx/load_push_oam.asm").read_text()
     fixture += oam[oam.index('LOAD "OAM DMA"'):oam.index("ENDL") + 4] + "\n"
@@ -44,7 +44,7 @@ with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
     bank, address = symbols["MobileHelloVector"]
     offset = bank * 0x4000 + address - 0x4000
     require(rom[offset:offset + 23] == bytes.fromhex(
-        "50 43 01 10 00 01 00 0f 02 00 03 00 01 00 00 00 00 00 00 00 00 00 00"),
+        "50 43 01 10 00 01 00 0f 03 00 03 00 01 00 00 00 00 00 00 00 00 00 00"),
         "Actual ROM HELLO differs from the standard-build lobby protocol")
     require(symbols["wMobileResidentStart"] == (0, 0xcec4), "Resident placement changed")
     require(symbols["wMobileBufferStart"] == (2, 0xd4eb), "Buffer placement changed")

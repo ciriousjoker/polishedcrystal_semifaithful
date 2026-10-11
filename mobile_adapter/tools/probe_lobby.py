@@ -132,6 +132,8 @@ def run_client(args, index):
         script += "ON 4000 wMobileMenuState=1,wMenuCursorY=2 B 8\n"
         for frame in range(4120, 4960, 120):
             script += f"{frame} B 8\n"
+    if index == 0 and args.scenario == "start-menu":
+        script += "3750 START 8\n4250 B 8\n"
     if index == 0 and args.scenario == "rejoin":
         script += "3750 SELECT 8\n3750 B 8\n"
         script += "ON 3850 wMobileOnline=0,wMobileOwner=0 SELECT 8\n"
@@ -158,7 +160,7 @@ def run_client(args, index):
             script += f"{3650 + step * 90} {('LEFT', 'RIGHT')[step % 2]} 12\n"
     (directory / "input.txt").write_text(script)
     frames = (6400 if args.latency else 6000 if args.scenario == "camera" else
-              5200 if args.scenario in ("menu", "resume") else
+              5200 if args.scenario in ("menu", "start-menu", "resume") else
               4800 if args.scenario in ("warp", "connection") else 4500)
     speed = 3 if index == 0 and args.scenario == "speed" else 1
     frames = 3250 + (frames - 3250) * speed
@@ -204,6 +206,50 @@ def run_client(args, index):
     return state
 
 
+def byte_hash(data):
+    value = 2166136261
+    for byte in data:
+        value = ((value ^ byte) * 16777619) & 0xffffffff
+    return value
+
+
+def verify_avatar_graphics(states):
+    figures = ("chris", "kris", "crys", "beta")
+    modes = ("", "_run", "_bike", "", "_surf", "")
+    for state in states:
+        for index in (1, 2):
+            peer = f"wMobilePeer{index}"
+            if not state[peer + "Visible"]:
+                continue
+            mode = state[peer + "Movement"]
+            name = "surf_pikachu" if mode == 5 else figures[state[peer + "Avatar"]] + modes[mode]
+            source = (REPO / "gfx/sprites" / (name + ".2bpp")).read_bytes()
+            require(len(source) == 384, "Remote player sprite size changed")
+            require(state[f"vMobilePeer{index}CacheHash"] == byte_hash(source),
+                    "Remote graphics cache differs from the selected vanilla sprite")
+            frame = state[peer + "LoadedFrame"]
+            require(frame in (0, 4, 8, 12, 16, 20), "Invalid remote source frame")
+            require(state[f"vMobilePeer{index}TileHash"] == byte_hash(source[frame * 16:(frame + 4) * 16]),
+                    "Displayed remote VRAM tiles differ from the selected vanilla frame")
+            palette = state[peer + "Palette"]
+            require(state[f"wLoadedObjPal{palette}"] == state[peer + "Avatar"],
+                    "Remote palette uses another player figure's colors")
+
+
+def verify_npc_motion(output):
+    for index in range(3):
+        rows = [json.loads(line) for line in (output / str(index) / "trace.jsonl").read_text().splitlines()]
+        stationary = [row["symbols"] for row in rows if row["frame"] >= 3800
+                      and row["symbols"]["wMobileOnline"]
+                      and row["symbols"]["wPlayerWalking"] == 255
+                      and row["symbols"]["wScriptRunning"] == 0]
+        by_occupancy = {}
+        for row in stationary:
+            by_occupancy.setdefault(row["vNPCOccupiedMask"], set()).add(row["vNPCPositionsHash"])
+        require(any(len(hashes) > 1 for hashes in by_occupancy.values()),
+                f"Client {index}: no ordinary NPC moved while the player and actor membership were unchanged")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("runner", "core", "server", "battery", "output"):
@@ -214,7 +260,9 @@ def main():
     parser.add_argument("--test-one-way-delay-ms", type=int, default=0)
     parser.add_argument("--profile", action="store_true")
     parser.add_argument("--port", type=int, default=17425)
-    parser.add_argument("--scenario", choices=("basic", "menu", "rejoin", "warp", "connection", "running", "camera", "resume", "instance", "speed"), default="basic")
+    parser.add_argument("--scenario", choices=("basic", "menu", "start-menu", "rejoin", "warp", "connection", "running", "camera", "resume", "instance", "speed"), default="basic")
+    parser.add_argument("--second-battery", type=Path, help="Second player's ordinary character-choice save")
+    parser.add_argument("--require-npc-motion", action="store_true")
     parser.add_argument("--different-battery", type=Path, help="Third player's ordinary save for instance isolation")
     parser.add_argument("--movement-mode", type=int, choices=range(6), help="Assert ordinary scene's movement state")
     parser.add_argument("--exercise-pressure", action="store_true", help="Require optional rendering pressure in the chosen dense scene")
@@ -227,7 +275,7 @@ def main():
     symbols_copy = args.output / "test.sym"
     symbols_copy.write_bytes(args.symbols.read_bytes())
     args.symbols = symbols_copy
-    args.batteries = [args.battery, args.battery, args.different_battery.resolve() if args.different_battery else args.battery]
+    args.batteries = [args.battery, args.second_battery.resolve() if args.second_battery else args.battery, args.different_battery.resolve() if args.different_battery else args.battery]
     for battery in args.batteries:
         validate_battery(battery, read_symbols(args.symbols))
     battery_hashes = [digest(battery) for battery in args.batteries]
@@ -295,6 +343,7 @@ def main():
             other = next(other for other in states if other["wMobilePlayerId"] == state[f"wMobilePeer{peer}Id"])
             require(state[f"wMobilePeer{peer}Generation"] == other["wMobileGeneration"],
                     "Stale peer generation after reconnect")
+            require(state[f"wMobilePeer{peer}Avatar"] == other["wPlayerGender"], "Remote figure differs from the actual chosen character")
             for name in ("MapGroup", "MapNumber"):
                 require(state[f"wMobilePeer{peer}{name}"] == other[f"w{name}"], "Stale peer map after transition")
             if other["wMobileAvailability"]:
@@ -332,6 +381,17 @@ def main():
         trace = [json.loads(line) for line in (args.output / "0/trace.jsonl").read_text().splitlines()]
         require(any(row["symbols"]["wMobileMenuState"] == 1 and row["symbols"]["wMenuCursorY"] == 2
                     for row in trace), "Roster option was never selected")
+    if args.scenario == "start-menu":
+        observations = [json.loads(line) for line in (args.output / "0/trace.jsonl").read_text().splitlines()]
+        paused = [row["symbols"] for row in observations
+                  if 3850 <= row["frame"] <= 4200 and row["symbols"]["wScriptRunning"] == 255]
+        require(paused and any(not row["wMobileRenderedCount"] and row["wMobileDeferred"] == 3 for row in paused),
+                "Start menu did not explicitly defer remote drawing")
+        require(states[0]["hInMenu"] == 0 and states[0]["wMobileRenderedCount"] == 2,
+                "Start menu failed to restore both remote figures")
+    if args.require_npc_motion:
+        verify_npc_motion(args.output)
+    verify_avatar_graphics(states)
     if args.scenario == "basic" and states[0]["wMapGroup"] == 11 and states[0]["wMapNumber"] == 23:
         # Goldenrod Game Corner is a representative real OAM-pressure scene.
         exercised = False

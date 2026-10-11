@@ -26,8 +26,11 @@ resident = new["wMobileResidentEnd"][1] - new["wMobileResidentStart"][1]
 buffers = new["wMobileBufferEnd"][1] - new["wMobileBufferStart"][1]
 code = new["MobileCodeEnd"][1] - new["MobileCodeStart"][1]
 require(resident <= 128 and buffers <= 1536 and code <= 8192, "Mobile allocation exceeds caps")
+avatar_bytes = new["wMobileAvatarCacheEnd"][1] - new["wMobileAvatarCache1"][1]
+require(new["wMobileAvatarCache1"] == (2, 0xdac0) and avatar_bytes == 768, "Avatar cache placement changed")
+require(new["wMobileBufferEnd"][1] <= 0xdac0 and new["wMobileAvatarCacheEnd"][1] <= 0xe000, "Avatar cache overlaps retained data")
 report = {"existing_ram_symbols_checked": len(ram), "existing_ram_symbols_changed": changed,
-          "resident_bytes": resident, "buffer_bytes": buffers, "banked_driver_bytes": code}
+          "avatar_cache_bytes": avatar_bytes, "resident_bytes": resident, "buffer_bytes": buffers, "banked_driver_bytes": code}
 for name in ("baseline", "mobile", "faithful"):
     path = getattr(args, name)
     report[name + "_rom_sha256"] = digest(path)

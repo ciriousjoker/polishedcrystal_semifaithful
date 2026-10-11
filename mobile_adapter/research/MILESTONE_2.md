@@ -5,6 +5,11 @@ overworld presence passed the gates below. Calls, battles and durable transfers
 remain milestones 3 through 5. Machine-readable evidence with hashes and per-core
 observations is in [milestone2-evidence.json](milestone2-evidence.json).
 
+The later [selected-figure and save-scenario follow-up](AVATAR_SCENARIOS.md)
+supersedes this historical record's avatar appearance, VRAM allocation, live
+schema and current build hashes. The milestone-2 acceptance below remains the
+record of its original completed implementation.
+
 The final compiler outputs, before adapting endpoint/checksum in test copies:
 
 | Build | SHA-256 |

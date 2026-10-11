@@ -52,6 +52,7 @@ wMobileSavedFacings:: ds NUM_OBJECT_STRUCTS
 wMobileCameraX:: dw
 wMobileCameraY:: dw
 wMobileAvatarPalette:: db
+wMobileAvatarTile:: db
 wMobileOAMReadCursor:: db
 wMobileOAMWriteCursor:: db
 wMobileLocalOAMStart:: db
@@ -106,7 +107,10 @@ wMobilePeer1ScreenY:: db
 wMobilePeer1Visible:: db
 wMobilePeer1OAMStart:: db
 ds 1 ; pending OAM offset
-ds MOBILE_PEER_SIZE - 30
+wMobilePeer1LoadedSprite:: db
+wMobilePeer1LoadedFrame:: db
+wMobilePeer1Palette:: db
+ds MOBILE_PEER_SIZE - 33
 wMobilePeer2::
 wMobilePeer2Id:: ds 2
 wMobilePeer2Generation:: ds 2
@@ -129,7 +133,10 @@ wMobilePeer2ScreenY:: db
 wMobilePeer2Visible:: db
 wMobilePeer2OAMStart:: db
 ds 1 ; pending OAM offset
-ds MOBILE_PEER_SIZE - 30
+wMobilePeer2LoadedSprite:: db
+wMobilePeer2LoadedFrame:: db
+wMobilePeer2Palette:: db
+ds MOBILE_PEER_SIZE - 33
 wMobileOAMSnapshot:: ds OAM_SIZE
 wMobileOAMOutput:: ds OAM_SIZE
 wMobileScanlineBudget:: ds SCREEN_HEIGHT_PX + 1 ; terminal delta for scanline sweep
@@ -139,3 +146,11 @@ wMobileGuardEnd:: db
 wMobileBufferEnd::
 ASSERT wMobileBufferEnd - wMobileBufferStart <= 1536
 ASSERT wMobileBufferStart >= $d4eb && wMobileBufferEnd <= $e000
+
+; Independent persistent graphics cache in the audited bank-2 tail.
+SECTION "Mobile Avatar Cache", WRAMX[$dac0], BANK[MOBILE_WRAM_BANK]
+wMobileAvatarCache1:: ds 24 tiles
+wMobileAvatarCache2:: ds 24 tiles
+wMobileAvatarCacheEnd::
+ASSERT wMobileBufferEnd <= wMobileAvatarCache1
+ASSERT wMobileAvatarCacheEnd <= $e000

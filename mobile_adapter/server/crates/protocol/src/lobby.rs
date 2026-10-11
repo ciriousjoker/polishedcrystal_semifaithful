@@ -1,7 +1,7 @@
 //! Explicit, bounded lobby wire fields. All multibyte fields are big endian.
 use crate::DecodeError;
 
-pub const SCHEMA: u8 = 2;
+pub const SCHEMA: u8 = 3;
 pub const CAPACITY: u8 = 3;
 pub const HELLO: u8 = 16;
 pub const WELCOME: u8 = 17;
@@ -12,8 +12,8 @@ pub const LEFT: u8 = 21;
 pub const ERROR: u8 = 22;
 pub const POLL: u8 = 23;
 pub const DELTA: u8 = 24;
-pub const SNAPSHOT_LEN: usize = 10;
-pub const PEER_LEN: usize = 16;
+pub const SNAPSHOT_LEN: usize = 11;
+pub const PEER_LEN: usize = 17;
 pub const HELLO_LEN: usize = 15;
 pub const WELCOME_LEN: usize = 15;
 pub const PRESENCE_LEN: usize = 4 + SNAPSHOT_LEN;
@@ -125,7 +125,7 @@ impl Snapshot {
                 && self.y <= 4095
                 && self.facing < 16
                 && self.status <= 1
-                && self.avatar == 0
+                && self.avatar < 4
                 && self.movement <= 5
         );
         let mut bytes = vec![self.map_group, self.map_number];
@@ -136,12 +136,13 @@ impl Snapshot {
             ((self.x << 4) as u8) | (self.y >> 8) as u8,
             self.y as u8,
             (self.facing << 4) | (self.movement << 1) | self.status,
+            self.avatar,
         ]);
         bytes
     }
 
     pub fn decode(bytes: &[u8]) -> Result<Self, Error> {
-        if bytes.len() != SNAPSHOT_LEN || (bytes[9] >> 1) & 7 > 5 {
+        if bytes.len() != SNAPSHOT_LEN || (bytes[9] >> 1) & 7 > 5 || bytes[10] >= 4 {
             return Err(Error::Malformed);
         }
         Ok(Self {
@@ -153,7 +154,7 @@ impl Snapshot {
             y: (u16::from(bytes[7] & 15) << 8) | u16::from(bytes[8]),
             facing: bytes[9] >> 4,
             status: bytes[9] & 1,
-            avatar: 0,
+            avatar: bytes[10],
             movement: (bytes[9] >> 1) & 7,
         })
     }
@@ -206,7 +207,7 @@ mod tests {
             resume: 7,
             token: [0xa5; 8],
         };
-        assert_eq!(&hello.encode()[..7], &[2, 1, 3, 0x12, 0x34, 0, 7]);
+        assert_eq!(&hello.encode()[..7], &[3, 1, 3, 0x12, 0x34, 0, 7]);
         assert_eq!(Hello::decode(&hello.encode()), Ok(hello));
         let welcome = Welcome {
             player: 0x1234,
@@ -250,7 +251,10 @@ mod tests {
             avatar: 0,
             movement: 3,
         };
-        assert_eq!(snapshot.encode(), [24, 5, 0x12, 0x34, 0, 2, 3, 0, 64, 0xc7]);
+        assert_eq!(
+            snapshot.encode(),
+            [24, 5, 0x12, 0x34, 0, 2, 3, 0, 64, 0xc7, 0]
+        );
         assert_eq!(Snapshot::decode(&snapshot.encode()), Ok(snapshot));
         let peers = [
             Peer {
@@ -266,11 +270,14 @@ mod tests {
                 snapshot,
             },
         ];
-        assert_eq!(roster(1, 1, &peers).len(), 37);
+        assert_eq!(roster(1, 1, &peers).len(), 39);
         assert!(roster(1, 1, &peers).len() < crate::MAX_PAYLOAD);
         let mut invalid = snapshot.encode();
         invalid[9] = 255;
         assert_eq!(Snapshot::decode(&invalid), Err(Error::Malformed));
+        let mut invalid_avatar = snapshot.encode();
+        invalid_avatar[10] = 4;
+        assert_eq!(Snapshot::decode(&invalid_avatar), Err(Error::Malformed));
         assert!(newer(0, 65535));
         assert!(!newer(65535, 0));
         assert!(!newer(7, 7));
@@ -286,6 +293,7 @@ mod tests {
                     facing: (x & 15) as u8,
                     status: (x & 1) as u8,
                     movement,
+                    avatar: (x & 3) as u8,
                     ..Snapshot::default()
                 };
                 assert_eq!(Snapshot::decode(&snapshot.encode()), Ok(snapshot));

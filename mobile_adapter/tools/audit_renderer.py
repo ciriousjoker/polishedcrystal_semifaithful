@@ -42,8 +42,7 @@ require("cp FIRST_VRAM1_OBJECT_STRUCT" in allocator and
         "Native 12-tile slot allocation changed")
 require("DEF FIRST_VRAM1_OBJECT_STRUCT EQU 8" in
         (REPO / "constants/map_object_constants.asm").read_text(), "VRAM split changed")
-reservations = {0: set(range(0x64, 0x6c)) | set(range(0xe0, 0xec)),
-                1: set(range(0x7c, 0x80))}
+reservations = {0: set(range(0x64, 0x6c)), 1: set()}
 for slot in range(13):
     bank = int(slot >= 8)
     base = (slot - 8 if bank else slot) * 12
@@ -57,8 +56,11 @@ require(not set(range(0x6f, 0x80)) & reservations[0], "Avatar overlaps weather/e
 names = re.findall(r"^\s*const (SPRITE_\w+)\s*(?:;.*)?$",
                    (REPO / "constants/sprite_constants.asm").read_text(), re.M)
 headers = offset("SpriteHeaders")
-expected = {"SPRITE_CHRIS": 1, "SPRITE_SAILBOAT": 2, "SPRITE_BIG_HO_OH": 1,
-            "SPRITE_BIG_LUGIA": 2, "SPRITE_BIG_GYARADOS": 4, "SPRITE_ALOLAN_EXEGGUTOR": 4}
+expected = {name: 1 for name in names if name in {
+    "SPRITE_" + figure + suffix for figure in ("CHRIS", "KRIS", "CRYS", "BETA")
+    for suffix in ("", "_RUN", "_BIKE", "_SURF")} }
+expected.update({ "SPRITE_SAILBOAT": 2, "SPRITE_BIG_HO_OH": 1,
+            "SPRITE_BIG_LUGIA": 2, "SPRITE_BIG_GYARADOS": 4, "SPRITE_ALOLAN_EXEGGUTOR": 4})
 for name, kind in expected.items():
     index = names.index(name) - 1
     require((rom[headers + index * 4 + 3] >> 6) + 1 == kind, f"Sprite type changed: {name}")

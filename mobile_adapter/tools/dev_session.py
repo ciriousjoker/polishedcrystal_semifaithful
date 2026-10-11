@@ -16,7 +16,8 @@ import sys
 import threading
 import time
 
-from probe_emulator import read_symbols, require, validate_battery
+from probe_emulator import read_symbols, require
+from save_scenarios import AVATARS, battery, choose, expected
 
 REPO = Path(__file__).resolve().parents[2]
 TOOLS = Path(__file__).resolve().parent
@@ -110,21 +111,6 @@ def native_tools(args, android=False):
     return build / "DoubleCherryGB_libretro.so", android_runner
 
 
-def fixture(args, runner):
-    seed = args.cache / "dev-session/start.sav"
-    if not seed.exists():
-        baseline = args.cache / "m1-baseline-regression/create/ingame.sav"
-        if not baseline.exists():
-            baseline_run = args.cache / ("dev-baseline-" + datetime.now().strftime("%Y%m%d-%H%M%S"))
-            run([sys.executable, TOOLS / "probe_emulator.py", "--runner", runner,
-                 "--core", args.cache / "build/doublecherry/DoubleCherryGB_libretro.dylib",
-                 "--output", baseline_run])
-            baseline = baseline_run / "create/ingame.sav"
-        shutil.copyfile(baseline, seed)
-    validate_battery(seed, read_symbols(REPO / "polishedcrystal-mobile-3.2.3.sym"))
-    return seed
-
-
 def profile(root, target, base="", android=False, package=None):
     for directory in (("system",) if android else ("roms", "saves", "states", "system")):
         (root / directory).mkdir(parents=True, exist_ok=True)
@@ -169,11 +155,11 @@ def profile(root, target, base="", android=False, package=None):
     config(root / "retroarch.cfg", values, base)
 
 
-def verify_idle(path):
+def verify_idle(path, expected_state=None):
     state = json.loads(path.read_text())["symbols"]
     for name, expected in {"hCrashCode": 0, "hCGB": 1, "hInMenu": 0,
                            "wMapStatus": 2, "wScriptRunning": 0, "wMobileOwner": 0,
-                           "wMapGroup": 24, "wMapNumber": 5}.items():
+                           **(expected_state or {})}.items():
         require(state.get(name) == expected, f"Start-state preparation failed: {name}")
 
 
@@ -215,7 +201,7 @@ def android_intent(package, target):
             "--es", "ROM", target + f"/{NAME}.gbc"]
 
 
-def mac_profile(args, runner, seed, address):
+def mac_profile(args, runner, seed, address, expected_state):
     root = args.cache / "dev-session/mac"
     profile(root, root)
     destination = root / f"roms/{NAME}.gbc"
@@ -234,9 +220,10 @@ def mac_profile(args, runner, seed, address):
              "--symbols", REPO / "polishedcrystal-mobile-3.2.3.sym",
              "--state-out", root / "start.json", "--snapshot-out", root / f"states/{NAME}.state.auto"],
             stdout=log, stderr=subprocess.STDOUT)
-    verify_idle(root / "start.json")
+    verify_idle(root / "start.json", expected_state)
     (root / "build.json").write_text(json.dumps({"endpoint": f"{address}:{PORT}",
         "rom_sha256": checksum, "core_revision": CORE_REVISION,
+        "scenario": args.scenario_record["id"], "avatar": args.mac_avatar,
         "snapshot_regenerated": True}, indent=2) + "\n")
     return root
 
@@ -277,7 +264,7 @@ class Android:
         return result.returncode == 0
 
 
-def deploy(args, device, mac, seed, core, runner):
+def deploy(args, device, mac, seed, core, runner, expected_state):
     root = args.cache / "dev-session/android"
     root.mkdir(parents=True, exist_ok=True)
     existing = f"/storage/emulated/0/Android/data/{device.package}/files/retroarch.cfg"
@@ -309,7 +296,7 @@ def deploy(args, device, mac, seed, core, runner):
                  "--save-in", temporary + "/start.sav", "--symbols", temporary + "/current.sym",
                  "--state-out", temporary + "/start.json", "--snapshot-out", temporary + "/start.state")
     device.call("pull", temporary + "/start.json", root / "start.json", stdout=subprocess.DEVNULL)
-    verify_idle(root / "start.json")
+    verify_idle(root / "start.json", expected_state)
     device.call("pull", temporary + "/start.state", root / f"{NAME}.state.auto", stdout=subprocess.DEVNULL)
     install = core_install_record(core, device.package, device.package_details)
     stamp = target + "/.core-install.json"
@@ -454,6 +441,9 @@ def start(args, mac, address, device=None, launch=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--scenario", help="Starting save: bedroom, game-corner or goldenrod-city; otherwise ask interactively")
+    parser.add_argument("--mac-avatar", choices=AVATARS, default="chris")
+    parser.add_argument("--android-avatar", choices=AVATARS, default="kris")
     parser.add_argument("--server-ip", help="Mac LAN IPv4; otherwise detect its default interface")
     parser.add_argument("--interface", help="Network interface to use instead of the default route")
     parser.add_argument("--serial", help="ADB device serial when several devices are connected")
@@ -467,6 +457,8 @@ def main():
                         help="Shared-storage folder for the stable ROM, save and auto-start snapshot")
     parser.add_argument("--frontend", type=Path, default=FRONTEND)
     args = parser.parse_args()
+    args.scenario_record = choose(args.scenario)
+    print(f"SCENARIO: {args.scenario_record['label']}; Mac={args.mac_avatar}, Android={args.android_avatar}", flush=True)
     require(sys.platform == "darwin", "This launcher is for the configured native macOS host")
     require(args.frontend.is_file(), "RetroArch frontend missing; pass --frontend")
     address = server_address(args)
@@ -484,12 +476,15 @@ def main():
     run(["make", "-j4", "mobile", f"RGBDS={args.cache}/rgbds-1.0.4/"], cwd=REPO)
     run([CARGO, "build", "--locked", "--manifest-path", REPO / "mobile_adapter/server/Cargo.toml"], cwd=REPO)
     runner = native_tools(args)
-    seed = fixture(args, runner)
-    mac = mac_profile(args, runner, seed, address)
+    symbols = read_symbols(REPO / "polishedcrystal-mobile-3.2.3.sym")
+    seed = battery(args.scenario_record, args.mac_avatar, symbols)
+    mac = mac_profile(args, runner, seed, address, expected(args.scenario_record, args.mac_avatar))
     launch = None
     if device:
         core, android_runner = native_tools(args, android=True)
-        launch = deploy(args, device, mac, seed, core, android_runner)
+        phone_seed = battery(args.scenario_record, args.android_avatar, symbols)
+        launch = deploy(args, device, mac, phone_seed, core, android_runner,
+                        expected(args.scenario_record, args.android_avatar))
     print(f"Prepared ROM + battery save + fresh start snapshot: {mac}", flush=True)
     if not args.prepare_only:
         start(args, mac, address, device, launch)

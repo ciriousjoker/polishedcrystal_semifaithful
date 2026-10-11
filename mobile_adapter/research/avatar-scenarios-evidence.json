@@ -1,0 +1,1155 @@
+{
+  "date": "2026-10-11",
+  "branch": "mobileadapter",
+  "status": "selected-avatar and selectable-save follow-up complete",
+  "integration_model": "Separate native DoubleCherryGB processes boot ordinary in-game battery saves. Matching symbols and read-only video observers verify actual sprite caches, VRAM, palettes and state. No game RAM/SRAM edits or stale state injection.",
+  "layout": {
+    "existing_ram_symbols_checked": 23373,
+    "existing_ram_symbols_changed": {},
+    "avatar_cache_bytes": 768,
+    "resident_bytes": 122,
+    "buffer_bytes": 1473,
+    "banked_driver_bytes": 7196,
+    "baseline_rom_sha256": "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e",
+    "baseline_summary": "SUMMARY:\n\tROM0: 16366 bytes used / 18 free\n\tROMX: 2066825 bytes used / 13943 free in 127 banks\n\tSRAM: 30936 bytes used / 1832 free in 4 banks\n\tWRAM0: 3796 bytes used / 300 free\n\tWRAMX: 23760 bytes used / 4912 free in 7 banks\n\tHRAM: 122 bytes used / 5 free",
+    "mobile_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+    "mobile_summary": "SUMMARY:\n\tROM0: 16377 bytes used / 7 free\n\tROMX: 2074057 bytes used / 6711 free in 127 banks\n\tSRAM: 30936 bytes used / 1832 free in 4 banks\n\tWRAM0: 3918 bytes used / 178 free\n\tWRAMX: 26001 bytes used / 2671 free in 7 banks\n\tHRAM: 122 bytes used / 5 free",
+    "faithful_rom_sha256": "6cd3a3997c33bb04bee19abbeb70c55d2c13e42077a9b8df7d1498e4966ee657",
+    "faithful_summary": "SUMMARY:\n\tROM0: 16363 bytes used / 21 free\n\tROMX: 2074008 bytes used / 6760 free in 127 banks\n\tSRAM: 30936 bytes used / 1832 free in 4 banks\n\tWRAM0: 3918 bytes used / 178 free\n\tWRAMX: 26001 bytes used / 2671 free in 7 banks\n\tHRAM: 122 bytes used / 5 free"
+  },
+  "host_checks": {
+    "rust_tests": 20,
+    "deployment_tests": 8,
+    "scenario_tests": 6,
+    "make_test_mobile_host": "passed",
+    "cargo_fmt": "passed",
+    "clippy_all_targets_warnings_denied": "passed",
+    "rgbds_contract_vectors_layout": "passed",
+    "renderer_audit": "passed"
+  },
+  "save_fixtures": {
+    "scenarios": 3,
+    "character_choices_per_scenario": 4,
+    "ordinary_batteries": 12,
+    "manifest_sha256": "bcc73dad9887f6c51781580726f157e36a08ef40d28d59452c7ebfedaea2d9e5",
+    "snapshot_policy": "Regenerate platform-specific auto-states from ordinary selected saves with the current ROM and core at every deployment."
+  },
+  "runtime_summary": {
+    "native_lobby_processes": 33,
+    "profiled_processes": 6,
+    "serial_max_cycles": 1432,
+    "tick_max_cycles": 25392,
+    "serial_max_vblank_cycles": 67840,
+    "lowest_stack_pointer": "0xc0ac",
+    "preservation_failures": 0,
+    "npc_restore_failures": 0
+  },
+  "runtime_gates": {
+    "serial_cycles_less_than": 2048,
+    "foreground_cycles_less_than": 32768,
+    "stack_pointer_at_least": "0xc040",
+    "serial_vblank_cycles_less_than": 70224
+  },
+  "start_menu": {
+    "policy": "Pause remote drawing while the local world is frozen; keep lobby membership and restore latest visible peer figures after closing.",
+    "runtime_signal": "wScriptRunning == 255 in this menu path, not hInMenu == 1",
+    "accepted_scenes": [
+      "bedroom",
+      "game-corner"
+    ],
+    "oracles": "actual-frame paused samples show deferred=3 and zero rendered peers, final idle state renders both selected peers"
+  },
+  "lobby_scenarios": [
+    {
+      "scenario": "basic",
+      "test_rom_sha256": "f507a9c2bfffcb79e4575b7525e896ceab1d84e1fcad41cf74643e6ff401d732",
+      "symbols_sha256": "0bb2adec715fcbb42ceae8ee5fb826784edd869e1f58e978f80459ab917252ca",
+      "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+      "battery_sha256": [
+        "8b39edc0ba9225375d351fad36defa1ae7a1d7ff6649ca52c9d288f7692cb725",
+        "9fa4f3ecc5f3b2a86143374f76ea2eea7a164df5630619ba8e6b5e79647102ff",
+        "94f2bb21ebe58ca6dbe4bd119bb24bb0eca3fb8f92946df814bf51858b486ca7"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/avatar-mixed-crowding",
+      "result": "passed",
+      "canonical_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+      "summary_sha256": "c307a2aea7d0df693b0b0a6547193b90173232cc79527cc84ec84e28e369bc15",
+      "server_log_sha256": "03d97008d5fdaaa6b76070d345337b78c1469fcab34269f3706b457ee8c46aca",
+      "npc_motion_verified_per_stationary_client": true,
+      "graphics_oracle": "native full sprite cache, actual four displayed VRAM tiles and loaded palette identity",
+      "clients": [
+        {
+          "index": 0,
+          "final_state": {
+            "wPlayerGender": 0,
+            "wPlayerSprite": 1,
+            "wPlayerState": 0,
+            "wMapGroup": 11,
+            "wMapNumber": 23,
+            "wXCoord": 14,
+            "wYCoord": 5,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 1,
+            "wMobilePeer2Avatar": 2
+          }
+        },
+        {
+          "index": 1,
+          "final_state": {
+            "wPlayerGender": 1,
+            "wPlayerSprite": 4,
+            "wPlayerState": 0,
+            "wMapGroup": 11,
+            "wMapNumber": 23,
+            "wXCoord": 14,
+            "wYCoord": 6,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 0,
+            "wMobilePeer2Avatar": 2
+          }
+        },
+        {
+          "index": 2,
+          "final_state": {
+            "wPlayerGender": 2,
+            "wPlayerSprite": 199,
+            "wPlayerState": 0,
+            "wMapGroup": 11,
+            "wMapNumber": 23,
+            "wXCoord": 14,
+            "wYCoord": 5,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 0,
+            "wMobilePeer2Avatar": 1
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "start-menu",
+      "test_rom_sha256": "6aed801d0b52f33ac96223727dd3cdd2dff0b6144dbecdc2e5e153cd890dbf7f",
+      "symbols_sha256": "0bb2adec715fcbb42ceae8ee5fb826784edd869e1f58e978f80459ab917252ca",
+      "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+      "battery_sha256": [
+        "74033d785badb7c7fd4ea65cb49627aa33e704241a144bac82bdc1120dca31e5",
+        "9dd9004d782855111ba43d0b676f79d2bbd0dcb29b450f36a4c7e6fa1a16dc12",
+        "c4f43c79f0cb16aecd5ad419e43b701f663f8d6e4f0b1cc1a63d1428ba1e36d4"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/avatar-start-menu-bedroom3",
+      "result": "passed",
+      "canonical_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+      "summary_sha256": "0e49ca4412e753650e0d666e017cdbc387964f37bc0d4448879de1cbe2112721",
+      "server_log_sha256": "021b9456e18b33abcc1131d279974c878ae1cf2d7b298ff820bfcddbed8fac0b",
+      "npc_motion_verified_per_stationary_client": false,
+      "graphics_oracle": "native full sprite cache, actual four displayed VRAM tiles and loaded palette identity",
+      "clients": [
+        {
+          "index": 0,
+          "final_state": {
+            "wPlayerGender": 0,
+            "wPlayerSprite": 1,
+            "wPlayerState": 0,
+            "wMapGroup": 24,
+            "wMapNumber": 5,
+            "wXCoord": 4,
+            "wYCoord": 3,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 1,
+            "wMobilePeer2Avatar": 3
+          }
+        },
+        {
+          "index": 1,
+          "final_state": {
+            "wPlayerGender": 1,
+            "wPlayerSprite": 4,
+            "wPlayerState": 0,
+            "wMapGroup": 24,
+            "wMapNumber": 5,
+            "wXCoord": 3,
+            "wYCoord": 4,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 0,
+            "wMobilePeer2Avatar": 3
+          }
+        },
+        {
+          "index": 2,
+          "final_state": {
+            "wPlayerGender": 3,
+            "wPlayerSprite": 209,
+            "wPlayerState": 0,
+            "wMapGroup": 24,
+            "wMapNumber": 5,
+            "wXCoord": 2,
+            "wYCoord": 3,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 0,
+            "wMobilePeer2Avatar": 1
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "start-menu",
+      "test_rom_sha256": "edc7b2bc3ecebe3bbd23f80976dba0f442452a820ec2e225be953e54fa28652f",
+      "symbols_sha256": "0bb2adec715fcbb42ceae8ee5fb826784edd869e1f58e978f80459ab917252ca",
+      "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+      "battery_sha256": [
+        "8b39edc0ba9225375d351fad36defa1ae7a1d7ff6649ca52c9d288f7692cb725",
+        "9fa4f3ecc5f3b2a86143374f76ea2eea7a164df5630619ba8e6b5e79647102ff",
+        "5157ddb2765122d05bff95b7bbbb67a83ea5d5f9f5dee1bdb856eec51b9224cc"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/avatar-start-menu-game-corner",
+      "result": "passed",
+      "canonical_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+      "summary_sha256": "b5f9d0c69e7f6f8382e86698e9aa44bad96bafcf2b6f94adc42bf93a9ed4248b",
+      "server_log_sha256": "09dc8d2ffce952a33b6e41c3b01fa40a6bc8061a2a21be8ed5e36d45dd2363af",
+      "npc_motion_verified_per_stationary_client": false,
+      "graphics_oracle": "native full sprite cache, actual four displayed VRAM tiles and loaded palette identity",
+      "clients": [
+        {
+          "index": 0,
+          "final_state": {
+            "wPlayerGender": 0,
+            "wPlayerSprite": 1,
+            "wPlayerState": 0,
+            "wMapGroup": 11,
+            "wMapNumber": 23,
+            "wXCoord": 14,
+            "wYCoord": 5,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 3,
+            "wMobilePeer2Avatar": 1
+          }
+        },
+        {
+          "index": 1,
+          "final_state": {
+            "wPlayerGender": 1,
+            "wPlayerSprite": 4,
+            "wPlayerState": 0,
+            "wMapGroup": 11,
+            "wMapNumber": 23,
+            "wXCoord": 14,
+            "wYCoord": 6,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 0,
+            "wMobilePeer2Avatar": 3
+          }
+        },
+        {
+          "index": 2,
+          "final_state": {
+            "wPlayerGender": 3,
+            "wPlayerSprite": 209,
+            "wPlayerState": 0,
+            "wMapGroup": 11,
+            "wMapNumber": 23,
+            "wXCoord": 14,
+            "wYCoord": 5,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 0,
+            "wMobilePeer2Avatar": 1
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "basic",
+      "test_rom_sha256": "84a5cc380ffaa4d0907c211781f83b20e981c53cfeb7cbf8c738ab8ffa289b65",
+      "symbols_sha256": "0bb2adec715fcbb42ceae8ee5fb826784edd869e1f58e978f80459ab917252ca",
+      "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+      "battery_sha256": [
+        "fd8e99c8cbf5567e9e9a7e8e7666515410c9c6813c1ee7689820d801371629a5",
+        "135bef21946800f1ac53ddf9bd84f4f2113275eb68369076eb18d1bbdb5824ea",
+        "8db21af584e8cdf494dd8045e82fd424e8cb402509fb2f593b5379cc8365ee04"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/avatar-moving-city",
+      "result": "passed",
+      "canonical_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+      "summary_sha256": "7fed8c008e5d3f1e3cde6ee0dd62570ff4363b03f461e2b0362c52072ed0c8ae",
+      "server_log_sha256": "8d2f9d5670ed7ede028832d488b35754ba6de1bc7aba6551e319638d5f0ffe0f",
+      "npc_motion_verified_per_stationary_client": true,
+      "graphics_oracle": "native full sprite cache, actual four displayed VRAM tiles and loaded palette identity",
+      "clients": [
+        {
+          "index": 0,
+          "final_state": {
+            "wPlayerGender": 0,
+            "wPlayerSprite": 1,
+            "wPlayerState": 0,
+            "wMapGroup": 11,
+            "wMapNumber": 6,
+            "wXCoord": 25,
+            "wYCoord": 18,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 3,
+            "wMobilePeer2Avatar": 1
+          }
+        },
+        {
+          "index": 1,
+          "final_state": {
+            "wPlayerGender": 1,
+            "wPlayerSprite": 4,
+            "wPlayerState": 0,
+            "wMapGroup": 11,
+            "wMapNumber": 6,
+            "wXCoord": 25,
+            "wYCoord": 19,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 3,
+            "wMobilePeer2Avatar": 0
+          }
+        },
+        {
+          "index": 2,
+          "final_state": {
+            "wPlayerGender": 3,
+            "wPlayerSprite": 209,
+            "wPlayerState": 0,
+            "wMapGroup": 11,
+            "wMapNumber": 6,
+            "wXCoord": 25,
+            "wYCoord": 18,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 0,
+            "wMobilePeer2Avatar": 1
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "speed",
+      "test_rom_sha256": "62d32bf68829898d6c78c2309f476ac7d1ff9931dae79284c28e1f5c3aff48c4",
+      "symbols_sha256": "0bb2adec715fcbb42ceae8ee5fb826784edd869e1f58e978f80459ab917252ca",
+      "core_sha256": "e26a7ecf08273a98fc04dcca7714a736a5fab9a73dce156464a8e5016b7c1ea0",
+      "battery_sha256": [
+        "74033d785badb7c7fd4ea65cb49627aa33e704241a144bac82bdc1120dca31e5",
+        "9dd9004d782855111ba43d0b676f79d2bbd0dcb29b450f36a4c7e6fa1a16dc12",
+        "c4f43c79f0cb16aecd5ad419e43b701f663f8d6e4f0b1cc1a63d1428ba1e36d4"
+      ],
+      "declared_client_server_rtt_ms": 100,
+      "client_speed_multipliers": [
+        3,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/avatar-speed3-profile2",
+      "result": "passed",
+      "canonical_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+      "summary_sha256": "c247f0b907572f04425d05f3260eb7356a0edf2c82e0c3f7f85404bb7af50a95",
+      "server_log_sha256": "4a88f634091ef578d3272c38f364f92b99818e1d8c22512b518b8571c08d0522",
+      "npc_motion_verified_per_stationary_client": false,
+      "graphics_oracle": "native full sprite cache, actual four displayed VRAM tiles and loaded palette identity",
+      "clients": [
+        {
+          "index": 0,
+          "final_state": {
+            "wPlayerGender": 0,
+            "wPlayerSprite": 1,
+            "wPlayerState": 0,
+            "wMapGroup": 24,
+            "wMapNumber": 5,
+            "wXCoord": 1,
+            "wYCoord": 3,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 1,
+            "wMobilePeer2Avatar": 3
+          },
+          "profile": {
+            "serial_count": 74562,
+            "serial_max_cycles": 1432,
+            "serial_total_cycles": 91922588,
+            "serial_failures": 0,
+            "serial_lowest_sp": 49338,
+            "tick_count": 20891,
+            "tick_max_cycles": 19912,
+            "tick_total_cycles": 32778892,
+            "tick_failures": 0,
+            "tick_lowest_sp": 49342,
+            "serial_max_frame_cycles": 71236,
+            "serial_normal_speed_count": 0,
+            "serial_bank_switch_completions": 1966,
+            "serial_max_vblank_cycles": 67796,
+            "npc_restore_count": 3903,
+            "npc_restore_failures": 0,
+            "tick_stack_cursor_samples": 0,
+            "tick_stack_cursor_lowest_sp": 65535,
+            "video_frames": 6998,
+            "audio_batches": 6998,
+            "audio_samples": 5143530
+          },
+          "profile_sha256": "48c309b5180bbfefd6f2f350d8c93a28359c30e1ce928beb7be6401bc6feec8f"
+        },
+        {
+          "index": 1,
+          "final_state": {
+            "wPlayerGender": 1,
+            "wPlayerSprite": 4,
+            "wPlayerState": 0,
+            "wMapGroup": 24,
+            "wMapNumber": 5,
+            "wXCoord": 3,
+            "wYCoord": 4,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 0,
+            "wMobilePeer2Avatar": 3
+          },
+          "profile": {
+            "serial_count": 29842,
+            "serial_max_cycles": 1432,
+            "serial_total_cycles": 38073840,
+            "serial_failures": 0,
+            "serial_lowest_sp": 49328,
+            "tick_count": 13117,
+            "tick_max_cycles": 24336,
+            "tick_total_cycles": 19987188,
+            "tick_failures": 0,
+            "tick_lowest_sp": 49324,
+            "serial_max_frame_cycles": 89140,
+            "serial_normal_speed_count": 0,
+            "serial_bank_switch_completions": 996,
+            "serial_max_vblank_cycles": 67840,
+            "npc_restore_count": 2390,
+            "npc_restore_failures": 0,
+            "tick_stack_cursor_samples": 0,
+            "tick_stack_cursor_lowest_sp": 65535,
+            "video_frames": 4498,
+            "audio_batches": 4498,
+            "audio_samples": 3306030
+          },
+          "profile_sha256": "dd7ee63b8c028fa303a0d6c8b53909f6d30206103b92988ff5bf957fea1284ff"
+        },
+        {
+          "index": 2,
+          "final_state": {
+            "wPlayerGender": 3,
+            "wPlayerSprite": 209,
+            "wPlayerState": 0,
+            "wMapGroup": 24,
+            "wMapNumber": 5,
+            "wXCoord": 2,
+            "wYCoord": 3,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 0,
+            "wMobilePeer2Avatar": 1
+          },
+          "profile": {
+            "serial_count": 29771,
+            "serial_max_cycles": 1432,
+            "serial_total_cycles": 37936648,
+            "serial_failures": 0,
+            "serial_lowest_sp": 49328,
+            "tick_count": 13130,
+            "tick_max_cycles": 23208,
+            "tick_total_cycles": 19886852,
+            "tick_failures": 0,
+            "tick_lowest_sp": 49324,
+            "serial_max_frame_cycles": 79508,
+            "serial_normal_speed_count": 0,
+            "serial_bank_switch_completions": 997,
+            "serial_max_vblank_cycles": 67816,
+            "npc_restore_count": 2392,
+            "npc_restore_failures": 0,
+            "tick_stack_cursor_samples": 0,
+            "tick_stack_cursor_lowest_sp": 65535,
+            "video_frames": 4498,
+            "audio_batches": 4498,
+            "audio_samples": 3306030
+          },
+          "profile_sha256": "bb0ad9ea767a2cc52dd8aecc144b93a2a52f7497131ed0b44f4418c11190c8b9"
+        }
+      ]
+    },
+    {
+      "scenario": "basic",
+      "test_rom_sha256": "0700e7741034206a6b444ce7f98395cbb5bac56f77d9533916aa43a207d19415",
+      "symbols_sha256": "0bb2adec715fcbb42ceae8ee5fb826784edd869e1f58e978f80459ab917252ca",
+      "core_sha256": "e26a7ecf08273a98fc04dcca7714a736a5fab9a73dce156464a8e5016b7c1ea0",
+      "battery_sha256": [
+        "8b39edc0ba9225375d351fad36defa1ae7a1d7ff6649ca52c9d288f7692cb725",
+        "9fa4f3ecc5f3b2a86143374f76ea2eea7a164df5630619ba8e6b5e79647102ff",
+        "94f2bb21ebe58ca6dbe4bd119bb24bb0eca3fb8f92946df814bf51858b486ca7"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/avatar-crowding-profile",
+      "result": "passed",
+      "canonical_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+      "summary_sha256": "2c093e1b37fd9c0fab746554ca132eec85c17da86ad145a606c2008e42d1ec32",
+      "server_log_sha256": "d8e01aba9fb59d349bb95d91f6ed24636bb07794a149cf72b53f6be7152b0aba",
+      "npc_motion_verified_per_stationary_client": true,
+      "graphics_oracle": "native full sprite cache, actual four displayed VRAM tiles and loaded palette identity",
+      "clients": [
+        {
+          "index": 0,
+          "final_state": {
+            "wPlayerGender": 0,
+            "wPlayerSprite": 1,
+            "wPlayerState": 0,
+            "wMapGroup": 11,
+            "wMapNumber": 23,
+            "wXCoord": 14,
+            "wYCoord": 5,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 1,
+            "wMobilePeer2Avatar": 2
+          },
+          "profile": {
+            "serial_count": 14797,
+            "serial_max_cycles": 1432,
+            "serial_total_cycles": 18258148,
+            "serial_failures": 0,
+            "serial_lowest_sp": 49336,
+            "tick_count": 11423,
+            "tick_max_cycles": 25392,
+            "tick_total_cycles": 11230496,
+            "tick_failures": 0,
+            "tick_lowest_sp": 49324,
+            "serial_max_frame_cycles": 65664,
+            "serial_normal_speed_count": 0,
+            "serial_bank_switch_completions": 465,
+            "serial_max_vblank_cycles": 65976,
+            "npc_restore_count": 2041,
+            "npc_restore_failures": 0,
+            "tick_stack_cursor_samples": 0,
+            "tick_stack_cursor_lowest_sp": 65535,
+            "video_frames": 4499,
+            "audio_batches": 4499,
+            "audio_samples": 3306765
+          },
+          "profile_sha256": "be7c36ad671d7aed6fbefdfe831296971925171b06e073c77aa00f4e5edc7847"
+        },
+        {
+          "index": 1,
+          "final_state": {
+            "wPlayerGender": 1,
+            "wPlayerSprite": 4,
+            "wPlayerState": 0,
+            "wMapGroup": 11,
+            "wMapNumber": 23,
+            "wXCoord": 14,
+            "wYCoord": 6,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 0,
+            "wMobilePeer2Avatar": 2
+          },
+          "profile": {
+            "serial_count": 14707,
+            "serial_max_cycles": 1432,
+            "serial_total_cycles": 18105820,
+            "serial_failures": 0,
+            "serial_lowest_sp": 49337,
+            "tick_count": 11425,
+            "tick_max_cycles": 17308,
+            "tick_total_cycles": 10987492,
+            "tick_failures": 0,
+            "tick_lowest_sp": 49337,
+            "serial_max_frame_cycles": 85680,
+            "serial_normal_speed_count": 0,
+            "serial_bank_switch_completions": 475,
+            "serial_max_vblank_cycles": 67800,
+            "npc_restore_count": 2042,
+            "npc_restore_failures": 0,
+            "tick_stack_cursor_samples": 0,
+            "tick_stack_cursor_lowest_sp": 65535,
+            "video_frames": 4498,
+            "audio_batches": 4498,
+            "audio_samples": 3306030
+          },
+          "profile_sha256": "a69789f34a44c907bac65231a023e64cab601696ab4550b1cf5d6405c74199b8"
+        },
+        {
+          "index": 2,
+          "final_state": {
+            "wPlayerGender": 2,
+            "wPlayerSprite": 199,
+            "wPlayerState": 0,
+            "wMapGroup": 11,
+            "wMapNumber": 23,
+            "wXCoord": 14,
+            "wYCoord": 5,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 0,
+            "wMobilePeer2Avatar": 1
+          },
+          "profile": {
+            "serial_count": 14840,
+            "serial_max_cycles": 1432,
+            "serial_total_cycles": 18313896,
+            "serial_failures": 0,
+            "serial_lowest_sp": 49338,
+            "tick_count": 11414,
+            "tick_max_cycles": 23672,
+            "tick_total_cycles": 11124524,
+            "tick_failures": 0,
+            "tick_lowest_sp": 49338,
+            "serial_max_frame_cycles": 76060,
+            "serial_normal_speed_count": 0,
+            "serial_bank_switch_completions": 476,
+            "serial_max_vblank_cycles": 66664,
+            "npc_restore_count": 2039,
+            "npc_restore_failures": 0,
+            "tick_stack_cursor_samples": 0,
+            "tick_stack_cursor_lowest_sp": 65535,
+            "video_frames": 4498,
+            "audio_batches": 4498,
+            "audio_samples": 3306030
+          },
+          "profile_sha256": "c4f35540f9de10aed01c00ed078829f2fc23f3380da75fc8ff2ecce2018adc78"
+        }
+      ]
+    },
+    {
+      "scenario": "running",
+      "test_rom_sha256": "ecd3383f60df248c6692a30e1e0ead545390d4c560587780a7fc0a2ad0ff3595",
+      "symbols_sha256": "0bb2adec715fcbb42ceae8ee5fb826784edd869e1f58e978f80459ab917252ca",
+      "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+      "battery_sha256": [
+        "665cbe35c551249ea7b57aee0df88f7baadc4e6bf5684f4a99b17989657e5beb",
+        "665cbe35c551249ea7b57aee0df88f7baadc4e6bf5684f4a99b17989657e5beb",
+        "665cbe35c551249ea7b57aee0df88f7baadc4e6bf5684f4a99b17989657e5beb"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/avatar-mode-running",
+      "result": "passed",
+      "canonical_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+      "summary_sha256": "b2ccd1b8419f32920aa9661092f2f3ab5046792f8ba2283ab2f39ab567c5da68",
+      "server_log_sha256": "14cc060be84fa376ba02915ed8af49120774e591a8ec86f8cc2e20e79c4b9516",
+      "npc_motion_verified_per_stationary_client": false,
+      "graphics_oracle": "native full sprite cache, actual four displayed VRAM tiles and loaded palette identity",
+      "clients": [
+        {
+          "index": 0,
+          "final_state": {
+            "wPlayerGender": 1,
+            "wPlayerSprite": 4,
+            "wPlayerState": 0,
+            "wMapGroup": 13,
+            "wMapNumber": 2,
+            "wXCoord": 11,
+            "wYCoord": 6,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 1,
+            "wMobilePeer2Avatar": 1
+          }
+        },
+        {
+          "index": 1,
+          "final_state": {
+            "wPlayerGender": 1,
+            "wPlayerSprite": 4,
+            "wPlayerState": 0,
+            "wMapGroup": 13,
+            "wMapNumber": 2,
+            "wXCoord": 8,
+            "wYCoord": 7,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 1,
+            "wMobilePeer2Avatar": 1
+          }
+        },
+        {
+          "index": 2,
+          "final_state": {
+            "wPlayerGender": 1,
+            "wPlayerSprite": 4,
+            "wPlayerState": 0,
+            "wMapGroup": 13,
+            "wMapNumber": 2,
+            "wXCoord": 7,
+            "wYCoord": 6,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 1,
+            "wMobilePeer2Avatar": 1
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "basic",
+      "test_rom_sha256": "ecd3383f60df248c6692a30e1e0ead545390d4c560587780a7fc0a2ad0ff3595",
+      "symbols_sha256": "0bb2adec715fcbb42ceae8ee5fb826784edd869e1f58e978f80459ab917252ca",
+      "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+      "battery_sha256": [
+        "fbff2811cf467cf8b7e510db0c40344bdcc4ffa9e4bf8ac737930473a4ac9ac1",
+        "fbff2811cf467cf8b7e510db0c40344bdcc4ffa9e4bf8ac737930473a4ac9ac1",
+        "fbff2811cf467cf8b7e510db0c40344bdcc4ffa9e4bf8ac737930473a4ac9ac1"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/avatar-mode-bike",
+      "result": "passed",
+      "canonical_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+      "summary_sha256": "00799c2c111e7d43e3061de0aca0c337ee2b725b65445943afb1dc8497a8771c",
+      "server_log_sha256": "2e314bf4e9b980ca5fc42a16b6332cff9206e31dc1993ff678d8bde27b1550f4",
+      "npc_motion_verified_per_stationary_client": false,
+      "graphics_oracle": "native full sprite cache, actual four displayed VRAM tiles and loaded palette identity",
+      "clients": [
+        {
+          "index": 0,
+          "final_state": {
+            "wPlayerGender": 1,
+            "wPlayerSprite": 5,
+            "wPlayerState": 2,
+            "wMapGroup": 21,
+            "wMapNumber": 3,
+            "wXCoord": 9,
+            "wYCoord": 12,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 1,
+            "wMobilePeer2Avatar": 1
+          }
+        },
+        {
+          "index": 1,
+          "final_state": {
+            "wPlayerGender": 1,
+            "wPlayerSprite": 5,
+            "wPlayerState": 2,
+            "wMapGroup": 21,
+            "wMapNumber": 3,
+            "wXCoord": 9,
+            "wYCoord": 12,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 1,
+            "wMobilePeer2Avatar": 1
+          }
+        },
+        {
+          "index": 2,
+          "final_state": {
+            "wPlayerGender": 1,
+            "wPlayerSprite": 5,
+            "wPlayerState": 2,
+            "wMapGroup": 21,
+            "wMapNumber": 3,
+            "wXCoord": 8,
+            "wYCoord": 12,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 1,
+            "wMobilePeer2Avatar": 1
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "basic",
+      "test_rom_sha256": "ecd3383f60df248c6692a30e1e0ead545390d4c560587780a7fc0a2ad0ff3595",
+      "symbols_sha256": "0bb2adec715fcbb42ceae8ee5fb826784edd869e1f58e978f80459ab917252ca",
+      "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+      "battery_sha256": [
+        "0458fc17f991d4af86a19b4d98d924207bd6caaa1de59a3a066ff968727fbc94",
+        "0458fc17f991d4af86a19b4d98d924207bd6caaa1de59a3a066ff968727fbc94",
+        "0458fc17f991d4af86a19b4d98d924207bd6caaa1de59a3a066ff968727fbc94"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/avatar-mode-surf",
+      "result": "passed",
+      "canonical_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+      "summary_sha256": "c9e61b18b75efe38a7836addb914452f1ad296f94b6cfe928a5df208b2245991",
+      "server_log_sha256": "3ca4f0759f5039dcbca26d3116edfcca5479f15d0832a6b60e5b51192e0eb406",
+      "npc_motion_verified_per_stationary_client": false,
+      "graphics_oracle": "native full sprite cache, actual four displayed VRAM tiles and loaded palette identity",
+      "clients": [
+        {
+          "index": 0,
+          "final_state": {
+            "wPlayerGender": 1,
+            "wPlayerSprite": 6,
+            "wPlayerState": 4,
+            "wMapGroup": 24,
+            "wMapNumber": 2,
+            "wXCoord": 23,
+            "wYCoord": 8,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 1,
+            "wMobilePeer2Avatar": 1
+          }
+        },
+        {
+          "index": 1,
+          "final_state": {
+            "wPlayerGender": 1,
+            "wPlayerSprite": 6,
+            "wPlayerState": 4,
+            "wMapGroup": 24,
+            "wMapNumber": 2,
+            "wXCoord": 22,
+            "wYCoord": 9,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 1,
+            "wMobilePeer2Avatar": 1
+          }
+        },
+        {
+          "index": 2,
+          "final_state": {
+            "wPlayerGender": 1,
+            "wPlayerSprite": 6,
+            "wPlayerState": 4,
+            "wMapGroup": 24,
+            "wMapNumber": 2,
+            "wXCoord": 21,
+            "wYCoord": 8,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 1,
+            "wMobilePeer2Avatar": 1
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "basic",
+      "test_rom_sha256": "cddb503a62e192166d8069e4b5c21db0f2095b7121dff7dacf38d10b6ce5a4d5",
+      "symbols_sha256": "28ce8ee4bb8f08086a4e6e04dbf0c9db829c22c14f30124501986dac60eb5f50",
+      "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+      "battery_sha256": [
+        "74033d785badb7c7fd4ea65cb49627aa33e704241a144bac82bdc1120dca31e5",
+        "9dd9004d782855111ba43d0b676f79d2bbd0dcb29b450f36a4c7e6fa1a16dc12",
+        "8fd272258112650a4babc41a3f85867023d86db1cafae8bfa464c9dc709f9b92"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/avatar-faithful-runtime",
+      "result": "passed",
+      "canonical_rom_sha256": "6cd3a3997c33bb04bee19abbeb70c55d2c13e42077a9b8df7d1498e4966ee657",
+      "summary_sha256": "746049ce62a531d5afc8a76f7da6a128dd9f593ab00601339f0d777eb9f24351",
+      "server_log_sha256": "85757b1117ec8019b0dfbf0eef1f3bbec9ad7dfea8611e4e6d0cabbc73f29cce",
+      "npc_motion_verified_per_stationary_client": false,
+      "graphics_oracle": "native full sprite cache, actual four displayed VRAM tiles and loaded palette identity",
+      "clients": [
+        {
+          "index": 0,
+          "final_state": {
+            "wPlayerGender": 0,
+            "wPlayerSprite": 1,
+            "wPlayerState": 0,
+            "wMapGroup": 24,
+            "wMapNumber": 5,
+            "wXCoord": 4,
+            "wYCoord": 3,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 2,
+            "wMobilePeer2Avatar": 1
+          }
+        },
+        {
+          "index": 1,
+          "final_state": {
+            "wPlayerGender": 1,
+            "wPlayerSprite": 4,
+            "wPlayerState": 0,
+            "wMapGroup": 24,
+            "wMapNumber": 5,
+            "wXCoord": 3,
+            "wYCoord": 4,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 2,
+            "wMobilePeer2Avatar": 0
+          }
+        },
+        {
+          "index": 2,
+          "final_state": {
+            "wPlayerGender": 2,
+            "wPlayerSprite": 199,
+            "wPlayerState": 0,
+            "wMapGroup": 24,
+            "wMapNumber": 5,
+            "wXCoord": 2,
+            "wYCoord": 3,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 1,
+            "wMobilePeer2Avatar": 0
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "basic",
+      "test_rom_sha256": "8c2b09b9f470afe2d04b429c1ae49466ae11c4f6348313555689d0c5dd815a7f",
+      "symbols_sha256": "0bb2adec715fcbb42ceae8ee5fb826784edd869e1f58e978f80459ab917252ca",
+      "core_sha256": "bfc96947723fc79fc913356a1f5cbbe1142eaac487151a0f83be319784a8796a",
+      "battery_sha256": [
+        "74033d785badb7c7fd4ea65cb49627aa33e704241a144bac82bdc1120dca31e5",
+        "9dd9004d782855111ba43d0b676f79d2bbd0dcb29b450f36a4c7e6fa1a16dc12",
+        "c4f43c79f0cb16aecd5ad419e43b701f663f8d6e4f0b1cc1a63d1428ba1e36d4"
+      ],
+      "declared_client_server_rtt_ms": 0,
+      "client_speed_multipliers": [
+        1,
+        1,
+        1
+      ],
+      "expected_deferral": 0,
+      "processes": 3,
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/avatar-local-latency",
+      "result": "passed",
+      "canonical_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+      "summary_sha256": "4b2983ea60ec488a8d1ec3db72574a7cc495eb62cd86eb85b5faa3644389d964",
+      "server_log_sha256": "b62d0670af6a2e0b3e69b8c9548af4e23637838062c684626c0a5c9084fb7329",
+      "npc_motion_verified_per_stationary_client": false,
+      "graphics_oracle": "native full sprite cache, actual four displayed VRAM tiles and loaded palette identity",
+      "clients": [
+        {
+          "index": 0,
+          "final_state": {
+            "wPlayerGender": 0,
+            "wPlayerSprite": 1,
+            "wPlayerState": 0,
+            "wMapGroup": 24,
+            "wMapNumber": 5,
+            "wXCoord": 4,
+            "wYCoord": 3,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 1,
+            "wMobilePeer2Avatar": 3
+          }
+        },
+        {
+          "index": 1,
+          "final_state": {
+            "wPlayerGender": 1,
+            "wPlayerSprite": 4,
+            "wPlayerState": 0,
+            "wMapGroup": 24,
+            "wMapNumber": 5,
+            "wXCoord": 3,
+            "wYCoord": 4,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 3,
+            "wMobilePeer2Avatar": 0
+          }
+        },
+        {
+          "index": 2,
+          "final_state": {
+            "wPlayerGender": 3,
+            "wPlayerSprite": 209,
+            "wPlayerState": 0,
+            "wMapGroup": 24,
+            "wMapNumber": 5,
+            "wXCoord": 2,
+            "wYCoord": 3,
+            "wMobileOnline": 1,
+            "wMobilePeerCount": 2,
+            "wMobileRenderedCount": 2,
+            "wMobileDeferred": 0,
+            "wMobilePeer1Avatar": 1,
+            "wMobilePeer2Avatar": 0
+          }
+        }
+      ],
+      "latency": {
+        "samples": 40,
+        "p50_ms": 83.097,
+        "p95_ms": 100.643,
+        "max_ms": 210.258,
+        "added_client_server_rtt_ms": 0,
+        "input_to_remote_p95_ms": 276.534,
+        "input_to_remote_max_ms": 378.14,
+        "measurement": "first captured local world motion to first directional position change of four-quad remote avatar bounds at native video callback; input-to-remote includes unchanged vanilla turn delay"
+      }
+    }
+  ],
+  "platform_preparation_and_live_observation": [
+    {
+      "platform": "mac",
+      "result": "fresh current-core snapshot preparation passed; correct local and remote figures observed in the live manual session",
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/avatar-device-proof/mac",
+      "test_rom_sha256": "3263cca4ea745ad800a9bf3af879f8eaf19bcc09741ced71556bcf669e3cd46c",
+      "canonical_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+      "start_state_sha256": "a478e4be4653c4bae19214218b9fcbda31db2bd8906be5c0c62d84587ec76fe2",
+      "live_screenshot_sha256": "1d4dc8478e6477831dc0a04f29843455f16645fa6bbc715f27084011a313ab31",
+      "player_gender": 0,
+      "player_sprite": 1,
+      "map": "GoldenrodGameCorner",
+      "x": 14,
+      "y": 5
+    },
+    {
+      "platform": "android",
+      "result": "fresh current-core snapshot preparation passed; correct local and remote figures observed in the live manual session",
+      "artifact_directory": "/Volumes/Storage/Cache/mobileadapter/avatar-device-proof/android",
+      "test_rom_sha256": "3263cca4ea745ad800a9bf3af879f8eaf19bcc09741ced71556bcf669e3cd46c",
+      "canonical_rom_sha256": "3bafac80ecea0d7da588f0b42ec7bc52ff1a703a60bb8708841ca03b791d1f87",
+      "start_state_sha256": "23f1089bce9c560560b1401613ec5f3a68aba70dacbbaa7381536eb41d1e8b55",
+      "live_screenshot_sha256": "f15958f789355ff19069088adc5379567bf7f9eb6854ca6bb2920a895146faed",
+      "player_gender": 1,
+      "player_sprite": 4,
+      "map": "GoldenrodGameCorner",
+      "x": 14,
+      "y": 5
+    }
+  ],
+  "excluded_development_attempts": [
+    "Initial bedroom 5,3 blocked the movement probe on a table; all committed bedroom saves now start at 3,3.",
+    "Two initial Start-menu oracles used the wrong flag or trace-row number; corrected to actual frame and wScriptRunning.",
+    "The first speed profile collided with another test TCP port; isolated rerun passed."
+  ]
+}

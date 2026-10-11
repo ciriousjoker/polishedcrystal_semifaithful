@@ -34,7 +34,8 @@ idle overworld scene. Select+B joins or leaves lobby 1. Select+A opens status,
 players and connect/disconnect controls. Select+B+A runs the echo diagnostic.
 Three clients can join; each sees two peers in a compatible map instance.
 Initial saves share coordinates, so move a tile to separate overlapping avatars.
-Avatars use the approved Chris appearance and the local player palette. Runtime
+Avatars use each player's selected Chris/Kris/Crys/Beta figure, movement sprite
+and the native palette allocator. Runtime
 symbols expose success, error, ownership and guard state for automated oracles.
 
 The only currently supported feature builds are standard `make mobile` and
@@ -65,6 +66,9 @@ frames while sending deltas. RGBDS additionally compiles the production adapter 
 layout with the actual LCD/OAM LOAD blocks, then checks emitted protocol vectors
 and memory bounds. It does not execute LR35902 instructions. Existing stack and HRAM
 addresses are explicit contract assertions.
+The same target runs eight host deployment tests and six portable-save selection
+and integrity tests, including validation of the chosen scene and figure in
+each freshly prepared start snapshot.
 See [protocol/transport-v1.md](protocol/transport-v1.md) and
 [protocol/lobby-v2.md](protocol/lobby-v2.md).
 
@@ -179,3 +183,32 @@ states or injected game RAM are used in acceptance.
 
 See [research/MILESTONE_2.md](research/MILESTONE_2.md) for measured evidence,
 rendering limits and protected-scene exceptions.
+Current avatar/scenario acceptance and build hashes are in
+[research/AVATAR_SCENARIOS.md](research/AVATAR_SCENARIOS.md).
+
+## Committed manual scenarios and selected figures
+
+The one-command launcher now asks for bedroom, crowded Game Corner or moving-NPC
+Goldenrod City saves. It defaults to Chris on Mac and Kris on Android. Pass
+`--scenario game-corner --mac-avatar crys --android-avatar beta` to choose directly.
+All twelve portable ordinary batteries and their hashes are committed in
+[tests/scenarios](tests/scenarios/README.md). Current ROM/core snapshots are
+regenerated per platform, never reused across builds.
+
+The live protocol is now schema 3 with an explicit four-choice figure byte.
+Two independent bank-2 graphics caches hold native sprite data; four VRAM0 tiles
+per peer display the current frame without touching the local player's sprite.
+The renderer uses native character/movement tables and allocates appropriate
+native palettes without recoloring required NPCs. If the eight hardware palettes
+are exhausted and no exact match exists, that peer is temporarily deferred.
+Start-menu drawing remains intentionally paused and resumes after menu close.
+
+`probe_lobby.py` accepts `--second-battery` and `--different-battery` for distinct
+figures, `--scenario start-menu` for the normal Start menu, and
+`--require-npc-motion` for the wandering-NPC fixtures. The read-only observer
+checks decompressed sprite-cache hashes, actual displayed VRAM frame hashes,
+remote figure IDs and loaded palette identities against native assets.
+
+```sh
+python3 -m unittest discover -s mobile_adapter/tools -p test_save_scenarios.py
+```

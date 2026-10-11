@@ -286,7 +286,7 @@ ScanObjectStructPals:
 	ld h, a
 	ret
 
-MarkUsedPal:
+MarkUsedPal::
 	push de
 	push bc
 	ld d, a ; preserve the requested palette ID in a free internal register

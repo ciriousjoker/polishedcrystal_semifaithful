@@ -1,7 +1,6 @@
 ; Peer sprites have their own records and OAM bindings, never NPC structures.
-; Standing down/up: VRAM0 64..6b. Standing sides: VRAM1 7c..7f.
-; Walking: VRAM0 e0..eb, refreshed after font/menu use. The 15-tile special
-; sprites overlap the side reservation and explicitly defer remote rendering.
+; Each peer has four current-frame tiles in VRAM0 64..67 / 68..6b.
+; Persistent bank-2 caches retain each selected figure and movement sprite.
 
 MobilePrepareSprites::
 	call MobileTick
@@ -51,10 +50,7 @@ MobilePrepareSprites::
 	jr nz, .large
 	ld a, [wMobileGraphicsReady]
 	and a
-	call z, MobileLoadAvatar
-	ld a, [wPlayerPalette]
-	and OAM_PALETTE
-	ld [wMobileAvatarPalette], a
+	call z, MobileResetAvatarCaches
 	call MobileStepProgress
 	ld c, d
 	ld b, 0
@@ -77,11 +73,19 @@ MobilePrepareSprites::
 	ldh [rWBK], a
 	ld hl, wMobilePeer1
 	call MobileProjectPeer
+	ld hl, wMobilePeer1
+	ld de, wMobileAvatarCache1
+	ld c, $64
+	call MobilePreparePeerGraphics
 	ld a, [wMobilePeerCount]
 	cp 2
 	jr nz, .budget
 	ld hl, wMobilePeer2
 	call MobileProjectPeer
+	ld hl, wMobilePeer2
+	ld de, wMobileAvatarCache2
+	ld c, $68
+	call MobilePreparePeerGraphics
 .budget
 	ld a, 1
 	ldh [rWBK], a
@@ -160,37 +164,7 @@ MobilePrepareSprites::
 	pop af
 	jr .done
 
-MobileLoadAvatar:
-	ldh a, [rVBK]
-	push af
-	ld a, SPRITE_CHRIS
-	farcall GetSprite
-	ld h, d
-	ld l, e
-	call FarDecompressWRA6InB
-	xor a
-	ldh [rVBK], a
-	ld de, wDecompressScratch
-	ld hl, vTiles0 tile $64
-	ld c, 8
-	call Request2bppInWRA6
-	ld a, 1
-	ldh [rVBK], a
-	ld de, wDecompressScratch + 8 tiles
-	ld hl, vTiles0 tile $7c
-	ld c, 4
-	call Request2bppInWRA6
-	xor a
-	ldh [rVBK], a
-	ld de, wDecompressScratch + 12 tiles
-	ld hl, vTiles1 tile $60
-	ld c, 12
-	call Request2bppInWRA6
-	pop af
-	ldh [rVBK], a
-	ld a, 1
-	ld [wMobileGraphicsReady], a
-	ret
+INCLUDE "mobile_adapter/rom/avatars.asm"
 
 MobileProjectPeer:
 ; WBK=2; HL=peer. Map/instance/status checks precede interpolation and projection.
@@ -735,6 +709,19 @@ MobileWritePeerOAM:
 	ldh [hCurSpriteYPixel], a
 	pop hl
 	push hl
+	ld bc, MOBILE_PEER_PALETTE
+	add hl, bc
+	ld a, [hl]
+	ld [wMobileAvatarPalette], a
+	pop hl
+	push hl
+	ld a, l
+	cp LOW(wMobilePeer2)
+	ld a, $64
+	jr nz, .first_tiles
+	ld a, $68
+.first_tiles
+	ld [wMobileAvatarTile], a
 	ld bc, 16 ; facing/animation
 	add hl, bc
 	ld l, [hl]
@@ -771,19 +758,12 @@ MobileWritePeerOAM:
 	and OAM_XFLIP | OAM_YFLIP | OAM_PRIO
 	ld c, a
 	ld a, [hli]
-	bit 7, a
-	jr nz, .walk
-	cp 8
-	jr nc, .side
-	add $64
-	jr .tile
-.side
-	add $7c - 8
-	set B_OAM_BANK1, c
-	jr .tile
-.walk
-	add $60 ; raw 80..8b becomes e0..eb in VRAM0
-.tile
+	and 3
+	push bc
+	ld b, a
+	ld a, [wMobileAvatarTile]
+	add b
+	pop bc
 	ld [de], a
 	inc de
 	ld a, [wMobileAvatarPalette]

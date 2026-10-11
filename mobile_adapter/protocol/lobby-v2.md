@@ -1,4 +1,4 @@
-# Lobby schema 2
+# Lobby schema 3
 
 One TCP stream per ROM connects through libmobile's ISP path. Frames use
 transport-v1's eight-byte PC header, version 1 and maximum 120-byte payload.
@@ -10,22 +10,22 @@ each client, independently of which peer produced the update.
 | --- | ---: | --- |
 | HELLO | 16 | schema u8, mechanics u8, capacity u8, lobby u16, resume ID u16, token 8 bytes |
 | WELCOME | 17 | ID u16, generation u16, lobby u16, token 8 bytes, capacity u8 |
-| PRESENCE | 18 | ID u16, generation u16, snapshot 10 bytes |
-| ROSTER | 19 | receiver ID u16, generation u16, count u8, count times 16-byte peer record |
+| PRESENCE | 18 | ID u16, generation u16, snapshot 11 bytes |
+| ROSTER | 19 | receiver ID u16, generation u16, count u8, count times 17-byte peer record |
 | LEAVE | 20 | ID u16, generation u16 |
 | LEFT | 21 | ID u16, generation u16 |
 | ERROR | 22 | error code u8 |
 | POLL | 23 | empty, sequence zero |
 | DELTA | 24 | ROSTER layout, containing changed existing peers only |
 
-Schema is 2, mechanics 0 standard or 1 faithful, capacity 3. The ROM selects
+Schema is 3, mechanics 0 standard or 1 faithful, capacity 3. The ROM selects
 public test lobby 1. IDs are nonzero, assigned by the server independently of
 trainer IDs, runtime objects and socket sessions. Rooms permit three connected
 players. The service retains at most 128 identities globally and accepts 16
 sockets. IDs are not reused in a server lifetime; generations never wrap.
 
 A peer record contains ID u16, generation u16, revision u16, then its snapshot.
-A full roster contains up to two peers and has a maximum 37-byte payload. It
+A full roster contains up to two peers and has a maximum 39-byte payload. It
 replaces membership and removes absent peers. Membership/generation changes
 always send a full roster. DELTA updates existing records by explicit ID and
 cannot create membership. The ROM checks receiving identity, duplicates, self
@@ -39,13 +39,14 @@ records, unknown delta IDs and all snapshot bounds before publishing records.
 | 4 | 2 | Scene-entry epoch |
 | 6 | 3 | Packed absolute X/Y: X[11:4], X[3:0] with Y[11:8], Y[7:0] |
 | 9 | 1 | Facing bits 7..4; movement bits 3..1; availability bit 0 |
+| 10 | 1 | Chosen figure: Chris 0, Kris 1, Crys 2, Beta 3 |
 
 Coordinates retain all 12 bits (0..4095), facing is 0..15, movement is normal 0,
 run 1, bike 2, skate 3, surf 4 or surf Pikachu 5. Availability is 0 paused or
-1 safe overworld. Approved avatar 0 (Chris) is implicit. The ROM expands peer
+1 safe overworld. Figure is read from the actual saved wPlayerGender. Values above 3 are rejected. Older schema-2 fixed-Chris clients are incompatible. The ROM expands peer
 records to its own 20-byte internal layout after validating packed frame size.
-Expansion scratch occupies the last 16 bytes of the private APP buffer; a packed
-full roster occupies at most 45 bytes including its header.
+Expansion scratch occupies the last 17 bytes of the private APP buffer; a packed
+full roster occupies at most 47 bytes including its header.
 
 Capture follows the player-object step and combines logical tile coordinates,
 fractional progress from the walking timer and vertical jump offset. Slow,
@@ -59,7 +60,7 @@ its epoch and hashes interior map blocks, excluding connection padding and
 including tileset. Scripted block changes therefore invalidate the visual key.
 The 16-bit key is a conservative visual hint, can collide, and does not synchronize
 story flags, pickups, puzzles or encounters. Rendering requires matching map/key
-and safe availability. Approved avatars have no collision or NPC scripts.
+and safe availability. Remote avatars have no collision or NPC scripts.
 
 WELCOME/LEFT repeat the request sequence. Increasing PRESENCE revisions and
 scene epochs use modulo-65536 serial arithmetic with difference 1..32767. A
