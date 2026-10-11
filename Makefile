@@ -148,7 +148,7 @@ MOBILE_TEST_PROFILE_CORE ?=
 MOBILE_CORE_ARGS = $(if $(MOBILE_TEST_CORE),--core "$(MOBILE_TEST_CORE)") $(if $(MOBILE_TEST_PROFILE_CORE),--profile-core "$(MOBILE_TEST_PROFILE_CORE)")
 MOBILE_TEST_CONTROL ?=
 MOBILE_TEST_OUTPUT ?= $(MOBILE_TEST_CACHE)/acceptance-$(shell date +%Y%m%d-%H%M%S)
-MOBILE_TEST_CASES ?= cadence,local-latency,hosted-latency,priority,saves,running,start-menu,warp,rejoin,save-caches,duplicate-ids
+MOBILE_TEST_CASES ?= cadence,local-latency,hosted-latency,priority,saves,running,start-menu,warp,warp-turn,rejoin,save-caches,duplicate-ids
 .PHONY: prepare-mobile-core
 prepare-mobile-core:
 	python3 mobile_adapter/tools/prepare_mbc30_core.py --profile

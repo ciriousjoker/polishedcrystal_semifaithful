@@ -140,7 +140,7 @@ def run_client(args, index):
         script += args.primary_route.read_text()
     script += f"\nON {args.join_frame} wMapStatus=2,wScriptRunning=0,hInMenu=0 SELECT 8\n"
     script += f"ON {args.join_frame} wMapStatus=2,wScriptRunning=0,hInMenu=0 B 8\n"
-    if not args.deferred and args.scenario not in ("camera", "scanline"):
+    if not args.deferred and args.scenario not in ("camera", "scanline") and not (index == 0 and args.scenario == "warp-turn"):
         script += f"ON {args.join_frame + 250} wMobileOnline=1,wMobilePeerCount={args.players - 1} {('RIGHT', 'DOWN', 'LEFT', 'UP')[index]} 12\n"
     if index == 0 and args.scenario == "menu":
         script += "3750 SELECT 8\n3750 A 8\n"
@@ -160,6 +160,17 @@ def run_client(args, index):
         script += "3750 RIGHT 80\n3900 UP 80\n"
         for frame in range(4040, 4670, 40):
             script += f"{frame} A 8\n"
+    if args.scenario == "warp-turn":
+        if index == 0:
+            # Leave the dense scene through its actual doorway, without RAM edits.
+            script += "WALK 3750 15 5 300\n"
+            script += "".join(f"WALK 3750 15 {y} 300\n" for y in range(6, 13))
+            script += "".join(f"WALK 3750 {x} 12 300\n" for x in range(14, 2, -1))
+            script += "ON 4700 wXCoord=3,wYCoord=12 DOWN 24\n"
+        else:
+            # One-frame direction presses select the ordinary in-place turn.
+            for frame in range(3900, 6500, 32):
+                script += f"{frame} {('LEFT', 'RIGHT')[(frame // 32) % 2]} 1\n"
     if index == 0 and args.scenario == "connection":
         script += "3750 UP 32\n"
     if index == 0 and args.scenario == "running":
@@ -180,7 +191,7 @@ def run_client(args, index):
         for step in range(20):
             script += f"{4000 + step * 90} {('LEFT', 'RIGHT')[step % 2]} 12\n"
     (directory / "input.txt").write_text(script)
-    frames = (6400 if args.latency else 6000 if args.scenario == "camera" else
+    frames = (6800 if args.scenario == "warp-turn" else 6400 if args.latency else 6000 if args.scenario == "camera" else
               5200 if args.scenario in ("menu", "start-menu", "resume") else
               4800 if args.scenario in ("warp", "connection") else 4500)
     if args.observation_frames is not None:
@@ -212,7 +223,7 @@ def run_client(args, index):
     expected_peers = 0 if disconnected else args.players - (2 if args.scenario == "disconnect" else 1)
     for key, expected in {"hCrashCode": 0, "wMobileOnline": int(not disconnected), "wMobilePeerCount": expected_peers,
                           "wMobileRenderedCount": (0 if args.deferred or disconnected else
-                              (0 if index == 0 else args.players - 2) if args.scenario in ("warp", "connection") else
+                              (0 if index == 0 else args.players - 2) if args.scenario in ("warp", "warp-turn", "connection") else
                               (0 if index == 2 else args.players - 2) if args.scenario == "instance" else expected_peers),
                           "wMobileDeferred": args.deferred,
                           "wMobileError": 1 if disconnected else 0, "wMobileServerError": 0,
@@ -322,7 +333,7 @@ def main():
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--rom", type=Path, default=REPO / "polishedcrystal-mobile-3.2.3.gbc")
     parser.add_argument("--symbols", type=Path, default=REPO / "polishedcrystal-mobile-3.2.3.sym")
-    parser.add_argument("--players", type=int, choices=(3, 4), default=3)
+    parser.add_argument("--players", type=int, choices=(2, 3, 4), default=3)
     parser.add_argument("--observation-frames", type=int, help="Extend the ordinary-speed observation without changing input timing")
     parser.add_argument("--fast-speed", type=int, choices=(1, 2, 3, 4), default=4)
     parser.add_argument("--fourth-battery", type=Path)
@@ -341,7 +352,7 @@ def main():
     parser.add_argument("--native-actor-probe", action="store_true", help="Enforce native actor resource and background cadence checks")
     parser.add_argument("--cadence-baseline", type=Path, help="Fail on any extra missed world frame relative to matching baseline profiles")
     parser.add_argument("--port", type=int, default=17425)
-    parser.add_argument("--scenario", choices=("basic", "menu", "start-menu", "rejoin", "disconnect", "warp", "connection", "running", "camera", "resume", "instance", "speed", "scanline"), default="basic")
+    parser.add_argument("--scenario", choices=("basic", "menu", "start-menu", "rejoin", "disconnect", "warp", "warp-turn", "connection", "running", "camera", "resume", "instance", "speed", "scanline"), default="basic")
     parser.add_argument("--second-battery", type=Path, help="Second player's ordinary character-choice save")
     parser.add_argument("--require-npc-motion", action="store_true")
     parser.add_argument("--different-battery", type=Path, help="Third player's ordinary save for instance isolation")
@@ -350,6 +361,7 @@ def main():
     parser.add_argument("--deferred", type=int, choices=(0, 1, 2, 3), default=0)
     args = parser.parse_args()
     require(3300 <= args.join_frame <= 10000, "Join frame exceeds the bounded fixture range")
+    require(args.scenario != "instance" or args.players >= 3, "Instance isolation needs at least three players")
     require(not args.primary_route or (args.scenario == "basic" and args.observation_frames and
             args.observation_frames >= args.join_frame + 1000), "A crowd walk needs a basic scenario with time to join")
     require(args.households == 1 or (args.bridge_upstream and args.scenario != "resume"
@@ -368,6 +380,7 @@ def main():
     args.batteries = [args.battery, args.second_battery.resolve() if args.second_battery else args.battery, args.different_battery.resolve() if args.different_battery else args.battery]
     if args.players == 4:
         args.batteries.append(args.fourth_battery.resolve() if args.fourth_battery else args.battery)
+    args.batteries = args.batteries[:args.players]
     for battery in args.batteries:
         validate_battery(battery, read_symbols(args.symbols))
     battery_hashes = [digest(battery) for battery in args.batteries]
@@ -562,7 +575,7 @@ def main():
             require(state["wMobileFacingsSuppressed"] == 1, "Native actor experiment was not enabled")
             for peer in range(1, state["wMobilePeerCount"] + 1):
                 if not state[f"wMobilePeer{peer}Visible"]:
-                    if args.scenario in ("warp", "connection", "instance"):
+                    if args.scenario in ("warp", "warp-turn", "connection", "instance"):
                         require(state[f"vMobilePeer{peer}NativeSlot"] == 0 and
                                 state[f"wMobilePeer{peer}NativeRole"] == 0,
                                 "Ineligible map/instance retained a native actor lease")
@@ -610,9 +623,47 @@ def main():
                     "Avatar rendering exceeded hardware scanline capacity")
         if args.exercise_pressure:
             require(exercised, "Optional NPC rendering did not exercise pressure policy")
-    if args.scenario in ("warp", "connection"):
+    if args.scenario in ("warp", "warp-turn", "connection"):
         require((states[0]["wMapGroup"], states[0]["wMapNumber"]) !=
                 (states[1]["wMapGroup"], states[1]["wMapNumber"]), "Warp did not change the map")
+    if args.scenario == "warp-turn":
+        departed = states[0]["wMobilePlayerId"]
+        checked = 0
+        for client in range(1, args.players):
+            rows = [json.loads(line) for line in trace_text(args.output / str(client) / "trace.jsonl").splitlines()]
+            turn_rows = [row for row in rows if 5200 <= row["frame"] <= 6500]
+            require(turn_rows and any(row["symbols"]["wScriptRunning"] for row in turn_rows),
+                    "Map-departure regression did not exercise native turn animations")
+            # Once native OAM has hidden the peer, a turn must never restore its
+            # cached figure while projection still says it is offscreen/ineligible.
+            hidden = False
+            saw_presented = saw_hidden = False
+            for row in rows:
+                if row["frame"] < args.join_frame + 200:
+                    continue
+                symbols = row["symbols"]
+                peer = next(i for i in range(1, args.players) if symbols[f"wMobilePeer{i}Id"] == departed)
+                presented = any(0 < symbols[f"vMobilePeer{peer}OAM{q}"] < 160 and
+                                0 < symbols[f"vMobilePeer{peer}OAM{q + 1}"] < 168 for q in (0, 4, 8, 12))
+                if symbols[f"wMobilePeer{peer}Visible"]:
+                    saw_presented |= presented
+                    hidden = False
+                elif not presented:
+                    saw_hidden |= saw_presented
+                    hidden = True
+                elif hidden:
+                    require(False, f"Hidden peer revived by native turn on client {client}, frame {row['frame']}")
+            require(saw_presented and saw_hidden, "Regression did not observe a displayed peer becoming hidden")
+            for row in turn_rows:
+                symbols = row["symbols"]
+                peer = next(i for i in range(1, args.players) if symbols[f"wMobilePeer{i}Id"] == departed)
+                require((symbols[f"wMobilePeer{peer}MapGroup"], symbols[f"wMobilePeer{peer}MapNumber"]) !=
+                        (symbols["wMapGroup"], symbols["wMapNumber"]), "Departed peer still reports the original map")
+                require(symbols[f"vMobilePeer{peer}OAM0"] == 160,
+                        f"Departed player reappeared on client {client}, frame {row['frame']}")
+                checked += 1
+        (args.output / "warp-turn.json").write_text(json.dumps({"checked_video_observations": checked,
+            "departed_player": departed, "passed": True}, indent=2) + "\n")
     require([digest(battery) for battery in args.batteries] == battery_hashes, "Input save changed")
     if args.latency:
         result = latency_results(args, states)

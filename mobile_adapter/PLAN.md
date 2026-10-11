@@ -1,5 +1,33 @@
 # Mobile Adapter multiplayer plan
 
+## 2026-10-12: hidden remote figures must survive native turns
+
+A two-player Game Corner regression reproduced the reported flash: after the
+remote figure became offscreen, each local facing-change event could resurrect
+its last accepted native facing. The static menu preservation hook also runs
+for ordinary turn events. `STANDING` hid only the immediate OAM build; the lease
+still lacked `INVISIBLE`, so that hook treated it as a displayed frozen actor.
+
+Both background hide paths now set the native invisible flag as well as the
+standing facing. Normal successful presentation clears the flag; original NPC
+restoration copies the original record. No native game assembly or foreground
+hook changes are required. This adds twelve upper-bank bytes, with the same
+174-byte net lower integration and original RAM layout.
+
+The `warp-turn` acceptance case boots normal Game Corner batteries, walks a
+player through the real exit, and repeatedly turns the remaining players before,
+during and after departure. Read-only hardware OAM observations must show an
+initial displayed figure, its disappearance, and no later resurrection while
+hidden. The departed player's map and final released leases are also checked.
+The default acceptance suite runs this case with both two and four players.
+The old ROM fails at frame 3934; the final two/four-player gate passes. Native
+Start menu, rejoin, offscreen return, connected Save and offline Continue pass.
+All four 100..400% profiles contain 800/800 world updates, without duplicates or
+background VBlank crossings, and beat their matched ordinary-NPC controls.
+The disabled target retains the exact original hash.
+See `research/REMOTE_TURN_VISIBILITY.md` and its evidence JSON for final results.
+The separate protected-NPC scanline blocker remains open.
+
 ## 2026-10-12: interactive multi-window development launcher
 
 The single Python command now asks for scenario, Mac instance count (1..4,
@@ -71,9 +99,9 @@ verification by tools/prepare_mbc30_core.py. Mac launchers use the supplied
 universal library; headless color/instruction observations use separate native
 builds from its matching pinned source. Old cores cannot run the expanded ROM.
 All new artifacts use the Storage volume, as requested by the user.
-Final standard mobile SHA-256:
-cfc57e531f839c2a58bc202fe730ec74832c0d16a923421e9f2833a8329a8a20.
-Feature storage is 10,946 upper bytes; lower integration remains 174 bytes. A
+Current standard mobile SHA-256, after the turn-visibility fix:
+73c113958b7b5207efeabe9c7141bcb3749fed8db9c640f08cefb207254308ed.
+Feature storage is 10,958 upper bytes; lower integration remains 174 bytes. A
 migration test exposed a VBK/VBlank race in tile restore. Bank selection now
 occurs under DI, with an explicit private latch (eight ROM bytes, one WRAM byte).
 Priority/offline snapshot recovery, all five Save fault scenarios, exact native

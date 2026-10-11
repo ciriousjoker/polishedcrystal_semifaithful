@@ -1,0 +1,169 @@
+{
+  "date": "2026-10-12",
+  "bug": "Hidden remote native actor restored during local facing change",
+  "core_revision": "ef247c6545c61358cd8679a78c95c2e92daae13d",
+  "source_rom_sha256": "73c113958b7b5207efeabe9c7141bcb3749fed8db9c640f08cefb207254308ed",
+  "disabled_rom_sha256": "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e",
+  "before": {
+    "rom_sha256": "cfc57e531f839c2a58bc202fe730ec74832c0d16a923421e9f2833a8329a8a20",
+    "result": "expected regression failure",
+    "frame": 3934,
+    "client": 1,
+    "script_running": 9,
+    "peer_visible": 0,
+    "native_flags1": 210,
+    "oam_quad_y": [
+      167,
+      167,
+      159,
+      159
+    ],
+    "artifacts": "/Volumes/Storage/Cache/mobileadapter/ghost-turn-regression-before"
+  },
+  "after": {
+    "two_players": {
+      "checked_video_observations": 1301,
+      "departed_player": 2,
+      "passed": true
+    },
+    "four_players": {
+      "checked_video_observations": 3812,
+      "departed_player": 1,
+      "passed": true
+    },
+    "start_menu": "passed",
+    "rejoin": "passed",
+    "connected_save_and_offline_continue": "passed",
+    "offscreen_return": "passed; invisible lease becomes visible again with native colors",
+    "cadence_speeds": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "cadence_profiles": [
+      {
+        "world_frames_with_update": 800,
+        "world_max_frame_gap": 1,
+        "world_duplicate_updates": 0,
+        "native_idle_vblank_crossings": 0,
+        "native_upload_vblank_crossings": 0,
+        "serial_failures": 0,
+        "tick_failures": 0
+      },
+      {
+        "world_frames_with_update": 800,
+        "world_max_frame_gap": 1,
+        "world_duplicate_updates": 0,
+        "native_idle_vblank_crossings": 0,
+        "native_upload_vblank_crossings": 0,
+        "serial_failures": 0,
+        "tick_failures": 0
+      },
+      {
+        "world_frames_with_update": 800,
+        "world_max_frame_gap": 1,
+        "world_duplicate_updates": 0,
+        "native_idle_vblank_crossings": 0,
+        "native_upload_vblank_crossings": 0,
+        "serial_failures": 0,
+        "tick_failures": 0
+      },
+      {
+        "world_frames_with_update": 800,
+        "world_max_frame_gap": 1,
+        "world_duplicate_updates": 0,
+        "native_idle_vblank_crossings": 0,
+        "native_upload_vblank_crossings": 0,
+        "serial_failures": 0,
+        "tick_failures": 0
+      }
+    ],
+    "matched_native_controls": {
+      "passed": true,
+      "controls": "/Volumes/Storage/Cache/mobileadapter/ghost-turn-cadence-saves/native-controls",
+      "comparisons": [
+        {
+          "figure": "chris",
+          "speed": 1,
+          "actor_count": 10,
+          "mobile_update_frames": 800,
+          "native_update_frames": 784,
+          "mobile_max_gap": 1,
+          "native_max_gap": 2,
+          "mobile_duplicates": 0,
+          "native_duplicates": 16
+        },
+        {
+          "figure": "kris",
+          "speed": 2,
+          "actor_count": 10,
+          "mobile_update_frames": 800,
+          "native_update_frames": 784,
+          "mobile_max_gap": 1,
+          "native_max_gap": 2,
+          "mobile_duplicates": 0,
+          "native_duplicates": 16
+        },
+        {
+          "figure": "crys",
+          "speed": 3,
+          "actor_count": 10,
+          "mobile_update_frames": 800,
+          "native_update_frames": 783,
+          "mobile_max_gap": 1,
+          "native_max_gap": 2,
+          "mobile_duplicates": 0,
+          "native_duplicates": 17
+        },
+        {
+          "figure": "beta",
+          "speed": 4,
+          "actor_count": 10,
+          "mobile_update_frames": 800,
+          "native_update_frames": 783,
+          "mobile_max_gap": 1,
+          "native_max_gap": 2,
+          "mobile_duplicates": 0,
+          "native_duplicates": 17
+        }
+      ]
+    },
+    "offscreen_return_profile": [
+      {
+        "world_frames_with_update": 800,
+        "world_max_frame_gap": 1,
+        "native_idle_vblank_crossings": 0,
+        "native_upload_vblank_crossings": 0
+      },
+      {
+        "world_frames_with_update": 800,
+        "world_max_frame_gap": 1,
+        "native_idle_vblank_crossings": 0,
+        "native_upload_vblank_crossings": 0
+      }
+    ]
+  },
+  "space": {
+    "upper_bytes": 10958,
+    "added_upper_bytes": 12,
+    "lower_net_integration_bytes": 174,
+    "lower_free_bytes": 13787,
+    "new_ram_bytes": 0
+  },
+  "tests": {
+    "assembly_contracts": "passed",
+    "native_lease_unit_tests": 8,
+    "rom_budget_unit_tests": 11,
+    "strict_rom_budget": "passed"
+  },
+  "immutable_rom_checks": "Every measured feature image differs only in endpoint port and global checksum",
+  "artifact_roots": [
+    "/Volumes/Storage/Cache/mobileadapter/ghost-turn-final-default",
+    "/Volumes/Storage/Cache/mobileadapter/ghost-turn-regression-after-four",
+    "/Volumes/Storage/Cache/mobileadapter/ghost-turn-cadence-saves",
+    "/Volumes/Storage/Cache/mobileadapter/ghost-turn-return"
+  ],
+  "unchanged_open_blocker": "Protected NPC scanline conflicts",
+  "physical_android_tested": false
+}

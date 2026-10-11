@@ -537,10 +537,13 @@ MobileNativeReleaseLease:
 	add hl, de
 	ld a, [hl]
 	call MobileNativeObjectPointer
-	ld hl, OBJECT_FACING
+	ld hl, OBJECT_FLAGS1
 	add hl, bc
 	ld a, 1
 	ldh [rWBK], a
+	set INVISIBLE_F, [hl]
+	ld bc, OBJECT_FACING - OBJECT_FLAGS1
+	add hl, bc
 	ld [hl], STANDING
 	ld a, MOBILE_WRAM_BANK
 	ldh [rWBK], a

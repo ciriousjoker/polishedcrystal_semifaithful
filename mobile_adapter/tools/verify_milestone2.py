@@ -20,7 +20,7 @@ from prepare_native_controls import compare_reference
 REPO = Path(__file__).resolve().parents[2]
 CACHE = Path("/Volumes/Storage/Cache/mobileadapter")
 CASES = ("cadence", "local-latency", "hosted-latency", "priority", "saves",
-         "running", "start-menu", "warp", "rejoin", "save-caches", "duplicate-ids")
+         "running", "start-menu", "warp", "warp-turn", "rejoin", "save-caches", "duplicate-ids")
 
 
 def main():
@@ -101,6 +101,12 @@ def main():
                        "--require-npc-motion", "--observation-frames", 5500]
         else:
             values += ["--scenario", "start-menu" if case == "duplicate-ids" else case]
+        if case == "warp-turn":
+            # Keep both the reported two-player case and the full-capacity gate.
+            pair_values = list(values)
+            pair_values[pair_values.index("--players") + 1] = 2
+            pair_values[pair_values.index("--output") + 1] = args.output / "warp-turn-two"
+            run("probe_lobby.py", pair_values)
         if case not in ("cadence", "hosted-latency"):
             run("probe_lobby.py", values)
             continue

@@ -880,7 +880,12 @@ MobileNativePrepare:
 	ldh [rWBK], a
 	ld h, d
 	ld l, e
-	ld bc, OBJECT_FACING
+; STANDING alone hides one OAM build. Turn/menu preservation must also know
+; this lease is hidden, so it cannot revive the last accepted native facing.
+	ld bc, OBJECT_FLAGS1
+	add hl, bc
+	set INVISIBLE_F, [hl]
+	ld bc, OBJECT_FACING - OBJECT_FLAGS1
 	add hl, bc
 	ld [hl], STANDING
 	ld a, MOBILE_WRAM_BANK
