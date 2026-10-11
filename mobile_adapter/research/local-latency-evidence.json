@@ -1,0 +1,36 @@
+{
+  "scenario": "basic",
+  "test_rom_sha256": "3313d7eace7994be8cbce5e808d0d4935e783f0018e285bb9e5bae4d223974a4",
+  "symbols_sha256": "447febc47fdad9708b686f4c4a352f756d24635d9519932bb58e6b1547e0074a",
+  "core_sha256": "6c9e291f93a70744d49f2ed6d9c015f8ad1d7b3dab6d9ff50caae3d130d7310d",
+  "battery_sha256": [
+    "74033d785badb7c7fd4ea65cb49627aa33e704241a144bac82bdc1120dca31e5",
+    "9dd9004d782855111ba43d0b676f79d2bbd0dcb29b450f36a4c7e6fa1a16dc12"
+  ],
+  "households": 1,
+  "emulator_speeds": [
+    1,
+    1
+  ],
+  "declared_client_server_rtt_ms": 0,
+  "client_speed_multipliers": [
+    1,
+    1
+  ],
+  "expected_deferral": 0,
+  "processes": 2,
+  "production_rom_sha256": "73c113958b7b5207efeabe9c7141bcb3749fed8db9c640f08cefb207254308ed",
+  "latency": {
+    "samples": 20,
+    "p50_ms": 160.137,
+    "p95_ms": 163.035,
+    "max_ms": 163.432,
+    "added_client_server_rtt_ms": 0,
+    "input_to_remote_p95_ms": 280.976,
+    "input_to_remote_max_ms": 281.467,
+    "measurement": "first captured local world motion to first directional position change of four-quad remote avatar bounds at native video callback; input-to-remote includes unchanged vanilla turn delay"
+  },
+  "artifacts": "/Volumes/Storage/Cache/mobileadapter/latency-two-20261012",
+  "user_hosted_delay_argument_ms": 0,
+  "scope": "Fresh two-player embedded local native-core measurement; no user session was changed."
+}

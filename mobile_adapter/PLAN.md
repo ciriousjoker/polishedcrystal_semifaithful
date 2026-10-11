@@ -1,5 +1,29 @@
 # Mobile Adapter multiplayer plan
 
+## 2026-10-12: local latency and temporal rendering proposal
+
+The user reports delayed remote movement even in Local multiplayer, diagonal
+corner shortcuts, and proposes alternating complete remote figures only under
+scanline pressure rather than fully removing NPCs. They permit an exceptional
+local-player alternating fallback where NPCs leave no capacity. This is a design
+discussion; no new rendering or transport implementation has been authorized by
+this question alone. Preserve normally stable local presentation and evaluate
+visual-only NPC time-sharing before that exceptional local-player fallback.
+
+The active hosted process injects zero delay. A fresh two-core embedded-local
+probe measures p95 163.035 ms from local world motion to remote motion, and
+280.976 ms from input including native turning. Existing native frame cadence
+can be correct while remote movement still lags. Independent X/Y interpolation
+explains diagonal shortcuts and must be addressed in future responsiveness work.
+
+Temporal whole-figure scheduling is a viable scanline strategy to investigate,
+but does not free native object records, VRAM or palettes. Do not delete the
+reviewed lease policy on that assumption. Account for 100..400% frontend frame
+skipping, whole-figure fairness, effects and maximum absence, along with the
+existing frame/Save gates. Detailed evidence, limitations and proposed next steps
+are in `research/LOCAL_LATENCY_AND_TEMPORAL_RENDERING.md` and
+`research/local-latency-evidence.json`. Production code and ROM hashes are unchanged.
+
 ## 2026-10-12: hidden remote figures must survive native turns
 
 A two-player Game Corner regression reproduced the reported flash: after the
