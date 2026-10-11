@@ -7,6 +7,12 @@ are unresolved. No rendering policy or cartridge mapper was changed in this audi
 
 ## Subsequent implementation
 
+The user's subsequent 10 KB limit, exact whole-ROM gate and executed size
+experiments are recorded in [ROM_BUDGET.md](ROM_BUDGET.md). The production addon
+still costs 11,112 bytes and exceeds the conservatively selected 10,000-byte
+budget by 1,112. Its ROM-only NPC metadata opportunity is research, not an
+implemented or save/timing-validated optimization.
+
 The follow-up in [SCANLINE_AND_MBC30_FOLLOWUP.md](SCANLINE_AND_MBC30_FOLLOWUP.md)
 adds current native selection checks, all-map/geometry guards and failing
 post-link map gates. It records the Route 37 visibility failure and the actual

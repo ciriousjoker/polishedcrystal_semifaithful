@@ -137,6 +137,7 @@ test-mobile-host:
 	python3 -m unittest discover -s mobile_adapter/tools -p 'test_native_leases.py'
 	python3 -m unittest discover -s mobile_adapter/tools -p 'test_scanline_selection.py'
 	python3 -m unittest discover -s mobile_adapter/tools -p 'test_native_scanlines.py'
+	python3 -m unittest discover -s mobile_adapter/tools -p 'test_rom_budget.py'
 # Emulator acceptance is deliberately separate from host-only unit/ASM tests.
 MOBILE_TEST_CACHE ?= /Volumes/Storage/Cache/mobileadapter
 MOBILE_TEST_CONTROL ?=
@@ -147,13 +148,18 @@ test-mobile-maps:
 	$(MAKE) mobile RGBDS="$(RGBDS)"
 	python3 mobile_adapter/tools/audit_native_capacity.py --rom polishedcrystal-mobile-$(VERSION).gbc --sym polishedcrystal-mobile-$(VERSION).sym --output "$(MOBILE_TEST_OUTPUT)-capacity.json"
 	python3 mobile_adapter/tools/audit_native_scanlines.py --rom polishedcrystal-mobile-$(VERSION).gbc --sym polishedcrystal-mobile-$(VERSION).sym --output "$(MOBILE_TEST_OUTPUT)-scanlines.json" --strict
+.PHONY: test-mobile-budget
+test-mobile-budget:
+	$(MAKE) crystal RGBDS="$(RGBDS)"
+	$(MAKE) mobile RGBDS="$(RGBDS)"
+	python3 mobile_adapter/tools/audit_rom_budget.py --baseline polishedcrystal-$(VERSION).gbc --mobile polishedcrystal-mobile-$(VERSION).gbc --output "$(MOBILE_TEST_OUTPUT)-rom-budget.json" --strict
 .PHONY: test-mobile-scanlines
 test-mobile-scanlines:
 	$(MAKE) mobile RGBDS="$(RGBDS)"
 	$(MOBILE_CARGO) build --locked --manifest-path mobile_adapter/server/Cargo.toml --bin mobile-bridge
 	python3 mobile_adapter/tools/probe_scanline_pressure.py --cache "$(MOBILE_TEST_CACHE)" --output "$(MOBILE_TEST_OUTPUT)-scanlines"
 test-mobile-rom:
-	$(MAKE) crystal RGBDS="$(RGBDS)"
+	$(MAKE) test-mobile-budget RGBDS="$(RGBDS)" MOBILE_TEST_OUTPUT="$(MOBILE_TEST_OUTPUT)"
 	$(MAKE) test-mobile-maps RGBDS="$(RGBDS)" MOBILE_TEST_OUTPUT="$(MOBILE_TEST_OUTPUT)"
 	$(MOBILE_CARGO) build --locked --manifest-path mobile_adapter/server/Cargo.toml
 	python3 mobile_adapter/tools/verify_milestone2.py --cache "$(MOBILE_TEST_CACHE)" $(if $(MOBILE_TEST_CONTROL),--control "$(MOBILE_TEST_CONTROL)") --output "$(MOBILE_TEST_OUTPUT)" --cases "$(MOBILE_TEST_CASES)"

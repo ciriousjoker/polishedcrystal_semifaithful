@@ -2,6 +2,21 @@
 
 Last updated: 2026-10-11.
 
+Latest footprint directive: the user sets a **10 KB** limit for the complete
+multiplayer ROM component, conservatively recorded as **10,000 bytes**, including
+data and net integration. Current cost is 11,112 bytes, requiring 1,112 bytes of
+optimization. `make test-mobile-budget` now gates full ROM acceptance and fails
+on the unchanged production build. Size-only cumulative link experiments save
+939 bytes, reaching 10,173; their menu/diagnostic changes are not adopted and
+runtime/timing/save acceptance is untested. A host-only all-map check finds a
+free ROM object-type bit that could replace much of the 1,005-byte policy section
+without growing map records. Estimated 800-900-byte savings need a reviewed
+reader/normalization design and full save/cadence validation. The 10 KB target is
+credible for the current four-player core but not a proved budget for the entire
+wishlist or arbitrary future upstream growth. Production assembly is unchanged.
+Read [research/ROM_BUDGET.md](research/ROM_BUDGET.md) before footprint work; do not
+fund the budget by weakening save isolation, packet safety or frame deadlines.
+
 Current checkpoint: the new native scanline/visibility gate finds a missing
 remote figure on Route 37 with four live players beside protected trainers.
 The whole-character display rule for approved replaceable NPCs is accepted but

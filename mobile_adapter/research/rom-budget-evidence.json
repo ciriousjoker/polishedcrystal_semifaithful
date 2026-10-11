@@ -1,0 +1,435 @@
+{
+  "date": "2026-10-11",
+  "production_checkpoint": "0dcc9022f",
+  "budget_interpretation": "10 KB means 10,000 bytes, including ROM data and net integration.",
+  "production": {
+    "budget_bytes": 10000,
+    "net_addon_bytes": 11112,
+    "feature_section_bytes": 10938,
+    "integration_net_bytes": 174,
+    "accounted_bytes": 11112,
+    "within_budget": false,
+    "required_savings_bytes": 1112,
+    "remaining_budget_bytes": -1112,
+    "baseline_free_bytes": 13961,
+    "mobile_free_bytes": 2849,
+    "mobile_rom0_free_bytes": 39,
+    "feature_sections": [
+      {
+        "name": "Mobile Native Palettes",
+        "kind": "ROMX",
+        "bank": 87,
+        "bytes": 1258
+      },
+      {
+        "name": "Mobile Native Lease Policy",
+        "kind": "ROMX",
+        "bank": 95,
+        "bytes": 1005
+      },
+      {
+        "name": "Mobile Native Save Isolation",
+        "kind": "ROMX",
+        "bank": 115,
+        "bytes": 257
+      },
+      {
+        "name": "Mobile Native Tile Backups",
+        "kind": "ROMX",
+        "bank": 116,
+        "bytes": 237
+      },
+      {
+        "name": "Mobile Native Map Fingerprint",
+        "kind": "ROMX",
+        "bank": 120,
+        "bytes": 170
+      },
+      {
+        "name": "Mobile Adapter",
+        "kind": "ROMX",
+        "bank": 127,
+        "bytes": 8011
+      }
+    ],
+    "baseline_sha256": "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e",
+    "mobile_sha256": "fdb237ff7a3bf88d20236ca18a33f239a158b6ca0b9b0edd8193ee6d62bde138",
+    "scope": "Matching source/options, freshly linked maps. Bytes only; no runtime acceptance."
+  },
+  "production_artifacts_unchanged_by_probe": true,
+  "candidate_runtime_accepted": false,
+  "candidate_measurements": [
+    {
+      "budget_bytes": 10000,
+      "net_addon_bytes": 10996,
+      "feature_section_bytes": 10822,
+      "integration_net_bytes": 174,
+      "accounted_bytes": 10996,
+      "within_budget": false,
+      "required_savings_bytes": 996,
+      "remaining_budget_bytes": -996,
+      "baseline_free_bytes": 13961,
+      "mobile_free_bytes": 2965,
+      "mobile_rom0_free_bytes": 39,
+      "feature_sections": [
+        {
+          "name": "Mobile Native Palettes",
+          "kind": "ROMX",
+          "bank": 87,
+          "bytes": 1258
+        },
+        {
+          "name": "Mobile Native Lease Policy",
+          "kind": "ROMX",
+          "bank": 95,
+          "bytes": 1005
+        },
+        {
+          "name": "Mobile Native Save Isolation",
+          "kind": "ROMX",
+          "bank": 115,
+          "bytes": 257
+        },
+        {
+          "name": "Mobile Native Tile Backups",
+          "kind": "ROMX",
+          "bank": 116,
+          "bytes": 237
+        },
+        {
+          "name": "Mobile Native Map Fingerprint",
+          "kind": "ROMX",
+          "bank": 120,
+          "bytes": 170
+        },
+        {
+          "name": "Mobile Adapter",
+          "kind": "ROMX",
+          "bank": 127,
+          "bytes": 7895
+        }
+      ],
+      "baseline_sha256": "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e",
+      "mobile_sha256": "8ff65967102ae1693fb7b562dca3abd1634e63fc3b09335cab1691c71b325251",
+      "scope": "Matching source/options, freshly linked maps. Bytes only; no runtime acceptance.",
+      "candidate": "cleanup",
+      "note": "Remove 93 unused routine bytes and relocate the 23-byte host-only HELLO fixture.",
+      "savings_from_production_bytes": 116
+    },
+    {
+      "budget_bytes": 10000,
+      "net_addon_bytes": 10957,
+      "feature_section_bytes": 10783,
+      "integration_net_bytes": 174,
+      "accounted_bytes": 10957,
+      "within_budget": false,
+      "required_savings_bytes": 957,
+      "remaining_budget_bytes": -957,
+      "baseline_free_bytes": 13961,
+      "mobile_free_bytes": 3004,
+      "mobile_rom0_free_bytes": 39,
+      "feature_sections": [
+        {
+          "name": "Mobile Native Palettes",
+          "kind": "ROMX",
+          "bank": 87,
+          "bytes": 1258
+        },
+        {
+          "name": "Mobile Native Lease Policy",
+          "kind": "ROMX",
+          "bank": 95,
+          "bytes": 1005
+        },
+        {
+          "name": "Mobile Native Save Isolation",
+          "kind": "ROMX",
+          "bank": 115,
+          "bytes": 257
+        },
+        {
+          "name": "Mobile Native Tile Backups",
+          "kind": "ROMX",
+          "bank": 116,
+          "bytes": 237
+        },
+        {
+          "name": "Mobile Native Map Fingerprint",
+          "kind": "ROMX",
+          "bank": 120,
+          "bytes": 170
+        },
+        {
+          "name": "Mobile Adapter",
+          "kind": "ROMX",
+          "bank": 127,
+          "bytes": 7856
+        }
+      ],
+      "baseline_sha256": "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e",
+      "mobile_sha256": "6188c1747319dc5806b88d477aa6d19569fc226fa242670dd86ef34be7fcbc6c",
+      "scope": "Matching source/options, freshly linked maps. Bytes only; no runtime acceptance.",
+      "candidate": "short_jumps",
+      "note": "39 statically in-range JP/JMP sites shortened to JR; runtime not validated.",
+      "savings_from_production_bytes": 155
+    },
+    {
+      "budget_bytes": 10000,
+      "net_addon_bytes": 10954,
+      "feature_section_bytes": 10780,
+      "integration_net_bytes": 174,
+      "accounted_bytes": 10954,
+      "within_budget": false,
+      "required_savings_bytes": 954,
+      "remaining_budget_bytes": -954,
+      "baseline_free_bytes": 13961,
+      "mobile_free_bytes": 3007,
+      "mobile_rom0_free_bytes": 39,
+      "feature_sections": [
+        {
+          "name": "Mobile Native Palettes",
+          "kind": "ROMX",
+          "bank": 87,
+          "bytes": 1258
+        },
+        {
+          "name": "Mobile Native Lease Policy",
+          "kind": "ROMX",
+          "bank": 95,
+          "bytes": 1002
+        },
+        {
+          "name": "Mobile Native Save Isolation",
+          "kind": "ROMX",
+          "bank": 115,
+          "bytes": 257
+        },
+        {
+          "name": "Mobile Native Tile Backups",
+          "kind": "ROMX",
+          "bank": 116,
+          "bytes": 237
+        },
+        {
+          "name": "Mobile Native Map Fingerprint",
+          "kind": "ROMX",
+          "bank": 120,
+          "bytes": 170
+        },
+        {
+          "name": "Mobile Adapter",
+          "kind": "ROMX",
+          "bank": 127,
+          "bytes": 7856
+        }
+      ],
+      "baseline_sha256": "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e",
+      "mobile_sha256": "73c0b26aff1cae6bdb3f1199153cd668aa64be04377ff8bf524c0dc07eab6b51",
+      "scope": "Matching source/options, freshly linked maps. Bytes only; no runtime acceptance.",
+      "candidate": "compact_policy",
+      "note": "Bounded prefix/bitmap policy lookup; same approved indices on all 611 maps.",
+      "savings_from_production_bytes": 158
+    },
+    {
+      "budget_bytes": 10000,
+      "net_addon_bytes": 10930,
+      "feature_section_bytes": 10756,
+      "integration_net_bytes": 174,
+      "accounted_bytes": 10930,
+      "within_budget": false,
+      "required_savings_bytes": 930,
+      "remaining_budget_bytes": -930,
+      "baseline_free_bytes": 13961,
+      "mobile_free_bytes": 3031,
+      "mobile_rom0_free_bytes": 39,
+      "feature_sections": [
+        {
+          "name": "Mobile Adapter",
+          "kind": "ROMX",
+          "bank": 127,
+          "bytes": 7842
+        },
+        {
+          "name": "Mobile Native Palettes",
+          "kind": "ROMX",
+          "bank": 127,
+          "bytes": 1252
+        },
+        {
+          "name": "Mobile Native Lease Policy",
+          "kind": "ROMX",
+          "bank": 127,
+          "bytes": 1002
+        },
+        {
+          "name": "Mobile Native Save Isolation",
+          "kind": "ROMX",
+          "bank": 127,
+          "bytes": 253
+        },
+        {
+          "name": "Mobile Native Tile Backups",
+          "kind": "ROMX",
+          "bank": 127,
+          "bytes": 237
+        },
+        {
+          "name": "Mobile Native Map Fingerprint",
+          "kind": "ROMX",
+          "bank": 127,
+          "bytes": 170
+        }
+      ],
+      "baseline_sha256": "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e",
+      "mobile_sha256": "c82372860930616900dc81f6e4e605bdb3b9131020f104cd9848018d206972fa",
+      "scope": "Matching source/options, freshly linked maps. Bytes only; no runtime acceptance.",
+      "candidate": "single_bank",
+      "note": "All six feature sections in bank 127; 24 internal banked calls become near calls. Callee bank/register contracts need runtime validation.",
+      "savings_from_production_bytes": 182
+    },
+    {
+      "budget_bytes": 10000,
+      "net_addon_bytes": 10697,
+      "feature_section_bytes": 10523,
+      "integration_net_bytes": 174,
+      "accounted_bytes": 10697,
+      "within_budget": false,
+      "required_savings_bytes": 697,
+      "remaining_budget_bytes": -697,
+      "baseline_free_bytes": 13961,
+      "mobile_free_bytes": 3264,
+      "mobile_rom0_free_bytes": 39,
+      "feature_sections": [
+        {
+          "name": "Mobile Adapter",
+          "kind": "ROMX",
+          "bank": 127,
+          "bytes": 7613
+        },
+        {
+          "name": "Mobile Native Palettes",
+          "kind": "ROMX",
+          "bank": 127,
+          "bytes": 1248
+        },
+        {
+          "name": "Mobile Native Lease Policy",
+          "kind": "ROMX",
+          "bank": 127,
+          "bytes": 1002
+        },
+        {
+          "name": "Mobile Native Save Isolation",
+          "kind": "ROMX",
+          "bank": 127,
+          "bytes": 253
+        },
+        {
+          "name": "Mobile Native Tile Backups",
+          "kind": "ROMX",
+          "bank": 127,
+          "bytes": 237
+        },
+        {
+          "name": "Mobile Native Map Fingerprint",
+          "kind": "ROMX",
+          "bank": 127,
+          "bytes": 170
+        }
+      ],
+      "baseline_sha256": "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e",
+      "mobile_sha256": "ddd22b6acedf01d0f99547b5054dcbf42be31582cf044269b6f82a6715308393",
+      "scope": "Matching source/options, freshly linked maps. Bytes only; no runtime acceptance.",
+      "candidate": "without_echo",
+      "note": "Move one-shot transport diagnostic to separate test ROM; persistent protocol and emergency recovery retained in candidate source.",
+      "savings_from_production_bytes": 415
+    },
+    {
+      "budget_bytes": 10000,
+      "net_addon_bytes": 10173,
+      "feature_section_bytes": 9999,
+      "integration_net_bytes": 174,
+      "accounted_bytes": 10173,
+      "within_budget": false,
+      "required_savings_bytes": 173,
+      "remaining_budget_bytes": -173,
+      "baseline_free_bytes": 13961,
+      "mobile_free_bytes": 3788,
+      "mobile_rom0_free_bytes": 39,
+      "feature_sections": [
+        {
+          "name": "Mobile Adapter",
+          "kind": "ROMX",
+          "bank": 127,
+          "bytes": 7089
+        },
+        {
+          "name": "Mobile Native Palettes",
+          "kind": "ROMX",
+          "bank": 127,
+          "bytes": 1248
+        },
+        {
+          "name": "Mobile Native Lease Policy",
+          "kind": "ROMX",
+          "bank": 127,
+          "bytes": 1002
+        },
+        {
+          "name": "Mobile Native Save Isolation",
+          "kind": "ROMX",
+          "bank": 127,
+          "bytes": 253
+        },
+        {
+          "name": "Mobile Native Tile Backups",
+          "kind": "ROMX",
+          "bank": 127,
+          "bytes": 237
+        },
+        {
+          "name": "Mobile Native Map Fingerprint",
+          "kind": "ROMX",
+          "bank": 127,
+          "bytes": 170
+        }
+      ],
+      "baseline_sha256": "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e",
+      "mobile_sha256": "4e471b462c8b3c76053ebb09b828672f24d90bc1ef2ed7c51c7b65b0fb2716e4",
+      "scope": "Matching source/options, freshly linked maps. Bytes only; no runtime acceptance.",
+      "candidate": "bridge_controls",
+      "note": "Remove prototype Select+A menu; Select+B join/disconnect remains. Replacement in-game social UI has not been budgeted.",
+      "savings_from_production_bytes": 939
+    }
+  ],
+  "constant_access_policy_prototype": {
+    "maps_compared": 611,
+    "chunks_and_indices_bytes": 492,
+    "group_pointer_bytes": 156,
+    "maximum_rank_bits": 7,
+    "scope": "Host table equivalence and link only; executed decoder/cadence not validated"
+  },
+  "rom_only_type_tag_research": {
+    "maps_compared": 611,
+    "object_type_bytes_checked": 2882,
+    "approved_flags_recovered": 775,
+    "existing_bit7_uses": 0,
+    "added_map_record_bytes": 0,
+    "scope": "Host byte transform only. Not an implemented ROM reader, save or timing guarantee."
+  },
+  "estimated_type_tag_net_savings_bytes": [
+    800,
+    900
+  ],
+  "type_tag_estimate_qualification": "Not compiled. Replacement bounded reader, normalization and integration costs remain to be measured; no runtime/save/timing acceptance.",
+  "reproduction": "python3 mobile_adapter/tools/probe_rom_savings.py --output /path/to/fresh/probe-directory",
+  "verification": {
+    "fresh_disabled_and_mobile_hashes_unchanged": true,
+    "budget_unit_tests_passed": 7,
+    "native_lease_unit_tests_passed": 8,
+    "production_assembly_and_vector_contracts_passed": true,
+    "strict_budget_gate_passed": false,
+    "strict_budget_gate_required_savings_bytes": 1112,
+    "candidate_emulator_tests_run": false
+  }
+}

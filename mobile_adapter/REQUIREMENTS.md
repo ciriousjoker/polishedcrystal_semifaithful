@@ -29,6 +29,18 @@ Do not implement wishlist features merely because they have been recorded.
   is unresolved: the current fixed 2 MiB build cannot guarantee arbitrary future
   growth. Do not silently discard content or claim the guarantee already holds.
   Cartridge/mapper compatibility changes need a reviewed design.
+- **F6 MUST:** The complete multiplayer ROM addon must fit within **10,000 bytes**
+  at the current 2 MiB target. This conservatively interprets the user's 10 KB
+  limit. Include executable code, embedded feature data and net integration
+  cost against the matching disabled build. Also cap feature-owned ROM sections;
+  do not fund them by deleting ordinary game code. Tooling, Rust/Flutter and
+  standalone test fixtures are excluded. The current addon costs 11,112 bytes,
+  so the budget is unmet by 1,112 bytes. It is an acceptance blocker, not an
+  approved exception. A larger mapper must not silently waive this cap.
+
+Read [research/ROM_BUDGET.md](research/ROM_BUDGET.md) for the linked savings
+experiments, the ROM-only NPC metadata opportunity and their validation limits.
+The strict `test-mobile-budget` gate is included in full ROM acceptance.
 
 The latest measured ROM budget, scanline limits and missing future-map gates are
 recorded in [research/ROM_AND_RENDER_LIMITS.md](research/ROM_AND_RENDER_LIMITS.md).
