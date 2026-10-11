@@ -1,7 +1,13 @@
 """Host-only contracts for manual-session deployment; no emulator or ADB."""
 import ipaddress
+import os
 from pathlib import Path
+import signal
+import socket
+import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -9,6 +15,130 @@ import dev_session as session
 
 
 class DeploymentContracts(unittest.TestCase):
+    def test_free_port_never_prompts_or_stops_a_process(self):
+        with patch.object(session, "port_available", return_value=True), patch.object(session, "port_listeners") as owners, patch.object(session.os, "kill") as kill:
+            session.ensure_port_available("127.0.0.1", ask=lambda _: self.fail("Unexpected prompt"))
+        owners.assert_not_called()
+        kill.assert_not_called()
+
+    def test_declined_or_closed_restart_prompt_preserves_the_listener(self):
+        for answer in ("", "n", "no", None):
+            def ask(_):
+                if answer is None:
+                    raise EOFError
+                return answer
+            with patch.object(session, "port_available", return_value=False), patch.object(session, "port_listeners", return_value={123: "test-server"}), patch.object(session.os, "kill") as kill, patch("builtins.print"):
+                with self.assertRaises(session.SessionCancelled):
+                    session.ensure_port_available("127.0.0.1", interactive=True, ask=ask)
+                kill.assert_not_called()
+
+    def test_unattended_restart_never_kills_a_port_owner(self):
+        with patch.object(session, "port_available", return_value=False), patch.object(session, "port_listeners", return_value={123: "test-server"}), patch.object(session.os, "kill") as kill, patch("builtins.print"):
+            with self.assertRaisesRegex(ValueError, "interactive terminal"):
+                session.ensure_port_available("127.0.0.1", interactive=False)
+            kill.assert_not_called()
+
+    def test_changed_port_owner_requires_a_new_approval(self):
+        with patch.object(session, "port_available", return_value=False), patch.object(session, "port_listeners", side_effect=[{123: "old"}, {456: "new"}]), patch.object(session.os, "kill") as kill, patch("builtins.print"):
+            with self.assertRaisesRegex(ValueError, "owner changed"):
+                session.ensure_port_available("127.0.0.1", interactive=True, ask=lambda _: "yes")
+            kill.assert_not_called()
+
+    def test_approved_restart_terminates_only_reviewed_listeners(self):
+        with patch.object(session, "port_available", side_effect=[False, False, True]), patch.object(session, "port_listeners", side_effect=[{123: "server", 456: "other"}, {123: "server"}]), patch.object(session.os, "kill") as kill, patch.object(session.time, "sleep"), patch("builtins.print"):
+            session.ensure_port_available("127.0.0.1", interactive=True, ask=lambda _: "y")
+            kill.assert_called_once_with(123, signal.SIGTERM)
+
+    def test_bind_probe_distinguishes_a_listener_from_a_free_port(self):
+        with socket.socket() as listener:
+            listener.bind(("127.0.0.1", 0))
+            port = listener.getsockname()[1]
+            listener.listen()
+            self.assertFalse(session.port_available("127.0.0.1", port))
+        self.assertTrue(session.port_available("127.0.0.1", port))
+
+    def test_listener_that_ignores_shutdown_is_not_force_killed(self):
+        with patch.object(session, "port_available", return_value=False), patch.object(session, "port_listeners", return_value={123: "server"}), patch.object(session.os, "kill") as kill, patch.object(session.time, "monotonic", side_effect=[0, 6]), patch("builtins.print"):
+            with self.assertRaisesRegex(ValueError, "no forced kill"):
+                session.ensure_port_available("127.0.0.1", interactive=True, ask=lambda _: "y")
+            kill.assert_called_once_with(123, signal.SIGTERM)
+
+    @unittest.skipUnless(Path("/usr/sbin/lsof").exists(), "macOS listener discovery")
+    def test_approved_restart_frees_a_real_test_listener(self):
+        code = ('import socket, time; s=socket.socket(); s.bind(("127.0.0.1", 0)); '
+                's.listen(); print(s.getsockname()[1], flush=True); time.sleep(30)')
+        listener = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, text=True, start_new_session=True)
+        try:
+            port = int(listener.stdout.readline())
+            self.assertIn(listener.pid, session.port_listeners(port))
+            with patch("builtins.print"):
+                session.ensure_port_available("127.0.0.1", port, interactive=True, ask=lambda _: "yes")
+            listener.communicate(timeout=5)
+            self.assertEqual(listener.returncode, -signal.SIGTERM)
+            self.assertTrue(session.port_available("127.0.0.1", port))
+        finally:
+            if listener.poll() is None:
+                listener.kill()
+                listener.communicate()
+
+    def test_declined_restart_has_a_success_exit_and_no_failure_message(self):
+        with patch.object(session, "main", side_effect=session.SessionCancelled), patch("builtins.print") as output:
+            self.assertEqual(session.entrypoint(), 0)
+        self.assertIn("cancelled", output.call_args.args[0])
+        self.assertNotIn("failed", output.call_args.args[0])
+
+    def test_terminal_ctrl_c_stops_both_owned_children_with_success_exit(self):
+        with tempfile.TemporaryDirectory() as folder, socket.socket() as reservation:
+            root = Path(folder)
+            reservation.bind(("127.0.0.1", 0))
+            port = reservation.getsockname()[1]
+            reservation.close()
+            server = root / "mobile_adapter/server/target/debug/mobile-server"
+            server.parent.mkdir(parents=True)
+            server.write_text(f'#!{sys.executable}\nimport os, socket, sys, time\n'
+                              f'open({str(root / "server.pid")!r}, "w").write(str(os.getpid()))\n'
+                              'address, port = sys.argv[2].split(":")\n'
+                              'listener = socket.socket()\nlistener.bind((address, int(port)))\nlistener.listen()\n'
+                              'print("READY " + sys.argv[2], flush=True)\ntime.sleep(30)\n')
+            frontend = root / "frontend"
+            frontend.write_text(f'#!{sys.executable}\nimport os, time\n'
+                                f'open({str(root / "frontend.pid")!r}, "w").write(str(os.getpid()))\ntime.sleep(30)\n')
+            server.chmod(0o755)
+            frontend.chmod(0o755)
+            code = (f'import sys; sys.path.insert(0, {str(Path(session.__file__).parent)!r}); '
+                    'import dev_session as s; from pathlib import Path; from types import SimpleNamespace; '
+                    f's.REPO=Path({str(root)!r}); s.PORT={port}; '
+                    f's.main=lambda: s.start(SimpleNamespace(frontend=Path({str(frontend)!r}), cache=Path({str(root)!r})), Path({str(root)!r}), "127.0.0.1"); '
+                    'sys.exit(s.entrypoint())')
+            parent = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE,
+                                      stderr=subprocess.STDOUT, text=True, start_new_session=True)
+            children = []
+            try:
+                deadline = time.monotonic() + 5
+                while len(children) < 2 and time.monotonic() < deadline:
+                    children = [int(path.read_text()) for path in root.glob("*.pid") if path.read_text()]
+                    time.sleep(.02)
+                self.assertEqual(len(children), 2)
+                os.killpg(parent.pid, signal.SIGINT)
+                output, _ = parent.communicate(timeout=8)
+                self.assertEqual(parent.returncode, 0, output)
+                self.assertIn("Development session stopped.", output)
+                self.assertNotIn("failed", output.lower())
+                self.assertTrue(session.port_available("127.0.0.1", port))
+                for pid in children:
+                    with self.assertRaises(ProcessLookupError):
+                        os.kill(pid, 0)
+            finally:
+                if parent.poll() is None:
+                    parent.kill()
+                    parent.communicate()
+                for pid in children:
+                    try:
+                        os.kill(pid, signal.SIGTERM)
+                    except ProcessLookupError:
+                        pass
+
     def test_lan_patch_changes_only_owned_endpoint_and_global_checksum(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

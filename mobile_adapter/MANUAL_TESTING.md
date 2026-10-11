@@ -159,7 +159,10 @@ does not change.
 
 Keep the terminal open while testing. Ctrl+C stops the server and this Mac game
 instance. Stop the previous session before rerunning the command or the automatic
-integration suite. The command refuses to kill another process using its port.
+integration suite. If the fixed port is occupied, the command lists its listener PID/name and
+asks before stopping it with SIGTERM. The default is No; a noninteractive
+launch never kills it. Ctrl+C is a normal stop and releases this session's
+server and Mac frontend.
 `--mac-only` runs without Android; `--prepare-only` prepares artifacts without
 starting the games or server. Only explicitly requesting `--reinstall-core`
 opens the Android installer in preparation mode.

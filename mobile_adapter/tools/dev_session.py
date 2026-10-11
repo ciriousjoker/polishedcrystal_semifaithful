@@ -3,13 +3,16 @@
 
 import argparse
 from datetime import datetime
+import errno
 import hashlib
 import ipaddress
 import json
+import os
 from pathlib import Path
 import re
 import shlex
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -29,6 +32,72 @@ PORT = 17423
 NAME = "polishedcrystal-mobile"
 PACKAGES = ("com.retroarch.aarch64", "com.retroarch")
 CORE_REVISION = "03f58ca3dfb4b716f7e66a0e0467f9e85ef82abb"
+
+
+class SessionCancelled(Exception):
+    """A declined interactive restart is a normal cancellation."""
+
+
+def port_available(address, port):
+    try:
+        with socket.socket() as check:
+            check.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            check.bind((address, port))
+        return True
+    except OSError as error:
+        if error.errno != errno.EADDRINUSE:
+            raise
+        return False
+
+
+def port_listeners(port):
+    result = run(["/usr/sbin/lsof", "-nP", "-a", f"-iTCP:{port}",
+                  "-sTCP:LISTEN", "-Fpc"], capture_output=True, text=True, check=False)
+    require(result.returncode in (0, 1), "Cannot identify the process using the server port")
+    listeners = {}
+    pid = None
+    for line in result.stdout.splitlines():
+        if line.startswith("p"):
+            pid = int(line[1:])
+            listeners[pid] = "unknown"
+        elif line.startswith("c") and pid is not None:
+            listeners[pid] = line[1:]
+    return listeners
+
+
+def ensure_port_available(address, port=PORT, *, interactive=None, ask=input):
+    if port_available(address, port):
+        return
+    listeners = port_listeners(port)
+    require(listeners, f"Port {port} is occupied, but its listener could not be identified")
+    print(f"Port {port} is already in use:")
+    for pid, name in listeners.items():
+        print(f"  PID {pid}: {name}")
+    if interactive is None:
+        interactive = sys.stdin.isatty()
+    require(interactive, "Restart from an interactive terminal to approve stopping these processes")
+    try:
+        answer = ask("Stop these processes and start a new session? [y/N]: ").strip().lower()
+    except EOFError:
+        raise SessionCancelled from None
+    if answer not in ("y", "yes"):
+        raise SessionCancelled
+    # Never extend consent to a listener that appeared while the prompt was open.
+    current = port_listeners(port)
+    require(all(pid in listeners and listeners[pid] == name for pid, name in current.items()),
+            "The port owner changed; run again to review the new listener")
+    for pid in current:
+        require(pid != os.getpid(), "Refusing to stop the launcher itself")
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    deadline = time.monotonic() + 5
+    while not port_available(address, port):
+        require(time.monotonic() < deadline,
+                f"Port {port} is still occupied after requesting shutdown; no forced kill was performed")
+        time.sleep(.1)
+    print(f"Port {port} is free. Starting the new session.", flush=True)
 
 
 def run(command, **kwargs):
@@ -394,7 +463,8 @@ def start(args, mac, address, device=None, launch=None):
     log = (mac / "play.log").open("w")
     try:
         process = subprocess.Popen([str(server), "--bind", f"{address}:{PORT}"],
-                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
+                                   start_new_session=True)
         children.append(process)
         ready = process.stdout.readline().strip()
         require(ready == f"READY {address}:{PORT}", f"Server failed to start: {ready}")
@@ -411,7 +481,8 @@ def start(args, mac, address, device=None, launch=None):
         threading.Thread(target=forward, daemon=True).start()
         children.append(subprocess.Popen([str(args.frontend), "-v", "-c", str(mac / "retroarch.cfg"),
             "-L", str(args.cache / "build/doublecherry/DoubleCherryGB_libretro.dylib"),
-            str(mac / f"roms/{NAME}.gbc")], stdout=log, stderr=subprocess.STDOUT))
+            str(mac / f"roms/{NAME}.gbc")], stdout=log, stderr=subprocess.STDOUT,
+            start_new_session=True))
         def watch_mac():
             while not stopped.wait(0.5):
                 if all(frontend_status((mac / "play.log").read_text(errors="replace")).values()):
@@ -425,7 +496,9 @@ def start(args, mac, address, device=None, launch=None):
         print("Press Ctrl+C here to stop this server and Mac game instance.", flush=True)
         while all(child.poll() is None for child in children):
             time.sleep(0.25)
-        require(all(child.returncode in (None, 0) for child in children), "Server or Mac frontend exited with an error; see play.log")
+        require(all(child.returncode in (None, 0, -signal.SIGINT, -signal.SIGTERM) for child in children),
+                "Server or Mac frontend exited with an error; see play.log")
+        print("Development session stopped.", flush=True)
     finally:
         stopped.set()
         for child in reversed(children):
@@ -463,11 +536,7 @@ def main():
     require(args.frontend.is_file(), "RetroArch frontend missing; pass --frontend")
     address = server_address(args)
     if not args.prepare_only:
-        try:
-            with socket.socket() as check:
-                check.bind((address, PORT))
-        except OSError as error:
-            raise ValueError(f"Port {PORT} is in use; stop the previous session with Ctrl+C before updating") from error
+        ensure_port_available(address)
     device = None if args.mac_only else Android(args)
     if device:
         device.shell("am", "force-stop", device.package)
@@ -490,11 +559,18 @@ def main():
         start(args, mac, address, device, launch)
 
 
-if __name__ == "__main__":
+def entrypoint():
     try:
         main()
     except KeyboardInterrupt:
         print("Development session stopped.")
+    except SessionCancelled:
+        print("Development session cancelled; existing session left running.")
     except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
         print(f"Development session failed: {error}", file=sys.stderr)
-        sys.exit(1)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(entrypoint())
