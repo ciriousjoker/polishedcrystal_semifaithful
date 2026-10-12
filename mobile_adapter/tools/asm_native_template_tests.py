@@ -3,7 +3,8 @@ import random
 
 
 def verify_native_templates(rom, symbols, require, mode="generic"):
-    entry_name = {"generic": "MobileVirtualWriteNativeQuads", "private": "MobileVirtualWritePrivateRectangle", "ordinary": "MobileVirtualWriteOrdinaryRectangle"}[mode]
+    entry_name = {"generic": "MobileVirtualWriteNativeQuads", "private": "MobileVirtualWritePrivateRectangle",
+                  "descriptor": "MobileVirtualWriteDescriptorRectangle", "ordinary": "MobileVirtualWriteOrdinaryRectangle"}[mode]
     bank, entry = symbols[entry_name]
     template = symbols['wMobileVirtualScratch'][1] + 64 + 8
     group_length = template + 80
@@ -47,6 +48,13 @@ def verify_native_templates(rom, symbols, require, mode="generic"):
             memory[group_length] = quads * 4
             memory[group_pointer:group_pointer + 2] = destination.to_bytes(2, 'little')
             registers = {key: 0 for key in 'abcdehl'}
+            if mode == 'descriptor':
+                descriptor = symbols['wMobileNativeOriginals'][1] + rng.randrange(13) * 8
+                memory[descriptor:descriptor + 8] = bytes((origin_x, origin_y, tile_base, attributes,
+                    source & 255, source >> 8, 0x44, relative))
+                memory[template:template + 4] = bytes(value ^ 255 for value in (origin_x, origin_y, tile_base, attributes))
+                memory[template + 7] = relative ^ 255
+                registers['b'], registers['c'] = descriptor >> 8, descriptor & 255
             if mode == "ordinary":
                 source = pointer + 1
                 for name, value in (("hCurSpriteXPixel", origin_x), ("hCurSpriteYPixel", origin_y),
@@ -70,7 +78,9 @@ def verify_native_templates(rom, symbols, require, mode="generic"):
                 return memory[address]
 
             def write(address, value):
-                require(destination <= address < destination + len(expected) or (mode != 'generic' and address in (symbols['hUsedSpriteTile'][1], symbols['hROMBank'][1], 0x2000)),
+                require(destination <= address < destination + len(expected) or
+                        (mode == 'descriptor' and address == template + 7) or
+                        (mode != 'generic' and address in (symbols['hUsedSpriteTile'][1], symbols['hROMBank'][1], 0x2000)),
                         'Native transform wrote outside its admitted private output')
                 memory[address] = value
 
@@ -98,12 +108,12 @@ def verify_native_templates(rom, symbols, require, mode="generic"):
                 elif op & 0xc7 == 0x06:
                     registers['bcdehl?a'[op >> 3 & 7]] = fetch()
                     cycles += 8
-                elif op in (0xc5, 0xe5):
-                    stack.append(pair('bc' if op == 0xc5 else 'hl'))
+                elif op in (0xc5, 0xd5, 0xe5):
+                    stack.append(pair({0xc5: 'bc', 0xd5: 'de', 0xe5: 'hl'}[op]))
                     cycles += 16
-                elif op in (0xc1, 0xe1):
+                elif op in (0xc1, 0xd1, 0xe1):
                     value = stack.pop()
-                    name = 'bc' if op == 0xc1 else 'hl'
+                    name = {0xc1: 'bc', 0xd1: 'de', 0xe1: 'hl'}[op]
                     registers[name[0]], registers[name[1]] = value >> 8, value & 255
                     cycles += 12
                 elif op in (0x09, 0x29):
@@ -158,6 +168,10 @@ def verify_native_templates(rom, symbols, require, mode="generic"):
                 elif op == 0x13:
                     address = pair('de') + 1
                     registers['d'], registers['e'] = address >> 8, address & 255
+                    cycles += 8
+                elif op == 0x23:
+                    address = pair('hl') + 1
+                    registers['h'], registers['l'] = address >> 8, address & 255
                     cycles += 8
                 elif op == 0x3c:
                     registers['a'] = (registers['a'] + 1) & 255
@@ -218,5 +232,5 @@ def verify_native_templates(rom, symbols, require, mode="generic"):
             'Native template transform exceeds its guarded budget')
     print(f'Emitted native {mode} transforms: {cases} cases, maximum {maximum} cycles')
     if mode == 'generic':
-        for program in ('private', 'ordinary'):
+        for program in ('private', 'descriptor', 'ordinary'):
             verify_native_templates(rom, symbols, require, program)

@@ -88,7 +88,49 @@ record field across all three peer slots, unchanged records, preserved caller
 pointers and all RAM write boundaries. Fresh warp/menu/avatar integration
 replays are still mandatory before accepting this fix.
 
-Current linked placement: 33,865 feature-owned upper bytes, 224 net lower
+`independent-descriptor-rectangle-20261013` reads overflow native descriptors
+directly through the existing six-byte resident dispatcher. Its eight hundred
+emitted descriptor cases pass against original native facing bytes, including
+arbitrary coordinates, flags, tile bases and source scratch that deliberately
+differs from the descriptor. Private/descriptor/ordinary maxima are 884/976/988
+cycles. The full-pool replay still fails visibility, with 19/0/19/5 publications,
+800/800 ordinary updates on every client and zero measured wait crossings.
+
+`independent-admission-first-20261013` rejects actual palette/row conflicts
+before applying the pixel-copy deadline. The local prefix retains its existing
+admission bound; rejected groups never consume row capacity. A bounded outer
+guard remains. This replay also fails visibility (19/0/20/5 publications), with
+unchanged 800/800 cadence and zero measured crossings. The deadline changes are
+not sufficient, and no visibility exception was accepted.
+
+Read-only profiling now records per-stage entry percentiles and costs specifically
+inside the same 800-frame cadence window. Earlier scene maxima include cold work,
+and mixed composition-entry percentiles cannot diagnose the start-stage delay.
+The supplied release core stays unchanged; both observed builds retain the six
+passing mapper/core tests. This is diagnostic instrumentation, not altered game
+timing or extra emulated CPU budget.
+
+`independent-admission-window-20261013` repeats the same immutable dense ROM
+with this observer. It again fails native visibility while all four clients
+retain 800/800 ordinary updates, no duplicates and no measured wait crossings.
+Stage-1 entry is typically LY122, local admission LY126, guest admission LY127
+and the ordinary pass LY132..133. That pass costs 4,840..5,967 cycles on average
+inside the observation window and frequently reaches its LY139 copy deadline
+without completing. Client 1 never publishes and remains at native rotation
+zero. The other clients publish only 17/20/5 scenes overall; those counts do not
+prove regular presentation. Native OAM is written backwards: the local figure
+occupies raw offset 144 in this fixture, not offset zero. Any future bulk-copy
+optimization must preserve the literal descriptor offsets and native local
+visibility rather than assume a source order.
+
+The diagnostic core SHA256 is
+`2a67a91bf9b6e100edc1e1ab4ddb3a1bc74194996f1cbc2cd4557a6d00859937`.
+Its runner is `/Volumes/Storage/Cache/mobileadapter/smoke-scene-window-20261013`.
+The full emitted contract suite passes, including 800 new descriptor vectors.
+These observations justify changing scheduling or composition structure; they
+do not justify increasing deadlines, skipping visibility gates or claiming M2.
+
+Current linked placement: 35,145 feature-owned upper bytes, 224 net lower
 integration bytes, 13,737 free lower bytes. Disabled counterpart hashes and the
 entire final M2 suite still require fresh verification. The battery-save format
 and original game helpers remain unchanged. No Cloudflare deployment, phone test

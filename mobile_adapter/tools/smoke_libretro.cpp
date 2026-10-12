@@ -1169,6 +1169,17 @@ int main(int argc, char** argv) {
                 for (unsigned field = 0; field < 6; ++field)
                     profile << ",\"scene_stage" << stage << '_' << fields[field] << "\":" << scene(stage * 6 + field);
         }
+        if (auto scene = reinterpret_cast<Metric>(dlsym(core, "mobile_profile_scene_window_metric"))) {
+            const char* fields[] = {"count", "max_cycles", "total_cycles", "max_entry_ly", "max_exit_ly", "return_stage_mask", "vblank_crossings"};
+            for (unsigned stage = 0; stage < 9; ++stage)
+                for (unsigned field = 0; field < 7; ++field)
+                    profile << ",\"scene_stage" << stage << "_window_" << fields[field] << "\":" << scene(stage * 7 + field);
+        }
+        if (auto entry = reinterpret_cast<Metric>(dlsym(core, "mobile_profile_scene_entry"))) {
+            for (unsigned stage = 0; stage < 9; ++stage)
+                profile << ",\"scene_stage" << stage << "_window_entry_ly_p50\":" << entry(stage * 2)
+                        << ",\"scene_stage" << stage << "_window_entry_ly_p95\":" << entry(stage * 2 + 1);
+        }
         if (auto entry = reinterpret_cast<Metric>(dlsym(core, "mobile_profile_composition_entry"))) {
             const char* stages[] = {"idle", "compose", "native_group", "peer_group", "merge_palette"};
             for (unsigned stage = 0; stage < 5; ++stage)

@@ -35,7 +35,8 @@ def rectangle_programs(native):
 
     lines = ['SECTION "Mobile Native Rectangle Programs", ROMX, BANK[MOBILE_ROM_BANK + 2]',
              'MobileNativeRectangleProgramsStart::',
-             'MobileVirtualWriteRectangleDispatch::', '\tjr c, MobileVirtualWritePrivateRectangle',
+             'MobileVirtualWriteRectangleDispatch::', '\tjr nc, MobileVirtualWriteOrdinaryRectangle',
+             '\tjr z, MobileVirtualWriteDescriptorRectangle', '\tjr MobileVirtualWritePrivateRectangle',
              'MobileVirtualWriteOrdinaryRectangle::', '\tpush hl', '\tpush bc',
              '\tld bc, -FacingStepDown0', '\tadd hl, bc',
              '\tadd hl, hl', '\tadd hl, hl', '\tld bc, MobileRectanglePrograms',
@@ -45,7 +46,12 @@ def rectangle_programs(native):
              '\tld bc, -MobileCopiedFacingStepDown0', '\tadd hl, bc',
              '\tadd hl, hl', '\tadd hl, hl', '\tld bc, MobileRectanglePrograms + 2',
              '\tadd hl, bc', '\tld a, [hli]', '\tld h, [hl]', '\tld l, a',
-             '\tjp hl', 'MobileRectanglePrograms:']
+             '\tjp hl',
+             'MobileVirtualWriteDescriptorRectangle::', '\tpush hl', '\tpush bc',
+             '\tld bc, -MobileCopiedFacingStepDown0', '\tadd hl, bc',
+             '\tadd hl, hl', '\tadd hl, hl', '\tld bc, MobileRectanglePrograms + 2',
+             '\tadd hl, bc', '\tld a, [hli]', '\tld h, [hl]', '\tld l, a',
+             '\tinc hl', '\tinc hl', '\tpop bc', '\tjp hl', 'MobileRectanglePrograms:']
     for names, count, _ in groups:
         name = names[0]
         # One dispatch entry for every source byte, with programs only at
@@ -100,15 +106,57 @@ def rectangle_programs(native):
                               'endc', '\tld [bc], a', '\tld a, c', '\tsub 7', '\tld c, a']
                 lines += ['\tjp .finish', '.unusual_base']
             if not ordinary:
-                lines += ['\tld a, [wMobileVirtualTemplate + 2]', '\tld b, a',
-                          '\tld a, [wMobileVirtualTemplate + 3]', '\tld c, a']
+                # The alternate entry reads the immutable unbanked descriptor
+                # directly. It avoids copying an eight-byte template solely to
+                # read it again. Both entries keep the original facing cursor
+                # on the dispatcher's stack and share the exact pixel program.
+                lines += ['\tjr .template', '.descriptor',
+                          '\tASSERT @ - ' + prefix + name + ' == 2',
+                          '\tpush de', '\tld h, b', '\tld l, c',
+                          '\tld a, [hli]', '\tld e, a',
+                          '\tld a, [hli]', '\tld d, a',
+                          '\tld a, [hli]', '\tld b, a',
+                          '\tld a, [hli]', '\tld c, a',
+                          '\tinc l', '\tinc l', '\tinc l',
+                          '\tld a, [hl]', '\tld [wMobileVirtualTemplate + 7], a',
+                          '\tld h, e', '\tld l, d', '\tpop de', '\tjr .coordinates',
+                          '.template', '\tld a, [wMobileVirtualTemplate]', '\tld h, a',
+                          '\tld a, [wMobileVirtualTemplate + 1]', '\tld l, a',
+                          '\tld a, [wMobileVirtualTemplate + 2]', '\tld b, a',
+                          '\tld a, [wMobileVirtualTemplate + 3]', '\tld c, a',
+                          '.coordinates']
+                private_simple = (len(tiles) == 4 and len({tile & 128 for tile in tiles}) == 1 and
+                                  max(tile & 127 for tile in tiles) <= 15 and
+                                  all('ABSOLUTE_TILE_ID' not in row[2] and 'NEXT_PALETTE' not in row[2]
+                                      for row in rows))
+                if private_simple:
+                    lines += ['\tld a, b', '\tcp 113', '\tjp nc, .unusual_base']
+                    if tiles[0] & 128:
+                        lines += ['\tbit 3, c', '\tjr z, .vram0_base', '\tadd $40',
+                                  '\tjr .tile_base', '.vram0_base', '\tadd $80', '.tile_base', '\tld b, a']
+                    for quad, (y, x, flags, tile) in enumerate(rows):
+                        for axis, value in (('l', y), ('h', x)):
+                            lines += ['\tld a, ' + axis]
+                            if value != '0':
+                                lines += ['\tadd ' + value]
+                            lines += ['\tld [de], a', '\tinc e']
+                        lines += ['\tld a, b']
+                        if tiles[quad] & 127:
+                            lines += [f'\tadd ${tiles[quad] & 127:02x}']
+                        lines += ['\tld [de], a', '\tinc e', f'if ({flags}) & RELATIVE_ATTRIBUTES',
+                                  '\tld a, [wMobileVirtualTemplate + 7]', f'\tor {flags}',
+                                  '\tand OAM_XFLIP | OAM_YFLIP | OAM_PRIO', '\tor c',
+                                  'else', '\tld a, c',
+                                  f'\tor ({flags}) & (OAM_XFLIP | OAM_YFLIP | OAM_PRIO)',
+                                  'endc', '\tld [de], a', '\tinc e']
+                    lines += ['\tjp .finish', '.unusual_base']
             for quad, (y, x, flags, tile) in enumerate(rows):
                 for axis, value in ((1, y), (0, x)):
                     if ordinary:
                         source = 'hCurSpriteYPixel' if axis else 'hCurSpriteXPixel'
                         lines += [f'\tldh a, [{source}]']
                     else:
-                        lines += [f'\tld a, [wMobileVirtualTemplate + {axis}]']
+                        lines += ['\tld a, ' + ('l' if axis else 'h')]
                     if value != '0':
                         lines += [f'\tadd {value}']
                     lines += ['\tld [bc], a', '\tinc c'] if ordinary else ['\tld [de], a', '\tinc e']

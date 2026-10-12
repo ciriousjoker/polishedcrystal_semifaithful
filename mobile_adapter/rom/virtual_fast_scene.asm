@@ -88,6 +88,9 @@ MobileVirtualAlignedNativePass:
 	cp NUM_OBJECT_STRUCTS - 1
 	jr nc, .done
 	ld b, a
+	ldh a, [rLY]
+	cp 141
+	jr nc, .busy
 	ld a, [wMobileVirtualNativeRotation]
 	inc a
 	add b
@@ -106,15 +109,8 @@ MobileVirtualAlignedNativePass:
 	ld a, [hl]
 	and $1f
 	jr z, .advance
-	ld b, 139
-	bit 7, [hl]
-	jr z, .deadline
-	inc b
-.deadline
-	ldh a, [rLY]
-	cp b
-	ret nc
 	call MobileVirtualAlignedNativeDescriptor
+	ret c ; only an otherwise admissible copy can require another idle slice
 .advance
 	ld hl, wMobileVirtualCursor
 	inc [hl]
@@ -124,6 +120,9 @@ MobileVirtualAlignedNativePass:
 	ld [wMobileVirtualCursor], a
 	ld a, 7
 	ld [wMobileVirtualStage], a
+	ret
+.busy
+	scf
 	ret
 
 MobileVirtualAlignedNativeGroup:
@@ -202,6 +201,22 @@ MobileVirtualAlignedNativeDescriptor:
 	ld a, [hl]
 	cp 5
 	ret nc
+	ld a, [wMobileVirtualIndex]
+	and a
+	jr z, .admitted ; the caller already admits the bounded local prefix
+; Reject full rows and occupied colors before applying the copy deadline.
+; Such candidates require no pixel work and must not strand a complete scene
+; merely because their hypothetical template would have been expensive.
+	ld b, 139
+	ld a, [wMobileVirtualHeaderOAM]
+	cp 255
+	jr z, .deadline
+	inc b
+.deadline
+	ldh a, [rLY]
+	cp b
+	jr nc, .busy
+.admitted
 	inc [hl]
 	ld a, [wMobileVirtualHeaderOAM]
 	cp 255
@@ -214,35 +229,27 @@ MobileVirtualAlignedNativeDescriptor:
 	add a
 	add a
 	add LOW(wMobileVirtualDescriptors)
+	ld c, a
+	ld b, HIGH(wMobileVirtualDescriptors)
+	ld h, b
+	add 4
 	ld l, a
-	adc HIGH(wMobileVirtualDescriptors)
-	sub l
-	ld h, a
-	ld de, wMobileVirtualTemplate
-	ld bc, 8
-	rst CopyBytes
-	ld a, 16
-	ld [wMobileVirtualGroupLength], a
-	ld a, [wMobileVirtualLength]
-	add LOW(wMobileVirtualOutput)
-	ld e, a
-	adc HIGH(wMobileVirtualOutput)
-	sub e
-	ld d, a
-	ld a, e
-	ld [wMobileVirtualGroupPointer], a
-	ld a, d
-	ld [wMobileVirtualGroupPointer + 1], a
-	ld hl, wMobileVirtualTemplate + 4
 	ld a, [hli]
 	ld h, [hl]
 	ld l, a
+	ld a, [wMobileVirtualLength]
+	ld e, a
+	ld d, HIGH(wMobileVirtualOutput)
+	xor a ; carry plus zero selects direct immutable-descriptor input
 	scf
 	call MobileNativeRectangleTrampoline
 	ld hl, wMobileVirtualLength
 	ld a, [hl]
 	add 16
 	ld [hl], a
+	ret
+.busy
+	scf
 	ret
 
 MobileVirtualAdmitAlignedRectangle:
