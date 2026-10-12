@@ -1,0 +1,27 @@
+[package]
+name = "mobile-acceptance"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+publish = false
+build = false
+
+[dependencies]
+mobile-protocol = { path = "../server/crates/protocol" }
+mobile-lobby-core = { path = "../server/crates/lobby-core", features = ["checkpoint"] }
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.145"
+
+[workspace]
+
+[[test]]
+name = "host"
+path = "host.rs"
+
+[[test]]
+name = "build"
+path = "build.rs"
+
+[[test]]
+name = "rom"
+path = "rom.rs"

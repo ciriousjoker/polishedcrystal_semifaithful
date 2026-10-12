@@ -29,6 +29,7 @@ static bool updated = true;
 static bool adapter_option_requested = false;
 static bool adapter_enabled = true;
 static unsigned input_frame = 0;
+static bool acceptance_enabled = false;
 static unsigned video_frames = 0, width = 0, height = 0;
 static uint64_t audio_samples = 0, audio_batches = 0;
 static retro_pixel_format pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
@@ -38,6 +39,7 @@ static unsigned (*native_oam_byte)(unsigned) = nullptr;
 static unsigned (*native_figure_byte)(unsigned) = nullptr;
 static unsigned video_native_source_count[13] = {}, video_native_complete[13] = {};
 static unsigned video_native_vanilla_complete[13] = {};
+static unsigned video_native_start[13] = {};
 static unsigned video_native_source_sprite[13] = {}, video_native_source_map[13] = {};
 static unsigned char video_object_palettes[64] = {};
 static unsigned char video_peer_tiles[128] = {};
@@ -131,7 +133,8 @@ static void load_bindings(const std::string& path) {
         std::istringstream row(line);
         std::string location, name;
         if (!(row >> location >> name) || location[0] == ';') continue;
-        if (!watched.count(name) && name.rfind("wMobile", 0) != 0 && name.rfind("wLoadedObjPal", 0) != 0) continue;
+        if (!watched.count(name) && name.rfind("wMobile", 0) != 0 && name.rfind("wLoadedObjPal", 0) != 0 &&
+            name.rfind("wAcceptance", 0) != 0) continue;
         auto colon = location.find(':');
         if (colon == std::string::npos) {
             if (name.rfind("wMobileVirtual", 0) != 0) fail("Invalid symbol location");
@@ -539,6 +542,7 @@ static void video(const void* data, unsigned w, unsigned h, size_t pitch) {
             video_native_source_count[slot] = 0;
             video_native_complete[slot] = 0;
             video_native_vanilla_complete[slot] = 0;
+            video_native_start[slot] = 160;
             const unsigned actual_count = native_figure_byte ? native_figure_byte(13 * 64 + slot) : count;
             if (!actual_count || actual_count > 16 ||
                 (!native_figure_byte && (!(flags & 128) || start + count * 4 > 160))) continue;
@@ -567,17 +571,19 @@ static void video(const void* data, unsigned w, unsigned h, size_t pitch) {
                     for (unsigned candidate = 0; candidate < actual_count; ++candidate) {
                         if (matched & (1u << candidate)) continue;
                         bool equal = true;
-                        for (unsigned field = 0; field < 4; ++field)
-                            if (video_oam[target + candidate * 4 + field] != source_byte(q * 4 + field)) {
+                        for (unsigned field = 0; field < 4; ++field) {
+                            const unsigned mask = acceptance_enabled && field == 3 ? 0xf8 : 0xff;
+                            if ((video_oam[target + candidate * 4 + field] & mask) != (source_byte(q * 4 + field) & mask)) {
                                 equal = false; break;
                             }
+                        }
                         if (equal) { matched |= 1u << candidate; break; }
                     }
                 }
                 bool fully_selected = true;
                 for (unsigned q = 0; q < actual_count; ++q) fully_selected &= selected[target / 4 + q];
                 if (fully_selected && matched == (1u << actual_count) - 1) {
-                    video_native_complete[slot] = 1; break;
+                    video_native_complete[slot] = 1; video_native_start[slot] = target; break;
                 }
             }
         }
@@ -668,6 +674,9 @@ template<class Function> static Function symbol(void* core, const char* name) {
     return function;
 }
 
+// Additional read-only observations belong to the acceptance suite.
+#include "../tests/support/observer.hpp"
+
 int main(int argc, char** argv) {
     if (argc < 5 || (argc - 5) % 2) {
         std::cerr << "Usage: smoke-libretro CORE ROM OUTPUT.ppm SYSTEM_DIRECTORY [OPTION VALUE]...\n"
@@ -687,7 +696,8 @@ int main(int argc, char** argv) {
             key != "--adapter" && key != "--pace-from" && key != "--trace-out" &&
             key != "--checkpoint-dir" && key != "--profile-out" && key != "--profile-window-start" &&
             key != "--snapshot-out" && key != "--test-snapshot-out" && key != "--snapshot-in" && key != "--input-events" &&
-            key != "--finish-barrier" && key != "--pace-multiplier" && key != "--expected-peers" && key != "--expected-online") fail("Unknown option: " + key);
+            key != "--finish-barrier" && key != "--pace-multiplier" && key != "--expected-peers" && key != "--expected-online" &&
+            key != "--acceptance") fail("Unknown option: " + key);
         arguments[key] = argv[i + 1];
     }
     if (arguments.count("--frames")) {
@@ -700,6 +710,8 @@ int main(int argc, char** argv) {
         adapter_enabled = arguments.at("--adapter") == "1";
     }
     if (arguments.count("--symbols")) load_bindings(arguments.at("--symbols"));
+    acceptance_enabled = arguments.count("--acceptance") && arguments.at("--acceptance") == "1";
+    if (acceptance_enabled) acceptance_load_symbols(arguments.at("--symbols"), argv[2]);
     if (arguments.count("--input-events")) {
         input_events.open(arguments.at("--input-events"));
         if (!input_events) fail("Cannot write input timestamps");
@@ -735,7 +747,8 @@ int main(int argc, char** argv) {
                 std::string condition;
                 while (std::getline(list, condition, ',')) {
                     auto equals = condition.find('=');
-                    if (equals == std::string::npos || !bindings.count(condition.substr(0, equals)))
+                    if (equals == std::string::npos || (!bindings.count(condition.substr(0, equals)) &&
+                        !(acceptance_enabled && condition.substr(0, equals).rfind("vAcceptance", 0) == 0)))
                         fail("Conditional input references unknown symbol");
                     action.conditions[condition.substr(0, equals)] = std::stoul(condition.substr(equals + 1));
                 }
@@ -828,6 +841,34 @@ int main(int argc, char** argv) {
                 }
             }
         }
+        if (acceptance_enabled) {
+            const char* markers[] = {"AcceptanceReadyMark", "AcceptanceDialogMark", "AcceptanceContinue.loaded", "AcceptanceContinue.failed", "LinkCommunications"};
+            for (unsigned i = 0; i < 5; ++i) {
+                auto mark = native_addresses.at(markers[i]);
+                symbol<void(*)(unsigned,unsigned,unsigned)>(core,"acceptance_profile_marker")(i,mark.first,mark.second);
+            }
+            auto point = native_addresses.at("InitSprites.InitSprite");
+            auto facing = native_addresses.at("InitSprites.AcceptanceFacing");
+            symbol<void(*)(unsigned,unsigned,unsigned,unsigned,unsigned,unsigned,unsigned,unsigned,unsigned,unsigned,unsigned)>(core, "acceptance_profile_native")(
+                point.first, point.second, facing.second, native_addresses.at("hCurSpriteXPixel").second,
+                native_addresses.at("hCurSpriteYPixel").second, native_addresses.at("hCurSpriteTile").second,
+                native_addresses.at("hCurSpriteOAMFlags").second, acceptance_word("AcceptanceObjectStride"),
+                native_addresses.at("wObjectStructs").first, acceptance_word("AcceptanceObjectSprite"), acceptance_word("AcceptanceObjectMap"));
+            auto save_start = native_addresses.at("wPlayerData");
+            auto save_routine = native_addresses.at("SaveGameData");
+            symbol<void(*)(unsigned,unsigned)>(core,"acceptance_profile_save_routine")(save_routine.first,save_routine.second);
+            auto menu_routine = native_addresses.at("StartMenu");
+            symbol<void(*)(unsigned,unsigned)>(core,"acceptance_profile_menu_routine")(menu_routine.first,menu_routine.second);
+            symbol<void(*)(unsigned,unsigned,unsigned,unsigned,unsigned,unsigned,unsigned)>(core,"mobile_profile_save")(
+                0, 0x20, native_addresses.at("wPlayerDataEnd").second - save_start.second, 0, save_start.second, 0, 0);
+            symbol<void(*)(unsigned,unsigned,unsigned)>(core,"mobile_profile_native_oam")(
+                native_addresses.at("wShadowOAM").second,
+                bindings.count("wMobileVirtualDescriptors") ? bindings.at("wMobileVirtualDescriptors").address : 0,
+                native_addresses.at("wObjectStructs").second);
+            symbol<void(*)(unsigned)>(core,"mobile_profile_native_facing")(native_addresses.at("Facings").first);
+            native_oam_byte = symbol<unsigned(*)(unsigned)>(core,"mobile_profile_native_oam_byte");
+            native_figure_byte = symbol<unsigned(*)(unsigned)>(core,"mobile_profile_native_figure_byte");
+        }
         if (bindings.count("wMobileVirtualActorMode")) {
             if (auto scene = reinterpret_cast<void(*)(unsigned)>(dlsym(core, "mobile_profile_scene")))
                 scene(bindings.at("wMobileVirtualStage").address);
@@ -884,6 +925,15 @@ int main(int argc, char** argv) {
     updated = true;
     auto* sram = static_cast<unsigned char*>(symbol<void*(*)(unsigned)>(core, "retro_get_memory_data")(RETRO_MEMORY_SAVE_RAM));
     size_t sram_size = symbol<size_t(*)(unsigned)>(core, "retro_get_memory_size")(RETRO_MEMORY_SAVE_RAM);
+    if (acceptance_enabled && !arguments.count("--save-in") && !arguments.count("--snapshot-in")) {
+        // A fresh erased battery image gives both controls identical unused
+        // bytes. Some cores allocate SRAM without initializing its contents.
+        if (!sram || !sram_size) fail("Acceptance requires battery memory");
+        std::memset(sram, 0xff, sram_size);
+        std::ofstream erased(system_directory + "/initial-battery.sav", std::ios::binary);
+        erased.write(reinterpret_cast<const char*>(sram), sram_size);
+        if (!erased) fail("Cannot retain initial battery evidence");
+    }
     if (arguments.count("--save-in")) {
         std::ifstream save(arguments.at("--save-in"), std::ios::binary);
         if (!save) fail("Cannot read battery save");
@@ -911,6 +961,10 @@ int main(int argc, char** argv) {
             fail("Core rejected manual-play snapshot");
     }
     auto run = symbol<void(*)()>(core, "retro_run");
+    auto acceptance_save_metric = reinterpret_cast<uint64_t(*)(unsigned)>(dlsym(core, "mobile_profile_save_metric"));
+    auto acceptance_marker_count = reinterpret_cast<unsigned(*)(unsigned)>(dlsym(core, "acceptance_profile_marker_count"));
+    auto acceptance_save_active = reinterpret_cast<unsigned(*)()>(dlsym(core, "acceptance_profile_save_active"));
+    auto acceptance_menu_active = reinterpret_cast<unsigned(*)()>(dlsym(core, "acceptance_profile_menu_active"));
     std::ofstream trace;
     gzFile compressed_trace = nullptr;
     if (arguments.count("--trace-out")) {
@@ -966,6 +1020,15 @@ int main(int argc, char** argv) {
         if (profile_frame) profile_frame();
         if (!trace_enabled && conditional_actions.empty() && walk_waypoints.empty()) continue;
         auto values = capture(sram, sram_size);
+        if (acceptance_enabled) {
+            acceptance_capture(values, sram, sram_size);
+            values["vAcceptanceSaveCount"] = acceptance_save_metric ? acceptance_save_metric(0) : 0;
+            values["vAcceptanceSaveActive"] = acceptance_save_active ? acceptance_save_active() : 0;
+            values["vAcceptanceMenuActive"] = acceptance_menu_active ? acceptance_menu_active() : 0;
+            const char* marker_names[] = {"vAcceptanceReady", "vAcceptanceDialogDone", "vAcceptanceLoaded", "vAcceptanceLoadFailed", "vAcceptanceLinkEntered"};
+            for (unsigned i = 0; i < 5; ++i) values[marker_names[i]] = acceptance_marker_count ? acceptance_marker_count(i) : 0;
+            values["vProfileWorldUpdates"] = metric ? metric(21) : 0;
+        }
         if (profile_frame && native_graphics_wait)
             values["vNativeGraphicsWait"] = native_graphics_wait();
         if (profile_frame && native_wait_ly)
@@ -1041,7 +1104,7 @@ int main(int argc, char** argv) {
         // missing frame into a false multi-frame absence during a cold join.
         const bool temporal_frame = values.count("wMobileVirtualActorMode") &&
                                     values.at("wMobileOnline");
-        if (trace_enabled && (progress != previous || temporal_frame || profile_frame)) {
+        if (trace_enabled && (progress != previous || temporal_frame || profile_frame || acceptance_enabled)) {
             auto wall_us = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now().time_since_epoch()).count();
             std::ostringstream record;
@@ -1238,6 +1301,11 @@ int main(int argc, char** argv) {
         if (!hardware_oam) fail("Cannot preserve hardware OAM evidence");
         if (!arguments.count("--symbols")) fail("--state-out requires matching --symbols");
         auto values = capture(sram, sram_size);
+        if (acceptance_enabled) {
+            acceptance_capture(values, sram, sram_size);
+            const char* marker_names[] = {"vAcceptanceReady", "vAcceptanceDialogDone", "vAcceptanceLoaded", "vAcceptanceLoadFailed", "vAcceptanceLinkEntered"};
+            for (unsigned i = 0; i < 5; ++i) values[marker_names[i]] = acceptance_marker_count ? acceptance_marker_count(i) : 0;
+        }
         if (!values.count("hCrashCode") || !values.count("hCGB")) fail("Required observer symbols missing");
         if (values.at("hCrashCode")) fail("ROM crash marker is nonzero");
         if (values.at("hCGB") != 1) fail("ROM did not detect Game Boy Color");

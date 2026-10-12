@@ -1,0 +1,156 @@
+; Included only in disposable fixture sources, in the native intro-menu bank.
+; Assembly writes happen during native initialization, never through a host RAM patch.
+AcceptanceBoot::
+	ld a, [wSaveFileExists]
+	and a
+	jmp nz, AcceptanceContinue
+	xor a
+	ldh [hBGMapMode], a
+	call ResetWRAM_NotPlus
+	call ResetWRAM
+	farcall ClearSavedObjPals
+	call NewGame_ClearTileMapEtc
+	ld a, [AcceptanceAvatar]
+	ld [wPlayerGender], a
+	ld a, [AcceptanceTrainerID]
+	ld [wPlayerID], a
+	ld a, [AcceptanceTrainerID + 1]
+	ld [wPlayerID + 1], a
+	ld a, $12
+	ld [wSecretID], a
+	ld a, $34
+	ld [wSecretID + 1], a
+	ld hl, AcceptanceName
+	ld de, wPlayerName
+	ld bc, NAME_LENGTH
+	rst CopyBytes
+	xor a
+	ld [wInitialOptions2], a ; native frame-driven clock, independent of host time
+	ld [wStringBuffer2 + 2], a
+	ld a, [AcceptanceHour]
+	ld [wStringBuffer2 + 1], a
+	call SetTimeOfDay
+	farcall InitializeEvents
+if DEF(MOBILE_ADAPTER)
+	ld a, [AcceptanceInitialFault]
+	and a
+	jr z, .no_fault
+	; Deliberate private-state fault initialization, never a host RAM patch.
+	ld [wMobileOwner], a
+	ld [wMobileWanted], a
+	ld [wMobileStep], a
+.no_fault
+endc
+	ld a, SPAWN_HOME
+	ld [wDefaultSpawnpoint], a
+	ld a, MAPSETUP_WARP
+	ldh [hMapEntryMethod], a
+	jmp FinishContinueFunction
+
+AcceptanceContinue:
+	farcall TryLoadSaveFile
+	jr c, .failed
+.loaded
+	call Continue_FinishReset
+	farcall ClearSavedObjPals
+	farcall FixPlayerEVsAndStats
+	farcall ClockContinue
+	ld a, [AcceptanceScenarioLoad]
+	and a
+	jr z, .ordinary_continue
+	ld a, [AcceptanceAvatar]
+	ld [wPlayerGender], a
+	ld a, [AcceptanceTrainerID]
+	ld [wPlayerID], a
+	ld a, [AcceptanceTrainerID + 1]
+	ld [wPlayerID + 1], a
+if DEF(MOBILE_ADAPTER)
+	ld a, [AcceptanceInitialFault]
+	and a
+	jr z, .no_loaded_fault
+	ld [wMobileOwner], a
+	ld [wMobileWanted], a
+	ld [wMobileStep], a
+.no_loaded_fault
+endc
+	; The source-generated seed carries its producer's ordinary objects.
+	; Reconstruct this scenario's objects through the native map loader.
+	xor a
+	ld hl, wObjectStructs
+	ld bc, wObjectStructsEnd - wObjectStructs
+	rst ByteFill
+	ld hl, wMapObjects
+	ld bc, wMapObjectsEnd - wMapObjects
+	rst ByteFill
+	ld a, SPAWN_HOME
+	ld [wDefaultSpawnpoint], a
+	ld a, MAPSETUP_WARP
+	jr .enter
+.ordinary_continue
+	ld a, MAPSETUP_CONTINUE
+.enter
+	ldh [hMapEntryMethod], a
+	jmp FinishContinueFunction
+.failed
+.wait
+	call DelayFrame
+	jr .wait
+
+AcceptanceReadyMark::
+	ret
+AcceptanceDialogMark::
+	ret
+
+AcceptanceAvatar:: db 0
+AcceptanceTrainerID:: dw $3039
+AcceptanceHour:: db 12
+AcceptanceInitialFault:: db 0
+AcceptanceScenarioLoad:: db 0
+AcceptanceFigures:: db SPRITE_CHRIS, SPRITE_KRIS, SPRITE_CRYS, SPRITE_BETA
+; Derived values are emitted by the same assembler as the current game.
+AcceptanceObjectCount:: dw NUM_OBJECT_STRUCTS
+AcceptanceObjectStride:: dw OBJECT_LENGTH
+AcceptanceObjectSprite:: dw OBJECT_SPRITE
+AcceptanceObjectMap:: dw OBJECT_MAP_OBJECT_INDEX
+AcceptanceObjectFacing:: dw OBJECT_FACING
+AcceptanceObjectPalette:: dw OBJECT_PALETTE
+AcceptanceObjectMapX:: dw OBJECT_MAP_X
+AcceptanceObjectMapY:: dw OBJECT_MAP_Y
+AcceptanceSimulationFields::
+	db OBJECT_SPRITE, OBJECT_MAP_OBJECT_INDEX, OBJECT_MOVEMENT_TYPE
+	db OBJECT_WALKING, OBJECT_DIRECTION, OBJECT_STEP_TYPE, OBJECT_STEP_DURATION
+	db OBJECT_ACTION, OBJECT_STEP_FRAME, OBJECT_MAP_X, OBJECT_MAP_Y
+AcceptanceSimulationFieldsEnd::
+AcceptanceName: db "TEST@"
+	ds NAME_LENGTH - 5, 0
+
+AcceptanceSave::
+	farcall SaveGameData
+	farcall SaveCurrentVersion
+	ret
+
+AcceptancePauseGameTimer::
+	; Save tests compare equal external clock inputs. The ordinary world,
+	; interrupts, animations, audio and network continue to advance normally.
+	xor a
+	ld [wGameTimerPaused], a
+	ld hl, wGameTimeCap
+	ld bc, wGameTimeFrames + 1 - wGameTimeCap
+	rst ByteFill
+	ret
+
+AcceptanceLink::
+	farcall LinkCommunications
+	ret
+
+AcceptanceInteractionFault:: db 0
+AcceptanceApplyInteractionFault::
+if DEF(MOBILE_ADAPTER)
+	ld a, [AcceptanceInteractionFault]
+	and a
+	ret z
+	ld [wMobileOwner], a
+	ld [wMobileWanted], a
+	ld [wMobileStep], a
+endc
+	ret

@@ -1,0 +1,319 @@
+{
+  "schema": 2,
+  "hard_dependencies": [
+    {
+      "name": "lobby Frame envelope and public wire-kind declarations",
+      "kind": "protocol adapter interface",
+      "reason": "Fault tooling frames the current eight-byte big-endian envelope and derives WELCOME/ROSTER/DELTA tag values from literal u8 declarations in protocol/src/lobby.rs. Changing header layout or declaration codec requires adapting this one wire adapter; tag numbers are not frozen."
+    },
+    {
+      "name": "GoldenrodGameCorner",
+      "reason": "Existing indoor assets and enough visible floor for twelve ordinary objects; native events are replaced only in disposable fixture builds."
+    },
+    {
+      "name": "PlayersHouse2F",
+      "reason": "Existing second map for real warp/loading paths; no assumptions about its current NPCs or callbacks."
+    },
+    {
+      "name": "SPRITE_POKEFAN_M",
+      "reason": "Ordinary multi-quad native NPC with no story-specific graphics."
+    },
+    {
+      "name": "SPRITE_BALL_CUT_TREE",
+      "reason": "The normal itemball_event macro uses this native ground-object sprite; item palettes and rendering data remain current-build inputs."
+    },
+    {
+      "name": "SPRITE_CHRIS",
+      "reason": "Native reference for the first remote appearance."
+    },
+    {
+      "name": "SPRITE_KRIS",
+      "reason": "Native reference for the second remote appearance."
+    },
+    {
+      "name": "SPRITE_CRYS",
+      "reason": "Native reference for the third remote appearance."
+    },
+    {
+      "name": "SPRITE_BETA",
+      "reason": "Native reference for the fourth remote appearance."
+    },
+    {
+      "name": "EVENT_TEMPORARY_UNTIL_MAP_RELOAD_1",
+      "kind": "event identity",
+      "reason": "The generated conversation exercises the ordinary event engine with a temporary flag, without depending on story progress."
+    },
+    {
+      "name": "ResetWRAM_NotPlus",
+      "kind": "engine interface",
+      "reason": "A named native entry or read-only observation boundary. Changing this interface requires updating the single engine adapter; tests do not bind its address or bytes."
+    },
+    {
+      "name": "ResetWRAM",
+      "kind": "engine interface",
+      "reason": "A named native entry or read-only observation boundary. Changing this interface requires updating the single engine adapter; tests do not bind its address or bytes."
+    },
+    {
+      "name": "NewGame_ClearTileMapEtc",
+      "kind": "engine interface",
+      "reason": "A named native entry or read-only observation boundary. Changing this interface requires updating the single engine adapter; tests do not bind its address or bytes."
+    },
+    {
+      "name": "InitializeEvents",
+      "kind": "engine interface",
+      "reason": "A named native entry or read-only observation boundary. Changing this interface requires updating the single engine adapter; tests do not bind its address or bytes."
+    },
+    {
+      "name": "ClearSavedObjPals",
+      "kind": "engine interface",
+      "reason": "A named native entry or read-only observation boundary. Changing this interface requires updating the single engine adapter; tests do not bind its address or bytes."
+    },
+    {
+      "name": "SetTimeOfDay",
+      "kind": "engine interface",
+      "reason": "A named native entry or read-only observation boundary. Changing this interface requires updating the single engine adapter; tests do not bind its address or bytes."
+    },
+    {
+      "name": "FinishContinueFunction",
+      "kind": "engine interface",
+      "reason": "A named native entry or read-only observation boundary. Changing this interface requires updating the single engine adapter; tests do not bind its address or bytes."
+    },
+    {
+      "name": "TryLoadSaveFile",
+      "kind": "engine interface",
+      "reason": "A named native entry or read-only observation boundary. Changing this interface requires updating the single engine adapter; tests do not bind its address or bytes."
+    },
+    {
+      "name": "Continue_FinishReset",
+      "kind": "engine interface",
+      "reason": "A named native entry or read-only observation boundary. Changing this interface requires updating the single engine adapter; tests do not bind its address or bytes."
+    },
+    {
+      "name": "FixPlayerEVsAndStats",
+      "kind": "engine interface",
+      "reason": "A named native entry or read-only observation boundary. Changing this interface requires updating the single engine adapter; tests do not bind its address or bytes."
+    },
+    {
+      "name": "ClockContinue",
+      "kind": "engine interface",
+      "reason": "A named native entry or read-only observation boundary. Changing this interface requires updating the single engine adapter; tests do not bind its address or bytes."
+    },
+    {
+      "name": "SaveGameData",
+      "kind": "engine interface",
+      "reason": "A named native entry or read-only observation boundary. Changing this interface requires updating the single engine adapter; tests do not bind its address or bytes."
+    },
+    {
+      "name": "StartMenu",
+      "kind": "engine interface",
+      "reason": "Read-only call-span observation proves that the emergency exit overlaps the actual native menu, without depending on menu text, selection order or cursor values."
+    },
+    {
+      "name": "SaveCurrentVersion",
+      "kind": "engine interface",
+      "reason": "A named native entry or read-only observation boundary. Changing this interface requires updating the single engine adapter; tests do not bind its address or bytes."
+    },
+    {
+      "name": "LinkCommunications",
+      "kind": "engine interface",
+      "reason": "A named native entry or read-only observation boundary. Changing this interface requires updating the single engine adapter; tests do not bind its address or bytes."
+    },
+    {
+      "name": "InitSprites.InitSprite",
+      "kind": "engine interface",
+      "reason": "A named native entry or read-only observation boundary. Changing this interface requires updating the single engine adapter; tests do not bind its address or bytes."
+    },
+    {
+      "name": "Facings",
+      "kind": "engine interface",
+      "reason": "A named native entry or read-only observation boundary. Changing this interface requires updating the single engine adapter; tests do not bind its address or bytes."
+    },
+    {
+      "name": "SPAWN_HOME",
+      "kind": "engine semantic identity",
+      "reason": "The fixture expresses initialization and ordinary object/script behavior using this named native constant; numeric values are derived by RGBDS."
+    },
+    {
+      "name": "MAPSETUP_WARP",
+      "kind": "engine semantic identity",
+      "reason": "The fixture expresses initialization and ordinary object/script behavior using this named native constant; numeric values are derived by RGBDS."
+    },
+    {
+      "name": "MAPSETUP_CONTINUE",
+      "kind": "engine semantic identity",
+      "reason": "The fixture expresses initialization and ordinary object/script behavior using this named native constant; numeric values are derived by RGBDS."
+    },
+    {
+      "name": "MAPCALLBACK_OBJECTS",
+      "kind": "engine semantic identity",
+      "reason": "The fixture expresses initialization and ordinary object/script behavior using this named native constant; numeric values are derived by RGBDS."
+    },
+    {
+      "name": "SPRITEMOVEDATA_STANDING_DOWN",
+      "kind": "engine semantic identity",
+      "reason": "The fixture expresses initialization and ordinary object/script behavior using this named native constant; numeric values are derived by RGBDS."
+    },
+    {
+      "name": "OBJECTTYPE_SCRIPT",
+      "kind": "engine semantic identity",
+      "reason": "The fixture expresses initialization and ordinary object/script behavior using this named native constant; numeric values are derived by RGBDS."
+    },
+    {
+      "name": "MapObjectPals and ow_npc_pal_const declarations",
+      "kind": "palette table interface",
+      "reason": "The stress scene requires seven distinct current non-avatar day palettes. Selectors and RGB data are enumerated from current source/linked ROM, without binding any particular selector ID or color."
+    },
+    {
+      "name": "native fixture adapter interfaces",
+      "kind": "engine interface family",
+      "reason": "The bootstrap, object_event/script macros, map-header boundaries, spawn loader and named symbols in observer.hpp, profile_native.hpp and the existing smoke frontend form the explicit engine adapter. Their names and semantics must exist; all resolved addresses and record constants are derived. The generated adapter-bindings.json lists each current symbolic binding."
+    },
+    {
+      "name": "native avatar palette mapping assertions",
+      "kind": "source-format interface",
+      "reason": "The source adapter reads the four PLAYER_* + 1 == PAL_NPC_* declarations in SpawnPlayer. This chooses stress colors distinct from the current avatars, without fixing selector IDs, names or RGB values. A change to this mapping codec requires adapting one parser."
+    },
+    {
+      "name": "DAY and MORN",
+      "kind": "time identity",
+      "reason": "Palette selection enumerates the current time-of-day declaration; the native software clock and real palette engine produce daytime/night references."
+    },
+    {
+      "name": "itemball_event and POTION",
+      "kind": "native object interface",
+      "reason": "Produce ordinary item balls through the real macro, with a harmless current native item identity. This exercises the real object priority class instead of an NPC with item graphics."
+    },
+    {
+      "name": "IN_DARKNESS, PALETTE_AUTO and PALETTE_NITE",
+      "kind": "native lighting identity",
+      "reason": "Exercise real local time-of-day and darkness branches through a temporary native map header. Their numeric bits and all color outputs are derived."
+    },
+    {
+      "name": "native map/collision source codec",
+      "kind": "source-format interface",
+      "reason": "The source adapter reads named MapScriptHeader tables, one block index per .ablk byte, square row-major collision entries and the FLOOR collision identity. This avoids creating maps or choosing immutable coordinates. Changing this source codec requires updating the single parser; block width and map dimensions are derived."
+    },
+    {
+      "name": "wGameTimerPaused, wGameTimeCap and wGameTimeFrames",
+      "kind": "native clock input interface",
+      "reason": "Exact save tests choose fixed elapsed-time/software-RTC input. These clock fields are initialized before joining; normal world frames, audio, interrupts and network stay live. Performance/rendering cases use normal native clocks."
+    }
+  ],
+  "derived_inputs": [
+    {
+      "name": "lobby response kind IDs",
+      "source": "mobile_adapter/server/crates/protocol/src/lobby.rs",
+      "derivation": "Parse current public u8 constants to identify successful restored responses and actual roster mutations."
+    },
+    {
+      "name": "map IDs and dimensions",
+      "source": "constants/map_constants.asm and data/maps/maps.asm",
+      "derivation": "Enumerate current map order; no frozen numeric group/number or total map count."
+    },
+    {
+      "name": "floor geometry and scenario positions",
+      "source": "maps/*.ablk and data/tilesets/*_collision.asm",
+      "derivation": "Derive cells per block axis from the current collision entry width, then find an eight-cell floor row and enough nearby floor positions. Original NPC additions/removals, positions and dialogue are irrelevant."
+    },
+    {
+      "name": "map background and tileset data",
+      "source": "current native map loader",
+      "derivation": "Reuse the current assets; synthetic event tables replace only scene scripts, callbacks, warps and actors."
+    },
+    {
+      "name": "sprite numeric IDs",
+      "source": "current RGBDS constants emitted in AcceptanceFigures",
+      "derivation": "Use symbolic sprite roles and patch only generated ROM data."
+    },
+    {
+      "name": "sprite pixels, tile allocation and figure geometry",
+      "source": "current native Facings data, VRAM and OAM",
+      "derivation": "Read the current facing quad count and tile bytes; no golden sprite image or four-quad lifetime assumption."
+    },
+    {
+      "name": "palette RGB values and lighting",
+      "source": "current native graphics/palette data and actual native video callbacks",
+      "derivation": "Each selected appearance is rendered by the native engine under equivalent local lighting; compare actual hardware colors."
+    },
+    {
+      "name": "palette and event numeric IDs",
+      "source": "current assembler constants",
+      "derivation": "Assemble symbolic selectors and event IDs instead of storing their numeric values in scenarios."
+    },
+    {
+      "name": "ROM version and build artifact names",
+      "source": "Makefile VERSION",
+      "derivation": "Derive names on every preparation."
+    },
+    {
+      "name": "RAM addresses and save spans",
+      "source": "matching .sym files",
+      "derivation": "Resolve every watched label and checksum-covered span from each ROM separately."
+    },
+    {
+      "name": "object count, record stride and semantic field offsets",
+      "source": "native constants emitted in AcceptanceObject* and AcceptanceSimulationFields",
+      "derivation": "Read metadata assembled with the current game; twelve ordinary objects is an acceptance requirement, not a frozen engine count."
+    },
+    {
+      "name": "frame cadence and existing dropped frames",
+      "source": "fresh corresponding singleplayer execution",
+      "derivation": "Compare prefix progress, update counts, maximum gaps and duplicates; native gaps are retained."
+    },
+    {
+      "name": "initialization, dialogue and save state",
+      "source": "current native initialization/map/script/save routines",
+      "derivation": "No committed save, fixed New Game dialog sequence or persistent CPU snapshot is a starting fixture."
+    },
+    {
+      "name": "source and core provenance",
+      "source": "source fingerprint, linked ROM hashes, pinned core archive",
+      "derivation": "Generated saves, snapshots and observations are scoped to their producing build/core/scenario."
+    },
+    {
+      "name": "normal native content preservation",
+      "source": "compiled map/event inventories from both counterparts",
+      "derivation": "Compare actual current inventories and symbolic script targets rather than frozen NPC positions/counts."
+    },
+    {
+      "name": "legacy probe resolved observations",
+      "source": "mobile_adapter/tools/smoke_libretro.cpp and profile_core.h",
+      "derivation": "Addresses, spans, inventories and physical-memory views are resolved through the declared native/core adapter. The corresponding symbol names and API semantics are hard interfaces, not derived IDs."
+    },
+    {
+      "name": "stress palette selection",
+      "source": "current ow_npc_pal_const inventory and linked MapObjectPals table",
+      "derivation": "Derive the current avatar palette roles from SpawnPlayer and select seven distinct day color values outside that set; record selectors and encoded colors in the fixture manifest. No named color is mandatory. The actual native renders must confirm all eleven requested colors are distinct."
+    },
+    {
+      "name": "battery capacity and initial unused bytes",
+      "source": "retro_get_memory_size(RETRO_MEMORY_SAVE_RAM) for the current linked cartridge",
+      "derivation": "Create and retain a fresh erased battery image of exactly the current capacity, identically for both controls. No save format, record layout or historic battery file is assumed."
+    },
+    {
+      "name": "receiver-specific ordinary activation",
+      "source": "current native map/object loader and native figure-demand observer",
+      "derivation": "The primary crowded receiver must establish twelve ordinary objects. Native eligibility is read from each frame of the singleplayer control and matched by original map-object identity. Workload avatar doubles are excluded; hiding multiplayer demand cannot waive a native-visible figure."
+    },
+    {
+      "name": "shared current native initialization data",
+      "source": "fresh native seed producer and current ordinary save/load routines",
+      "derivation": "The current singleplayer ROM produces a settled native save for each avatar. Both counterparts load that exact fresh file, then construct the requested map objects through the native loader. Daily NPC/phone/RNG values and string padding are carried as native-generated data, without dependencies on their individual fields or results."
+    }
+  ],
+  "acceptance_limits": {
+    "exit_frames": 2,
+    "presentation_gap_frames": 8,
+    "fairness_count_difference": 8,
+    "settle_frames": 600,
+    "profile_frames": 800
+  },
+  "acceptance_limits_reason": "Explicit acceptance ceilings, not fitted to the current renderer. Existing native omissions and world-update gaps are retained in paired controls. No CPU-heavy frame is silently removed from presentation coverage.",
+  "hardware_contracts": [
+    "Game Boy Color viewport 160x144",
+    "Forty OAM entries and ten selected sprites per scanline",
+    "Eight hardware object palette slots"
+  ],
+  "core_interface": "The enabled ROM uses MBC30 and libmobile. Use the project's pinned read-only observer, with MOBILE_ACCEPTANCE_CORE and MOBILE_ACCEPTANCE_CORE_SOURCE overrides for equivalent supported platforms. Emulator state recovery requires compatible serialization, not cross-core state conversion.",
+  "coverage_boundary": "Finite scenarios and deterministic generated byte/event sequences do not prove safety for every possible machine state. Manual footprint judgement remains required. Synthetic scene tests and unchanged-release tests are reported separately."
+}

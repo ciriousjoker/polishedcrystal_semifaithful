@@ -67,6 +67,7 @@ rgbds/
 deploy.sh
 mobile_adapter/build*/
 mobile_adapter/server/target/
+mobile_adapter/tests/target/
 
 # Portable, ordinary in-game batteries for mobile test scenarios
 !mobile_adapter/tests/scenarios/**/*.sav

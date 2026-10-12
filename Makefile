@@ -135,6 +135,9 @@ mobile-layout-check: $$(ROM_NAME).$$(EXTENSION)
 	python3 mobile_adapter/tools/audit_rom_budget.py --mobile "$(ROM_NAME).gbc" --layout-only
 endif
 MOBILE_CARGO ?= cargo
+.PHONY: test-mobile-suite
+test-mobile-suite:
+	$(MOBILE_CARGO) test --locked --manifest-path mobile_adapter/tests/Cargo.toml --no-fail-fast
 test-mobile-host:
 	$(MOBILE_CARGO) test --locked --manifest-path mobile_adapter/server/Cargo.toml
 	python3 mobile_adapter/tools/test_asm_contracts.py --rgbds "$(or $(RGBDS),./)"
