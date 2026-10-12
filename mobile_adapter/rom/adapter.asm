@@ -176,7 +176,11 @@ MobileTick::
 ; IRQs may have completed a byte since the outer admission check. Check the
 ; budget again after choosing the actual expensive state, before touching it.
 	ldh a, [rLY]
+if DEF(MOBILE_VIRTUAL_ACTORS)
+	cp 116
+else
 	cp 120
+endc
 	jp nc, .return
 	call MobilePrepareCommand
 	jp .return
@@ -184,7 +188,11 @@ MobileTick::
 ; IRQs may have completed a byte since the outer admission check. Check the
 ; budget again after choosing the actual expensive state, before touching it.
 	ldh a, [rLY]
+if DEF(MOBILE_VIRTUAL_ACTORS)
+	cp 116
+else
 	cp 120
+endc
 	jp nc, .return
 	call MobileAppendPending
 	jp c, .protocol_error
@@ -217,7 +225,11 @@ MobileTick::
 ; IRQs may have completed a byte since the outer admission check. Check the
 ; budget again after choosing the actual expensive state, before touching it.
 	ldh a, [rLY]
+if DEF(MOBILE_VIRTUAL_ACTORS)
+	cp 116
+else
 	cp 120
+endc
 	jp nc, .return
 	call MobileValidateResponseSlice
 	jp c, .packet_error
@@ -679,6 +691,10 @@ MobileSerialIRQ::
 .counted
 	ld hl, wMobileBurst
 	dec [hl]
+if DEF(MOBILE_VIRTUAL_ACTORS)
+	ld hl, wMobileVirtualSerialSlice
+	dec [hl]
+endc
 	ldh a, [rSB]
 	ld d, a
 	ld a, [wMobileWire]
@@ -688,13 +704,13 @@ MobileSerialIRQ::
 	jr z, .waiting
 	cp MOBILE_WIRE_RX
 	jr z, .rx
-	jr .bad
+	jp .bad
 .waiting
 	ld a, d
 	cp $99
-	jr nz, .return
+	jp nz, .return
 	call MobileStoreRx
-	jr c, .bad
+	jp c, .bad
 	ld a, MOBILE_WIRE_RX
 	ld [wMobileWire], a
 	ld a, 5
@@ -744,6 +760,17 @@ MobileSerialIRQ::
 	ld [wMobileWire], a
 	jr .return
 .next
+if DEF(MOBILE_VIRTUAL_ACTORS)
+	ldh a, [rLY]
+	cp 136
+	jr nc, .return ; finish this byte, then give the awaited VBlank to the game
+	ldh a, [hVBlankOccurred]
+	and a
+	jr nz, .return
+	ld a, [wMobileVirtualSerialSlice]
+	and a
+	jr z, .return ; return the idle CPU to presentation after a bounded byte slice
+endc
 	ld a, [wMobileBurst]
 	and a
 	jr z, .return

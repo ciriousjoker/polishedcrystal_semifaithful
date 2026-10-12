@@ -123,10 +123,14 @@ with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
     require(symbols["wMobileResidentStart"] == (0, 0xcec4), "Resident placement changed")
     require(symbols["wMobileBufferStart"] == (2, 0xd4eb), "Buffer placement changed")
     require(symbols["wMobileBufferEnd"][1] <= 0xe000, "Buffer overflow")
-    bank, address = symbols["MobileNativeCopyFourTiles"]
-    offset = bank * 0x4000 + address - 0x4000
-    require(rom[offset:offset + 5] == bytes.fromhex("f3 e0 4f 06 04"),
-            "Native tile copy must select VRAM bank only after disabling interrupts")
+    if args.renderer == "native":
+        bank, address = symbols["MobileNativeCopyFourTiles"]
+        offset = bank * 0x4000 + address - 0x4000
+        require(rom[offset:offset + 5] == bytes.fromhex("f3 e0 4f 06 04"),
+                "Native tile copy must select VRAM bank only after disabling interrupts")
+    else:
+        require("MobileNativeCopyFourTiles" not in symbols,
+                "Virtual renderer must exclude the retired active-scanout tile copier")
     require(symbols["wMobileAvatarBank"] == symbols["wMobileNativeOriginalsEnd"] and
             symbols["wMobileAvatarBank"][1] < 0xd000, "Private VRAM bank latch escaped unbanked feature RAM")
     def facing(table, index):
@@ -153,6 +157,15 @@ with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
         start = bank * 0x4000 + pointer - 0x4000
         count = rom[start]
         require(0 < count <= 16, "Native figure exceeds independent renderer scratch bound")
+        if args.renderer == "virtual":
+            for quad in range(count):
+                attributes, tile = rom[start + 3 + quad * 4:start + 5 + quad * 4]
+                if attributes & 4:  # ABSOLUTE_TILE_ID
+                    require(tile not in set(range(0x64, 0x6f)) | {0x3f},
+                            "Native absolute tile overlaps a private pose window")
+                else:
+                    require((tile & 0x7f) <= 14,
+                            f"Native facing {index} tile {tile:02x} exceeds the audited fifteen-tile atlas footprint")
         if count == 4:
             ys = [rom[start + 1 + quad * 4] for quad in range(4)]
             ys = [y - 256 if y >= 128 else y for y in ys]
@@ -161,10 +174,14 @@ with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
             require(ys[0] == ys[1] and ys[2] == ys[3] and abs(ys[2] - ys[0]) == 8,
                     "Four-quad native figure requires exact-row admission instead of interval admission")
             require(max(demand) <= 2, "Four-quad native figure invalidates five-figure scanline proof")
-            flags = [rom[start + 3 + quad * 4] & 4 for quad in range(4)]
+            flags = [rom[start + 3 + quad * 4] & 8 for quad in range(4)]
             require(len(set(flags)) == 1,
                     "Four-quad facing requires per-quad palette inventory")
     if "MobileVirtualActorVersion" in symbols:
+        from asm_rectangle_tests import verify_rectangles
+        verify_rectangles(rom, symbols, require)
+        from asm_row_tests import verify_rows
+        verify_rows(rom, symbols, require)
         def compiled_bytes(name, length):
             bank, address = symbols[name]
             offset = bank * 0x4000 + address - 0x4000

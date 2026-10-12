@@ -38,13 +38,14 @@ def inventory():
 def source(rows):
     paths = list(dict.fromkeys(row[2] for row in rows))
     lines = ['; Generated from native avatar definitions. Do not edit.',
-             'SECTION "Mobile Virtual Avatar Assets", ROMX, BANK[MOBILE_ROM_BANK + 1]',
-             'MobileVirtualAssetStart::', 'MobileVirtualAssetSprites::']
+             'SECTION "Mobile Virtual Avatar Identities", ROMX, BANK[MOBILE_ROM_BANK]',
+             'MobileVirtualAssetSprites::']
     for sprite, index, _ in rows:
         lines += [f'\tASSERT {sprite} == {index}', f'\tdb {sprite}']
     lines += ['MobileVirtualAssetSpritesEnd::',
               '\tASSERT @ - MobileVirtualAssetSprites == NUM_PLAYER_GENDERS * NUM_PLAYER_STATES',
-              'MobileVirtualAssetPointers::']
+              'SECTION "Mobile Virtual Avatar Assets", ROMX, BANK[MOBILE_ROM_BANK + 1]',
+              'MobileVirtualAssetStart::', 'MobileVirtualAssetPointers::']
     for _, _, path in rows:
         lines += [f'\tdw MobileVirtualAsset{paths.index(path)}']
     for index, path in enumerate(paths):

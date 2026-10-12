@@ -64,37 +64,26 @@ MACRO mobile_virtual_capture
 	push hl
 	ld a, c
 	ld [wMobileVirtualHeaderOAM], a
-	ld b, h
-	ld c, l
-	ld e, d
 	ld a, [wMobileVirtualIndex]
 	add a
 	add a
 	add a
-	add LOW(wMobileVirtualDescriptors)
+	add LOW(wMobileVirtualDescriptors + 6)
 	ld l, a
-	adc HIGH(wMobileVirtualDescriptors)
+	adc HIGH(wMobileVirtualDescriptors + 6)
 	sub l
 	ld h, a
-	ldh a, [hCurSpriteXPixel]
-	ld [hli], a
-	ldh a, [hCurSpriteYPixel]
-	ld [hli], a
-	ldh a, [hCurSpriteTile]
-	ld [hli], a
-	ld [hl], e
-	inc hl
-	ld [hl], c
-	inc hl
-	ld [hl], b
-	inc hl
 	ldh a, [hUsedSpriteTile]
 	ld b, a
 ; All native four-quad facings are canonical two-column rectangles. The host
 ; contract checks the emitted facing data, including every future addition.
 	ld a, b
 	cp 4
-	jr nz, .shape_ready\@
+	jr z, .rectangle\@
+	xor a
+	ld [wMobileVirtualFastAdmission], a
+	jr .shape_ready\@
+.rectangle\@
 	set 6, b
 .shape_ready\@
 
@@ -121,6 +110,28 @@ MACRO mobile_virtual_capture
 	inc hl
 	ldh a, [hCurSpriteOAMFlags]
 	ld [hl], a
+; Only a group that does not fit native OAM needs the materialization template.
+; Raw groups retain just their current count and ShadowOAM offset.
+	ld de, -7
+	add hl, de
+	ldh a, [hCurSpriteXPixel]
+	ld [hli], a
+	ldh a, [hCurSpriteYPixel]
+	ld [hli], a
+	ldh a, [hCurSpriteTile]
+	ld [hli], a
+	ld d, h
+	ld e, l
+	ld hl, sp + 3 ; saved native D contains the complete palette/bank flags
+	ld a, [hl]
+	ld [de], a
+	inc de
+	ld hl, sp + 0 ; saved native HL is the original facing ROM template
+	ld a, [hli]
+	ld [de], a
+	inc de
+	ld a, [hl]
+	ld [de], a
 .restore\@
 	pop hl
 	pop de

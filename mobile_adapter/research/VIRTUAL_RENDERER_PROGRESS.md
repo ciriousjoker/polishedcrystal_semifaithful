@@ -2,7 +2,33 @@
 
 Date: 2026-10-12. Experimental, not accepted M2 completion.
 
-## User contract and rollout
+## Active follow-up, 2026-10-12
+
+The latest active plan entry supersedes the older implementation description
+below. Three private pose windows no longer overlap the native large-sprite
+atlas: bank 0 $64..$67, $68..$6b and $6c..$6e plus bank 1 $3f. Pending pose source,
+identity and appearance are private; transfer and OAM flip/bank attributes commit
+in the existing early VBlank hook. The retired active-scanout copier is excluded.
+
+A preserved native OAM base and bounded guest scatter avoid repeatedly copying
+ordinary NPCs. Canonical shape classification is captured at the existing native
+metadata hook. The dense virtual-geometry-credit-corner-20261012 run passes all
+four strict 800-frame windows, speeds 1..4, native NPC motion, actual palettes/
+poses, hardware row selection and the unchanged three-frame absence bound.
+The early-transfer bedroom run passes four clients and strict cadence.
+
+Actual emitted irregular row accounting exposed a reverse-template clipping
+bug, fixed by rechecking the selected minimum Y before the rectangle fast path.
+2,144 host instruction cases now validate clipping, private bounds and exact
+rollback. Its measured 21,752-cycle count/rollback bound requires generic work
+before LY 110. 13,920 interval cases and 65,536 native OAM bounds cases also pass.
+
+These runs do not yet establish final-source acceptance. Local motion and hosted
+motion are being measured after transfer cleanup and source validation. The
+remaining graphics/resource, recovery/save and matched-cadence gates listed in
+the plan remain mandatory. Default launcher migration is deliberately pending.
+
+## Historical user contract and rollout
 
 The replacement must work without map redesign, replaceable-NPC labels, native
 NPC eviction, story/script changes or NPC state restoration. G3 supersedes the

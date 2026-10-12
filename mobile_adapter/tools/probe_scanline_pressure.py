@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Run four real native ROMs next to Route 37's protected twin trainers.
+"""Run four real ROMs next to Route 37's protected twin trainers.
 
 Creates ordinary New Game/Save batteries, with no state or game-RAM injection.
-The current known conflict fails acceptance. --diagnostic records that failure
-without treating it as renderer success. User listeners and saves are untouched.
+--diagnostic records a failure without treating it as renderer success. User listeners and saves are untouched.
 """
 import argparse
 from core_runtime import CORE_SOURCE, OBSERVED_CORE, PROFILE_CORE
@@ -21,6 +20,8 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--port", type=int, default=17640)
     parser.add_argument("--diagnostic", action="store_true")
+    parser.add_argument("--rom", type=Path, default=REPO / "polishedcrystal-mobile-3.2.3.gbc")
+    parser.add_argument("--symbols", type=Path, default=REPO / "polishedcrystal-mobile-3.2.3.sym")
     parser.add_argument("--core", type=Path, default=OBSERVED_CORE)
     parser.add_argument("--profile-core", type=Path, default=PROFILE_CORE)
     args = parser.parse_args()
@@ -41,13 +42,15 @@ def main():
         with (args.output / (figure + "-producer.log")).open("w") as log:
             subprocess.run(["python3", str(REPO / "mobile_adapter/tools/create_scene_save.py"),
                 "--runner", str(runner), "--core", str(core), "--output", str(directory),
+                "--rom", str(args.rom), "--symbols", str(args.symbols),
                 "--map", "Route37", "--x", "8", "--y", "12", "--avatar", figure],
                 stdout=log, stderr=subprocess.STDOUT, check=True)
         batteries.append(directory / "ingame.sav")
     command = ["python3", str(REPO / "mobile_adapter/tools/probe_lobby.py"),
         "--runner", str(runner), "--core", str(core), "--server",
         str(REPO / "mobile_adapter/server/target/debug/mobile-bridge"), "--players", "4",
-        "--native-actor-probe", "--scenario", "scanline", "--port", str(args.port),
+        "--native-actor-probe", "--rom", str(args.rom), "--symbols", str(args.symbols),
+        "--scenario", "scanline", "--port", str(args.port),
         "--output", str(args.output / "runtime"), "--battery", str(batteries[0]),
         "--second-battery", str(batteries[1]), "--different-battery", str(batteries[2]),
         "--fourth-battery", str(batteries[3])]
@@ -60,7 +63,7 @@ def main():
     if process.returncode:
         require("Native scanline/visibility acceptance failed" in (args.output / "probe.log").read_text(),
                 "Diagnostic mode cannot absorb unrelated fixture failures")
-    evidence = {"acceptance_passed": result["passed"], "rom_sha256": digest(REPO / "polishedcrystal-mobile-3.2.3.gbc"),
+    evidence = {"acceptance_passed": result["passed"], "rom_sha256": digest(args.rom),
         "core_sha256": digest(core), "map": "Route37", "protected_map_indices": [2, 3],
         "player_positions": [[8, 12]] * 4, "battery_sha256": [digest(path) for path in batteries],
         "note": "Distinct live players may overlap because remote hitboxes are disabled. X overlap does not reduce OAM selection demand.",

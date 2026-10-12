@@ -1,5 +1,47 @@
 # Mobile Adapter multiplayer plan
 
+## 2026-10-12: active M2 follow-up, independent rendering
+
+The user explicitly authorized autonomous work through full M2 acceptance,
+using local headless MBC30 DoubleCherryGB instances. Phone and public Cloudflare
+access are outside this run. Keep the human launcher on the comparison build
+until the independent renderer passes, then remove the temporary renderer flag.
+
+Current structural changes preserve native ShadowOAM groups in place, add
+compact guest groups only into admitted holes, and classify canonical geometry
+inside the existing metadata hook instead of rescanning thirteen descriptors.
+Native object records, map scripts and NPC simulation remain unchanged. A ready
+peer must not starve behind incomplete joins; cyclic admission now handles this.
+
+The third private pose window is split across bank 0 tiles $6c..$6e and bank 1
+$3f. The other windows remain bank 0 $64..$67 and $68..$6b. This removes sharing
+with large native walking atlases. Emitted facing contracts reject future tile
+formats overlapping these windows. Pose copies are immutable private jobs and
+commit during the existing early VBlank hook, before native graphics work.
+No extra ordinary-engine entry point is needed for that transfer.
+
+Finite current evidence: virtual-geometry-credit-corner-20261012 passes four
+actual clients at speeds 1,2,3,4, including moving NPCs, 800/800 world updates,
+no duplicate updates and at most three omitted frames per ready remote figure.
+virtual-early-pose-bedroom-20261012 passes four actual clients with complete
+native avatar graphics/colors and strict cadence. These are intermediate-source
+results, not final M2 acceptance. The graphics-transfer safety guard and cleanup
+were changed afterward and must be rechecked.
+
+Host execution of actual emitted assembly now covers 65,536 OAM bounds cases,
+13,920 rectangle overlap cases and 2,144 irregular/clipped quad cases including
+exact rollback. The latter exposed and fixed a reversed rectangle writing past
+its private row buffer at the screen edge. Worst count plus rollback is 21,752
+CPU cycles; generic jobs now enter before LY 110, reserving caller time.
+
+Still required: final local/hosted latency; exact native cadence and matched
+ordinary-NPC controls; protected-trainer/scanline stress; large and irregular
+sprites, weather and palette transitions; malformed transport, priority cancel,
+rejoin, map exits/turns, menus, duplicate trainer IDs, connected saves and offline
+recovery; final disabled hashes and RAM/ROM layout; default-launcher migration.
+Do not mark M2 complete based solely on joining or cached assets. Details and
+historical failed attempts remain in research/VIRTUAL_RENDERER_PROGRESS.md.
+
 ## 2026-10-12: independent renderer implementation checkpoint
 
 G3 now requires map-design independence: no replaceable-NPC labels, native NPC

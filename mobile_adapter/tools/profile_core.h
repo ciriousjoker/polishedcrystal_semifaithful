@@ -78,12 +78,26 @@ struct MobileRenderSpan {
     unsigned sp = 0, return_pc = 0;
     uint32_t clock = 0;
     unsigned vblank = 0, stage = 0, ly = 0;
+    unsigned minimum_ly = 154, maximum_ly = 0;
     uint16_t lowest_sp = 0xffff;
     uint64_t crossings = 0;
     uint64_t maximum_cycles = 0, count = 0, total_cycles = 0;
 };
-static MobileRenderSpan mobile_render_spans[14];
-static unsigned mobile_overworld_points[16][2] = {};
+static MobileRenderSpan mobile_render_spans[19];
+static unsigned mobile_overworld_points[21][2] = {};
+extern "C" uint64_t mobile_profile_pose_metric(unsigned index) {
+    const auto& span = mobile_render_spans[18];
+    const uint64_t values[] = {span.count, span.maximum_cycles, span.total_cycles,
+        span.minimum_ly, span.maximum_ly, span.crossings};
+    return index < 6 ? values[index] : 0;
+}
+extern "C" uint64_t mobile_profile_composition_metric(unsigned index) {
+    if (index >= 24) return 0;
+    const auto& span = mobile_render_spans[14 + index / 6];
+    const uint64_t values[] = {span.count, span.maximum_cycles, span.total_cycles,
+        span.minimum_ly, span.maximum_ly, span.crossings};
+    return values[index % 6];
+}
 static uint64_t mobile_world_gaps[64] = {};
 static unsigned mobile_world_gap_count = 0;
 static unsigned char mobile_world_frames[800] = {};
@@ -92,6 +106,20 @@ extern "C" uint64_t mobile_profile_world_gap(unsigned index) {
 }
 static unsigned mobile_observed_frames = 0, mobile_last_world_frame = 0;
 static unsigned mobile_world_start = 3600;
+static unsigned mobile_composition_entry_lines[5][154] = {};
+extern "C" uint64_t mobile_profile_composition_entry(unsigned index) {
+    if (index >= 10) return 0;
+    const auto& lines = mobile_composition_entry_lines[index / 2];
+    unsigned total = 0, seen = 0;
+    for (auto count : lines) total += count;
+    if (!total) return 154;
+    unsigned target = index % 2 ? (total * 95 + 99) / 100 : (total + 1) / 2;
+    for (unsigned line = 0; line < 154; ++line) {
+        seen += lines[line];
+        if (seen >= target) return line;
+    }
+    return 154;
+}
 extern "C" void mobile_profile_window(unsigned first) {
     mobile_world_start = first;
 }
@@ -113,7 +141,7 @@ extern "C" uint64_t mobile_profile_idle_metric(unsigned index) {
 static uint64_t mobile_prepare_waits = 0, mobile_world_updates = 0, mobile_world_max_gap = 0;
 
 extern "C" void mobile_profile_overworld(unsigned index, unsigned bank, unsigned pc) {
-    if (index < 16) {
+    if (index < 21) {
         mobile_overworld_points[index][0] = bank;
         mobile_overworld_points[index][1] = pc;
     }
@@ -244,7 +272,7 @@ static void mobile_profile_before_instruction(gb* game, const cpu_regs& regs, in
             mobile_save_projected++;
         }
     }
-    for (unsigned index = 0; index < 16; ++index) {
+    for (unsigned index = 0; index < 21; ++index) {
         auto* point = mobile_overworld_points[index];
         bool bank_matches = point[0] == 0 ? regs.PC < 0x4000 :
             game->get_mbc()->get_rom() == game->get_rom()->get_rom() + (point[0] - 1) * 0x4000;
@@ -260,6 +288,13 @@ static void mobile_profile_before_instruction(gb* game, const cpu_regs& regs, in
             span.return_pc = game->get_cpu()->readw(regs.SP);
             span.clock = static_cast<uint32_t>(clock);
             span.vblank = game->get_cpu()->read(mobile_vblank_address);
+            const unsigned ly = game->get_cpu()->read(0xff44);
+            span.minimum_ly = std::min(span.minimum_ly, ly);
+            span.maximum_ly = std::max(span.maximum_ly, ly);
+            if (ly < 154 && mobile_observed_frames >= mobile_world_start && mobile_observed_frames < mobile_world_start + 800) {
+                if (index == 14) mobile_composition_entry_lines[0][ly]++;
+                if (index >= 16 && index < 20) mobile_composition_entry_lines[index - 15][ly]++;
+            }
             if (index == 13 || index == 14 || index == 15) {
                 span.stage = game->get_cpu()->read(regs.HL.w + 34);
                 span.ly = game->get_cpu()->read(0xff44);

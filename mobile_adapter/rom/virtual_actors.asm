@@ -27,6 +27,13 @@ MobileNativeWait::
 	ld a, [wMobileOwner]
 	and a
 	jr z, .deadline
+	ld a, [wMobileVirtualStage]
+	and a
+	ld a, 2
+	jr nz, .serial_slice
+	ld a, $ff
+.serial_slice
+	ld [wMobileVirtualSerialSlice], a
 	ldh a, [rIE]
 	or IE_SERIAL
 	ldh [rIE], a
@@ -115,32 +122,28 @@ MobileNativeIdle::
 	jp .done
 .sample
 	ldh a, [rLY]
-	cp 120
+	cp 116
 	jr nc, .compose
 	ldh a, [hVBlankCounter]
-	bit 0, a
-	jr nz, .pump
 	ld b, a
-	ld a, [wMobileColdFrame]
-	cp b
-	jr z, .pump
+	ld hl, wMobileColdFrame
+	sub [hl]
+	cp 2
+	jr c, .pump
 	ld a, b
 	ld [wMobileColdFrame], a
 	call MobileCapture
 	jp .done
 .pump
-	ldh a, [hVBlankCounter]
-	and 3
-	cp 1
-	jr nz, .project_admit
 	ldh a, [rLY]
-	cp 120
+	cp 116
 	jr nc, .project_admit
 	ldh a, [hVBlankCounter]
 	ld b, a
-	ld a, [wMobileVirtualUploadFrame]
-	cp b
-	jr z, .project_admit
+	ld hl, wMobileVirtualUploadFrame
+	sub [hl]
+	cp 4
+	jr c, .project_admit
 	ld a, b
 	ld [wMobileVirtualUploadFrame], a
 	call MobileVirtualUploadJob
@@ -149,15 +152,14 @@ MobileNativeIdle::
 ; Position projection and graphics are admitted independently. Every fourth
 ; frame gives the cold cache first choice; no job consumes a native game frame.
 	ldh a, [rLY]
-	cp 128
+	cp 116
 	jr nc, .compose
 	ldh a, [hVBlankCounter]
-	bit 0, a
-	jr z, .compose ; keep pose/transport admission ahead of optional projection
 	ld b, a
-	ld a, [wMobileNativePrepareFrame]
-	cp b
-	jr z, .compose
+	ld hl, wMobileNativePrepareFrame
+	sub [hl]
+	cp 2
+	jr c, .compose
 	ld a, b
 	ld [wMobileNativePrepareFrame], a
 	call MobileNativePrepareSpritesWork
@@ -168,7 +170,7 @@ MobileNativeIdle::
 	and a
 	jr nz, .done
 	call MobileVirtualCanCompose
-	jr nc, .transport
+	jr nc, .flush_guest
 	ld a, [wMobileVirtualStage]
 	and a
 	jr z, .transport
@@ -183,10 +185,28 @@ MobileNativeIdle::
 	and a
 	jr nz, .done
 	call MobileVirtualCanCompose
-	jr nc, .transport
+	jr nc, .flush_guest
 	ld hl, wMobileVirtualAttempts
 	dec [hl]
 	jr nz, .compose_loop
+.flush_guest
+; A complete guest may be published even when there is no time for the next
+; guest. Current native figures are already admitted, so native game work wins
+; without discarding a safe completed presentation solely for a second avatar.
+	ld a, [wMobileVirtualBaseReady]
+	cp 1
+	jr nz, .transport
+	ld a, [wMobileVirtualStage]
+	cp 3
+	jr nz, .transport
+	ld a, [wMobileRenderedCount]
+	and a
+	jr z, .transport
+	ld a, 7
+	ld [wMobileVirtualStage], a
+	call MobileVirtualCanCompose
+	jr nc, .transport
+	call MobileVirtualComposeStep
 .transport
 	ldh a, [hVBlankOccurred]
 	and a
@@ -209,15 +229,50 @@ MobileNativeIdle::
 MobileVirtualCanCompose:
 ; C=admitted. Exact interval groups have a much smaller fixed worst case than
 ; arbitrary sixteen-quad shapes. Publication uses bounded four-byte copies.
-	ld b, 128
+	ld b, 110 ; sixteen irregular quads plus exact rollback need a larger window
 	ld a, [wMobileVirtualStage]
 	cp 7
+	jr z, .publication
+	cp 3
 	jr z, .small
+	cp 6
+	jr z, .weather_deadline
+	cp 1
+	jr nz, .shape_deadline
+	ld b, 133
+.shape_deadline
 	ld a, [wMobileVirtualFastAdmission]
 	cp 2
 	jr nz, .deadline
-.small
+	ld a, [wMobileVirtualStage]
+	cp 3
+	jr z, .small ; peer preparation has a larger bound than a raw native group
+	ld b, 137
+	jr .deadline
+.publication
 	ld b, 133
+	ld a, [wMobileVirtualFastAdmission]
+	cp 2
+	jr nz, .deadline
+	ld a, [wMobileVirtualPlannedPrivateColors]
+	and a
+	jr nz, .deadline
+	ld b, 136
+	ld a, [wMobileRenderedCount]
+	cp 2
+	jr nz, .other_count
+	ld b, 137
+	jr .deadline
+.other_count
+	cp 2
+	jr nc, .deadline
+	ld b, 139 ; in-place native groups and one guest, with no color merge
+	jr .deadline
+.small
+	ld b, 131 ; reserve enough of this frame to publish the complete peer group
+	jr .deadline
+.weather_deadline
+	ld b, 140
 .deadline
 	ldh a, [rLY]
 	cp b
@@ -312,6 +367,9 @@ MobileNativePrepareSpritesWork:
 	ret
 
 MobileVirtualUploadJob:
+	ld a, [wMobileVirtualQueuedPeer]
+	and a
+	ret nz ; source and identity remain immutable until the hardware commit
 ; One bounded pose/color job. Native menus and scripts own their graphics.
 	ld a, [wMobileOnline]
 	and a
@@ -373,10 +431,9 @@ MobileNativeUpload:
 	add [hl]
 	ld c, a
 	ld b, 0
-	ld hl, PlayerStateSprites
+	ld hl, MobileVirtualAssetSprites
 	add hl, bc
-	ld a, BANK(PlayerStateSprites)
-	call GetFarByte
+	ld a, [hl]
 	ld b, a
 	pop hl
 	push hl
@@ -393,7 +450,10 @@ MobileNativeUpload:
 	rst ByteFill
 	pop hl
 	push hl
-	ld bc, 54
+	ld bc, MOBILE_PEER_LOADED_FRAME
+	add hl, bc
+	ld [hl], 255 ; a changed sprite cannot reuse the old window's equal pose index
+	ld bc, 54 - MOBILE_PEER_LOADED_FRAME
 	add hl, bc
 	ld [hl], 0
 .sprite_ready
@@ -422,8 +482,18 @@ MobileNativeUpload:
 	ld de, 18 - MOBILE_PEER_PALETTE
 	add hl, de
 	ld a, [hl]
+	call MobileVirtualExactPalette
+	jr c, .construct_color
+	push af
+	ld bc, 54 - 18
+	add hl, bc
+	ld [hl], 2 ; native palette uploads already keep this exact source current
+	pop af
+	jr .color_ready
+.construct_color
 	farcall MobileNativePaletteGuard
 	jp c, .return
+.color_ready
 	ld [wMobileAvatarPalette], a
 	pop hl
 	push hl
@@ -432,13 +502,6 @@ MobileNativeUpload:
 	ld [hl], a
 	ld a, [wMobileBudgetIndex]
 	ld b, a
-	ld a, [wMobileVirtualThirdBlocked]
-	and a
-	jr z, .window
-	ld a, b
-	cp 2
-	jr nz, .window
-	ld b, 1 ; only the second window is shared in a large-sprite scene
 .window
 	ld a, b
 	ld [wMobileVirtualWindow], a
@@ -522,35 +585,30 @@ MobileNativeUpload:
 
 	ld d, h
 	ld e, l
+	ld a, e
+	ld [wMobileVirtualQueuedSource], a
+	ld a, d
+	ld [wMobileVirtualQueuedSource + 1], a
 	ld a, [wMobileVirtualWindow]
-	cp 2
-	ld hl, vTiles0 tile $7c
-	ld a, 1
-	jr z, .transfer
-	ld a, [wMobileVirtualWindow]
-	ld hl, vTiles0 tile $64
-	and a
-	jr z, .bank0
-	ld hl, vTiles0 tile $68
-.bank0
-	xor a
-.transfer
-	call MobileNativeCopyFourTiles
-	jp nc, .return
-	ld a, [wMobileVirtualWindow]
-	ld e, a
-	ld d, 0
-	ld hl, wMobileVirtualWindowOwners
-	add hl, de
-	ld a, [wMobileBudgetIndex]
-	inc a
-	ld [hl], a
+	ld [wMobileVirtualQueuedWindow], a
+	ld a, [wMobileVirtualFrame]
+	ld [wMobileVirtualQueuedFrame], a
+	ld a, [wMobileAvatarTile]
+	ld [wMobileVirtualQueuedFacing], a
 	pop hl
 	push hl
-	ld bc, MOBILE_PEER_LOADED_FRAME
+	ld bc, 33
 	add hl, bc
-	ld a, [wMobileVirtualFrame]
-	ld [hl], a
+	ld a, [hl]
+	ld [wMobileVirtualQueuedSprite], a
+	ld bc, 18 - 33
+	add hl, bc
+	ld a, [hl]
+	ld [wMobileVirtualQueuedAvatar], a
+	ld a, [wMobileBudgetIndex]
+	inc a
+	ld [wMobileVirtualQueuedPeer], a ; publish the complete transaction last
+	jr .return
 .publish_facing
 	pop hl
 	push hl
@@ -573,71 +631,56 @@ MobileNativeUpload:
 	pop hl
 	ret
 
-MobileNativeCopyFourTiles:
-; Aligned DE source, HL native destination, A=VRAM bank. Select only under DI:
-; native VBlank writes VBK while drawing menus and background attributes.
-; Four single-tile GDMA blocks fit four HBlanks. Never call a frame-wait helper or
-; leave a DMA pending after returning. Only the short copy owns IME; VBlank has
-; priority outside this bounded interval. Native DMA requests were checked above.
-	di
-	ldh [rVBK], a
-	ld b, 4
-; Reject before the first write when a whole four-HBlank job cannot fit. A
-; late retry must never leave the current displayed lease partially updated.
-	ldh a, [rLY]
-	cp 128
-	jr nc, .defer
-.tile
-	ld a, d
-	ldh [rVDMA_SRC_HIGH], a
-	ld a, e
-	ldh [rVDMA_SRC_LOW], a
-	ld a, h
-	and $1f
-	ldh [rVDMA_DEST_HIGH], a
-	ld a, l
-	ldh [rVDMA_DEST_LOW], a
-	ldh a, [rLCDC]
-	bit B_LCDC_ENABLE, a
-	jr z, .copy
-.leave_hblank
-	ldh a, [rLY]
-	cp 136
-	jr nc, .defer
-	ldh a, [rSTAT]
-	and STAT_MODE
-	jr z, .leave_hblank
-.enter_hblank
-	ldh a, [rLY]
-	cp 136
-	jr nc, .defer
-	ldh a, [rSTAT]
-	and STAT_MODE
-	jr nz, .enter_hblank
-.copy
-	xor a ; one 16-byte block, general DMA
-	ldh [rVDMA_LEN], a
-	ld a, e
-	add 16
+MobileVirtualExactPalette:
+; A native base color, C last hardware slot. Revalidate the specific ordinary
+; source without rebuilding its private copy. Native palette metadata, fades and
+; glow state stay authoritative. A changed or unavailable source takes the full
+; isolated constructor path. Preserve the peer pointer and selected WRAM bank.
+	push af
+	push hl
+	push de
 	ld e, a
-	jr nc, .source_ready
-	inc d
-.source_ready
-	ld a, l
-	add 16
-	ld l, a
-	jr nc, .destination_ready
-	inc h
-.destination_ready
-	dec b
-	jr nz, .tile
-	scf
-	ei
-	ret
-.defer
-; A partially filled private lease is still hidden. Retry the same whole chunk.
+	ldh a, [rWBK]
+	push af
+	ld a, c
+	cp PAL_OW_WEATHER
+	jr nc, .missing
+	ld a, 1
+	ldh [rWBK], a
+	ld d, 0
+	ld hl, wLoadedObjPal0
+	ld a, e
+	ld e, c
+	add hl, de
+	cp [hl]
+	jr nz, .missing
+	ld hl, wLoadedObjPalGlows
+	add hl, de
+	ld a, [hl]
+	ld hl, wLoadedObjPalPrevGlows
+	add hl, de
+	or [hl]
+	jr nz, .missing
+	ld hl, MobileVirtualPaletteBits
+	add hl, de
+	ld a, [wLoadedObjPalType]
+	and [hl]
+	jr nz, .missing
+	pop af
+	ldh [rWBK], a
+	pop de
+	pop hl
+	pop af
+	ld a, c
 	and a
-	ei
+	ret
+.missing
+	pop af
+	ldh [rWBK], a
+	pop de
+	pop hl
+	pop af
+	scf
 	ret
 
 MobileProjectPeer:
@@ -865,6 +908,11 @@ MobileNativeResetLeases:
 	ld bc, NUM_OBJECT_STRUCTS
 	xor a
 	rst ByteFill
+	ld [wMobileVirtualQueuedPeer], a
+	ld [wMobileVirtualForceFull], a
+	ld [wMobileVirtualBaseReady], a
+	ld a, $80
+	ld [wMobileVirtualNeedColorAudit], a
 	pop hl
 	pop bc
 	pop af

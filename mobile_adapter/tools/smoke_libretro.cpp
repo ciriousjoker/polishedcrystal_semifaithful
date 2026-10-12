@@ -130,7 +130,10 @@ static void load_bindings(const std::string& path) {
         if (colon == std::string::npos) {
             if (name.rfind("wMobileVirtual", 0) != 0) fail("Invalid symbol location");
             const unsigned address = std::stoul(location, nullptr, 16);
-            if (address < 0xcf44 || address >= 0xdd00) fail("Virtual alias outside audited private WRAM");
+            const bool resident_pose = name.rfind("wMobileVirtualQueued", 0) == 0 &&
+                                       address >= 0xcf0b && address <= 0xcf12;
+            if (!resident_pose && (address < 0xcf44 || address >= 0xdd00))
+                fail("Virtual alias outside audited private WRAM");
             bindings[name] = {address < 0xd000 ? 0u : 5u, address};
             continue;
         }
@@ -207,25 +210,28 @@ static std::map<std::string, unsigned> capture(const unsigned char* sram, size_t
             slot = 160;
             unsigned palette = values.at(prefix + "Palette") & 7;
             if (window < 3) {
-                const unsigned base = window == 2 ? 124 : 100 + window * 4;
-                const unsigned bank = window == 2 ? 1 : 0;
+                const unsigned base = 100 + window * 4;
                 for (unsigned i = 0; i <= 144; i += 4) {
                     unsigned mask = 0;
                     bool complete = true;
                     for (unsigned q = 0; q < 4; ++q) {
                         unsigned tile = video_oam[i + q * 4 + 2];
-                        if (tile < base || tile >= base + 4 ||
-                            (video_oam[i + q * 4 + 3] & 8) != bank * 8 ||
+                        const unsigned bank = (video_oam[i + q * 4 + 3] & 8) / 8;
+                        const unsigned ordinal = window == 2 && bank == 1 && tile == 63 ? 3 :
+                            bank == 0 && tile >= base && tile < base + (window == 2 ? 3 : 4) ? tile - base : 4;
+                        if (ordinal >= 4 ||
                             !video_oam[i + q * 4] || video_oam[i + q * 4] >= 160) {
                             complete = false; break;
                         }
-                        mask |= 1u << (tile - base);
+                        mask |= 1u << ordinal;
                     }
                     if (complete && mask == 15) { slot = i; palette = video_oam[i + 3] & 7; break; }
                 }
                 unsigned hash = 2166136261u;
-                for (unsigned i = 0; i < 64; ++i)
-                    hash = (hash ^ video_native_tiles[bank * 0x2000 + base * 16 + i]) * 16777619u;
+                for (unsigned i = 0; i < 64; ++i) {
+                    const unsigned address = window == 2 && i >= 48 ? 0x2000 + 63 * 16 + i - 48 : base * 16 + i;
+                    hash = (hash ^ video_native_tiles[address]) * 16777619u;
+                }
                 values[std::string("vMobilePeer") + peer + "TileHash"] = hash;
             }
             if (descriptor(0x10000)) {
@@ -712,7 +718,8 @@ int main(int argc, char** argv) {
         if (auto observer = reinterpret_cast<void(*)(unsigned, unsigned, unsigned)>(dlsym(core, "mobile_profile_overworld"))) {
             const char* points[] = {"MobilePrepareSprites", "MobileRenderSprites", "DelayFrame", "HandleNPCStep", "MobileBudgetNPCScanlines",
                 "MobileCheckNPCScanlines", "MobileCanSuppress", "MobileBudgetWeather",
-                "MobileCountObjectOAM", "MobilePreparePeerGraphics", "MobileProjectPeer", "MobileCapture", "_UpdateSprites", "MobileNativeUpload", "MobileNativeIdle", "MobileNativePrepareSpritesWork"};
+                "MobileCountObjectOAM", "MobilePreparePeerGraphics", "MobileProjectPeer", "MobileCapture", "_UpdateSprites", "MobileNativeUpload", "MobileNativeIdle", "MobileNativePrepareSpritesWork",
+                "MobileVirtualComposeStep", "MobileVirtualNativeGroup", "MobileVirtualPeerGroup", "MobileVirtualMergePalettes", "MobileVirtualCommitPose"};
             for (unsigned i = 0; i < sizeof(points) / sizeof(points[0]); ++i) {
                 if (native_addresses.count(points[i])) {
                     auto point = native_addresses.at(points[i]);
@@ -984,6 +991,24 @@ int main(int argc, char** argv) {
             const char* save_names[] = {"save_copy_count", "save_copy_register_failures", "save_copy_byte_failures",
                 "save_projected_objects", "save_copy_max_cycles", "save_copy_lowest_sp"};
             for (unsigned i = 0; i < 6; ++i) profile << ",\"" << save_names[i] << "\":" << saved(i);
+        }
+        if (auto composition = reinterpret_cast<Metric>(dlsym(core, "mobile_profile_composition_metric"))) {
+            const char* stages[] = {"compose", "native_group", "peer_group", "merge_palette"};
+            const char* fields[] = {"count", "max_cycles", "total_cycles", "min_entry_ly", "max_entry_ly", "vblank_crossings"};
+            for (unsigned stage = 0; stage < 4; ++stage)
+                for (unsigned field = 0; field < 6; ++field)
+                    profile << ",\"" << stages[stage] << '_' << fields[field] << "\":" << composition(stage * 6 + field);
+        }
+        if (auto pose = reinterpret_cast<Metric>(dlsym(core, "mobile_profile_pose_metric"))) {
+            const char* names[] = {"count", "max_cycles", "total_cycles", "min_entry_ly", "max_entry_ly", "vblank_crossings"};
+            for (unsigned i = 0; i < 6; ++i)
+                profile << ",\"pose_commit_" << names[i] << "\":" << pose(i);
+        }
+        if (auto entry = reinterpret_cast<Metric>(dlsym(core, "mobile_profile_composition_entry"))) {
+            const char* stages[] = {"idle", "compose", "native_group", "peer_group", "merge_palette"};
+            for (unsigned stage = 0; stage < 5; ++stage)
+                profile << ",\"" << stages[stage] << "_window_entry_ly_p50\":" << entry(stage * 2)
+                        << ",\"" << stages[stage] << "_window_entry_ly_p95\":" << entry(stage * 2 + 1);
         }
         profile << ",\"world_window_start\":" << (arguments.count("--profile-window-start") ? std::stoul(arguments.at("--profile-window-start")) : 3600);
         profile << ",\"video_frames\":" << video_frames << ",\"audio_batches\":" << audio_batches

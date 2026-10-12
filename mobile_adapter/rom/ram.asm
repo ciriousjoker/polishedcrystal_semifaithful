@@ -232,6 +232,21 @@ endc
 
 if DEF(MOBILE_VIRTUAL_ACTORS)
 ; 13 immutable foreground descriptors, each x/y/tile/flags/source/count/relative.
+; The virtual renderer never leases ordinary objects. Reuse the old lease-index
+; storage exclusively for a private, bounded pending graphics transaction.
+DEF wMobileVirtualQueuedPeer EQU wMobileSavedFacings
+DEF wMobileVirtualQueuedWindow EQU wMobileSavedFacings + 1
+DEF wMobileVirtualQueuedSource EQU wMobileSavedFacings + 2
+DEF wMobileVirtualQueuedFrame EQU wMobileSavedFacings + 4
+DEF wMobileVirtualQueuedFacing EQU wMobileSavedFacings + 5
+DEF wMobileVirtualQueuedSprite EQU wMobileSavedFacings + 6
+DEF wMobileVirtualQueuedAvatar EQU wMobileSavedFacings + 7
+EXPORT wMobileVirtualQueuedPeer, wMobileVirtualQueuedWindow, wMobileVirtualQueuedSource
+EXPORT wMobileVirtualQueuedFrame, wMobileVirtualQueuedFacing, wMobileVirtualQueuedSprite
+EXPORT wMobileVirtualQueuedAvatar
+ASSERT MOBILE_PEERS == 3
+ASSERT FIRST_VRAM1_OBJECT_STRUCT * 12 + 3 <= $64
+ASSERT (NUM_OBJECT_STRUCTS - FIRST_VRAM1_OBJECT_STRUCT) * 12 + 3 <= $3f
 DEF wMobileVirtualDescriptors EQU wMobileNativeOriginals
 ASSERT NUM_OBJECT_STRUCTS * 8 <= wMobileNativeOriginalsEnd - wMobileNativeOriginals
 DEF wMobileVirtualWindowOwners EQU wMobileNativePaletteOwners
@@ -242,6 +257,8 @@ DEF wMobileVirtualPhase EQU wMobileNativePaletteOwners + 6
 DEF wMobileVirtualCursor EQU wMobileNativePaletteOwners + 7
 DEF wMobileVirtualPaletteUsed EQU wMobileNativePaletteOwners + 8
 DEF wMobileVirtualThirdBlocked EQU wMobileNativePaletteOwners + 9
+DEF wMobileVirtualNextPhase EQU wMobileVirtualThirdBlocked
+EXPORT wMobileVirtualNextPhase
 DEF wMobileVirtualWindow EQU wMobileNativePaletteOwners + 10
 DEF wMobileVirtualCacheHit EQU wMobileNativePaletteOwners + 11
 DEF wMobileVirtualFrame EQU wMobileNativePaletteOwners + 12
@@ -300,5 +317,22 @@ wMobileVirtualMirror:: db
 wMobileVirtualRectangleCount:: db
 wMobileVirtualRectangleTop:: db
 wMobileVirtualRemoteLimit:: db
-ASSERT @ <= $d000
+wMobileVirtualGroupOwner:: db
+wMobileVirtualKeepSlots:: ds OAM_COUNT / 4
+wMobileVirtualExtraOwners:: ds OAM_COUNT / 4
+wMobileVirtualMapGroup:: db
+wMobileVirtualMapNumber:: db
+wMobileVirtualHasPrivateColors:: db
+wMobileVirtualPlannedPrivateColors:: db
+wMobileVirtualSerialSlice:: db
+wMobileVirtualBaseReady:: db
+wMobileVirtualDroppedSlot:: db
+wMobileVirtualForceFull:: db
+wMobileVirtualCoarseTrial:: db
+wMobileVirtualDroppedSlot2:: db
+wMobileVirtualDropRemaining:: db
+wMobileVirtualNativeColors:: ds NUM_PLAYER_GENDERS / 2
+wMobileVirtualNeedColorAudit:: db
+ASSERT NUM_PLAYER_GENDERS == 4
+ASSERT @ <= $cff0
 endc

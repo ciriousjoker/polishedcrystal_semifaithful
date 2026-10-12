@@ -4,7 +4,12 @@ MobileNativePaletteCodeStart::
 
 MobileEmergencyInput::
 	call MobileEmergencyKeys
-	jp MobileNativePaletteFadeDirty
+	call MobileNativePaletteFadeDirty
+if DEF(MOBILE_VIRTUAL_ACTORS)
+	jp MobileVirtualCommitPose
+else
+	ret
+endc
 
 ; VBlank already saved all registers and keeps IME disabled. Read physical
 ; buttons before any native input lock can filter them. No packet or cache data
@@ -107,6 +112,7 @@ endr
 ; Select+B toggles the lobby; adding A runs the one-shot transport diagnostic.
 
 
+if !DEF(MOBILE_VIRTUAL_ACTORS)
 MobileNativeOriginalPointer::
 ; A bounded pool index -> unbanked original record, preserving BC/DE.
 	push bc
@@ -163,7 +169,12 @@ MobileNativeCaptureOriginal::
 	pop af
 	ret
 
+endc
+
 MobileNativeClearPaletteSource::
+if DEF(MOBILE_VIRTUAL_ACTORS)
+	ret ; no ordinary palette or object lease exists in this renderer
+else
 ; Clear only the table entry still owned by this pool record.
 	push af
 	push bc
@@ -194,6 +205,7 @@ MobileNativeClearPaletteSource::
 	pop bc
 	pop af
 	ret
+endc
 
 MobileNativePrivatePalette::
 ; A base color, C previous hardware slot. Native save metadata is never written.
@@ -274,6 +286,14 @@ endc
 	inc c
 	jr .native
 .borrow
+if DEF(MOBILE_VIRTUAL_ACTORS)
+; This is a private color cache, not a native palette lease. Hardware ownership
+; is decided from current draw groups by the compositor, so scanning thirteen
+; native object records here cannot inform the decision and wastes idle time.
+	ld a, 1
+	ld [wMobilePrivatePalSlot], a
+	jp .cached
+else
 	xor a
 	ld [wMobilePrivatePalUsed], a
 	ld [wMobilePrivatePalBlocked], a
@@ -372,6 +392,7 @@ endc
 	ld a, c
 	ld [wMobilePrivatePalSlot], a
 	jr .generate
+endc
 .cached
 	ld a, MOBILE_WRAM_BANK
 	ldh [rWBK], a
@@ -684,6 +705,9 @@ if DEF(MOBILE_VIRTUAL_ACTORS)
 	and a
 	jr z, .virtual_ordinary
 	ld a, [wMobileVirtualPublished]
+	and a
+	jr z, .virtual_ordinary
+	ld a, [wMobileVirtualHasPrivateColors]
 	and a
 	jr z, .virtual_ordinary
 	ld hl, wMobileVirtualMergedPalette

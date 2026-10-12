@@ -802,10 +802,14 @@ MobileValidatePeer:
 MobileMapEntered::
 	farcall MobileNativeInvalidateHash
 	call MobileNativeResetLeases
+if !DEF(MOBILE_VIRTUAL_ACTORS)
 	ld hl, wMobileSavedFacings
 	ld bc, MOBILE_PEERS
 	xor a
 	rst ByteFill
+else
+	xor a
+endc
 	ld [wMobileBudgetCursor], a
 	ld [wMobileBudgetPriority], a
 	ld [wMobileVisibleCount], a
