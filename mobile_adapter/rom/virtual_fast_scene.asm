@@ -1,69 +1,145 @@
-; Preserve a complete current native scene when a coarse proof can admit it.
-; Only presentation is shared when total OAM is full; no object record changes.
+; Exact aligned-scene admission for a single guest and ordinary rectangles.
 SECTION "Mobile Virtual Fast Scene", ROMX, BANK[MOBILE_ROM_BANK]
 MobileVirtualFastSceneStart::
-MobileVirtualFastScene:
-	ld a, 1
-	ld [wMobileVirtualCoarseTrial], a
-	ld a, 255
-	ld [wMobileVirtualDroppedSlot], a
-	ld [wMobileVirtualDroppedSlot2], a
+
+MobileVirtualAlignedScene:
+; Gather one compact, immutable view of every canonical native source. The
+; accelerated selector is used only when more than ten visible native figures
+; already prove total OAM pressure, with exactly one admitted guest. Otherwise
+; the full exact-row path remains responsible for actual hardware admission.
 	xor a
-	ld [wMobileVirtualCursor], a
-MobileVirtualFastSceneContinue::
-	ld a, [wMobileVirtualCursor]
+	ld [wMobileVirtualForceFull], a
+	ld [wMobileVirtualLines + 14], a
+	ld a, [wMobileVirtualFastAdmission]
+	cp 2
+	ret nz
+	ld a, [wMobileVirtualRemoteLimit]
+	cp 1
+	ret nz
+	ldh a, [hUsedOAMIndex]
+	cp OAM_SIZE
+	ret nz
+	ld a, [wMobileVirtualDescriptors + 7]
+	add 8 ; native four-quad order is reversed: the third quad has the top Y
+	ld l, a
+	ld h, HIGH(wShadowOAM)
+	ld a, [hl]
+	and $f
+	ld [wMobileVirtualLines + 15], a
+	ld a, 1
+	ld [wMobileVirtualForceFull], a
+for native_slot, NUM_OBJECT_STRUCTS
+	xor a
+	ld [wMobileVirtualNativeRaw + native_slot * 4], a
+	ld a, [wMobileVirtualDescriptors + native_slot * 8 + 6]
+	and a
+	jr z, .next{d:native_slot}
+	bit 7, a
+	jr z, .template{d:native_slot}
+	ld a, [wMobileVirtualDescriptors + native_slot * 8 + 7]
+	ld [wMobileVirtualNativeRaw + native_slot * 4 + 2], a
+	ld l, a
+	ld h, HIGH(wShadowOAM)
+	ld de, 8
+	add hl, de
+	ld a, [hl]
+	ld c, a
+	inc l
+	inc l
+	inc l
+	ld a, [hl]
+	and OAM_PALETTE
+	ld [wMobileVirtualNativeRaw + native_slot * 4 + 1], a
+	ld a, c
+	jr .top{d:native_slot}
+.template{d:native_slot}
+	ld a, 255
+	ld [wMobileVirtualNativeRaw + native_slot * 4 + 2], a
+; Every canonical native facing has the same palette for all four quadrants,
+; with no NEXT_PALETTE flag. The compiled-data host contract proves this.
+	ld a, [wMobileVirtualDescriptors + native_slot * 8 + 3]
+	and OAM_PALETTE
+	ld [wMobileVirtualNativeRaw + native_slot * 4 + 1], a
+	ld a, [wMobileVirtualDescriptors + native_slot * 8 + 1]
+.top{d:native_slot}
+	and a
+	jr z, .next{d:native_slot}
+	cp SCREEN_HEIGHT_PX + OAM_Y_OFS
+	jr nc, .next{d:native_slot}
+	ld [wMobileVirtualNativeRaw + native_slot * 4], a
+	ld hl, wMobileVirtualLines + 14
+	inc [hl]
+	and $f
+	ld b, a
+	ld a, [wMobileVirtualLines + 15]
+	cp b
+	jr z, .next{d:native_slot}
+	xor a
+	ld [wMobileVirtualForceFull], a
+.next{d:native_slot}
+endr
+	ld a, [wMobileVirtualLines + 14]
+	cp OAM_COUNT / 4 + 1
+	ret nc
+	xor a
+	ld [wMobileVirtualForceFull], a
+	ret
+
+MobileVirtualAlignedNativeGroup:
+; A ordinary slot in a proven aligned scene. Read its metadata once, admit
+; before constructing any quads, and preserve already generated native OAM.
+	ld [wMobileVirtualIndex], a
+	and a
+	ld a, 255
+	jr nz, .owner
+	ld a, MOBILE_PEERS + 2
+.owner
+	ld [wMobileVirtualGroupOwner], a
+	ld a, [wMobileVirtualLength]
+	cp OAM_SIZE - 16 + 1
+	ret nc
+	ld a, [wMobileVirtualIndex]
 	add a
+	add a
+	add LOW(wMobileVirtualNativeRaw)
+	ld l, a
+	adc HIGH(wMobileVirtualNativeRaw)
+	sub l
+	ld h, a
+	ld a, [hli]
+	and a
+	ret z
+	ld [wMobileVirtualRectangleTop], a
+	ld a, [hli]
+	ld [wMobileVirtualGroupPalette], a
 	ld e, a
 	ld d, 0
-	ld hl, .entries
+	ld a, [hl]
+	ld [wMobileVirtualHeaderOAM], a
+	ld hl, wMobileVirtualBindings
 	add hl, de
-	ld a, [hli]
-	ld h, [hl]
-	ld l, a
-	jp hl
-.entries
-for slot, OAM_COUNT / 4
-	dw .group{d:slot}
-endr
-for slot, OAM_COUNT / 4
-.group{d:slot}
-; Fixed hardware offsets avoid per-figure pointer construction and counters.
-	ld a, [wShadowOAM + slot * 16]
-	ld b, a
-	ld a, [wShadowOAM + slot * 16 + 8]
-	cp b
-	jr c, .top{d:slot}
-	ld a, b
-.top{d:slot}
+	ld a, [hl]
 	and a
-	jr z, .next{d:slot}
-	cp 160
-	jr nc, .next{d:slot}
-	ld c, a
+	ret nz
+; Native aligned tops occupy exactly one visible bucket. The guest may span
+; two and keeps the general aligned check. Length already bounds total OAM.
+	ld a, [wMobileVirtualRectangleTop]
 	swap a
 	and $f
 	ld e, a
-	ld d, 0
 	ld hl, wMobileVirtualLines + 16
 	add hl, de
-	inc [hl]
 	ld a, [hl]
-	cp 6
-	jp nc, .failed
-	ld a, c
-	and $f
-	jr z, .row_ready{d:slot}
-	inc hl
+	cp 5
+	ret nc
 	inc [hl]
-	ld a, [hl]
-	cp 6
-	jp nc, .failed
-.row_ready{d:slot}
-	ld a, [wMobileVirtualNeedColorAudit]
-	and a
-	jr z, .color_ready{d:slot}
-	ld a, [wShadowOAM + slot * 16 + 3]
-	and OAM_PALETTE
+	ld hl, wMobileVirtualRectangleCount
+	inc [hl]
+	ld a, [wMobileVirtualHeaderOAM]
+	cp 255
+	jr z, .template
+	ld [wMobileVirtualGroupPointer], a
+	ld a, [wMobileVirtualGroupPalette]
 	ld e, a
 	ld d, 0
 	ld hl, MobileVirtualPaletteBits
@@ -71,280 +147,97 @@ for slot, OAM_COUNT / 4
 	ld a, [wMobileVirtualPaletteUsed]
 	or [hl]
 	ld [wMobileVirtualPaletteUsed], a
-.color_ready{d:slot}
-	ld a, 1
-	ld [wMobileVirtualKeepSlots + slot], a
-	ld hl, wMobileVirtualRectangleCount
-	inc [hl]
-.next{d:slot}
-if slot + 1 < OAM_COUNT / 4
-	ld a, slot + 1
-	ld [wMobileVirtualCursor], a
-	ldh a, [rLY]
-	cp 134
-	ret nc
-endc
-endr
-.finish
-	ld a, [wMobileVirtualRectangleCount]
-	swap a
-	ld [wMobileVirtualLength], a
-	ld a, 1
-	ld [wMobileVirtualBaseReady], a
-	xor a
-	ld [wMobileVirtualCursor], a
-	ld a, [wMobileVirtualRectangleCount]
-	ld b, a
-	ld a, OAM_COUNT / 4
-	sub b
-	jr z, .two_holes
-	cp 2
-	jr c, .one_hole
-	cp MOBILE_PEERS + 1
-	jr c, .limit
-	ld a, MOBILE_PEERS
-.limit
-	ld [wMobileVirtualRemoteLimit], a
-	and a
-	ret
-.failed
-	xor a
-	ld [wMobileVirtualCoarseTrial], a
-	scf
-	ret
-.two_holes
-	ld a, 2
-	jr .drop_count
-.one_hole
-	ld a, 1
-.drop_count
-	ld [wMobileVirtualDropRemaining], a
-.drop
-; Rotate two guests under total OAM pressure. Whole native figures share only
-; their presentation; local OAM stays intact and simulation remains unchanged.
-	ld a, 2
-	ld [wMobileVirtualRemoteLimit], a
-	ld a, [wMobileVirtualNativeRotation]
-.modulo
-	cp OAM_COUNT / 4
-	jr c, .hole
-	sub OAM_COUNT / 4
-	jr .modulo
-.hole
-	ld c, a
-	ld e, a
-	ld d, 0
-	ld hl, wMobileVirtualKeepSlots
-	add hl, de
-	ld a, [hl]
-	and a
-	jr z, .next_hole
-	ld a, c
-	swap a
-	ld b, a
-	ld a, [wPlayerCurrentOAMSlot]
-	cp b
-	jr nz, .selected
-.next_hole
-	ld a, c
-	inc a
-	jr .modulo
-.selected
-	ld a, [wMobileVirtualDroppedSlot]
-	cp 255
-	ld a, c
-	jr nz, .second_hole
-	ld [wMobileVirtualDroppedSlot], a
-	jr .hole_saved
-.second_hole
-	ld [wMobileVirtualDroppedSlot2], a
-.hole_saved
-	ld a, c
-	ld e, a
-	ld d, 0
-	ld hl, wMobileVirtualKeepSlots
-	add hl, de
-	ld [hl], 0
-	ld a, c
-	swap a
+	jp MobileVirtualCopyRawRectangle
+.template
+	ld a, [wMobileVirtualIndex]
+	add a
+	add a
+	add a
+	add LOW(wMobileVirtualDescriptors)
 	ld l, a
-	ld h, HIGH(wShadowOAM)
-	ld b, [hl]
-	ld de, 8
-	add hl, de
-	ld a, [hl]
-	cp b
-	jr c, .hole_top
-	ld a, b
-.hole_top
+	adc HIGH(wMobileVirtualDescriptors)
+	sub l
+	ld h, a
+	ld de, wMobileVirtualTemplate
+	ld bc, 8
+	rst CopyBytes
+	ld a, 16
+	ld [wMobileVirtualGroupLength], a
+	ld a, [wMobileVirtualLength]
+	add LOW(wMobileVirtualOutput)
+	ld e, a
+	adc HIGH(wMobileVirtualOutput)
+	sub e
+	ld d, a
+	ld a, e
+	ld [wMobileVirtualGroupPointer], a
+	ld a, d
+	ld [wMobileVirtualGroupPointer + 1], a
+	ld hl, wMobileVirtualTemplate + 4
+	ld a, [hli]
+	ld h, [hl]
+	ld l, a
+	scf
+	call MobileNativeRectangleTrampoline
+	jp MobileVirtualTemplateRectangleDone
+
+MobileVirtualAdmitAlignedRectangle:
+; Exact only under AlignedScene's proof. Check both touched bins before
+; changing either. The clipped bottom bin never consumes invisible scanlines.
+	ld a, [wMobileVirtualRectangleCount]
+	cp OAM_COUNT / 4
+	jr nc, .rejected
+	ld a, [wMobileVirtualRectangleTop]
 	ld c, a
+	and a
+	jr z, .record
+	cp SCREEN_HEIGHT_PX + OAM_Y_OFS
+	jr nc, .record
+	ld a, [wMobileVirtualLines + 15]
+	ld b, a
+	ld a, c
+	sub b
+	jr nc, .coordinate
+	xor a
+.coordinate
+	ld b, a
 	swap a
 	and $f
 	ld e, a
 	ld d, 0
 	ld hl, wMobileVirtualLines + 16
 	add hl, de
-	dec [hl]
-	ld a, c
-	and $f
-	jr z, .bins_ready
-	inc hl
-	dec [hl]
-.bins_ready
-	ld hl, wMobileVirtualRectangleCount
-	dec [hl]
-	ld a, [wMobileVirtualLength]
-	sub 16
-	ld [wMobileVirtualLength], a
-	ld hl, wMobileVirtualDropRemaining
-	dec [hl]
-	jr z, .dropped
-	ld a, [wMobileVirtualDroppedSlot]
-	inc a
-	jp .modulo
-.dropped
-	and a
-	ret
-
-MobileVirtualRestoreUnusedHole:
-	ld a, [wMobileVirtualLength]
-	cp OAM_SIZE
-	ret nc
-	ld a, [wMobileVirtualDroppedSlot]
-	call .restore
-	ld a, [wMobileVirtualDroppedSlot2]
-.restore
-	cp OAM_COUNT / 4
-	ret nc
-	push af
-	swap a
-	ld l, a
-	ld h, HIGH(wShadowOAM)
-	ld b, [hl]
-	ld de, 8
-	add hl, de
 	ld a, [hl]
-	cp b
-	jr c, .top
-	ld a, b
-.top
-	ld [wMobileVirtualRectangleTop], a
-	call MobileVirtualAdmitRectangleTop
-	pop bc
-	ret c
-	ld a, b
-	ld e, a
-	ld d, 0
-	ld hl, wMobileVirtualKeepSlots
-	add hl, de
-	ld [hl], 1
-	ld a, [wMobileVirtualLength]
-	add 16
-	ld [wMobileVirtualLength], a
-	ret
-MobileVirtualPublishFastGuests:
-; The preserved native base needs no second inventory scan. Guest groups are
-; a contiguous suffix, and each free OAM hole is searched at most once.
-	ld a, [wMobileRenderedCount]
-	and a
-	ret z
-	ld [wMobileVirtualIndex], a
-	xor a
-	ld [wMobileVirtualHeaderOAM], a
-	ld a, [wMobileVirtualDroppedSlot]
-	call .hide_dropped
-	ld a, [wMobileVirtualDroppedSlot2]
-	call .hide_dropped
-.guest
-	ld a, [wMobileVirtualPreviousOAM]
-	swap a
-	and $f
-	ld e, a
-	ld d, 0
-	ld hl, wMobileVirtualExtraOwners
-	add hl, de
-	ld a, [hl]
-	and a
-	ret z
-	cp MOBILE_PEERS + 1
-	ret nc
-	ld [wMobileVirtualGroupOwner], a
-	ld a, [wMobileVirtualHeaderOAM]
-	ld c, a
-	ld e, a
-	ld hl, wMobileVirtualKeepSlots
-	add hl, de
-.find
-	ld a, c
-	cp OAM_COUNT / 4
-	ret nc
-	ld a, [hli]
-	and a
-	jr z, .found
-	inc c
-	jr .find
-.found
-	dec hl
-	ld [hl], 1
-	ld a, c
-	inc a
-	ld [wMobileVirtualHeaderOAM], a
-	ld a, c
-	swap a
-	ld [wMobileOAMReadCursor], a
-	ld e, a
-	ld d, HIGH(wShadowOAM)
-	ld a, [wMobileVirtualPreviousOAM]
-	add LOW(wMobileVirtualOutput)
-	ld l, a
-	adc HIGH(wMobileVirtualOutput)
-	sub l
-	ld h, a
-rept 16
-	ld a, [hli]
-	ld [de], a
-	inc e
-endr
-	ld a, MOBILE_WRAM_BANK
-	ldh [rWBK], a
-	ld a, [wMobileVirtualGroupOwner]
-	dec a
-	call MobileNativePeerPointer
-	ld bc, MOBILE_PEER_OAM_START
-	add hl, bc
-	ld a, [wMobileOAMReadCursor]
-	ld [hl], a
-	ld a, MOBILE_BACKUP_BANK
-	ldh [rWBK], a
-	ld a, [wMobileVirtualPreviousOAM]
-	add 16
-	ld [wMobileVirtualPreviousOAM], a
-	ld hl, wMobileVirtualIndex
-	dec [hl]
-	jp nz, .guest
-	ret
-.hide_dropped
-	cp OAM_COUNT / 4
-	ret nc
-	ld e, a
-	ld d, 0
-	ld hl, wMobileVirtualKeepSlots
-	add hl, de
-	ld a, [hl]
-	and a
-	ret nz ; publication restored this native group when no guest needed it
+	cp 5
+	jr nc, .rejected
 	ld a, e
-	swap a
-	ld l, a
-	ld h, HIGH(wShadowOAM)
-rept 4
-	ld [hl], 160
-	inc l
-	inc l
-	inc l
-	inc l
-endr
+	cp 9
+	jr nc, .one_bin
+	ld a, b
+	and $f
+	jr z, .one_bin
+	inc hl
+	ld a, [hl]
+	cp 5
+	jr nc, .rejected
+	inc [hl]
+	dec hl
+.one_bin
+	inc [hl]
+.record
+	ld a, [wMobileVirtualRectangleCount]
+	ld e, a
+	ld d, 0
+	ld hl, wMobileVirtualLines
+	add hl, de
+	ld [hl], c
+	ld hl, wMobileVirtualRectangleCount
+	inc [hl]
+	and a
+	ret
+.rejected
+	scf
 	ret
 
 MobileVirtualFastSceneEnd::
-ASSERT MobileVirtualFastSceneEnd - MobileVirtualFastSceneStart <= 2048
+ASSERT MobileVirtualFastSceneEnd - MobileVirtualFastSceneStart <= 4096

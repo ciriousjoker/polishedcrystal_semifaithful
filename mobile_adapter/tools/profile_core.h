@@ -94,11 +94,15 @@ extern "C" uint64_t mobile_profile_scene_metric(unsigned index) {
 }
 static unsigned mobile_native_shadow_address, mobile_native_descriptor_address, mobile_native_object_address;
 static byte mobile_native_shadow[160], mobile_native_descriptors[13 * 8], mobile_native_identities[13 * 2];
-static unsigned mobile_native_facing_bank;
+static unsigned mobile_native_facing_bank, mobile_native_template_delta;
 static byte mobile_native_figures[13][64], mobile_native_figure_counts[13];
 extern "C" void mobile_profile_native_facing(unsigned bank) {
     mobile_native_facing_bank = bank;
 }
+extern "C" void mobile_profile_native_template_offset(unsigned delta) {
+    mobile_native_template_delta = delta & 0xffff;
+}
+
 extern "C" unsigned mobile_profile_native_figure_byte(unsigned index) {
     if (index < 13 * 64) return mobile_native_figures[index / 64][index % 64];
     index -= 13 * 64;
@@ -453,7 +457,10 @@ static void mobile_profile_after_instruction(gb* game, const cpu_regs& regs, int
                         // this actor even when vanilla's finite OAM was full.
                         // Interpret its immutable native data, without running
                         // a game routine, modifying RAM or charging game cycles.
-                        const unsigned pointer = view[4] | unsigned(view[5]) << 8;
+                        // Reverse the audited upper-bank mirror address. The oracle
+                        // always reads the unchanged original native facing ROM.
+                        const unsigned pointer = ((view[4] | unsigned(view[5]) << 8) -
+                                                  mobile_native_template_delta) & 0xffff;
                         if (!mobile_native_facing_bank || pointer < 0x4000 || pointer + count * 4 > 0x8000) continue;
                         const auto* facing = game->get_rom()->get_rom() +
                             mobile_native_facing_bank * 0x4000 + pointer - 0x4000;

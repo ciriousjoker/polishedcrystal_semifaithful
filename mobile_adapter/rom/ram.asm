@@ -197,6 +197,14 @@ for peer, 1, MOBILE_PEERS + 1
 wMobileActorBackup{d:peer}:: ds OBJECT_LENGTH + 4 ; camera and BG anchor
 endr
 wMobileActorBackupEnd::
+DEF wMobileVirtualPriorityBackup EQU wMobileActorBackup1
+DEF wMobileVirtualPriorityCursor EQU wMobileActorBackup1 + NUM_OBJECT_STRUCTS
+DEF wMobileVirtualPriorityEnd EQU wMobileActorBackup1 + NUM_OBJECT_STRUCTS + 1
+EXPORT wMobileVirtualPriorityBackup, wMobileVirtualPriorityCursor, wMobileVirtualPriorityEnd
+DEF wMobileVirtualFrameColors EQU wMobileActorBackup1 + 16
+EXPORT wMobileVirtualFrameColors
+ASSERT wMobileVirtualFrameColors + MOBILE_PEERS palettes <= wMobileActorBackupEnd
+ASSERT wMobileVirtualPriorityEnd + 1 <= wMobileActorBackupEnd
 ; GDMA ignores the source address's low four bits. Keep every private raw tile
 ; snapshot aligned, independently of the 38-byte native object records.
 ds (16 - (LOW(@) & $f)) & $f
@@ -259,7 +267,7 @@ DEF wMobileVirtualCacheHit EQU wMobileNativePaletteOwners + 11
 DEF wMobileVirtualFrame EQU wMobileNativePaletteOwners + 12
 DEF wMobileVirtualNativeRaw EQU wMobileActorTiles1
 EXPORT wMobileVirtualNativeRaw
-DEF wMobileVirtualOutput EQU wMobileActorTiles1 + NUM_OBJECT_STRUCTS * 64
+DEF wMobileVirtualOutput EQU (wMobileActorTiles1 + NUM_OBJECT_STRUCTS * 4 + $ff) & $ff00
 DEF wMobileVirtualLines EQU wMobileVirtualOutput + OAM_SIZE
 DEF wMobileVirtualGroup EQU wMobileVirtualScratch
 DEF wMobileVirtualBindings EQU wMobileVirtualGroup + 64
@@ -269,7 +277,8 @@ DEF wMobileVirtualRejected EQU wMobileVirtualGroupLength + 1
 DEF wMobileVirtualGroupPalette EQU wMobileVirtualRejected + 1
 DEF wMobileVirtualMergedPalette EQU wMobileVirtualGroupPalette + 1
 EXPORT wMobileVirtualMergedPalette
-ASSERT wMobileVirtualNativeRaw + NUM_OBJECT_STRUCTS * 64 == wMobileVirtualOutput
+ASSERT wMobileVirtualNativeRaw + NUM_OBJECT_STRUCTS * 4 <= wMobileVirtualOutput
+ASSERT LOW(wMobileVirtualOutput) == 0
 ASSERT wMobileVirtualOutput + OAM_SIZE == wMobileVirtualLines
 ASSERT wMobileVirtualLines + SCREEN_HEIGHT_PX <= wMobileActorTilesEnd
 ASSERT wMobileVirtualMergedPalette + 8 palettes <= wMobileVirtualScratchEnd
@@ -300,7 +309,7 @@ EXPORT wMobileVirtualGroupPalette
 SECTION "Mobile Virtual Admission", WRAM0[$cfc0]
 wMobileVirtualFastAdmission:: db
 wMobileVirtualAttempts:: db
-wMobileVirtualPreviousOAM:: db
+wMobileVirtualPreviousOAM:: db ; one-shot completed private OAM DMA token
 wMobileVirtualGroupPointer:: ds 2
 wMobileVirtualNativeRotation:: db
 wMobileVirtualPublished:: db

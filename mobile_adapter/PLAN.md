@@ -1,3 +1,125 @@
+# Mobile Adapter multiplayer plan
+
+## 2026-10-13: private DMA and emitted rectangle programs
+
+M2 remains open. The 3 to 6 hour estimate is uncertain: no completion deadline
+is justified until the full-pool visibility blocker is resolved. The user's
+status question does not cancel the autonomous milestone work.
+
+Executed probes `independent-compact-native-metadata-20261012`,
+`independent-direct-dma-corrected-20261012` and
+`independent-shared-rectangle-20261013` preserve 800/800 native world updates,
+maximum gap one, zero duplicates and zero observed awaited-VBlank crossings,
+but fail complete-figure visibility. The shared-rectangle replay publishes only
+2, 0, 3 and 2 completed private frames across its four clients. It ends with all
+four online and all three peers, but this is not renderer acceptance. A general
+farcall rectangle experiment was slower and was replaced, not accepted.
+
+The private OAM page is now 256-byte aligned in private bank-5 RAM. Native DMA
+can select that completed page directly, instead of scattering it into ordinary
+ShadowOAM. Publication dropped from 6,592 to 3,092 measured cycles. Ordinary
+ShadowOAM remains the native engine's output. A one-shot world-frame token rejects
+late/menu publications. Identity/map/appearance handoffs and menu behavior need
+fresh regression verification before this design can be accepted.
+
+A generated upper-bank rectangle program uses literal native facing definitions.
+The six-byte resident dispatcher restores the source bank through the original
+Bankswitch entry. Independent emitted-instruction tests pass 800 private cases
+(maximum 900 cycles), 800 ordinary cases (952 cycles) and 1,984 general cases
+(6,412 cycles). Full host bounds, aligned, irregular, weather and palette-mask
+checks pass again. The remaining ROM0 headroom is only two bytes; do not relocate
+ordinary helpers to hide that constraint.
+
+Current unaccepted experiment freezes only the private RGB bytes alongside the
+private OAM page and selects color sources during native VBlank upload. It also
+tries three dense presentation phases and temporary native draw-order rotation
+with byte-for-byte restoration. These are experiments, not the final G10 policy:
+NPC/object priority, actual-conflict-only omissions, an independent vanilla local
+visibility oracle and VBlank graphics timing still need proof. Do not relax any
+visibility threshold to make this pass. The first frozen-color replay did not
+execute: the headless symbol reader rejected newly exported aliases. Those names
+were corrected. The actual replay is
+`independent-three-phase-corrected-aliases-20261013`, with unchanged gates.
+
+The corrected frozen-color replay fails before its final lobby barrier. It
+publishes only 10, 1, 7 and 5 scenes. Clients 1 and 3 each have 799/800 update
+frames, one duplicate and maximum gap two; clients 0 and 2 retain 800/800.
+Awaited-VBlank crossing counters remain zero. Native renderer cost increased
+under the temporary draw-order experiment. This is a performance regression,
+reported to the user, and that experiment must be removed rather than accepted.
+
+Current linked placement: 32,885 feature-owned upper bytes, 244 net lower
+integration bytes, 13,717 free lower bytes. Disabled counterpart hashes and the
+entire final M2 suite still require fresh verification. The battery-save format
+and original game helpers remain unchanged. No Cloudflare deployment, phone test
+or upstream submission has been attempted.
+
+
+## 2026-10-12: exact host checks and compact native inventory experiment
+
+M2 remains open. The user asked for remaining time; the working estimate was
+3 to 6 hours with substantial uncertainty, not a delivery commitment. No renderer
+policy or timing exception has been accepted.
+
+The strengthened full-pool source observer exposed slots 10 through 12 with zero
+complete presentations. Subsequent `independent-bitplane-pool-20261012`,
+`independent-credit-template-pool-20261012` and
+`independent-early-capacity-pool-20261012` replays still failed. Ordinary cadence
+remained 800/800 update frames, zero duplicates and zero observed awaited-VBlank
+crossings, but complete scene publication starved. The last early-capacity replay
+also ended with client 1 seeing two peers instead of three.
+
+The later `independent-aligned-native-mirror-20261012` replay also failed before
+its final barrier. All four clients again retained 800/800 updates, zero duplicates,
+maximum gap one and zero measured awaited-VBlank crossings, but every client had
+zero stage-7 publications. Transport was also starved: the Bridge's local read
+deadlines repeatedly expired. Merely relaxing a test, widening a deadline or
+claiming that native cadence alone proves multiplayer acceptance is unacceptable.
+
+Current host checks execute actual emitted code, without an LCD/game emulator:
+30,720 exact rectangle vectors (maximum 1,004 cycles including dispatch),
+43,260 proven-aligned rectangle vectors (maximum 436 cycles), 18,152 weather
+vectors, 2,144 irregular count/rollback vectors, all 256 palette masks and 1,984
+native-facing transformations (maximum 6,412 cycles for a sixteen-quad figure).
+The native transform has an independent byte oracle using the original facing
+ROM, and asserts that writes stay inside its admitted private output. Scanline
+analysis has 23 passing tests, including all thirteen visible native sources,
+ordinary starvation and local-player continuity relative to native hardware.
+
+An automatically generated 1,351-byte facing-data mirror now lives in the upper
+feature bank. Native source data and each mirrored template are compared exactly,
+and relative label layouts are assembly assertions. Descriptors reference this
+mirror only for figures beyond native OAM capacity. The profiling observer reverses
+the address offset and always reads the original native ROM for its oracle.
+Read-only profile core SHA256:
+`55f95a892ade60a840bf342da97780b6475fb112e75cdfff611c234901832a31`.
+All six pinned core tests pass. Runner:
+`/Volumes/Storage/Cache/mobileadapter/smoke-native-mirror-20261012`.
+
+Current unaccepted experiment builds compact top/color/raw-offset metadata for
+all thirteen native figures in the already private bank-5 scratch area. Its fast
+selector is enabled only for aligned canonical rectangles, more than ten visible
+native sources (actual OAM pressure), and one admitted guest. Rejected native
+figures do not require constructing their quad data. Native raw OAM is preserved
+in place; beyond-OAM figures read the audited upper-bank mirror directly. The
+ordinary cursor no longer skips an actor merely because its CPU admission window
+was missed. Removed the dead earlier fast base, partial-base publication and
+redundant native materialization/copies. The exact-row/general-shape path remains.
+The one-guest canonical publication guard is currently LY136 and needs a fresh
+zero-crossing replay after the reduced scatter work; it is not accepted evidence.
+
+Latest linked footprint: 22,441 upper feature bytes and 191 net lower integration
+bytes, leaving 13,770 bytes downstairs. Disabled hashes still require fresh final
+verification. The main repository is untouched; work is on the `mobileadapter`
+worktree. Native map fixture builders must finish restoration before source edits.
+
+Pending: fresh compact-metadata replay; full G10 NPC/object/remote priority policy;
+actual-conflict-only sharing outside this proven dense fast case; all-class fair
+presentation; color/lighting checks; local and hosted latency; the entire final
+M2 suite; Standard/Faithful disabled hashes and enabled Faithful runtime. These
+remain mandatory, so host-only success does not close M2.
+
+
 ## 2026-10-12: all ordinary sources are now measured
 
 The new read-only facing-template observer is built and its six core tests pass.
@@ -21,8 +143,6 @@ thirteen descriptors rather than only the ten native OAM groups. Host instructio
 verification and a fresh native replay are required. This is not yet the final
 priority policy: G10 priority, actual-conflict-only sharing, all-class fairness,
 colors, the final suite and matching disabled hashes remain acceptance blockers.
-
-# Mobile Adapter multiplayer plan
 
 ## 2026-10-12: final crowded-scene priority contract
 

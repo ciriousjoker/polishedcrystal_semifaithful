@@ -96,7 +96,7 @@ endr
 	ld a, [wMobileOwner]
 	and a
 	jr z, .already_released
-	farjp MobileReleaseNoIME
+	jp MobileReleaseNoIME
 .already_released
 	xor a
 	ld [wMobileOnline], a
@@ -119,87 +119,9 @@ MobileNativePrivatePalette::
 	ld [wMobilePrivatePalSlot], a
 	ldh a, [rWBK]
 	push af
-	ld a, [wMobileBudgetIndex]
-	ld e, a
-	ld d, 0
-	ld hl, wMobileSavedFacings
-	add hl, de
-	ld a, [hl]
-	ld a, 255
-	ld [wMobilePrivatePalCurrent], a
-; The compositor audits current native sources. A constructed private color
-; already has its own identity/dirty validation below; rescanning six ordinary
-; palette entries on every unchanged pose job adds no ownership information.
-	ld a, MOBILE_WRAM_BANK
-	ldh [rWBK], a
-	ld a, [wMobileBudgetIndex]
-	farcall MobileNativePeerPointer
-	ld bc, 54
-	add hl, bc
-	ld a, [hl]
-	cp 1
-	jp z, .borrow
-; Reuse an exact ordinary color without changing its manager metadata.
-	ld a, 1
-	ldh [rWBK], a
-	ld c, 0
-.native
-	ld a, c
-	cp PAL_OW_WEATHER
-	jr nc, .borrow
-	call .bit
-	ld b, a
-	ld hl, wLoadedObjPal0
-	ld e, c
-	ld d, 0
-	add hl, de
-	ld a, [wMobilePrivatePalRequest]
-	cp [hl]
-	jr nz, .next
-	ld a, [wLoadedObjPalType]
-	and b
-	jr nz, .next
-	ld hl, wLoadedObjPalGlows
-	add hl, de
-	ld a, [hl]
-	ld hl, wLoadedObjPalPrevGlows
-	add hl, de
-	or [hl]
-	jr nz, .next
-; A native color can already be borrowed by a different remote identity.
-; Check its private owner before reusing it, without scanning every actor.
-	push bc
-	ld a, MOBILE_BACKUP_BANK
-	ldh [rWBK], a
-	ld hl, wMobilePrivatePalBindings
-	add hl, de
-	ld a, [hl]
-	and a
-	jr z, .native_available
-	cp MOBILE_PEERS + 1
-	jr nc, .native_available
-	dec a
-	ld e, a
-	ld hl, wMobilePrivatePalIdentities
-	add hl, de
-	ld a, [wMobilePrivatePalRequest]
-	cp [hl]
-	jr z, .native_available
-	ld a, 1
-	ldh [rWBK], a
-	pop bc
-	jr .next
-.native_available
-	ld a, 1
-	ldh [rWBK], a
-	pop bc
-	ld a, c
-	ld [wMobilePrivatePalSlot], a
-	call .copy_native
-	jp .success
-.next
-	inc c
-	jr .native
+; The caller has already rejected every exact native source. Hardware color
+; ownership belongs to the renderer; this routine only maintains a private copy.
+	jr .borrow
 .borrow
 ; This is a private color cache, not a native palette lease. Hardware ownership
 ; is decided from current draw groups by the compositor, so scanning thirteen
@@ -211,7 +133,7 @@ MobileNativePrivatePalette::
 	ld a, MOBILE_WRAM_BANK
 	ldh [rWBK], a
 	ld a, [wMobileBudgetIndex]
-	farcall MobileNativePeerPointer
+	call MobileNativePeerPointer
 	ld bc, 54
 	add hl, bc
 	ld a, [hl]
@@ -253,104 +175,32 @@ MobileNativePrivatePalette::
 	scf
 	ret
 .stable_generation
-	call .native_pointer
-	ld de, wMobilePrivatePalTemporary
-	ld bc, 1 palettes
-	rst CopyBytes
-	call .native_pointer
-	ld bc, wOBPals2 - wOBPals1
-	add hl, bc
-	ld bc, 1 palettes
-	rst CopyBytes
-	ldh a, [hCGBPalUpdate]
-	ld [wMobilePrivatePalSavedUpdate], a
-; The native constructor also refreshes palette endpoint and fade scratch state.
-; Private color generation must leave those ordinary engine values untouched.
-	assert BANK(wPalFadeStepValue) == MOBILE_BACKUP_BANK
-	ld a, [wPalFadeStepValue]
-	push af
-	ld a, [wPalState]
-	push af
-	assert PALSTATE_SIZE == 4
-	ld hl, wCurPalStates
-rept PALSTATE_SIZE
-	ld a, [hli]
-	push af
-endr
+; Look up the current canonical avatar colors directly. This read-only native
+; selector accounts for time, darkness and overcast. Avoid the general allocator,
+; its target/active buffer backup, endpoint recalculation and color reapplication.
+; The outer guard preserves native request scratch; only wPalState needs saving.
 	ld a, 1
 	ldh [rWBK], a
-	ld a, [wMobilePrivatePalRequest]
-	ld [wNeededPalIndex], a
-	xor a
-	ld [wNeededPalType], a
-	ld [wNeededObjPalGlow], a
-	ld [wPrevNeededObjPalGlow], a
-	dec a
-	ld [wNeededMonPalLight], a
-	call .native_pointer
-	ld d, h
-	ld e, l
-	ld a, [wPalFlags]
+	ld a, [wPalState]
 	push af
-	and ~NO_DYN_PAL_APPLY
-	ld [wPalFlags], a
-	farcall CopyObjectSpritePalHandler
-	pop af
-	ld [wPalFlags], a
-	ld hl, wCurPalStates + PALSTATE_SIZE - 1
-rept PALSTATE_SIZE
-	pop af
-	ld [hld], a
-endr
+	ld a, CURR_PALSTATE
+	ld [wPalState], a
+	xor a
+	ld [wNeededObjPalGlow], a
+	ld a, [wMobilePrivatePalRequest]
+	farcall LookupOBPalette
 	pop af
 	ld [wPalState], a
-	ld a, MOBILE_BACKUP_BANK
-	ldh [rWBK], a
-	pop af
-	ld [wPalFadeStepValue], a
-	call .copy_native
-; Restore original target and active buffers, including a running fade.
-	ld a, MOBILE_BACKUP_BANK
-	ldh [rWBK], a
-	call .native_pointer
-	ld d, h
-	ld e, l
-	ld hl, wMobilePrivatePalTemporary
-	ld bc, 1 palettes
-	rst CopyBytes
 	push hl
-	call .native_pointer
-	ld bc, wOBPals2 - wOBPals1
-	add hl, bc
-	ld d, h
-	ld e, l
-	pop hl
-	ld bc, 1 palettes
-	rst CopyBytes
-	ld a, [wMobilePrivatePalSavedUpdate]
-	ldh [hCGBPalUpdate], a
-	ld a, MOBILE_WRAM_BANK
-	ldh [rWBK], a
-	ld a, [wMobileBudgetIndex]
-	farcall MobileNativePeerPointer
-	ld bc, 54
-	add hl, bc
-	ld [hl], 1
-	call MobileNativeClearPaletteBinding
-	ld a, TRUE
-	ldh [hCGBPalUpdate], a
-	jr .success
-.copy_native
 	ld a, MOBILE_BACKUP_BANK
 	ldh [rWBK], a
 	call .color_pointer
 	ld d, h
 	ld e, l
-	call .native_pointer
-	ld bc, wOBPals2 - wOBPals1
-	add hl, bc
+	pop hl
 	ld bc, 1 palettes
-	rst CopyBytes
+	ld a, BANK(LookupOBPalette)
+	call FarCopyBytes
 	ld a, [wMobileBudgetIndex]
 	ld e, a
 	ld d, 0
@@ -367,23 +217,17 @@ endr
 	ld a, MOBILE_WRAM_BANK
 	ldh [rWBK], a
 	ld a, [wMobileBudgetIndex]
-	farcall MobileNativePeerPointer
+	call MobileNativePeerPointer
 	ld bc, 54
 	add hl, bc
-	ld [hl], 2 ; exact ordinary color: native uploads keep it current
+	ld [hl], 1
 	call MobileNativeClearPaletteBinding
-	ret
+	jr .success
 .success
 	pop af
 	ldh [rWBK], a
 	ld a, [wMobilePrivatePalSlot]
 	and a
-	ret
-.native_pointer
-	ld hl, wOBPals1
-	ld a, [wMobilePrivatePalSlot]
-	ld bc, 1 palettes
-	rst AddNTimes
 	ret
 .color_pointer
 	ld hl, wMobilePrivatePalColors
@@ -457,23 +301,51 @@ MobileNativeClearPaletteBinding:
 MobileNativeUpdateOBPalettes::
 	ldh a, [hInMenu]
 	and a
-	jr nz, .virtual_ordinary
+	jp nz, .virtual_ordinary
 	ld a, [wMobileLocalValid]
 	and a
-	jr z, .virtual_ordinary
+	jp z, .virtual_ordinary
 	ld a, [wMobileOnline]
 	and a
-	jr z, .virtual_ordinary
+	jp z, .virtual_ordinary
 	ld a, [wMobileWanted]
 	and a
-	jr z, .virtual_ordinary
-	ld a, [wMobileVirtualPublished]
-	and a
-	jr z, .virtual_ordinary
+	jp z, .virtual_ordinary
+	push hl
+	call MobileVirtualFrameValid
+	pop hl
+	jp z, .virtual_ordinary
 	ld a, [wMobileVirtualHasPrivateColors]
 	and a
-	jr z, .virtual_ordinary
-	ld hl, wMobileVirtualMergedPalette
+	jp z, .virtual_ordinary
+; Keep immutable private RGB and OAM together. Selecting eight bounded
+; sources here avoids rebuilding all 64 native color bytes in idle time.
+	ld c, LOW(rOBPD)
+for hardware_color, 8
+	ld hl, wOBPals2 + hardware_color palettes
+	ld a, [wMobilePrivatePalBindings + hardware_color]
+	and a
+	jr z, .frame_color{d:hardware_color}
+	cp MOBILE_PEERS + 1
+	jr nc, .frame_color{d:hardware_color}
+	dec a
+	add a
+	add a
+	add a
+	add LOW(wMobileVirtualFrameColors)
+	ld l, a
+	adc HIGH(wMobileVirtualFrameColors)
+	sub l
+	ld h, a
+.frame_color{d:hardware_color}
+rept 1 palettes
+	ld a, [hli]
+	ldh [c], a
+endr
+endr
+	ld hl, wOBPals2 + 8 palettes
+	ld b, 0
+	ret
 .virtual_ordinary
 	lb bc, 4, LOW(rOBPD)
 .virtual_upload
@@ -504,7 +376,7 @@ MobileNativePaletteGuard::
 	push af
 	ld hl, sp + 13
 	ld a, [hl]
-	farcall MobileNativePrivatePalette
+	call MobileNativePrivatePalette
 	push af
 	pop bc ; preserve returned palette and carry while restoring scratch
 	pop af

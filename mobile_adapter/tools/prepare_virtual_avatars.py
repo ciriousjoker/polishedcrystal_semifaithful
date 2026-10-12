@@ -54,6 +54,24 @@ def source(rows):
         lines += [f'MobileVirtualAsset{index}:', f'\tINCBIN "{path}"',
                   f'\tASSERT @ - MobileVirtualAsset{index} == 24 tiles']
     lines += ['MobileVirtualAssetEnd::', '']
+    # Read the native facing data verbatim into the same upper ROM bank as
+    # the compositor. Relative offsets remain identical; only labels and the
+    # address table change. This avoids repeated lower-bank crossings while
+    # materializing ordinary actors that did not fit vanilla OAM.
+    native = (REPO / 'data/sprites/facings.asm').read_text()
+    labels = re.findall(r'^(\w+)::?', native, re.M)
+    if not labels or labels[0] != 'Facings' or 'FacingStepDown0' not in labels:
+        raise ValueError('Native facing source format changed')
+    aliases = {name: 'MobileCopied' + name for name in labels}
+    copied = re.sub(r'\b(?:' + '|'.join(map(re.escape, labels)) + r')\b',
+                    lambda match: aliases[match[0]], native)
+    lines += ['SECTION "Mobile Native Facing Templates", ROMX, BANK[MOBILE_ROM_BANK]',
+              copied, 'MobileCopiedFacingsEnd::']
+    for name in labels:
+        if name != 'Facings':
+            lines += [f'\tASSERT {aliases[name]} - MobileCopiedFacingStepDown0 == {name} - FacingStepDown0']
+    from prepare_native_rectangles import rectangle_programs
+    lines += [rectangle_programs(native)]
     return '\n'.join(lines)
 
 

@@ -71,9 +71,10 @@ def verify_scene(output, scene, rom, symbols):
                     item['source_frames'] += 1
                     item['complete_hardware_frames'] += row[prefix + 'Complete']
             report['native_figure_presentations'] = list(native_figures.values())
-            require(native_figures and all(item['complete_hardware_frames'] > 0
+            require({key[0] for key in native_figures} == set(range(1, 13)) and
+                    all(item['complete_hardware_frames'] > 0
                     for item in native_figures.values() if item['source_frames'] > 100),
-                    'A continuously native-rendered ordinary figure was never presented')
+                    'A visible full-pool source was omitted from the census or never presented')
         if scene in ('night', 'snow'):
             require(report['ordinary_time_of_day'] == 2, 'Night fixture did not exercise native night colors')
         if scene == 'snow':

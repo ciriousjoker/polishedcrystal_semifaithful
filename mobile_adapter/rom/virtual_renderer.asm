@@ -14,6 +14,13 @@ MobileVirtualBeginSprites::
 	ld [wMobileVirtualMapGroup], a
 	ld a, [wMapNumber]
 	ld [wMobileVirtualMapNumber], a
+	ldh a, [hCGBPalUpdate]
+	and a
+	jr z, .native_colors_current
+	ld a, [wMobileVirtualNeedColorAudit]
+	or $80
+	ld [wMobileVirtualNeedColorAudit], a
+.native_colors_current
 	ld a, [wMobileVirtualHasPrivateColors]
 	and a
 	jr z, .colors_restored
@@ -46,6 +53,27 @@ MobileVirtualBeginSprites::
 	ld a, [wMobileVisibleCount]
 	and a
 	jr z, .done
+; Cold peers cannot be drawn yet. Leave the idle window to transport and pose
+; preparation instead of repeatedly rebuilding a scene with no usable guest.
+	ld a, MOBILE_WRAM_BANK
+	ldh [rWBK], a
+for peer, 1, MOBILE_PEERS + 1
+	ld a, 255
+	ld [wMobilePeer{d:peer}OAMStart], a
+	ld [wMobilePeer{d:peer}OAMStart + 1], a
+endr
+	ld a, [wMobilePeer1NativeStage]
+	cp 7
+	jr z, .ready_peer
+	ld a, [wMobilePeer2NativeStage]
+	cp 7
+	jr z, .ready_peer
+	ld a, [wMobilePeer3NativeStage]
+	cp 7
+	jr nz, .done
+.ready_peer
+	ld a, MOBILE_BACKUP_BANK
+	ldh [rWBK], a
 	ld hl, wMobileVirtualDescriptors + 6
 	ld de, 8
 	ld b, NUM_OBJECT_STRUCTS
@@ -93,20 +121,38 @@ MobileVirtualComposeStep::
 	cp 7
 	jp z, .publish
 	cp 8
-	jp z, .collect
+	jp z, .abort
 .abort
 	xor a
 	ld [wMobileVirtualStage], a
 	ret
 .start
 	call MobileVirtualFastCase
+	ldh a, [hUsedOAMIndex]
+	cp OAM_SIZE - MOBILE_PEERS * 4 * OBJ_SIZE + 1
+	ld a, MOBILE_PEERS
+	jr c, .remote_limit
+	ld a, 1
+.remote_limit
+	ld [wMobileVirtualRemoteLimit], a
+	call MobileVirtualAlignedScene
+	ld a, [wMobileVirtualForceFull]
+	and a
+	jr z, .audit_colors
+	ld a, [wMobileVirtualDroppedSlot]
+	cp 3
+	jr c, .dense_phase
+	xor a
+	ld [wMobileVirtualDroppedSlot], a
+.dense_phase
+	and a
+	jr nz, .colors_current ; native-only presentation has no private color request
+	ld a, MOBILE_PEERS
+	ld [wMobileVirtualRemoteLimit], a
+.audit_colors
 	ld a, [wMobileVirtualNeedColorAudit]
 	bit 7, a
-	jr nz, .refresh_colors
-	ldh a, [hCGBPalUpdate]
-	and a
 	jr z, .colors_current
-.refresh_colors
 	call MobileVirtualCurrentColors
 .colors_current
 	xor a
@@ -116,7 +162,17 @@ MobileVirtualComposeStep::
 ; their output bytes; the unused OAM suffix is hidden once, at publication.
 	ld a, [wMobileVirtualFastAdmission]
 	cp 2
-	jp z, .rows_ready
+	jr nz, .ordinary_rows
+	ld a, [wMobileVirtualForceFull]
+	and a
+	jp nz, .rows_ready
+	ld hl, wMobileVirtualLines + 64
+	xor a
+rept 63
+	ld [hli], a
+endr
+	jp .rows_ready
+.ordinary_rows
 	ld hl, wMobileVirtualLines
 	xor a
 rept SCREEN_HEIGHT_PX
@@ -128,20 +184,6 @@ endr
 rept 11
 	ld [hli], a
 endr
-	ld hl, wMobileVirtualKeepSlots
-	xor a
-rept 2 * OAM_COUNT / 4
-	ld [hli], a
-endr
-; Share complete remote figures only under actual total-OAM pressure. A crowded
-; native viewport keeps its ordinary figures, with one rotating remote guest.
-	ld a, [hUsedOAMIndex]
-	cp OAM_SIZE - MOBILE_PEERS * 4 * OBJ_SIZE + 1
-	ld a, MOBILE_PEERS
-	jr c, .remote_limit
-	ld a, 1
-.remote_limit
-	ld [wMobileVirtualRemoteLimit], a
 	xor a
 	ld hl, wMobileVirtualBindings
 rept 8
@@ -167,37 +209,7 @@ endr
 	sub NUM_OBJECT_STRUCTS - 1
 .rotation_ready
 	ld [wMobileVirtualNativeRotation], a
-	ld a, [wMobileVirtualBaseReady]
-	cp 255
-	jr z, .full_base
-	ld a, [wMobileVirtualForceFull]
-	and a
-	jr nz, .full_base
-	ld a, [wMobileVirtualFastAdmission]
-	cp 2
-	jr nz, .full_base
-	ld a, 2
-	ld [wMobileVirtualBaseReady], a
-	call MobileVirtualFastScene
-	jr nc, .fast_base
-	ld a, 255
-	ld [wMobileVirtualBaseReady], a
-	jp .reset
-.fast_base
-	ld a, [wMobileVirtualBaseReady]
-	cp 1
-	ld a, 3
-	jr z, .base_stage
-	ld a, 8
-.base_stage
-	ld [wMobileVirtualStage], a
-	ret
-.collect
-	call MobileVirtualFastSceneContinue
-	jr nc, .fast_base
-	ld a, 255
-	ld [wMobileVirtualBaseReady], a
-	jp .reset
+
 .full_base
 	xor a
 	ld [wMobileVirtualBaseReady], a
@@ -211,6 +223,13 @@ endr
 	ld [wMobileVirtualStage], a
 	ret
 .urgent
+	ld a, [wMobileVirtualForceFull]
+	and a
+	jr z, .ordinary_guests
+	ld a, [wMobileVirtualDroppedSlot]
+	and a
+	jp nz, .urgent_done
+.ordinary_guests
 ; Independent avatars precede ordinary figures only in presentation admission.
 ; Native NPC state/simulation remains untouched when total OAM capacity is full.
 	ld a, [wMobileVirtualCursor]
@@ -246,13 +265,6 @@ endr
 	jr z, .urgent_done ; a completed last guest needs no second large-job admission
 	ret
 .urgent_done
-	ld a, [wMobileVirtualBaseReady]
-	and a
-	jr z, .full_native
-	ld a, 7
-	ld [wMobileVirtualStage], a
-	ret
-.full_native
 	xor a
 	ld [wMobileVirtualCursor], a
 	ld a, 4
@@ -260,19 +272,32 @@ endr
 	ret
 
 .native
-	ld a, [wMobileVirtualFastAdmission]
-	cp 2
-	jr z, .native_raw
+	ld a, [wMobileVirtualForceFull]
+	and a
+	jr z, .native_capacity
+	ld a, [wMobileVirtualDroppedSlot]
+	and a
+	jp z, .native_raw_done ; all four canonical players fit without ordinary quads
+.native_capacity
+	ld a, [wMobileVirtualLength]
+	cp OAM_SIZE
+	jp nc, .native_raw_done
 	ld a, [wMobileVirtualCursor]
-	inc a
-	ld [wMobileVirtualCursor], a
-	cp NUM_OBJECT_STRUCTS
-	jr c, .native_group
+	cp NUM_OBJECT_STRUCTS - 1
+	jr c, .native_candidate
 	xor a
 	ld [wMobileVirtualCursor], a
+	ld a, [wMobileVirtualFastAdmission]
+	cp 2
 	ld a, 6
+	jr nz, .native_done_stage
+	ld a, 7
+.native_done_stage
 	ld [wMobileVirtualStage], a
 	ret
+.native_candidate
+	inc a
+
   .native_group
 	ld b, a
 	ld a, [wMobileVirtualNativeRotation]
@@ -294,59 +319,49 @@ endr
 	sub l
 	ld h, a
 	ld a, [hl]
+	ld b, a
+	ld a, [wMobileVirtualForceFull]
+	and a
+	ld a, b
+	jr z, .ordinary_source
+	bit 7, a
+	jr z, .omitted_native_source ; cyclic foreground order shares raw capacity
+	ld a, [wMobileVirtualDroppedSlot]
+	and a
+	jr nz, .raw_source
+.raw_source
+	ld a, b
+.ordinary_source
 	and $1f
-	jr z, .native
+	jr nz, .native_present
+.omitted_native_source
+	ld hl, wMobileVirtualCursor
+	inc [hl]
+	jr .native
+.native_present
 	ld b, 110 ; retain the worst-case sixteen-quad construction/rollback bound
 	cp 5
 	jr nc, .native_shape_deadline
-	ld b, 131 ; ordinary four-quad figures use the unrolled row counter
+	ld b, 131
+	ld a, [wMobileVirtualFastAdmission]
+	cp 2
+	jr nz, .native_shape_deadline
+	ld b, 139 ; bounded canonical template and caller-return window
+	bit 7, [hl]
+	jr z, .native_shape_deadline
+	ld b, 140 ; copying one already complete native rectangle is bounded
 .native_shape_deadline
 	ldh a, [rLY]
 	cp b
-	ret nc ; defer this presentation, never a native game frame
+	ret nc ; retain the candidate for the next admitted idle slice
+	ld hl, wMobileVirtualCursor
+	inc [hl]
 	ld a, c
 	call MobileVirtualNativeGroup
+	ld a, [wMobileVirtualForceFull]
+	and a
+	jp nz, .native
 	ret
-.native_raw
-; Native rectangles already fill aligned OAM groups. Walk those current groups
-; directly instead of resolving thirteen object descriptors and ROM templates.
-; An actor vanilla could not fit is not made visible by the multiplayer layer.
-	ld a, 255
-	ld [wMobileVirtualGroupOwner], a
-	ld a, [wMobileVirtualCursor]
-	ld c, a
-	inc a
-	ld [wMobileVirtualCursor], a
-	cp OAM_COUNT / 4 + 1
-	jr nc, .native_raw_done
-	ld a, [wMobileVirtualNativeRotation]
-	add c
-.raw_modulo
-	cp OAM_COUNT / 4
-	jr c, .raw_slot
-	sub OAM_COUNT / 4
-	jr .raw_modulo
-.raw_slot
-	swap a
-	ld c, a
-	ld a, [wPlayerCurrentOAMSlot]
-	cp c
-	jr z, .next_raw
-	ld a, c
-	ld [wMobileVirtualGroupPointer], a
-	ld a, HIGH(wShadowOAM)
-	ld [wMobileVirtualGroupPointer + 1], a
-	ld a, 16
-	ld [wMobileVirtualGroupLength], a
-	call MobileVirtualNativeRectangle
-.next_raw
-	ld a, [wMobileVirtualCursor]
-	cp OAM_COUNT / 4
-	jr nc, .native_raw_done
-	ldh a, [rLY]
-	cp 137
-	ret nc
-	jr .native_raw
 .native_raw_done
 	xor a
 	ld [wMobileVirtualCursor], a
@@ -394,17 +409,8 @@ endr
 	ld [wMobileVirtualStage], a
 	ret
 .publish
-	ld a, [wMobileRenderedCount]
-	swap a
-	ld b, a
-	ld a, [wMobileVirtualLength]
-	sub b
-	ld [wMobileVirtualPreviousOAM], a ; before restoring an unused native hole
-	ld a, [wMobileVirtualBaseReady]
-	and a
-	jr z, .native_ready
-	call MobileVirtualRestoreUnusedHole
-.native_ready
+; Publish the already complete private DMA page, never another full OAM copy.
+; The one-shot frame token keeps menus, stale states and new scenes native.
 	ld hl, wMobileVirtualBindings
 	xor a
 rept 8
@@ -414,158 +420,141 @@ endr
 	ld [wMobileVirtualHasPrivateColors], a
 	and a
 	jr z, .colors_ready
-	call MobileVirtualMergePalettes
 	ld a, TRUE
 	ldh [hCGBPalUpdate], a
 .colors_ready
-; Whole output and matching hardware palette bindings commit in one early idle
-; window. Native DMA never sees an in-progress admission list.
-	ld a, [wMobileVirtualFastAdmission]
-	cp 2
-	jr nz, .packed_output
-	call MobileVirtualPublishScatter
-	jr .bindings
-.packed_output
-	ld hl, wMobileVirtualOutput
-	ld de, wShadowOAM
 	ld a, [wMobileVirtualLength]
-	rrca
-	rrca
-	ld b, a
-	and a
-	jr z, .copy_done
-.copy_quads
-rept OBJ_SIZE
-	ld a, [hli]
-	ld [de], a
-	inc e
-endr
-	dec b
-	jr nz, .copy_quads
-.copy_done
-	call MobileVirtualHideShadowSuffix
-	xor a
-	ld [wPlayerCurrentOAMSlot], a
-.bindings
+	ld l, a
+	ld h, HIGH(wMobileVirtualOutput)
+	ld b, OAM_SIZE
+	ld a, l
+	cp b
+	jr nc, .suffix_done
+	ld a, 160
+.hide_suffix
+	ld [hli], a
+	inc l
+	inc l
+	inc l
+	ld c, a
+	ld a, l
+	cp b
+	ld a, c
+	jr c, .hide_suffix
+.suffix_done
 	ld hl, wMobileVirtualBindings
 	ld de, wMobilePrivatePalBindings
 	ld bc, 8
 	rst CopyBytes
 	xor a
 	ld [wMobileVirtualStage], a
+	ldh a, [hVBlankCounter]
+	ld [wMobileVirtualHeaderOAM], a
 	ld a, 1
+	ld [wMobileVirtualPreviousOAM], a
 	ld [wMobileVirtualPublished], a
 	ld a, [wMobileVirtualPhase]
-	inc a ; advance the first choice, even when a later successful peer repeats
+	inc a
 	cp MOBILE_PEERS
 	jr c, .next_phase
 	xor a
 .next_phase
 	ld [wMobileVirtualPhase], a
+	ld a, [wMobileVirtualForceFull]
+	and a
+	ret z
+	ld a, [wMobileVirtualDroppedSlot]
+	inc a
+	cp 3
+	jr c, .dense_phase_done
+	xor a
+.dense_phase_done
+	ld [wMobileVirtualDroppedSlot], a
 	ret
 
-MobileVirtualPublishScatter:
-; All native figures in this path occupy aligned four-quad groups. Preserve
-; their current engine-generated bytes in place, hide only rejected draw groups,
-; and insert generated figures into the resulting holes. Ordinary NPC records
-; and positions are never changed. This avoids copying every NPC twice.
-	ld a, [wMobileVirtualBaseReady]
-	cp 1
-	jp z, MobileVirtualPublishFastGuests
-	ld hl, wMobileVirtualKeepSlots
-	ld de, wShadowOAM
-	ld b, OAM_COUNT / 4
-.hide
-	ld a, [hli]
+MobileVirtualFrameValid:
+; A private frame is valid only for the immediately following world VBlank.
+	ld a, [wMobileVirtualPreviousOAM]
 	and a
-	jr nz, .keep
-	ld a, 160
-rept 4
-	ld [de], a
-	inc e
-	inc e
-	inc e
-	inc e
+	ret z
+	ld a, [wMobileWanted]
+	and a
+	ret z
+	ld a, [wMobileOnline]
+	and a
+	ret z
+	ld a, [wMobileLocalValid]
+	and a
+	ret z
+	ldh a, [hInMenu]
+	and a
+	jr nz, .invalid
+	ldh a, [hVBlank]
+	and $f
+	jr nz, .invalid
+	ld a, [wMobileVirtualHeaderOAM]
+	ld b, a
+	ldh a, [hVBlankCounter]
+	cp b
+	jr nz, .invalid
+	ld a, 1
+	and a
+	ret
+.invalid
+	xor a
+	ret
+
+MobileVirtualPushOAM::
+; Native HRAM DMA code and its timing remain intact. Only its source page changes.
+; Restore WBK and all registers preserved by the original ForcePushOAM routine.
+	push hl
+	push de
+	ldh a, [rWBK]
+	push af
+	call MobileVirtualFrameValid
+	push af
+	ld a, MOBILE_WRAM_BANK
+	ldh [rWBK], a
+for peer, 1, MOBILE_PEERS + 1
+	ld a, [wMobilePeer{d:peer}OAMStart + 1]
+	ld [wMobilePeer{d:peer}OAMStart], a
 endr
-	jr .next
-.keep
-	ld a, e
-	add 16
+	xor a
+	ld [wMobileVirtualPreviousOAM], a
+	pop af
+	jr z, .ordinary
+	ld a, MOBILE_BACKUP_BANK
+	ldh [rWBK], a
+	ld a, HIGH(wMobileVirtualOutput)
+	jr .dma
+.ordinary
+	ld a, HIGH(wShadowOAM)
+.dma
+	lb bc, 40 + 1, LOW(rDMA)
+	call hPushOAM
+	pop af
+	ldh [rWBK], a
+	pop de
+	pop hl
+	ret
+
+MobileVirtualCopyRawRectangle:
+; Source native ShadowOAM is read only. All chosen figures share one DMA page.
+	ld a, [wMobileVirtualLength]
 	ld e, a
-.next
-	dec b
-	jr nz, .hide
-	ld c, 0
-.extra
-	ld e, c
-	ld d, 0
-	ld hl, wMobileVirtualExtraOwners
-	add hl, de
-	ld a, [hl]
-	and a
-	jp z, .next_extra
-	ld [wMobileVirtualGroupOwner], a
-	push bc
-	ld hl, wMobileVirtualKeepSlots
-	ld b, 0
-.find
-	ld a, [hli]
-	and a
-	jr z, .found
-	inc b
-	ld a, b
-	cp OAM_COUNT / 4
-	jr c, .find
-	pop bc
-	ret ; bounds fault stays confined to omitted presentation
-.found
-	dec hl
-	ld [hl], 1
-	ld a, b
-	swap a
-	ld [wMobileOAMReadCursor], a
-	ld e, a
-	ld d, HIGH(wShadowOAM)
-	ld a, c
-	swap a
-	add LOW(wMobileVirtualOutput)
+	ld d, HIGH(wMobileVirtualOutput)
+	ld a, [wMobileVirtualGroupPointer]
 	ld l, a
-	adc HIGH(wMobileVirtualOutput)
-	sub l
-	ld h, a
+	ld h, HIGH(wShadowOAM)
 rept 16
 	ld a, [hli]
 	ld [de], a
 	inc e
 endr
-	ld a, [wMobileVirtualGroupOwner]
-	cp MOBILE_PEERS + 2
-	jr nz, .peer
-	ld a, [wMobileOAMReadCursor]
-	ld [wPlayerCurrentOAMSlot], a
-	jr .owner_done
-.peer
-	cp MOBILE_PEERS + 1
-	jr nc, .owner_done
-	dec a
-	ld b, a
-	ld a, MOBILE_WRAM_BANK
-	ldh [rWBK], a
-	ld a, b
-	call MobileNativePeerPointer
-	ld bc, MOBILE_PEER_OAM_START
-	add hl, bc
-	ld a, [wMobileOAMReadCursor]
+	ld hl, wMobileVirtualLength
+	ld a, [hl]
+	add 16
 	ld [hl], a
-	ld a, MOBILE_BACKUP_BANK
-	ldh [rWBK], a
-.owner_done
-	pop bc
-.next_extra
-	inc c
-	ld a, c
-	cp OAM_COUNT / 4
-	jp c, .extra
 	ret
 
 MobileVirtualAdmitWeatherQuad:
@@ -691,6 +680,21 @@ endr
 	ld b, 1
 	ld c, 0
 .slot
+	ld a, c
+	cp PAL_OW_WEATHER
+	jr nz, .ordinary_color
+	ld a, [wCurWeather]
+	ld e, a
+	ld a, [wOverworldWeatherCooldown]
+	or e
+	jr z, .ordinary_color
+; The native weather manager reserves this fixed hardware slot until all
+; particles are gone. It cannot be an exact avatar source or a private loan.
+	ld a, [wMobileVirtualNativeAvatarColors]
+	or 1 << PAL_OW_WEATHER
+	ld [wMobileVirtualNativeAvatarColors], a
+	jr .next
+.ordinary_color
 	ld a, [wLoadedObjPalType]
 	and b
 	jr nz, .next
@@ -747,7 +751,7 @@ endr
 	sla b
 	inc c
 	ld a, c
-	cp PAL_OW_WEATHER
+	cp 8
 	jr c, .slot
 	xor a
 	ld [wMobileVirtualNeedColorAudit], a
@@ -787,6 +791,15 @@ MobileVirtualFastCase:
 	ret
 
 MobileVirtualNativeGroup:
+	ld b, a
+	ld a, [wMobileVirtualForceFull]
+	and a
+	ld a, b
+	jp nz, MobileVirtualAlignedNativeGroup
+	push af
+	xor a
+	ld [wMobileVirtualCoarseTrial], a
+	pop af
 ; A native slot -> scratch hardware group. Every template is bounded to 16 quads.
 	ld [wMobileVirtualIndex], a
 	and a
@@ -807,6 +820,29 @@ MobileVirtualNativeGroup:
 	ld a, [wMobileVirtualFastAdmission]
 	cp 2
 	jr nz, .materialize
+; Reject a proven total-OAM conflict before copying a facing template. Nothing
+; is omitted merely because background CPU time is short.
+	push hl
+	ld de, 6
+	add hl, de
+	ld a, [hl]
+	and $1f
+	add a
+	add a
+	ld b, a
+	ld a, [wMobileVirtualLength]
+	add b
+	jr c, .unavailable_template
+	cp OAM_SIZE + 1
+	jr nc, .unavailable_template
+
+.template_resources_ready
+	pop hl
+	jr .materialize_ready
+.unavailable_template
+	pop hl
+	ret
+.materialize_ready
 	push hl
 	ld de, 6
 	add hl, de
@@ -867,18 +903,92 @@ endr
 	rst CopyBytes
 	jp .prepared_group
 .template
+; Read the audited immutable upper-bank mirror directly. Admission precedes
+; materialization, so rejected figures require no quad copy or transform.
 	ld hl, wMobileVirtualTemplate + 4
 	ld a, [hli]
 	ld h, [hl]
 	ld l, a
-	ld de, wMobileVirtualTemplate + 8
+	ld a, [wMobileVirtualFastAdmission]
+	cp 2
+	jr nz, .general_template
 	ld a, [wMobileVirtualGroupLength]
-	ld c, a
-	ld b, 0
-	ld a, BANK(Facings)
-	call FarCopyBytes
-	ld hl, wMobileVirtualTemplate + 8
+	cp 16
+	jr nz, .general_template
+	push hl
+	inc hl
+	inc hl
+	ld a, [hl]
+	ld [wMobileVirtualTemplate + 10], a
+	call MobileVirtualTemplateRectangle
+	pop hl
+	ret c
+	jr .emit_template
+.general_template
 	ld de, wMobileVirtualGroup
+.emit_template
+	ld a, [wMobileVirtualCoarseTrial]
+	and a
+	jr z, .ordinary_transform
+	scf
+	call MobileNativeRectangleTrampoline
+	jr .transform_ready
+.ordinary_transform
+	call MobileVirtualWriteNativeQuads
+.transform_ready
+	jp .prepared_group
+
+.prepared_group
+	ld a, [wMobileVirtualCoarseTrial]
+	and a
+	jp nz, MobileVirtualTemplateRectangleDone
+	ld a, [wMobileVirtualFastAdmission]
+	cp 2
+	jp z, MobileVirtualNativeRectangle
+	call MobileVirtualGroupVisible
+	ret z
+; Native palette ownership blocks private colors for exactly these presentations.
+	ld a, [wMobileVirtualGroupPointer]
+	ld l, a
+	ld a, [wMobileVirtualGroupPointer + 1]
+	ld h, a
+	ld de, 3
+	add hl, de
+	ld a, [wMobileVirtualGroupLength]
+	cp 16
+	jr nz, .palette_general
+; Emitted native four-quad facings have a uniform palette, checked by the
+; assembly-data contract. Independent avatars also share one complete color.
+	ld b, 1
+	jr .palette_ready
+.palette_general
+	rrca
+	rrca
+	ld b, a
+.palette_ready
+.check_palette
+	ld a, [hl]
+	and OAM_PALETTE
+	push hl
+	push bc
+	ld e, a
+	ld d, 0
+	ld hl, wMobileVirtualBindings
+	add hl, de
+	ld a, [hl]
+	pop bc
+	pop hl
+	and a
+	ret nz
+	ld de, OBJ_SIZE
+	add hl, de
+	dec b
+	jr nz, .check_palette
+	jp MobileVirtualAdmitGroup
+
+MobileVirtualWriteNativeQuads:
+; HL immutable facing mirror, DE private output, template native origin/flags.
+
 .loop
 	ld a, [hli]
 	ld b, a
@@ -929,56 +1039,88 @@ endr
 .palette
 	ld [de], a
 	inc de
+	ld a, [wMobileVirtualGroupPointer]
+	ld c, a
 	ld a, e
-	sub LOW(wMobileVirtualGroup)
+	sub c
 	ld b, a
 	ld a, [wMobileVirtualGroupLength]
 	cp b
 	jr nz, .loop
-.prepared_group
-	ld a, [wMobileVirtualFastAdmission]
-	cp 2
-	jp z, MobileVirtualNativeRectangle
-	call MobileVirtualGroupVisible
-	ret z
-; Native palette ownership blocks private colors for exactly these presentations.
-	ld a, [wMobileVirtualGroupPointer]
-	ld l, a
-	ld a, [wMobileVirtualGroupPointer + 1]
-	ld h, a
-	ld de, 3
-	add hl, de
-	ld a, [wMobileVirtualGroupLength]
-	cp 16
-	jr nz, .palette_general
-; Emitted native four-quad facings have a uniform palette, checked by the
-; assembly-data contract. Independent avatars also share one complete color.
-	ld b, 1
-	jr .palette_ready
-.palette_general
-	rrca
-	rrca
-	ld b, a
-.palette_ready
-.check_palette
-	ld a, [hl]
+	ret
+MobileVirtualTemplateRectangle:
+; A canonical actor beyond vanilla OAM capacity is emitted directly into the
+; private admitted output. Avoid constructing and then copying it a second time.
+	ld a, [wMobileVirtualLength]
+	cp OAM_SIZE - 16 + 1
+	jp nc, .rejected
+	ld a, [wMobileVirtualTemplate + 10]
+	and NEXT_PALETTE
+	ld b, 0
+	jr z, .native_color
+	inc b
+.native_color
+	ld a, [wMobileVirtualTemplate + 3]
+	add b
 	and OAM_PALETTE
-	push hl
-	push bc
+	ld [wMobileVirtualGroupPalette], a
 	ld e, a
 	ld d, 0
 	ld hl, wMobileVirtualBindings
 	add hl, de
 	ld a, [hl]
-	pop bc
-	pop hl
 	and a
-	ret nz
-	ld de, OBJ_SIZE
+	jp nz, .rejected
+	ld a, [wMobileVirtualTemplate + 1]
+
+.top
+	and a
+	jr z, .rejected
+	cp 160
+	jr nc, .rejected
+	ld [wMobileVirtualRectangleTop], a
+	call MobileVirtualAdmitRectangleTop
+	ret c
+	ld a, 1
+	ld [wMobileVirtualCoarseTrial], a
+	ld a, [wMobileVirtualLength]
+	add LOW(wMobileVirtualOutput)
+	ld e, a
+	adc HIGH(wMobileVirtualOutput)
+	sub e
+	ld d, a
+	ld a, e
+	ld [wMobileVirtualGroupPointer], a
+	ld a, d
+	ld [wMobileVirtualGroupPointer + 1], a
+	and a
+	ret
+.rejected
+	scf
+	ret
+
+MobileVirtualTemplateRectangleDone:
+	ld a, [wMobileVirtualLength]
+	swap a
+	and $f
+	ld e, a
+	ld d, 0
+	ld hl, wMobileVirtualExtraOwners
 	add hl, de
-	dec b
-	jr nz, .check_palette
-	jp MobileVirtualAdmitGroup
+	ld a, [wMobileVirtualGroupOwner]
+	ld [hl], a
+	ld a, [wMobileVirtualGroupPalette]
+	ld e, a
+	ld hl, MobileVirtualPaletteBits
+	add hl, de
+	ld a, [wMobileVirtualPaletteUsed]
+	or [hl]
+	ld [wMobileVirtualPaletteUsed], a
+	ld hl, wMobileVirtualLength
+	ld a, [hl]
+	add 16
+	ld [hl], a
+	ret
 
 MobileVirtualNativeRectangle:
 ; The native facing-data contract proves all four-quad groups are rectangles
@@ -1060,8 +1202,6 @@ MobileVirtualNativeRawRectangle:
 	and a
 	ret nz
 	push de
-	ld a, [wMobileVirtualRectangleTop]
-	ld d, a
 	call MobileVirtualAdmitRectangleTop
 	pop de
 	ret c
@@ -1071,27 +1211,13 @@ MobileVirtualNativeRawRectangle:
 	or [hl]
 	ld [wMobileVirtualPaletteUsed], a
 .keep
-	ld a, [wMobileVirtualGroupPointer]
-	swap a
-	and $f
-	ld e, a
-	ld d, 0
-	ld hl, wMobileVirtualKeepSlots
-	add hl, de
-	ld [hl], 1
-	ld hl, wMobileVirtualLength
-	ld a, [hl]
-	add 16
-	ld [hl], a
-	ret
+	jp MobileVirtualCopyRawRectangle
 
 MobileVirtualPeerGroup:
 ; A pool index, cache and colors validated in bounded background work.
 	ld [wMobileBudgetIndex], a
 	inc a
 	ld [wMobileVirtualGroupOwner], a
-	ld hl, wMobileVirtualGroup
-	call MobileVirtualScratchGroup
 	ld a, MOBILE_WRAM_BANK
 	ldh [rWBK], a
 	ld a, [wMobileBudgetIndex]
@@ -1143,6 +1269,7 @@ MobileVirtualPeerGroup:
 	inc hl
 	ld a, [hl]
 	ld b, a
+	ld [wMobileAvatarTile], a
 	ld de, MOBILE_PEER_LOADED_SPRITE - 18
 	add hl, de
 	ld a, [hl]
@@ -1156,6 +1283,8 @@ MobileVirtualPeerGroup:
 	pop hl
 	ret
 .eligible
+; Collect the committed pose in one bank-2 view. Subsequent admission only
+; touches private bank-5 presentation data; no repeated peer lookup is needed.
 	ld a, 1
 	ldh [rWBK], a
 	ld a, [wScriptRunning]
@@ -1171,13 +1300,28 @@ MobileVirtualPeerGroup:
 	ld a, [hl]
 	pop hl
 	cp 9 * TILE_WIDTH
-	ret nc ; the ordinary Start menu hides sprites from X=10 tiles onward
+	ret nc
 .outside_menu
-	ld bc, 34
+	ld bc, MOBILE_PEER_SCREEN_X
+	add hl, bc
+	ld a, [hli]
+	ld [wMobileOAMWriteCursor], a
+	ld a, [hl]
+	ld [wMobileOAMDemand], a
+	ld bc, MOBILE_PEER_NATIVE_STAGE - MOBILE_PEER_SCREEN_Y
 	add hl, bc
 	ld a, [hl]
 	cp 7
 	ret nz
+	ld bc, MOBILE_PEER_NATIVE_FACING - MOBILE_PEER_NATIVE_STAGE
+	add hl, bc
+	ld a, [hli]
+	ld [wMobileVirtualFrame], a
+	inc hl
+	ld a, [hl]
+	and a
+	ret z
+	ld [wMobileVirtualCacheHit], a
 	ld a, [wMobileBudgetIndex]
 	ld e, a
 	inc a
@@ -1190,32 +1334,11 @@ MobileVirtualPeerGroup:
 	ret nz
 	ld a, e
 	ld [wMobileVirtualWindow], a
-	ld a, [wMobileBudgetIndex]
-	call MobileNativePeerPointer
-	ld bc, 54
-	add hl, bc
-	ld a, [hl]
-	and a
-	ret z
-	ld [wMobileVirtualCacheHit], a ; 2: exact current native color
-	ld bc, MOBILE_PEER_PALETTE - 54
-	add hl, bc
-	ld a, [hl]
-	ld [wMobileAvatarPalette], a
-	ld a, MOBILE_BACKUP_BANK
-	ldh [rWBK], a
-	ld a, MOBILE_WRAM_BANK
-	ldh [rWBK], a
-	ld a, [wMobileBudgetIndex]
-	call MobileNativePeerPointer
-	ld bc, 18
-	add hl, bc
-	ld a, [hl]
+	ld a, [wMobileAvatarTile]
 	ld b, a
 	rrca
 	and 1
 	ld e, a
-	ld d, 0
 	ld hl, wMobileVirtualNativeColors
 	add hl, de
 	ld a, [hl]
@@ -1228,7 +1351,7 @@ MobileVirtualPeerGroup:
 	ld a, MOBILE_BACKUP_BANK
 	ldh [rWBK], a
 	ld a, [wMobileAvatarPalette]
-	cp PAL_OW_WEATHER
+	cp 8
 	jr c, .exact_color
 	ld a, [wMobileVirtualCacheHit]
 	cp 1
@@ -1251,55 +1374,52 @@ MobileVirtualPeerGroup:
 	ld a, [wPalFadeDelayFrames]
 	and a
 	ret nz
-; Private colors occupy only a currently unused palette. Local player was
-; admitted first, so its hardware color cannot be borrowed.
+; Reserve the local color and every exact avatar source before borrowing a
+; currently unused hardware slot. Rotate loans across all eight native slots.
 	ld a, [wMobileVirtualPaletteUsed]
 	ld b, a
 	ld a, [wMobileVirtualNativeAvatarColors]
 	or b
-	and (1 << PAL_OW_WEATHER) - 1
+	ld b, a
+	ld a, [wMobileVirtualBaseReady]
+	and a
+	ld a, b
+	jr nz, .free_color_table
+	cp 255
+	jr z, .color_full
+	ld a, [wMobileVirtualNativeRotation]
+	and 7
+	ld c, a
+.color_probe
+	ld e, c
+	ld d, 0
+	ld hl, MobileVirtualPaletteBits
+	add hl, de
+	ld a, [hl]
+	and b
+	ld a, c
+	jr z, .free_color_found
+	inc a
+	and 7
+	ld c, a
+	jr .color_probe
+.free_color_table
 	ld e, a
 	ld d, 0
 	ld hl, MobileVirtualFreeColor
 	add hl, de
 	ld a, [hl]
-	cp PAL_OW_WEATHER
+	cp 8
 	jr nc, .color_full
+.free_color_found
 	ld [wMobileAvatarPalette], a
 	jr .color_ready
 .color_full
-	ld a, [wMobileVirtualBaseReady]
-	and a
-	ret z
-; Only genuine palette pressure needs the fair full admission path. Native
-; sources were audited before taking an unused color in the common fast path.
-	ld a, 1
-	ld [wMobileVirtualForceFull], a
-	xor a
-	ld [wMobileVirtualBaseReady], a
-	ld a, 1
-	ld [wMobileVirtualStage], a
 	scf
 	ret
+
 .color_ready
-	ld a, MOBILE_WRAM_BANK
-	ldh [rWBK], a
-	ld a, [wMobileBudgetIndex]
-	call MobileNativePeerPointer
-	ld bc, MOBILE_PEER_PALETTE
-	add hl, bc
-	ld a, [wMobileAvatarPalette]
-	ld [hl], a
-	ld bc, MOBILE_PEER_SCREEN_X - MOBILE_PEER_PALETTE
-	add hl, bc
-	ld a, [hli]
-	ld [wMobileOAMWriteCursor], a
-	ld a, [hl]
-	ld [wMobileOAMDemand], a
-	ld bc, 52 - MOBILE_PEER_SCREEN_Y
-	add hl, bc
-	ld a, [hl]
-	ld [wMobileVirtualFrame], a
+	ld a, [wMobileVirtualFrame]
 	and $c
 	cp $c
 	jr z, .mirror
@@ -1355,7 +1475,17 @@ MobileVirtualPeerGroup:
 	push de
 	ld a, d
 	ld [wMobileVirtualRectangleTop], a
+	ld a, [wMobileVirtualForceFull]
+	and a
+	jr z, .peer_rows
+	ld a, [wMobileVirtualDroppedSlot]
+	and a
+	jr nz, .peer_rows
+	and a ; proven four canonical players: <=16 OAM and <=8 per visible line
+	jr .peer_rows_done
+.peer_rows
 	call MobileVirtualAdmitRectangleTop
+.peer_rows_done
 	pop de
 	pop bc
 	jr nc, .peer_rectangle_ready
@@ -1401,6 +1531,8 @@ MobileVirtualPeerGroup:
 	ld [wMobileVirtualLength], a
 	jr .peer_admitted
 .scratch_peer
+	ld hl, wMobileVirtualGroup
+	call MobileVirtualScratchGroup
 	ld a, 16
 	ld [wMobileVirtualGroupLength], a
 	ld hl, wMobileVirtualGroup
@@ -1425,14 +1557,37 @@ MobileVirtualPeerGroup:
 	ld [hl], a
 	ld a, 1
 	ld [wMobileVirtualPlannedPrivateColors], a
+	ld a, [wMobileBudgetIndex]
+	add a
+	add a
+	add a
+	ld e, a
+	ld d, 0
+	ld hl, wMobilePrivatePalColors
+	add hl, de
+	push hl
+	ld hl, wMobileVirtualFrameColors
+	add hl, de
+	ld d, h
+	ld e, l
+	pop hl
+rept 1 palettes
+	ld a, [hli]
+	ld [de], a
+	inc de
+endr
 .bound
 	ld a, MOBILE_WRAM_BANK
 	ldh [rWBK], a
 	ld a, [wMobileBudgetIndex]
 	call MobileNativePeerPointer
-	ld bc, MOBILE_PEER_OAM_START
+	ld bc, MOBILE_PEER_OAM_START + 1
 	add hl, bc
 	ld a, [wMobileOAMReadCursor]
+	ld [hl], a
+	ld bc, MOBILE_PEER_PALETTE - MOBILE_PEER_OAM_START - 1
+	add hl, bc
+	ld a, [wMobileAvatarPalette]
 	ld [hl], a
 	ld hl, wMobileRenderedCount
 	inc [hl]
@@ -1539,31 +1694,6 @@ MobileVirtualAdmitGroup:
 	scf
 	ret
 .admitted
-	ld a, [wMobileVirtualFastAdmission]
-	cp 2
-	jr nz, .copy_output
-	ld a, [wMobileVirtualGroupPointer + 1]
-	cp HIGH(wShadowOAM)
-	jr nz, .extra_owner
-	ld a, [wMobileVirtualGroupPointer]
-	swap a
-	and $f
-	ld e, a
-	ld d, 0
-	ld hl, wMobileVirtualKeepSlots
-	add hl, de
-	ld [hl], 1
-	jp .copied
-.extra_owner
-	ld a, [wMobileVirtualLength]
-	swap a
-	and $f
-	ld e, a
-	ld d, 0
-	ld hl, wMobileVirtualExtraOwners
-	add hl, de
-	ld a, [wMobileVirtualGroupOwner]
-	ld [hl], a
 .copy_output
 	ld a, [wMobileVirtualLength]
 	ld e, a
@@ -1770,141 +1900,134 @@ MobileVirtualAdmitRectangle:
 	ld [wMobileVirtualRectangleTop], a
 	ld d, a
 MobileVirtualAdmitRectangleTop:
-; A coarse sixteen-pixel bucket bounds ordinary rectangle overlap cheaply.
-; A bucket overflow is not a rejection: exact relative start/end events handle
-; that candidate, including clipped screen edges. Keep at most ten admitted tops
-; in an unordered list; ordinary open scenes need no insertion sort per actor.
+	ld a, [wMobileVirtualForceFull]
+	and a
+	jp nz, MobileVirtualAdmitAlignedRectangle
+MobileVirtualAdmitExactRectangle:
+
+; Three bit planes count admitted rectangles on every actual visible row.
+; Each candidate touches at most three eight-row chunks. Check all chunks
+; before updating any plane, so rejection is atomic and needs no rollback.
+; This is exact, including clipped edges, with no coarse bucket fallback.
 	ld a, [wMobileVirtualRectangleCount]
 	cp OAM_COUNT / 4
 	jp nc, .rejected
 	ld a, [wMobileVirtualRectangleTop]
-	swap a
-	and $f
 	ld e, a
 	ld d, 0
-	ld hl, wMobileVirtualLines + 16
+	ld hl, MobileVirtualRectangleMasks
 	add hl, de
-	ld a, [hl]
-	cp 5
-	jr nc, .exact
-	ld a, [wMobileVirtualRectangleTop]
-	and $f
-	jr z, .accepted
-	inc hl
-	ld a, [hl]
-	cp 5
-	jr nc, .exact
-.accepted
-	ld a, [wMobileVirtualRectangleTop]
-	ld c, a
-	swap a
-	and $f
+	add hl, de
+	add hl, de
+	add hl, de
+	ld a, [hli]
+	ld [wMobileVirtualLines + 128], a
+for chunk, 3
+	ld a, [hli]
+	ld [wMobileVirtualLines + 129 + chunk], a
+endr
+	ld a, [wMobileVirtualLines + 128]
+	ld e, a
+	ld hl, wMobileVirtualLines + 64
+	add hl, de
+for chunk, 3
+	ld a, [wMobileVirtualLines + 129 + chunk]
+	ld d, a
+	ld a, [hli]
+	ld b, a
+	ld a, [hli]
+	or b
+	ld b, a
+	ld a, [hli]
+	and b
+	and d
+	jp nz, .rejected
+endr
+	ld a, [wMobileVirtualLines + 128]
 	ld e, a
 	ld d, 0
-	ld hl, wMobileVirtualLines + 16
+	ld hl, wMobileVirtualLines + 64
 	add hl, de
-	inc [hl]
-	ld a, c
-	and $f
-	jr z, .record
-	inc hl
-	inc [hl]
-.record
+for chunk, 3
+	ld a, [wMobileVirtualLines + 129 + chunk]
+	ld d, a
+	ld a, [hl]
+	ld b, a
+	xor d
+	ld [hli], a
+	ld a, b
+	and d
+	ld e, a
+	ld a, [hl]
+	ld b, a
+	xor e
+	ld [hli], a
+	ld a, b
+	and e
+	ld e, a
+	ld a, [hl]
+	xor e
+	ld [hli], a
+endr
 	ld a, [wMobileVirtualRectangleCount]
 	ld e, a
+	ld d, 0
 	ld hl, wMobileVirtualLines
 	add hl, de
-	ld [hl], c
+	ld a, [wMobileVirtualRectangleTop]
+	ld [hl], a
 	ld hl, wMobileVirtualRectangleCount
 	inc [hl]
 	and a
 	ret
-.exact
-	ld a, [wMobileVirtualCoarseTrial]
-	and a
-	jp nz, .rejected
-; Count only overlap with this candidate's sixteen rows. Every previous
-; interval contributes a start or an end event, rather than sixteen row writes.
-	ld hl, wMobileVirtualLines + 32
-	xor a
-rept 16
-	ld [hli], a
-endr
-	ld a, [wMobileVirtualRectangleCount]
-	ld b, a
-	ld a, [wMobileVirtualRectangleTop]
-	ld d, a
-	ld hl, wMobileVirtualLines
-.event
-	ld a, [hli]
-	sub d
-	cp 16
-	jr c, .start_event
-	cp -15
-	jr c, .next_event
-	add 16
-	ld e, a
-	push hl
-	push de
-	ld d, 0
-	ld hl, wMobileVirtualLines + 32
-	inc [hl]
-	add hl, de
-	dec [hl]
-	pop de
-	pop hl
-	jr .next_event
-.start_event
-	ld e, a
-	push hl
-	push de
-	ld d, 0
-	ld hl, wMobileVirtualLines + 32
-	add hl, de
-	inc [hl]
-	pop de
-	pop hl
-.next_event
-	dec b
-	jr nz, .event
-	ld hl, wMobileVirtualLines + 32
-	ld b, 16
-	ld c, 0
-.row
-	ld a, [hli]
-	add c
-	ld c, a
-	ld a, d
-	inc d
-	cp OAM_Y_OFS
-	jr c, .next_row
-	cp SCREEN_HEIGHT_PX + OAM_Y_OFS
-	jr nc, .next_row
-	ld a, c
-	cp 5 ; adding two objects must leave no more than ten on any visible row
-	jr nc, .rejected
-.next_row
-	dec b
-	jr nz, .row
-	jp .accepted
 .rejected
 	scf
 	ret
 
+MobileVirtualRectangleMasks:
+; Hardware Y is screen Y plus sixteen. Counter chunks represent only rows
+; 16..159, so offscreen clipping cannot cause an artificial resource conflict.
+for top, 256
+	DEF clipped_top = top
+	if top < OAM_Y_OFS
+		REDEF clipped_top = OAM_Y_OFS
+	endc
+	DEF clipped_end = top + 16
+	if clipped_end > SCREEN_HEIGHT_PX + OAM_Y_OFS
+		REDEF clipped_end = SCREEN_HEIGHT_PX + OAM_Y_OFS
+	endc
+	DEF chunk_top = clipped_top
+	if chunk_top >= SCREEN_HEIGHT_PX + OAM_Y_OFS
+		REDEF chunk_top = SCREEN_HEIGHT_PX + OAM_Y_OFS - 1
+	endc
+	DEF row_chunk = (chunk_top - OAM_Y_OFS) / 8
+	db row_chunk * 3
+	for chunk, 3
+		DEF row_mask = 0
+		for bit_index, 8
+			DEF hardware_row = OAM_Y_OFS + (row_chunk + chunk) * 8 + bit_index
+			if hardware_row >= clipped_top && hardware_row < clipped_end
+				REDEF row_mask = row_mask | (1 << bit_index)
+			endc
+			PURGE hardware_row
+		endr
+		db row_mask
+		PURGE row_mask
+	endr
+	PURGE clipped_top, clipped_end, chunk_top, row_chunk
+endr
+
 MobileVirtualMergePalettes:
-; Build all 64 bytes before publishing OAM. VBlank then uses the same unrolled
-; upload as vanilla, without eight variable-cost palette-source calls.
-	ld hl, wOBPals2
-	ld de, wMobileVirtualMergedPalette
-	ld bc, wMobileVirtualBindings
-.loop
-	push hl
-	ld a, [bc]
-	inc bc
+; Copy directly from each immutable source. Fixed hardware slots avoid saving
+; and advancing a native pointer through colors that use a private source.
+for hardware_color, 8
+	ld hl, wOBPals2 + hardware_color palettes
+	ld de, wMobileVirtualMergedPalette + hardware_color palettes
+	ld a, [wMobileVirtualBindings + hardware_color]
 	and a
-	jr z, .copy
+	jr z, .copy{d:hardware_color}
 	cp MOBILE_PEERS + 1
-	jr nc, .copy
+	jr nc, .copy{d:hardware_color}
 	dec a
 	add a
 	add a
@@ -1914,19 +2037,13 @@ MobileVirtualMergePalettes:
 	adc HIGH(wMobilePrivatePalColors)
 	sub l
 	ld h, a
-.copy
+.copy{d:hardware_color}
 rept 1 palettes
 	ld a, [hli]
 	ld [de], a
 	inc de
 endr
-	pop hl
-rept 1 palettes
-	inc hl
 endr
-	ld a, c
-	cp LOW(wMobileVirtualBindings + 8)
-	jr c, .loop
 	ret
 
 MobileVirtualPaletteSource:
@@ -1977,9 +2094,9 @@ MobileVirtualScratchGroup:
 MobileVirtualPaletteBits: db 1, 2, 4, 8, 16, 32, 64, 128
 MobileVirtualFreeColor:
 	DEF free_color = 255
-for palette_mask, 1 << PAL_OW_WEATHER
+for palette_mask, 1 << 8
 	REDEF free_color = 255
-	for virtual_color, PAL_OW_WEATHER
+	for virtual_color, 8
 		if !(palette_mask & (1 << virtual_color)) && free_color == 255
 			REDEF free_color = virtual_color
 		endc
@@ -1988,7 +2105,9 @@ for palette_mask, 1 << PAL_OW_WEATHER
 endr
 	PURGE free_color
 MobileVirtualRendererEnd::
-ASSERT MobileVirtualRendererEnd - MobileVirtualRendererStart <= 4608
+ASSERT MobileVirtualRendererEnd - MobileVirtualRendererStart <= 6144
 
 INCLUDE "mobile_adapter/rom/virtual_fast_scene.asm"
 INCLUDE "mobile_adapter/rom/virtual_graphics.asm"
+
+INCLUDE "mobile_adapter/rom/virtual_priority.asm"

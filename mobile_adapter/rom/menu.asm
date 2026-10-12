@@ -114,7 +114,7 @@ endr
 	jp .menu
 .close
 	call CloseText
-	farcall MobileNativeInvalidateHash
+	call MobileNativeInvalidateHash
 	xor a
 	ld [wMobileMenuState], a
 	ld [wMobileLocalValid], a

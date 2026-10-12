@@ -1,8 +1,17 @@
 SECTION "Mobile Adapter", ROMX, BANK[MOBILE_ROM_BANK]
 MobileCodeStart::
 
+MobileTickCredit::
+; Dense presentation may replenish frame credit without parsing a packet first.
+; A pending frame tick remains available to the next ordinary transport pump.
+	push af
+	ld a, 1
+	jr MobileTick.credit_mode
 MobileTick::
 	push af
+	xor a
+.credit_mode
+	ld [wMobileVirtualAttempts], a
 	push bc
 	push de
 	push hl
@@ -33,8 +42,6 @@ MobileTick::
 	ld [wMobileFrameTick], a
 	jr .new_frame
 .same_frame
-	xor a
-	ld [wMobileFrameTick], a
 	jr .key
 .new_frame
 	ld hl, wMobileKeepalive
@@ -58,6 +65,9 @@ MobileTick::
 	jr z, .key
 	dec [hl]
 .key
+	ld a, [wMobileVirtualAttempts]
+	and a
+	jp nz, .return
 .pump
 	ld a, [wMobileKeyLatch]
 	and a
@@ -137,7 +147,7 @@ MobileTick::
 	ld [wMobileAvailability], a
 	call MobileFrozenOverworld
 	jr z, .available
-	farcall MobileNativeInvalidateHash
+	call MobileNativeInvalidateHash
 	xor a
 	ld [wMobileAvailability], a
 	ld [wMobileLocalValid], a
@@ -180,7 +190,7 @@ MobileTick::
 ; IRQs may have completed a byte since the outer admission check. Check the
 ; budget again after choosing the actual expensive state, before touching it.
 	ldh a, [rLY]
-	cp 116
+	cp 130
 	jp nc, .return
 	call MobilePrepareCommand
 	jp .return
@@ -188,7 +198,7 @@ MobileTick::
 ; IRQs may have completed a byte since the outer admission check. Check the
 ; budget again after choosing the actual expensive state, before touching it.
 	ldh a, [rLY]
-	cp 116
+	cp 130
 	jp nc, .return
 	call MobileAppendPending
 	jp c, .protocol_error
@@ -221,7 +231,7 @@ MobileTick::
 ; IRQs may have completed a byte since the outer admission check. Check the
 ; budget again after choosing the actual expensive state, before touching it.
 	ldh a, [rLY]
-	cp 116
+	cp 130
 	jp nc, .return
 	call MobileValidateResponseSlice
 	jp c, .packet_error
@@ -265,6 +275,12 @@ MobileTick::
 .fail
 	call MobileFail
 .return
+	ld a, [wMobileVirtualAttempts]
+	and a
+	jr nz, .frame_pending
+	xor a
+	ld [wMobileFrameTick], a
+.frame_pending
 	ld a, [wMobileEmergencyPending]
 	and a
 	jr z, .restore_registers

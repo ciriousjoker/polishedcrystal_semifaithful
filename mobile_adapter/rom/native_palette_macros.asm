@@ -102,14 +102,43 @@ MACRO mobile_virtual_capture
 	inc de
 	ld hl, sp + 0 ; saved native HL is the original facing ROM template
 	ld a, [hli]
+	ld h, [hl]
+	ld l, a
+	ld bc, MobileCopiedFacingStepDown0 - FacingStepDown0
+	add hl, bc
+	ld a, l
 	ld [de], a
 	inc de
-	ld a, [hl]
+	ld a, h
 	ld [de], a
+
 .restore\@
 	pop hl
 	pop de
 	pop bc
 .capture_done\@
 	ldh a, [hUsedSpriteTile]
+ENDM
+
+MACRO mobile_virtual_bin_coordinate
+; Shift the conservative buckets with the current native scene. Clamp a clipped
+; top edge instead of wrapping an unsigned coordinate into another counter.
+	ld e, a
+	ld a, [wMobileVirtualLines + 15]
+	ld d, a
+	ld a, e
+	sub d
+	jr nc, :+
+	xor a
+:
+ENDM
+
+; This six-byte resident integration avoids the general farcall's stack work
+; for a validated rectangle. Carry selects private output, otherwise native.
+; Both upper programs return via Bankswitch.
+MACRO mobile_native_rectangle_trampoline
+MobileNativeRectangleTrampoline::
+	ld a, BANK(MobileVirtualWriteRectangleDispatch)
+	rst Bankswitch
+	jp MobileVirtualWriteRectangleDispatch
 ENDM

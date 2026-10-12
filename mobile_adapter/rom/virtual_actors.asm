@@ -29,7 +29,7 @@ MobileNativeWait::
 	jr z, .deadline
 	ld a, [wMobileVirtualStage]
 	and a
-	ld a, 2
+	ld a, 1
 	jr nz, .serial_slice
 	ld a, $ff
 .serial_slice
@@ -118,15 +118,38 @@ MobileNativeIdle::
 	ld a, [wMobileLastFrame]
 	cp b
 	jr z, .sample
-; A late native wait cannot afford the first network poll before composing
-; its ready avatars. Menu teardown is one ordinary source of such a frame.
-; The transport path still polls after composition when its deadline permits.
+; Replenish serial/frame credit before presentation, but do not spend the
+; same small idle window parsing a packet and rebuilding a complete scene.
+; One quarter of late frames retains the normal transport/asset slot.
+	ld a, [wMobileVirtualStage]
+	and a
+	jr z, .first_transport
 	ldh a, [rLY]
 	cp 116
-	jp nc, .compose
+	jr c, .first_transport
+	ldh a, [hVBlankCounter]
+	and 3
+	jr z, .first_transport
+	call MobileTickCredit
+	jp .compose
+.first_transport
 	call MobileTick
 	jp .done
 .sample
+; A dense native frame leaves a much smaller idle window. Once a complete
+; guest exists, reserve three of four late windows for presentation; the fourth
+; advances optional capture/pose/projection jobs. Early scenes keep their normal
+; per-frame policy. Transport still receives its first poll on every frame.
+	ld a, [wMobileVirtualStage]
+	and a
+	jr z, .optional_job
+	ldh a, [rLY]
+	cp 116
+	jr c, .optional_job
+	ldh a, [hVBlankCounter]
+	and 3
+	jp nz, .compose
+.optional_job
 ; At most one optional capture, graphics or projection job per frame. Select
 ; the oldest eligible job so a short idle window cannot permanently starve
 ; projection behind capture and upload work. The remaining idle calls compose
@@ -137,7 +160,7 @@ MobileNativeIdle::
 	cp b
 	jp z, .compose
 	ldh a, [rLY]
-	cp 116
+	cp 130
 	jr nc, .compose
 	ld hl, wMobileColdFrame
 	ld a, b
@@ -156,6 +179,9 @@ MobileNativeIdle::
 	jr c, .capture_or_project
 	cp d
 	jr c, .capture_or_project
+	ldh a, [rLY]
+	cp 130 ; direct color selection and pose copying are separate bounded jobs
+	jr nc, .capture_or_project
 	ld a, b
 	ld [wMobileVirtualUploadFrame], a
 	ld [wMobileVirtualBackgroundFrame], a
@@ -187,7 +213,7 @@ MobileNativeIdle::
 	and a
 	jr nz, .done
 	call MobileVirtualCanCompose
-	jr nc, .flush_guest
+	jr nc, .transport
 	ld a, [wMobileVirtualStage]
 	and a
 	jr z, .transport
@@ -202,28 +228,10 @@ MobileNativeIdle::
 	and a
 	jr nz, .done
 	call MobileVirtualCanCompose
-	jr nc, .flush_guest
+	jr nc, .transport
 	ld hl, wMobileVirtualAttempts
 	dec [hl]
 	jr nz, .compose_loop
-.flush_guest
-; A complete guest may be published even when there is no time for the next
-; guest. Current native figures are already admitted, so native game work wins
-; without discarding a safe completed presentation solely for a second avatar.
-	ld a, [wMobileVirtualBaseReady]
-	cp 1
-	jr nz, .transport
-	ld a, [wMobileVirtualStage]
-	cp 3
-	jr nz, .transport
-	ld a, [wMobileRenderedCount]
-	and a
-	jr z, .transport
-	ld a, 7
-	ld [wMobileVirtualStage], a
-	call MobileVirtualCanCompose
-	jr nc, .transport
-	call MobileVirtualComposeStep
 .transport
 	ldh a, [hVBlankOccurred]
 	and a
@@ -262,12 +270,12 @@ MobileVirtualCanCompose:
 	and $1f
 	cp 5
 	jr nc, .deadline
-	ld b, 131 ; bounded four-quad local figure, including exact row rollback
+	ld b, 139 ; bounded four-quad local figure, including exact row rollback
 	jr .deadline
 .native_deadline
 ; Each native group applies its own shape deadline before doing expensive
 ; admission. Empty descriptors must not inherit the sixteen-quad deadline.
-	ld b, 137
+	ld b, 140
 	jr .deadline
 .start_deadline
 	ld a, [wMobileVirtualStage]
@@ -281,29 +289,18 @@ MobileVirtualCanCompose:
 	ld a, [wMobileVirtualStage]
 	cp 3
 	jr z, .small ; peer preparation has a larger bound than a raw native group
-	ld b, 137
+	cp 1
+	jr nz, .canonical_group_deadline
+	ld b, 133 ; full metadata audit and aligned proof also need caller-return time
+	jr .deadline
+.canonical_group_deadline
+	ld b, 140
 	jr .deadline
 .publication
-	ld b, 133
-	ld a, [wMobileVirtualFastAdmission]
-	cp 2
-	jr nz, .deadline
-	ld a, [wMobileVirtualPlannedPrivateColors]
-	and a
-	jr nz, .deadline
-	ld b, 136
-	ld a, [wMobileRenderedCount]
-	cp 2
-	jr nz, .other_count
-	ld b, 137
-	jr .deadline
-.other_count
-	cp 2
-	jr nc, .deadline
-	ld b, 139 ; in-place native groups and one guest, with no color merge
+	ld b, 142 ; frozen private RGB and native VBlank upload need no palette merge
 	jr .deadline
 .small
-	ld b, 131 ; reserve enough of this frame to publish the complete peer group
+	ld b, 138 ; one peer has a measured bound below six double-speed scanlines
 	jr .deadline
 .weather_deadline
 	ld b, 140
@@ -492,8 +489,9 @@ MobileNativeUpload:
 	jr z, .sprite_ready
 .invalidate_pose
 	ld [hl], 0
-	ld de, 2
-	add hl, de
+	inc hl
+	ld [hl], 0 ; cancel an obsolete split color/pose job
+	inc hl
 	ld bc, 16
 	xor a
 	rst ByteFill
@@ -523,6 +521,30 @@ MobileNativeUpload:
 	ld a, [hl]
 	cp 255
 	jp z, .return
+	inc hl
+	ld a, [hl]
+	and a
+	jr nz, .resume_pose
+	ld bc, 54 - MOBILE_PEER_COLOR_READY
+	add hl, bc
+	ld a, [hl]
+	cp 1
+	jr nz, .check_color
+; The private constructor already caches identity and fade dirtiness. Its
+; immutable color remains usable without an eight-slot native lookup per pose.
+	ld a, MOBILE_BACKUP_BANK
+	ldh [rWBK], a
+	ld a, [wMobileBudgetIndex]
+	ld e, a
+	ld d, 0
+	ld hl, MobileVirtualPaletteBits
+	add hl, de
+	ld a, [wMobilePrivatePalDirty]
+	and [hl]
+	ld a, MOBILE_WRAM_BANK
+	ldh [rWBK], a
+	jr z, .cached_pose
+.check_color
 	pop hl
 	push hl
 	ld bc, MOBILE_PEER_PALETTE
@@ -540,7 +562,7 @@ MobileNativeUpload:
 	pop af
 	jr .color_ready
 .construct_color
-	farcall MobileNativePaletteGuard
+	call MobileNativePaletteGuard
 	jp c, .return
 .color_ready
 	ld [wMobileAvatarPalette], a
@@ -549,6 +571,27 @@ MobileNativeUpload:
 	ld bc, MOBILE_PEER_PALETTE
 	add hl, bc
 	ld [hl], a
+	ldh a, [rLY]
+	cp 116
+	jr c, .window_ready
+; Palette construction and a banked 64-byte pose copy have separate budgets.
+; Dense native scenes still have room for either job, but not both together.
+	pop hl
+	push hl
+	ld bc, MOBILE_PEER_COLOR_READY
+	add hl, bc
+	ld [hl], 1 ; keep a previously committed pose ready throughout this job
+	jp .return
+.resume_pose
+	ld [hl], 0
+.cached_pose
+	pop hl
+	push hl
+	ld bc, MOBILE_PEER_PALETTE
+	add hl, bc
+	ld a, [hl]
+	ld [wMobileAvatarPalette], a
+.window_ready
 	ld a, [wMobileBudgetIndex]
 	ld b, a
 .window
@@ -704,7 +747,7 @@ MobileVirtualExactPalette:
 	ld a, 1
 	ldh [rWBK], a
 	ld a, c
-	cp PAL_OW_WEATHER
+	cp 8
 	jr nc, .scan
 	call .check_slot
 	jr nc, .found
@@ -717,7 +760,7 @@ MobileVirtualExactPalette:
 	jr nc, .found
 	inc c
 	ld a, c
-	cp PAL_OW_WEATHER
+	cp 8
 	jr c, .slot
 	jr .missing
 .found
@@ -730,6 +773,15 @@ MobileVirtualExactPalette:
 	and a
 	ret
 .check_slot
+	ld a, c
+	cp PAL_OW_WEATHER
+	jr nz, .ordinary_color
+	ld a, [wCurWeather]
+	ld d, a
+	ld a, [wOverworldWeatherCooldown]
+	or d
+	jr nz, .slot_missing
+.ordinary_color
 	ld d, 0
 	ld hl, wLoadedObjPal0
 	ld e, c

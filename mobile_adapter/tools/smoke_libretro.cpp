@@ -37,6 +37,7 @@ static unsigned char video_oam[160] = {};
 static unsigned (*native_oam_byte)(unsigned) = nullptr;
 static unsigned (*native_figure_byte)(unsigned) = nullptr;
 static unsigned video_native_source_count[13] = {}, video_native_complete[13] = {};
+static unsigned video_native_vanilla_complete[13] = {};
 static unsigned video_native_source_sprite[13] = {}, video_native_source_map[13] = {};
 static unsigned char video_object_palettes[64] = {};
 static unsigned char video_peer_tiles[128] = {};
@@ -408,6 +409,7 @@ static std::map<std::string, unsigned> capture(const unsigned char* sram, size_t
             const std::string prefix = "vNativeSource" + std::to_string(slot);
             values[prefix + "Count"] = video_native_source_count[slot];
             values[prefix + "Complete"] = video_native_complete[slot];
+            values[prefix + "VanillaComplete"] = video_native_vanilla_complete[slot];
             values[prefix + "Sprite"] = video_native_source_sprite[slot];
             values[prefix + "Map"] = video_native_source_map[slot];
         }
@@ -515,9 +517,14 @@ static void video(const void* data, unsigned w, unsigned h, size_t pitch) {
     if (const auto* oam = descriptor(0xfe00)) std::memcpy(video_oam, oam, sizeof(video_oam));
     if (native_oam_byte) {
         unsigned row_demand[144] = {};
-        bool selected[40];
+        bool selected[40], native_selected[40];
+        unsigned native_row_demand[144] = {};
         for (unsigned q = 0; q < 40; ++q) {
-            selected[q] = true;
+            selected[q] = native_selected[q] = true;
+            for (int row = int(native_oam_byte(q * 4)) - 16; row < int(native_oam_byte(q * 4)) - 8; ++row) {
+                if (row < 0 || row >= 144) continue;
+                if (native_row_demand[row]++ >= 10) native_selected[q] = false;
+            }
             for (int row = int(video_oam[q * 4]) - 16; row < int(video_oam[q * 4]) - 8; ++row) {
                 if (row < 0 || row >= 144) continue;
                 if (row_demand[row]++ >= 10) selected[q] = false;
@@ -531,6 +538,7 @@ static void video(const void* data, unsigned w, unsigned h, size_t pitch) {
             video_native_source_map[slot] = native_oam_byte(265 + slot * 2);
             video_native_source_count[slot] = 0;
             video_native_complete[slot] = 0;
+            video_native_vanilla_complete[slot] = 0;
             const unsigned actual_count = native_figure_byte ? native_figure_byte(13 * 64 + slot) : count;
             if (!actual_count || actual_count > 16 ||
                 (!native_figure_byte && (!(flags & 128) || start + count * 4 > 160))) continue;
@@ -544,6 +552,12 @@ static void video(const void* data, unsigned w, unsigned h, size_t pitch) {
             }
             if (!visible) continue;
             video_native_source_count[slot] = actual_count;
+            if ((flags & 128) && start + actual_count * 4 <= 160) {
+                bool complete = true;
+                for (unsigned q = start / 4; q < start / 4 + actual_count; ++q)
+                    complete &= native_selected[q];
+                video_native_vanilla_complete[slot] = complete;
+            }
             // The native renderer writes facing quads backwards; an independent
             // renderer may write the same complete figure forwards. Compare all
             // four-byte hardware tuples, preserving multiplicity, not ordering.
@@ -824,6 +838,11 @@ int main(int argc, char** argv) {
             native_oam_byte = symbol<unsigned(*)(unsigned)>(core, "mobile_profile_native_oam_byte");
             if (auto facing = reinterpret_cast<void(*)(unsigned)>(dlsym(core, "mobile_profile_native_facing"))) {
                 facing(native_addresses.at("Facings").first);
+                if (native_addresses.count("MobileCopiedFacingStepDown0")) {
+                    auto offset = symbol<void(*)(unsigned)>(core, "mobile_profile_native_template_offset");
+                    offset((native_addresses.at("MobileCopiedFacingStepDown0").second -
+                            native_addresses.at("FacingStepDown0").second) & 0xffff);
+                }
                 native_figure_byte = symbol<unsigned(*)(unsigned)>(core, "mobile_profile_native_figure_byte");
             }
         }

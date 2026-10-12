@@ -200,16 +200,19 @@ endr
 .patch_pose
 ; A previously published figure may still use the same window. Commit its
 ; quadrant bank/flip attributes together with the tiles, before native OAM DMA.
-	ld a, [wMobileVirtualPublished]
-	and a
+	push hl
+	call MobileVirtualFrameValid
+	pop hl
 	ret z
-	ld bc, MOBILE_PEER_OAM_START
+	ld bc, MOBILE_PEER_OAM_START + 1
 	add hl, bc
 	ld a, [hl]
 	cp OAM_SIZE - 16 + 1
 	ret nc
 	ld l, a
-	ld h, HIGH(wShadowOAM)
+	ld h, HIGH(wMobileVirtualOutput)
+	ld a, MOBILE_BACKUP_BANK
+	ldh [rWBK], a
 	push hl
 	ld a, [wMobileVirtualQueuedWindow]
 	add a

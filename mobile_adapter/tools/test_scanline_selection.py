@@ -1,7 +1,7 @@
 """Exercise actual selection limits, including incomplete and offscreen figures."""
 import unittest
 import random
-from scanline_selection import inspect_native_frame, missing_final_peers, select_scanlines, virtual_temporal_report
+from scanline_selection import inspect_native_frame, missing_final_peers, select_scanlines, virtual_temporal_report, native_figure_report
 
 
 def figures(count, y=64):
@@ -233,6 +233,41 @@ class ScanlineSelectionTests(unittest.TestCase):
             interval_overflow = any(ordered[i + 5] - ordered[i] < 16
                                     for i in range(len(ordered) - 5))
             self.assertEqual(interval_overflow, max(select_scanlines(hardware)[0]) > 10, tops)
+
+    def test_native_census_detects_visible_figures_beyond_original_oam(self):
+        rows = [{'frame': frame, 'symbols': {'wMobileOnline': 1,
+            'vNativeSource0Count': 4, 'vNativeSource0Sprite': 1,
+            'vNativeSource0Map': 0, 'vNativeSource0Complete': 1,
+            'vNativeSource12Count': 4, 'vNativeSource12Sprite': 5,
+            'vNativeSource12Map': 12, 'vNativeSource12Complete': int(frame == 0)}}
+            for frame in range(19)]
+        report = native_figure_report(rows)
+        self.assertFalse(report['passed'])
+        self.assertEqual(report['witnesses'][0]['native_slot'], 12)
+        self.assertEqual(report['maximum_absent_frames'], 18)
+        for row in rows[8:]:
+            row['symbols']['vNativeSource12Complete'] = 1
+        self.assertTrue(native_figure_report(rows)['passed'])
+
+    def test_native_census_protects_every_vanilla_local_presentation(self):
+        row = {'frame': 3, 'symbols': {'wMobileOnline': 1,
+            'vNativeSource0Count': 4, 'vNativeSource0Sprite': 1,
+            'vNativeSource0Map': 0, 'vNativeSource0Complete': 0,
+            'vNativeSource0VanillaComplete': 1}}
+        report = native_figure_report([row])
+        self.assertFalse(report['passed'])
+        self.assertEqual(report['local_continuity_witnesses'], [{'frame': 3, 'native_slot': 0}])
+        row['symbols']['vNativeSource0Complete'] = 1
+        self.assertTrue(native_figure_report([row])['passed'])
+
+    def test_native_census_resets_on_an_actual_scene_exit(self):
+        rows = [{'frame': frame, 'symbols': {'wMobileOnline': 1,
+            'vNativeSource0Count': 0, 'vNativeSource12Count': 4,
+            'vNativeSource12Sprite': 5, 'vNativeSource12Map': 12,
+            'vNativeSource12Complete': 0}} for frame in range(20)]
+        rows[10]['symbols']['vNativeSource12Count'] = 0
+        self.assertTrue(native_figure_report(rows)['passed'])
+        self.assertFalse(native_figure_report([{'frame': 0, 'symbols': {'wMobileOnline': 1}}])['passed'])
 
     def test_unknown_or_truncated_observations_cannot_pass(self):
         with self.assertRaises(ValueError):

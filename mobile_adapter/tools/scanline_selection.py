@@ -116,6 +116,56 @@ def virtual_temporal_report(rows, max_absent_frames=3):
             "scope": "Eligible world frames with an admitted native idle window; native-heavy graphics frames and frozen menu occlusion are separate."}
 
 
+def native_figure_report(rows, max_absent_frames=16):
+    """Census every immutable native source, including those outside native OAM.
+
+    A game object without a currently visible facing starts a new segment.
+    Observe hardware-complete presentation rather than allocated object slots.
+    The local-player continuity rule is reported separately from ordinary
+    complete-figure sharing. An unavailable source observer cannot claim a pass.
+    """
+    figures, last, witnesses, local_failures, maximum = {}, {}, [], [], 0
+    observed = False
+    for row in rows:
+        state, frame = row['symbols'], row['frame']
+        if not state['wMobileOnline']:
+            last.clear()
+            continue
+        if state.get('hInMenu', 0) or state.get('wScriptRunning', 0) == 255:
+            last.clear()
+            continue
+        active = set()
+        observed |= 'vNativeSource0Count' in state
+        for slot in range(13):
+            prefix = f'vNativeSource{slot}'
+            if not state.get(prefix + 'Count', 0):
+                continue
+            key = (slot, state[prefix + 'Sprite'], state[prefix + 'Map'])
+            active.add(key)
+            item = figures.setdefault(key, {'native_slot': slot, 'sprite': key[1],
+                'map_object': key[2], 'source_frames': 0,
+                'complete_hardware_frames': 0, 'maximum_absent_frames': 0})
+            item['source_frames'] += 1
+            complete = bool(state[prefix + 'Complete'])
+            item['complete_hardware_frames'] += complete
+            if slot == 0 and state.get(prefix + 'VanillaComplete', 0) and not complete and len(local_failures) < 8:
+                local_failures.append({'frame': frame, 'native_slot': 0})
+            prior = last.get(key, frame - 1)
+            absent = 0 if complete else frame - prior
+            item['maximum_absent_frames'] = max(item['maximum_absent_frames'], absent)
+            maximum = max(maximum, absent)
+            if slot and absent > max_absent_frames and len(witnesses) < 8:
+                witnesses.append({'frame': frame, 'native_slot': slot,
+                    'sprite': key[1], 'map_object': key[2], 'absent_frames': absent})
+            last[key] = frame if complete else prior
+        last = {key: value for key, value in last.items() if key in active}
+    return {'passed': observed and bool(figures) and not witnesses and not local_failures, 'observed': observed,
+        'local_continuity_witnesses': local_failures,
+        'maximum_absent_frames': maximum, 'allowed_ordinary_absent_frames': max_absent_frames,
+        'figures': list(figures.values()), 'witnesses': witnesses,
+        'scope': 'All visible facing sources, including figures that vanilla could not fit into OAM.'}
+
+
 def verify_native_scanlines(output, players):
     reports = []
     for client in range(players):
@@ -149,14 +199,17 @@ def verify_native_scanlines(output, players):
             expected = {peer for peer in range(1, final_state["wMobilePeerCount"] + 1)
                         if final_state[f"wMobilePeer{peer}Visible"]}
             never_presented = sorted(expected - temporal_seen)
+        native = native_figure_report(trace_rows(trace_path)) if "wMobileVirtualActorMode" in final_state else None
         reports.append({"client": client, "samples": samples, "maximum_demand": maximum,
                         "failing_samples": failures, "witnesses": witnesses,
                         "final_missing_peers": missing_final_peers(final_state),
-                        "temporal_visibility": temporal,
+                        "temporal_visibility": temporal, "native_figures": native,
                         "never_presented_peers": never_presented})
     result = {"passed": all(report["samples"] > 0 and not report["failing_samples"] and
                            not report["final_missing_peers"] and
                            not report["never_presented_peers"] and
+                           (report["native_figures"] is None or not report["native_figures"]["observed"] or
+                            report["native_figures"]["passed"]) and
                            (report["temporal_visibility"] is None or report["temporal_visibility"]["passed"])
                            for report in reports),
               "object_height": 8, "model": "first ten Y-matching hardware OAM entries",

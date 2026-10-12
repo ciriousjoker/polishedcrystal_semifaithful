@@ -5,9 +5,20 @@ PushOAM::
 	and a
 	ret nz
 ForcePushOAM:
+if DEF(MOBILE_ADAPTER)
+	ld a, [wMobileVirtualPreviousOAM]
+	and a
+	jr z, .ordinary
+	farjp MobileVirtualPushOAM
+.ordinary
+endc
 	lb bc, 40 + 1, LOW(rDMA)
 	ld a, HIGH(wShadowOAM)
 	jmp hPushOAM
+
+if DEF(MOBILE_ADAPTER)
+	mobile_native_rectangle_trampoline
+endc
 
 ContinueGDMACopy:
 	push hl

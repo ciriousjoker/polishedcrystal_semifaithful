@@ -12,7 +12,7 @@ def verify_rows(rom, symbols, require):
     group = symbols['wMobileVirtualScratch'][1]
     length = group + 64 + 8 + 80
     rejected = length + 1
-    lines = symbols['wMobileActorTiles1'][1] + 13 * 64 + 160
+    lines = ((symbols['wMobileActorTiles1'][1] + 13 * 4 + 255) & 0xff00) + 160
 
     def execute(entry, memory, weather=False):
         registers = {key: 0 for key in 'abcdehl'}

@@ -25,13 +25,15 @@ if args.renderer == "virtual":
 with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
     out = Path(temporary)
     fixture = (REPO / "mobile_adapter/tests/driver.asm").read_text()
-    fixture += '\nDEF CopyBytes EQU $20\nDEF ByteFill EQU $28\nDEF AddNTimes EQU $18\nDEF FarCall EQU $10\nDEF Bankswitch EQU $08\nDEF DoNothing EQU $0150\n'
+    fixture += '\nDEF CopyBytes EQU $20\nDEF ByteFill EQU $28\nDEF AddNTimes EQU $18\nDEF FarCall EQU $10\nDEF DoNothing EQU $0150\n'
     fixture += 'SECTION "OAM bounds execution fixture", ROM0[$220]\nBoundsFixture::\n mobile_native_oam_bounds\n ld a, 1\n ret\n.full: xor a\n ret\n'
     fixture += 'SECTION "Serial return stub", ROM0[$200]\nSerial:\n.end: ret\n'
+    fixture += 'SECTION "Native bank return fixture", ROM0[$8]\nBankswitch::\n ldh [hROMBank], a\n ld [rROMB0], a\n ret\n'
+    fixture += 'SECTION "Resident rectangle fixture", ROM0[$250]\n mobile_native_rectangle_trampoline\n'
     fixture += 'SECTION "Render link stubs", ROM0[$3000]\n'
     fixture += 'GetFarByte:: ret\nGetFarWord:: ret\nFarCopyBytes:: ret\nSwapHLDE:: ret\nFarDecompressWRA6InB:: ret\nGet2bpp:: ret\nCopy2bpp:: ret\nFarDecompressToDE:: ret\nGetMapConnections:: ret\nGetMapAttributes:: ret\nClearJoypad:: ret\nOpenText:: ret\nCloseText:: ret\nPrintText:: ret\nLoadMenuHeader:: ret\nVerticalMenu:: ret\nExitMenu:: ret\nWaitButton:: ret\n'
     fixture += 'SECTION "Native facing data", ROMX, BANK[2]\nINCLUDE "data/sprites/facings.asm"\n'
-    fixture += 'SECTION "Sprite link stub", ROMX, BANK[1]\nSpriteHeaders:: ds SPRITE_VARS * SPRITEDATA_LENGTH\nGetSprite:: ret\nMarkUsedPal:: ret\nCopyObjectSpritePalHandler:: ret\n\nINCLUDE "data/player/state_sprites.asm"\n'
+    fixture += 'SECTION "Sprite link stub", ROMX, BANK[1]\nSpriteHeaders:: ds SPRITE_VARS * SPRITEDATA_LENGTH\nGetSprite:: ret\nMarkUsedPal:: ret\nCopyObjectSpritePalHandler:: ret\nLookupOBPalette:: ret\n\nINCLUDE "data/player/state_sprites.asm"\n'
     fixture += 'SECTION "LCD layout contracts", ROMX, BANK[$12]\n'
     oam = (REPO / "engine/gfx/load_push_oam.asm").read_text()
     fixture += oam[oam.index('LOAD "OAM DMA"'):oam.index("ENDL") + 4] + "\n"
@@ -156,6 +158,11 @@ with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
         pointer = int.from_bytes(rom[offset:offset + 2], "little")
         start = bank * 0x4000 + pointer - 0x4000
         count = rom[start]
+        copy_bank, copy_body = symbols['MobileCopiedFacingStepDown0']
+        original_body = symbols['FacingStepDown0'][1]
+        mirrored = copy_bank * 0x4000 + copy_body + pointer - original_body - 0x4000
+        require(rom[mirrored:mirrored + 1 + count * 4] == rom[start:start + 1 + count * 4],
+                f'Upper native facing mirror differs at facing {index}')
         require(0 < count <= 16, "Native figure exceeds independent renderer scratch bound")
         if args.renderer == "virtual":
             for quad in range(count):
@@ -173,15 +180,43 @@ with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
                       for line in range(min(ys), max(ys) + 8)]
             require(ys[0] == ys[1] and ys[2] == ys[3] and abs(ys[2] - ys[0]) == 8,
                     "Four-quad native figure requires exact-row admission instead of interval admission")
+            require(min(ys) == 0, "Canonical native facing changed the aligned-scene template origin")
             require(max(demand) <= 2, "Four-quad native figure invalidates five-figure scanline proof")
             flags = [rom[start + 3 + quad * 4] & 8 for quad in range(4)]
             require(len(set(flags)) == 1,
                     "Four-quad facing requires per-quad palette inventory")
     if "MobileVirtualActorVersion" in symbols:
+        # Test the emitted palette-choice table against hardware ownership for
+        # every eight-slot mask, including weather and ordinary slots6/7.
+        color_bank, color_start = symbols['MobileVirtualFreeColor']
+        color_start += (color_bank - 1) * 0x4000
+        for occupied in range(256):
+            chosen = rom[color_start + occupied]
+            require((chosen == 255) == (occupied == 255),
+                    'Palette choice omitted available hardware capacity')
+            if chosen != 255:
+                require(chosen < 8 and not occupied & (1 << chosen),
+                        'Palette choice overwrites an admitted hardware color')
+        print('All 256 hardware palette ownership masks passed')
         from asm_rectangle_tests import verify_rectangles
         verify_rectangles(rom, symbols, require)
         from asm_row_tests import verify_rows
         verify_rows(rom, symbols, require)
+        from asm_native_template_tests import verify_native_templates
+        verify_native_templates(rom, symbols, require)
+        # Fast native DMA admission depends on the original emitted quad order,
+        # not just a set of rectangle coordinates. Reject upstream drift here.
+        facing_bank, facing_table = symbols['Facings']
+        table_offset = facing_bank * 0x4000 + facing_table - 0x4000
+        for index in range(62):
+            pointer = int.from_bytes(rom[table_offset + index * 2:table_offset + index * 2 + 2], 'little')
+            offset = facing_bank * 0x4000 + pointer - 0x4000
+            if rom[offset] == 4:
+                quads = [rom[offset + 1 + quad * 4:offset + 5 + quad * 4] for quad in range(4)]
+                require([quad[0] for quad in quads] == [0, 0, 8, 8],
+                        'Canonical native facing no longer has audited reverse-OAM Y order')
+                require(all(not quad[2] & 8 for quad in quads),
+                        'Canonical native facing now requires NEXT_PALETTE handling')
         def compiled_bytes(name, length):
             bank, address = symbols[name]
             offset = bank * 0x4000 + address - 0x4000
