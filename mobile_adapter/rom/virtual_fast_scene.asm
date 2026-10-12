@@ -28,45 +28,37 @@ MobileVirtualAlignedScene:
 	ld [wMobileVirtualLines + 15], a
 	ld a, 1
 	ld [wMobileVirtualForceFull], a
-for native_slot, NUM_OBJECT_STRUCTS
+; The completed native page already proves ten complete canonical rectangles.
+; Inspect their literal native tops directly, then inspect only overflow
+; templates. Do not duplicate thirteen groups into another metadata view.
+for raw_slot, OAM_COUNT / 4
+	ld a, [wShadowOAM + raw_slot * 16 + 8]
+	and a
+	jr z, .raw_next{d:raw_slot}
+	cp SCREEN_HEIGHT_PX + OAM_Y_OFS
+	jr nc, .raw_next{d:raw_slot}
+	ld hl, wMobileVirtualLines + 14
+	inc [hl]
+	and $f
+	ld b, a
+	ld a, [wMobileVirtualLines + 15]
+	cp b
+	jr z, .raw_next{d:raw_slot}
 	xor a
-	ld [wMobileVirtualNativeRaw + native_slot * 4], a
+	ld [wMobileVirtualForceFull], a
+.raw_next{d:raw_slot}
+endr
+for native_slot, NUM_OBJECT_STRUCTS
 	ld a, [wMobileVirtualDescriptors + native_slot * 8 + 6]
+	bit 7, a
+	jr nz, .next{d:native_slot}
 	and a
 	jr z, .next{d:native_slot}
-	bit 7, a
-	jr z, .template{d:native_slot}
-	ld a, [wMobileVirtualDescriptors + native_slot * 8 + 7]
-	ld [wMobileVirtualNativeRaw + native_slot * 4 + 2], a
-	ld l, a
-	ld h, HIGH(wShadowOAM)
-	ld de, 8
-	add hl, de
-	ld a, [hl]
-	ld c, a
-	inc l
-	inc l
-	inc l
-	ld a, [hl]
-	and OAM_PALETTE
-	ld [wMobileVirtualNativeRaw + native_slot * 4 + 1], a
-	ld a, c
-	jr .top{d:native_slot}
-.template{d:native_slot}
-	ld a, 255
-	ld [wMobileVirtualNativeRaw + native_slot * 4 + 2], a
-; Every canonical native facing has the same palette for all four quadrants,
-; with no NEXT_PALETTE flag. The compiled-data host contract proves this.
-	ld a, [wMobileVirtualDescriptors + native_slot * 8 + 3]
-	and OAM_PALETTE
-	ld [wMobileVirtualNativeRaw + native_slot * 4 + 1], a
 	ld a, [wMobileVirtualDescriptors + native_slot * 8 + 1]
-.top{d:native_slot}
 	and a
 	jr z, .next{d:native_slot}
 	cp SCREEN_HEIGHT_PX + OAM_Y_OFS
 	jr nc, .next{d:native_slot}
-	ld [wMobileVirtualNativeRaw + native_slot * 4], a
 	ld hl, wMobileVirtualLines + 14
 	inc [hl]
 	and $f
@@ -86,44 +78,71 @@ endr
 	ret
 
 MobileVirtualAlignedNativeGroup:
-; A ordinary slot in a proven aligned scene. Read its metadata once, admit
-; before constructing any quads, and preserve already generated native OAM.
+; Proven canonical native sources share exact shifted row buckets. After the
+; urgent guest, later native colors cannot affect another guest allocation.
 	ld [wMobileVirtualIndex], a
-	and a
-	ld a, 255
-	jr nz, .owner
-	ld a, MOBILE_PEERS + 2
-.owner
-	ld [wMobileVirtualGroupOwner], a
 	ld a, [wMobileVirtualLength]
 	cp OAM_SIZE - 16 + 1
 	ret nc
 	ld a, [wMobileVirtualIndex]
 	add a
 	add a
-	add LOW(wMobileVirtualNativeRaw)
+	add a
+	add LOW(wMobileVirtualDescriptors + 6)
 	ld l, a
-	adc HIGH(wMobileVirtualNativeRaw)
-	sub l
-	ld h, a
-	ld a, [hli]
-	and a
-	ret z
-	ld [wMobileVirtualRectangleTop], a
-	ld a, [hli]
-	ld [wMobileVirtualGroupPalette], a
-	ld e, a
-	ld d, 0
+	ld h, HIGH(wMobileVirtualDescriptors)
+	bit 7, [hl]
+	jr z, .template_color
+	inc l
 	ld a, [hl]
 	ld [wMobileVirtualHeaderOAM], a
+	add 8
+	ld l, a
+	ld h, HIGH(wShadowOAM)
+	ld a, [hl]
+	ld c, a
+	inc l
+	inc l
+	inc l
+	ld a, [hl]
+	and OAM_PALETTE
+	jr .source_color
+.template_color
+	ld a, 255
+	ld [wMobileVirtualHeaderOAM], a
+	ld a, l
+	sub 5
+	ld l, a
+	ld a, [hl]
+	ld c, a
+	inc l
+	inc l
+	ld a, [hl]
+	and OAM_PALETTE
+.source_color
+	ld e, a
+	ld d, 0
+	ld a, c
+	and a
+	ret z
+	cp SCREEN_HEIGHT_PX + OAM_Y_OFS
+	ret nc
 	ld hl, wMobileVirtualBindings
 	add hl, de
 	ld a, [hl]
 	and a
 	ret nz
-; Native aligned tops occupy exactly one visible bucket. The guest may span
-; two and keeps the general aligned check. Length already bounds total OAM.
-	ld a, [wMobileVirtualRectangleTop]
+	ld a, [wMobileVirtualIndex]
+	and a
+	jr nz, .ordinary_color
+; Only the local prefix precedes guest color allocation. Protect its exact color.
+	ld hl, MobileVirtualPaletteBits
+	add hl, de
+	ld a, [wMobileVirtualPaletteUsed]
+	or [hl]
+	ld [wMobileVirtualPaletteUsed], a
+.ordinary_color
+	ld a, c
 	swap a
 	and $f
 	ld e, a
@@ -133,20 +152,10 @@ MobileVirtualAlignedNativeGroup:
 	cp 5
 	ret nc
 	inc [hl]
-	ld hl, wMobileVirtualRectangleCount
-	inc [hl]
 	ld a, [wMobileVirtualHeaderOAM]
 	cp 255
 	jr z, .template
 	ld [wMobileVirtualGroupPointer], a
-	ld a, [wMobileVirtualGroupPalette]
-	ld e, a
-	ld d, 0
-	ld hl, MobileVirtualPaletteBits
-	add hl, de
-	ld a, [wMobileVirtualPaletteUsed]
-	or [hl]
-	ld [wMobileVirtualPaletteUsed], a
 	jp MobileVirtualCopyRawRectangle
 .template
 	ld a, [wMobileVirtualIndex]
@@ -179,7 +188,11 @@ MobileVirtualAlignedNativeGroup:
 	ld l, a
 	scf
 	call MobileNativeRectangleTrampoline
-	jp MobileVirtualTemplateRectangleDone
+	ld hl, wMobileVirtualLength
+	ld a, [hl]
+	add 16
+	ld [hl], a
+	ret
 
 MobileVirtualAdmitAlignedRectangle:
 ; Exact only under AlignedScene's proof. Check both touched bins before

@@ -2824,29 +2824,12 @@ DEF PRIORITY_HIGH EQU $30
 InitSprites:
 	; Since OAM's are loaded in reverse order, we need to load the sprite priorities in reverse order.
 	call .DeterminePriorities
-if DEF(MOBILE_ADAPTER)
-	xor a
-	ld [wMobileVirtualBaseReady], a
-	ld a, [wMobileVirtualStage]
-	and a
-	jr z, .ordinary_order
-	xor a
-	call MobileNativeRectangleTrampoline
-.ordinary_order
-endc
 	ld c, PRIORITY_LOW
 	call .InitSpritesByPriority
 	ld c, PRIORITY_NORM
 	call .InitSpritesByPriority
 	ld c, PRIORITY_HIGH
-if DEF(MOBILE_ADAPTER)
-	call .InitSpritesByPriority
-	xor a
-	scf
-	jp MobileNativeRectangleTrampoline
-else
 	jr .InitSpritesByPriority
-endc
 
 .DeterminePriorities:
 	xor a

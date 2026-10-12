@@ -136,19 +136,6 @@ MobileVirtualComposeStep::
 .remote_limit
 	ld [wMobileVirtualRemoteLimit], a
 	call MobileVirtualAlignedScene
-	ld a, [wMobileVirtualForceFull]
-	and a
-	jr z, .audit_colors
-	ld a, [wMobileVirtualDroppedSlot]
-	cp 3
-	jr c, .dense_phase
-	xor a
-	ld [wMobileVirtualDroppedSlot], a
-.dense_phase
-	and a
-	jr nz, .colors_current ; native-only presentation has no private color request
-	ld a, MOBILE_PEERS
-	ld [wMobileVirtualRemoteLimit], a
 .audit_colors
 	ld a, [wMobileVirtualNeedColorAudit]
 	bit 7, a
@@ -202,13 +189,6 @@ endr
 	xor a
 .phase_ready
 	ld [wMobileVirtualPhase], a
-	ldh a, [hVBlankCounter]
-	and $f
-	cp NUM_OBJECT_STRUCTS - 1
-	jr c, .rotation_ready
-	sub NUM_OBJECT_STRUCTS - 1
-.rotation_ready
-	ld [wMobileVirtualNativeRotation], a
 
 .full_base
 	xor a
@@ -223,12 +203,6 @@ endr
 	ld [wMobileVirtualStage], a
 	ret
 .urgent
-	ld a, [wMobileVirtualForceFull]
-	and a
-	jr z, .ordinary_guests
-	ld a, [wMobileVirtualDroppedSlot]
-	and a
-	jp nz, .urgent_done
 .ordinary_guests
 ; Independent avatars precede ordinary figures only in presentation admission.
 ; Native NPC state/simulation remains untouched when total OAM capacity is full.
@@ -272,12 +246,6 @@ endr
 	ret
 
 .native
-	ld a, [wMobileVirtualForceFull]
-	and a
-	jr z, .native_capacity
-	ld a, [wMobileVirtualDroppedSlot]
-	and a
-	jp z, .native_raw_done ; all four canonical players fit without ordinary quads
 .native_capacity
 	ld a, [wMobileVirtualLength]
 	cp OAM_SIZE
@@ -320,17 +288,6 @@ endr
 	ld h, a
 	ld a, [hl]
 	ld b, a
-	ld a, [wMobileVirtualForceFull]
-	and a
-	ld a, b
-	jr z, .ordinary_source
-	bit 7, a
-	jr z, .omitted_native_source ; cyclic foreground order shares raw capacity
-	ld a, [wMobileVirtualDroppedSlot]
-	and a
-	jr nz, .raw_source
-.raw_source
-	ld a, b
 .ordinary_source
 	and $1f
 	jr nz, .native_present
@@ -460,16 +417,13 @@ endr
 	xor a
 .next_phase
 	ld [wMobileVirtualPhase], a
-	ld a, [wMobileVirtualForceFull]
-	and a
-	ret z
-	ld a, [wMobileVirtualDroppedSlot]
+	ld a, [wMobileVirtualNativeRotation]
 	inc a
-	cp 3
-	jr c, .dense_phase_done
+	cp NUM_OBJECT_STRUCTS - 1
+	jr c, .next_native_rotation
 	xor a
-.dense_phase_done
-	ld [wMobileVirtualDroppedSlot], a
+.next_native_rotation
+	ld [wMobileVirtualNativeRotation], a
 	ret
 
 MobileVirtualFrameValid:
@@ -1475,17 +1429,7 @@ MobileVirtualPeerGroup:
 	push de
 	ld a, d
 	ld [wMobileVirtualRectangleTop], a
-	ld a, [wMobileVirtualForceFull]
-	and a
-	jr z, .peer_rows
-	ld a, [wMobileVirtualDroppedSlot]
-	and a
-	jr nz, .peer_rows
-	and a ; proven four canonical players: <=16 OAM and <=8 per visible line
-	jr .peer_rows_done
-.peer_rows
 	call MobileVirtualAdmitRectangleTop
-.peer_rows_done
 	pop de
 	pop bc
 	jr nc, .peer_rectangle_ready
@@ -2109,5 +2053,3 @@ ASSERT MobileVirtualRendererEnd - MobileVirtualRendererStart <= 6144
 
 INCLUDE "mobile_adapter/rom/virtual_fast_scene.asm"
 INCLUDE "mobile_adapter/rom/virtual_graphics.asm"
-
-INCLUDE "mobile_adapter/rom/virtual_priority.asm"

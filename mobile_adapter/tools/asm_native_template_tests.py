@@ -132,11 +132,18 @@ def verify_native_templates(rom, symbols, require, mode="generic"):
                 elif op == 0xea:
                     write(fetch() | fetch() << 8, registers['a'])
                     cycles += 16
-                elif op == 0xc3:
-                    pc = fetch() | fetch() << 8
-                    require(pc == symbols['Bankswitch'][1] and registers['a'] == (native_bank if mode == 'ordinary' else copy_bank),
-                            'Ordinary rectangle did not restore its source ROM bank')
-                    cycles += 16
+                elif op in (0xc3, 0xc2, 0xca, 0xd2, 0xda):
+                    target = fetch() | fetch() << 8
+                    taken = {0xc3: True, 0xc2: not zero, 0xca: zero,
+                             0xd2: not carry, 0xda: carry}[op]
+                    if taken:
+                        pc = target
+                        if target == symbols['Bankswitch'][1]:
+                            require(registers['a'] == (native_bank if mode == 'ordinary' else copy_bank),
+                                    'Rectangle did not restore its source ROM bank')
+                        else:
+                            require(0x4000 <= target < 0x8000, 'Rectangle jump escaped its upper program bank')
+                    cycles += 16 if taken else 12
                 elif op == 0xfa:
                     registers['a'] = read(fetch() | fetch() << 8)
                     cycles += 16

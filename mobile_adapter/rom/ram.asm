@@ -197,14 +197,9 @@ for peer, 1, MOBILE_PEERS + 1
 wMobileActorBackup{d:peer}:: ds OBJECT_LENGTH + 4 ; camera and BG anchor
 endr
 wMobileActorBackupEnd::
-DEF wMobileVirtualPriorityBackup EQU wMobileActorBackup1
-DEF wMobileVirtualPriorityCursor EQU wMobileActorBackup1 + NUM_OBJECT_STRUCTS
-DEF wMobileVirtualPriorityEnd EQU wMobileActorBackup1 + NUM_OBJECT_STRUCTS + 1
-EXPORT wMobileVirtualPriorityBackup, wMobileVirtualPriorityCursor, wMobileVirtualPriorityEnd
 DEF wMobileVirtualFrameColors EQU wMobileActorBackup1 + 16
 EXPORT wMobileVirtualFrameColors
 ASSERT wMobileVirtualFrameColors + MOBILE_PEERS palettes <= wMobileActorBackupEnd
-ASSERT wMobileVirtualPriorityEnd + 1 <= wMobileActorBackupEnd
 ; GDMA ignores the source address's low four bits. Keep every private raw tile
 ; snapshot aligned, independently of the 38-byte native object records.
 ds (16 - (LOW(@) & $f)) & $f

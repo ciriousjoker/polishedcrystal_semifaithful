@@ -35,7 +35,7 @@ def rectangle_programs(native):
 
     lines = ['SECTION "Mobile Native Rectangle Programs", ROMX, BANK[MOBILE_ROM_BANK + 2]',
              'MobileNativeRectangleProgramsStart::',
-             'MobileVirtualWriteRectangleDispatch::', '\tjp z, MobileVirtualPriorityDispatch', '\tjr c, MobileVirtualWritePrivateRectangle',
+             'MobileVirtualWriteRectangleDispatch::', '\tjr c, MobileVirtualWritePrivateRectangle',
              'MobileVirtualWriteOrdinaryRectangle::', '\tpush hl', '\tpush bc',
              '\tld bc, -FacingStepDown0', '\tadd hl, bc',
              '\tadd hl, hl', '\tadd hl, hl', '\tld bc, MobileRectanglePrograms',
@@ -66,6 +66,39 @@ def rectangle_programs(native):
         for ordinary in (True, False):
             prefix = 'MobileOrdinary' if ordinary else 'MobilePrivate'
             lines += [prefix + name + ':']
+            tiles = [int(row[3][1:], 16) for row in rows if re.fullmatch(r'\$[0-9a-fA-F]+', row[3])]
+            simple = (ordinary and len(tiles) == 4 and
+                      len({tile & 128 for tile in tiles}) == 1 and
+                      max(tile & 127 for tile in tiles) <= 15 and
+                      all('ABSOLUTE_TILE_ID' not in row[2] and 'NEXT_PALETTE' not in row[2]
+                          for row in rows))
+            if simple:
+                # The fast branch proves the whole four-tile sum cannot wrap or
+                # straddle the standing/walking boundary. Other native inputs
+                # retain the byte-exact general program below.
+                lines += ['\tldh a, [hCurSpriteTile]', '\tcp 113', '\tjp nc, .unusual_base']
+                if tiles[0] & 128:
+                    lines += ['\tbit 3, d', '\tjr z, .vram0_base', '\tadd $40',
+                              '\tjr .tile_base', '.vram0_base', '\tadd $80', '.tile_base']
+                lines += ['\tld e, a', '\tldh a, [hCurSpriteXPixel]', '\tld h, a',
+                          '\tldh a, [hCurSpriteYPixel]', '\tld l, a']
+                for quad, (y, x, flags, tile) in enumerate(rows):
+                    for axis, value in (('l', y), ('h', x)):
+                        lines += ['\tld a, ' + axis]
+                        if value != '0':
+                            lines += ['\tadd ' + value]
+                        lines += ['\tld [bc], a', '\tinc c']
+                    lines += ['\tld a, e']
+                    low_tile = tiles[quad] & 127
+                    if low_tile:
+                        lines += [f'\tadd ${low_tile:02x}']
+                    lines += ['\tld [bc], a', '\tinc c', f'if ({flags}) & RELATIVE_ATTRIBUTES',
+                              '\tldh a, [hCurSpriteOAMFlags]', f'\tor {flags}',
+                              '\tand OAM_XFLIP | OAM_YFLIP | OAM_PRIO', '\tor d',
+                              'else', '\tld a, d',
+                              f'\tor ({flags}) & (OAM_XFLIP | OAM_YFLIP | OAM_PRIO)',
+                              'endc', '\tld [bc], a', '\tld a, c', '\tsub 7', '\tld c, a']
+                lines += ['\tjp .finish', '.unusual_base']
             if not ordinary:
                 lines += ['\tld a, [wMobileVirtualTemplate + 2]', '\tld b, a',
                           '\tld a, [wMobileVirtualTemplate + 3]', '\tld c, a']
@@ -96,7 +129,7 @@ def rectangle_programs(native):
                     lines += ['\tld [bc], a', '\tld a, c', '\tsub 7', '\tld c, a']
                 else:
                     lines += ['\tld [de], a', '\tinc e']
-            lines += ['\tpop hl', '\tld a, l', '\tadd 16', '\tld l, a',
+            lines += ['.finish', '\tpop hl', '\tld a, l', '\tadd 16', '\tld l, a',
                       '\tjr nc, .source_ready', '\tinc h', '.source_ready']
             if ordinary:
                 lines += [f'\tld e, {rows[-1][2]}', '\txor a', '\tldh [hUsedSpriteTile], a']

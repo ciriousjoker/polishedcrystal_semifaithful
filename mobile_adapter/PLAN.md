@@ -2,9 +2,10 @@
 
 ## 2026-10-13: private DMA and emitted rectangle programs
 
-M2 remains open. The 3 to 6 hour estimate is uncertain: no completion deadline
-is justified until the full-pool visibility blocker is resolved. The user's
-status question does not cancel the autonomous milestone work.
+M2 remains open. The earlier 3 to 6 hour estimate was revised to roughly one to
+two working days, with substantial uncertainty. No completion deadline is
+justified until the full-pool visibility blocker is resolved. The user's status
+question does not cancel the autonomous milestone work.
 
 Executed probes `independent-compact-native-metadata-20261012`,
 `independent-direct-dma-corrected-20261012` and
@@ -30,10 +31,11 @@ Bankswitch entry. Independent emitted-instruction tests pass 800 private cases
 checks pass again. The remaining ROM0 headroom is only two bytes; do not relocate
 ordinary helpers to hide that constraint.
 
-Current unaccepted experiment freezes only the private RGB bytes alongside the
-private OAM page and selects color sources during native VBlank upload. It also
-tries three dense presentation phases and temporary native draw-order rotation
-with byte-for-byte restoration. These are experiments, not the final G10 policy:
+The current unaccepted design freezes only the private RGB bytes alongside the
+private OAM page and selects color sources during native VBlank upload. An earlier
+experiment tried three dense presentation phases and temporary native draw-order
+rotation with byte-for-byte restoration. Both were removed after the regression
+below. These are experiments, not the final G10 policy:
 NPC/object priority, actual-conflict-only omissions, an independent vanilla local
 visibility oracle and VBlank graphics timing still need proof. Do not relax any
 visibility threshold to make this pass. The first frozen-color replay did not
@@ -48,8 +50,29 @@ Awaited-VBlank crossing counters remain zero. Native renderer cost increased
 under the temporary draw-order experiment. This is a performance regression,
 reported to the user, and that experiment must be removed rather than accepted.
 
-Current linked placement: 32,885 feature-owned upper bytes, 244 net lower
-integration bytes, 13,717 free lower bytes. Disabled counterpart hashes and the
+Later probes `independent-original-native-order-20261013`,
+`independent-fast-native-base-20261013` and
+`independent-direct-native-inventory-20261013` all restore 800/800 native updates,
+zero duplicates, maximum gap one and zero observed awaited-VBlank crossings.
+They still fail the unchanged visibility gates. Private publications are
+5/0/8/4, 7/0/8/4 and 9/0/8/4 respectively. The last run also fails the stale
+peer generation barrier after reconnect. Do not widen transport deadlines.
+
+The native rectangle fast branch is byte-identical to the independent original
+facing oracle, including unusual tile bases through its fallback. All 800
+ordinary cases pass with a 988-cycle maximum. Warm dense native rendering saves
+about 1,800 cycles. Aligned-scene inventory now reads immutable native ShadowOAM
+directly instead of copying a second metadata view. Stage-1 maxima fall from
+7,136..7,868 cycles to 5,304..6,036. Neither improvement resolves starvation.
+The full emitted assembly contract suite passes again after these changes.
+
+A VRAM-staged OAM/GDMA alternative was researched but not implemented. It would
+consume native VBlank graphics time, and the pinned core charges an additional
+912 cycles for every general DMA start. Repeated sixteen-byte transfers therefore
+do not justify a hardware-specific optimization without independent timing proof.
+
+Current linked placement: 33,865 feature-owned upper bytes, 224 net lower
+integration bytes, 13,737 free lower bytes. Disabled counterpart hashes and the
 entire final M2 suite still require fresh verification. The battery-save format
 and original game helpers remain unchanged. No Cloudflare deployment, phone test
 or upstream submission has been attempted.
