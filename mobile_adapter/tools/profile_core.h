@@ -94,6 +94,16 @@ extern "C" uint64_t mobile_profile_scene_metric(unsigned index) {
 }
 static unsigned mobile_native_shadow_address, mobile_native_descriptor_address, mobile_native_object_address;
 static byte mobile_native_shadow[160], mobile_native_descriptors[13 * 8], mobile_native_identities[13 * 2];
+static unsigned mobile_native_facing_bank;
+static byte mobile_native_figures[13][64], mobile_native_figure_counts[13];
+extern "C" void mobile_profile_native_facing(unsigned bank) {
+    mobile_native_facing_bank = bank;
+}
+extern "C" unsigned mobile_profile_native_figure_byte(unsigned index) {
+    if (index < 13 * 64) return mobile_native_figures[index / 64][index % 64];
+    index -= 13 * 64;
+    return index < 13 ? mobile_native_figure_counts[index] : 0;
+}
 extern "C" void mobile_profile_native_oam(unsigned shadow, unsigned descriptors, unsigned objects) {
     mobile_native_shadow_address = shadow;
     mobile_native_descriptor_address = descriptors;
@@ -430,6 +440,37 @@ static void mobile_profile_after_instruction(gb* game, const cpu_regs& regs, int
                     const auto* actor = ram + 0x1000 + mobile_native_object_address - 0xd000 + i * 34;
                     mobile_native_identities[i * 2] = actor[0];
                     mobile_native_identities[i * 2 + 1] = actor[1];
+                    const auto* view = mobile_native_descriptors + i * 8;
+                    const unsigned count = view[6] & 31;
+                    mobile_native_figure_counts[i] = 0;
+                    if (!count || count > 16) continue;
+                    auto* expected = mobile_native_figures[i];
+                    if (view[6] & 128) {
+                        if (unsigned(view[7]) + count * 4 > 160) continue;
+                        std::copy_n(mobile_native_shadow + view[7], count * 4, expected);
+                    } else {
+                        // The ordinary engine retained a facing template for
+                        // this actor even when vanilla's finite OAM was full.
+                        // Interpret its immutable native data, without running
+                        // a game routine, modifying RAM or charging game cycles.
+                        const unsigned pointer = view[4] | unsigned(view[5]) << 8;
+                        if (!mobile_native_facing_bank || pointer < 0x4000 || pointer + count * 4 > 0x8000) continue;
+                        const auto* facing = game->get_rom()->get_rom() +
+                            mobile_native_facing_bank * 0x4000 + pointer - 0x4000;
+                        for (unsigned q = 0; q < count; ++q) {
+                            const auto* source = facing + q * 4;
+                            unsigned tile = ((source[2] & 4 ? 0 : view[2]) + source[3]) & 255;
+                            if ((view[3] & 8) && tile >= 128) tile -= 64;
+                            unsigned attributes = ((source[2] & 2 ? view[7] : 0) | source[2]) & 0xe0;
+                            attributes |= view[3];
+                            if (source[2] & 8) attributes = (attributes + 1) & 255;
+                            expected[q * 4] = byte(view[1] + source[0]);
+                            expected[q * 4 + 1] = byte(view[0] + source[1]);
+                            expected[q * 4 + 2] = byte(tile);
+                            expected[q * 4 + 3] = byte(attributes);
+                        }
+                    }
+                    mobile_native_figure_counts[i] = byte(count);
                 }
             }
             if (&span == &mobile_render_spans[14] && mobile_scene_stage_address && span.stage < 9) {

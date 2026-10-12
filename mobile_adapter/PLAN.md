@@ -1,3 +1,27 @@
+## 2026-10-12: all ordinary sources are now measured
+
+The new read-only facing-template observer is built and its six core tests pass.
+Profile core SHA256: `46e8dcdb8e00fd89727824c02bcfcf7bd1031feb90c86368cf72be2cbf5688e1`.
+Runner: `/Volumes/Storage/Cache/mobileadapter/smoke-all-native-20261012`.
+The fresh `independent-all-native-pool-20261012` replay fails the unchanged
+visibility gate. Every client retains all thirteen ordinary records and 800/800
+native world updates with zero duplicates. The strengthened source census exposes
+three continuously eligible native figures (slots 10, 11, 12) with **zero**
+complete hardware presentations. Earlier raw-OAM-only census omitted these
+figures and is insufficient evidence for G5/G12.
+
+The direct full-base replay also failed publication; suppressing serial work
+starved clients and has been reverted. The corrected aligned replay crossed the
+awaited VBlank on three clients (counts 1, 1, 2), correcting the earlier two-client
+note. Publication again uses LY133. No timing or visibility exception is accepted.
+
+Current unaccepted experiment replaces coarse/exact rectangle fallback with
+three bit planes counting actual visible rows, and makes full admission visit all
+thirteen descriptors rather than only the ten native OAM groups. Host instruction
+verification and a fresh native replay are required. This is not yet the final
+priority policy: G10 priority, actual-conflict-only sharing, all-class fairness,
+colors, the final suite and matching disabled hashes remain acceptance blockers.
+
 # Mobile Adapter multiplayer plan
 
 ## 2026-10-12: final crowded-scene priority contract
@@ -20,7 +44,7 @@ object removal, interaction change or battery change is authorized.
 The current fast-color experiment predates this final priority policy and is not
 an accepted implementation. Its corrected aligned replay still fails: scene
 preparation completes too late for most guest admissions, and private publication
-crosses the awaited VBlank on two clients. Tighten the unsafe publication guard;
+crosses the awaited VBlank on three clients. Tighten the unsafe publication guard;
 then reduce/restructure work rather than widening timing gates. The time-based
 ordinary-group cutoff must be removed because it manufactures omissions before
 a hardware conflict is proven. All native/world/save and final-suite gates remain.

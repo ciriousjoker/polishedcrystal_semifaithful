@@ -35,6 +35,7 @@ static retro_pixel_format pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
 static std::vector<unsigned char> image;
 static unsigned char video_oam[160] = {};
 static unsigned (*native_oam_byte)(unsigned) = nullptr;
+static unsigned (*native_figure_byte)(unsigned) = nullptr;
 static unsigned video_native_source_count[13] = {}, video_native_complete[13] = {};
 static unsigned video_native_source_sprite[13] = {}, video_native_source_map[13] = {};
 static unsigned char video_object_palettes[64] = {};
@@ -513,6 +514,15 @@ static void video(const void* data, unsigned w, unsigned h, size_t pitch) {
     ++video_frames;
     if (const auto* oam = descriptor(0xfe00)) std::memcpy(video_oam, oam, sizeof(video_oam));
     if (native_oam_byte) {
+        unsigned row_demand[144] = {};
+        bool selected[40];
+        for (unsigned q = 0; q < 40; ++q) {
+            selected[q] = true;
+            for (int row = int(video_oam[q * 4]) - 16; row < int(video_oam[q * 4]) - 8; ++row) {
+                if (row < 0 || row >= 144) continue;
+                if (row_demand[row]++ >= 10) selected[q] = false;
+            }
+        }
         for (unsigned slot = 0; slot < 13; ++slot) {
             const unsigned flags = native_oam_byte(160 + slot * 8 + 6);
             const unsigned count = flags & 31;
@@ -521,19 +531,40 @@ static void video(const void* data, unsigned w, unsigned h, size_t pitch) {
             video_native_source_map[slot] = native_oam_byte(265 + slot * 2);
             video_native_source_count[slot] = 0;
             video_native_complete[slot] = 0;
-            if (!(flags & 128) || !count || count > 16 || start + count * 4 > 160) continue;
+            const unsigned actual_count = native_figure_byte ? native_figure_byte(13 * 64 + slot) : count;
+            if (!actual_count || actual_count > 16 ||
+                (!native_figure_byte && (!(flags & 128) || start + count * 4 > 160))) continue;
+            const auto source_byte = [&](unsigned index) {
+                return native_figure_byte ? native_figure_byte(slot * 64 + index) : native_oam_byte(start + index);
+            };
             bool visible = false;
-            for (unsigned quad = 0; quad < count; ++quad) {
-                const unsigned y = native_oam_byte(start + quad * 4);
+            for (unsigned quad = 0; quad < actual_count; ++quad) {
+                const unsigned y = source_byte(quad * 4);
                 visible |= y >= 9 && y < 160;
             }
             if (!visible) continue;
-            video_native_source_count[slot] = count;
-            for (unsigned target = 0; target + count * 4 <= 160; target += 4) {
-                bool equal = true;
-                for (unsigned i = 0; i < count * 4; ++i)
-                    if (video_oam[target + i] != native_oam_byte(start + i)) { equal = false; break; }
-                if (equal) { video_native_complete[slot] = 1; break; }
+            video_native_source_count[slot] = actual_count;
+            // The native renderer writes facing quads backwards; an independent
+            // renderer may write the same complete figure forwards. Compare all
+            // four-byte hardware tuples, preserving multiplicity, not ordering.
+            for (unsigned target = 0; target + actual_count * 4 <= 160; target += 4) {
+                unsigned matched = 0;
+                for (unsigned q = 0; q < actual_count; ++q) {
+                    for (unsigned candidate = 0; candidate < actual_count; ++candidate) {
+                        if (matched & (1u << candidate)) continue;
+                        bool equal = true;
+                        for (unsigned field = 0; field < 4; ++field)
+                            if (video_oam[target + candidate * 4 + field] != source_byte(q * 4 + field)) {
+                                equal = false; break;
+                            }
+                        if (equal) { matched |= 1u << candidate; break; }
+                    }
+                }
+                bool fully_selected = true;
+                for (unsigned q = 0; q < actual_count; ++q) fully_selected &= selected[target / 4 + q];
+                if (fully_selected && matched == (1u << actual_count) - 1) {
+                    video_native_complete[slot] = 1; break;
+                }
             }
         }
     }
@@ -791,6 +822,10 @@ int main(int argc, char** argv) {
                      bindings.at("wMobileVirtualDescriptors").address,
                      native_addresses.at("wObjectStructs").second);
             native_oam_byte = symbol<unsigned(*)(unsigned)>(core, "mobile_profile_native_oam_byte");
+            if (auto facing = reinterpret_cast<void(*)(unsigned)>(dlsym(core, "mobile_profile_native_facing"))) {
+                facing(native_addresses.at("Facings").first);
+                native_figure_byte = symbol<unsigned(*)(unsigned)>(core, "mobile_profile_native_figure_byte");
+            }
         }
         const std::pair<const char*, const char*> cursor_ranges[] = {
             {"HBlankCopy1bpp", "ClearBGPalettes"},
