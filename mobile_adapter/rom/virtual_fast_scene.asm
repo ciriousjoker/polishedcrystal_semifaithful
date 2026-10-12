@@ -77,6 +77,55 @@ endr
 	ld [wMobileVirtualForceFull], a
 	ret
 
+MobileVirtualAlignedNativePass:
+; AlignedScene proves every source is a canonical rectangle. Reuse the same
+; immutable descriptor pointer for eligibility, its deadline and admission.
+; Irregular scenes continue through the general selector with its larger bound.
+	ld a, [wMobileVirtualLength]
+	cp OAM_SIZE
+	jr nc, .done
+	ld a, [wMobileVirtualCursor]
+	cp NUM_OBJECT_STRUCTS - 1
+	jr nc, .done
+	ld b, a
+	ld a, [wMobileVirtualNativeRotation]
+	inc a
+	add b
+	cp NUM_OBJECT_STRUCTS - 1
+	jr c, .index_ready
+	sub NUM_OBJECT_STRUCTS - 1
+.index_ready
+	inc a
+	ld [wMobileVirtualIndex], a
+	add a
+	add a
+	add a
+	add LOW(wMobileVirtualDescriptors + 6)
+	ld l, a
+	ld h, HIGH(wMobileVirtualDescriptors)
+	ld a, [hl]
+	and $1f
+	jr z, .advance
+	ld b, 139
+	bit 7, [hl]
+	jr z, .deadline
+	inc b
+.deadline
+	ldh a, [rLY]
+	cp b
+	ret nc
+	call MobileVirtualAlignedNativeDescriptor
+.advance
+	ld hl, wMobileVirtualCursor
+	inc [hl]
+	jr MobileVirtualAlignedNativePass
+.done
+	xor a
+	ld [wMobileVirtualCursor], a
+	ld a, 7
+	ld [wMobileVirtualStage], a
+	ret
+
 MobileVirtualAlignedNativeGroup:
 ; Proven canonical native sources share exact shifted row buckets. After the
 ; urgent guest, later native colors cannot affect another guest allocation.
@@ -91,6 +140,8 @@ MobileVirtualAlignedNativeGroup:
 	add LOW(wMobileVirtualDescriptors + 6)
 	ld l, a
 	ld h, HIGH(wMobileVirtualDescriptors)
+MobileVirtualAlignedNativeDescriptor:
+; HL points to the exact descriptor selected above, or to the local prefix.
 	bit 7, [hl]
 	jr z, .template_color
 	inc l

@@ -246,6 +246,9 @@ endr
 	ret
 
 .native
+	ld a, [wMobileVirtualForceFull]
+	and a
+	jp nz, MobileVirtualAlignedNativePass
 .native_capacity
 	ld a, [wMobileVirtualLength]
 	cp OAM_SIZE
@@ -1960,71 +1963,6 @@ for top, 256
 	endr
 	PURGE clipped_top, clipped_end, chunk_top, row_chunk
 endr
-
-MobileVirtualMergePalettes:
-; Copy directly from each immutable source. Fixed hardware slots avoid saving
-; and advancing a native pointer through colors that use a private source.
-for hardware_color, 8
-	ld hl, wOBPals2 + hardware_color palettes
-	ld de, wMobileVirtualMergedPalette + hardware_color palettes
-	ld a, [wMobileVirtualBindings + hardware_color]
-	and a
-	jr z, .copy{d:hardware_color}
-	cp MOBILE_PEERS + 1
-	jr nc, .copy{d:hardware_color}
-	dec a
-	add a
-	add a
-	add a
-	add LOW(wMobilePrivatePalColors)
-	ld l, a
-	adc HIGH(wMobilePrivatePalColors)
-	sub l
-	ld h, a
-.copy{d:hardware_color}
-rept 1 palettes
-	ld a, [hli]
-	ld [de], a
-	inc de
-endr
-endr
-	ret
-
-MobileVirtualPaletteSource:
-; Bank 5, HL ordinary active color, D hardware slot. Return a private pointer
-; only for the completed current OAM publication. Never edit native metadata.
-	push af
-	push bc
-	push de
-	ld a, [wMobileOnline]
-	and a
-	jr z, .done
-	ld a, [wMobileWanted]
-	and a
-	jr z, .done
-	push hl
-	ld e, d
-	ld d, 0
-	ld hl, wMobilePrivatePalBindings
-	add hl, de
-	ld a, [hl]
-	and a
-	jr z, .ordinary
-	cp MOBILE_PEERS + 1
-	jr nc, .ordinary
-	dec a
-	ld hl, wMobilePrivatePalColors
-	ld bc, 1 palettes
-	rst AddNTimes
-	pop de ; discard ordinary source
-	jr .done
-.ordinary
-	pop hl
-.done
-	pop de
-	pop bc
-	pop af
-	ret
 
 MobileRenderSprites::
 	ret

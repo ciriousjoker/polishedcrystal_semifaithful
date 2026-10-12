@@ -71,6 +71,23 @@ consume native VBlank graphics time, and the pinned core charges an additional
 912 cycles for every general DMA start. Repeated sixteen-byte transfers therefore
 do not justify a hardware-specific optimization without independent timing proof.
 
+`independent-aligned-native-pass-20261013` removes duplicate aligned descriptor
+selection and deadline work and the obsolete palette merge/source routines.
+It publishes 19/0/17/5 private scenes, but client 1 ends offline. All four still
+have 800/800 ordinary updates, zero duplicates and zero observed awaited-VBlank
+crossings. This is another failed full-pool acceptance replay, not completion.
+The aligned path is only permitted after the existing canonical-source proof;
+irregular sources retain their original exact admission and larger deadline.
+
+A separate correctness fix invalidates both the published frame token and
+in-progress composition before validated peer identity, map, instance, epoch,
+availability or avatar changes are copied. It also invalidates projected
+visibility. Position, facing, sequence revision and coherent movement-mode
+updates do not clear the presentation. Emitted-instruction tests check every
+record field across all three peer slots, unchanged records, preserved caller
+pointers and all RAM write boundaries. Fresh warp/menu/avatar integration
+replays are still mandatory before accepting this fix.
+
 Current linked placement: 33,865 feature-owned upper bytes, 224 net lower
 integration bytes, 13,737 free lower bytes. Disabled counterpart hashes and the
 entire final M2 suite still require fresh verification. The battery-save format

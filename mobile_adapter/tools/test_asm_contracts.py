@@ -125,6 +125,8 @@ with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
     require(symbols["wMobileResidentStart"] == (0, 0xcec4), "Resident placement changed")
     require(symbols["wMobileBufferStart"] == (2, 0xd4eb), "Buffer placement changed")
     require(symbols["wMobileBufferEnd"][1] <= 0xe000, "Buffer overflow")
+    from asm_peer_invalidation_tests import verify_peer_invalidation
+    verify_peer_invalidation(rom, symbols, require)
     if args.renderer == "native":
         bank, address = symbols["MobileNativeCopyFourTiles"]
         offset = bank * 0x4000 + address - 0x4000

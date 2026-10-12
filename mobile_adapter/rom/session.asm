@@ -965,7 +965,8 @@ MobileCapture::
 	ret
 
 MobileInvalidatePeer:
-; HL=new wire record, DE=old peer. Invalidate interpolation on identity/warp.
+; HL=validated new record, DE=old peer. Invalidate the projected appearance and
+; any published private frame before committing identity, scene or avatar changes.
 	push hl
 	push de
 	push bc
@@ -978,14 +979,31 @@ MobileInvalidatePeer:
 	inc hl
 	dec b
 	jr nz, .identity
-	ld bc, 6 ; entry epoch at record offset 10
+	ld bc, 2 ; map, instance and entry epoch at record offsets 6..11
 	add hl, bc
 	ld a, e
-	add 6
+	add 2
 	ld e, a
-	jr nc, .epoch
+	jr nc, .scene
 	inc d
-.epoch
+.scene
+	ld b, 6
+.scene_byte
+	ld a, [de]
+	cp [hl]
+	jr nz, .changed
+	inc de
+	inc hl
+	dec b
+	jr nz, .scene_byte
+	ld bc, 5 ; availability and selected appearance at record offsets 17..18
+	add hl, bc
+	ld a, e
+	add 5
+	ld e, a
+	jr nc, .appearance
+	inc d
+.appearance
 	ld a, [de]
 	cp [hl]
 	jr nz, .changed
@@ -1001,6 +1019,12 @@ MobileInvalidatePeer:
 	ld hl, MOBILE_PEER_DRAW_VALID
 	add hl, de
 	ld [hl], 0
+	ld hl, MOBILE_PEER_VISIBLE
+	add hl, de
+	ld [hl], 0
+	xor a
+	ld [wMobileVirtualPreviousOAM], a
+	ld [wMobileVirtualStage], a
 	jr .done
 .same
 	pop bc
