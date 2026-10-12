@@ -133,12 +133,10 @@ MobileTick::
 	and a
 	jr z, .available
 .paused
-if DEF(MOBILE_VIRTUAL_ACTORS)
 	xor a
 	ld [wMobileAvailability], a
 	call MobileFrozenOverworld
 	jr z, .available
-endc
 	farcall MobileNativeInvalidateHash
 	xor a
 	ld [wMobileAvailability], a
@@ -182,11 +180,7 @@ endc
 ; IRQs may have completed a byte since the outer admission check. Check the
 ; budget again after choosing the actual expensive state, before touching it.
 	ldh a, [rLY]
-if DEF(MOBILE_VIRTUAL_ACTORS)
 	cp 116
-else
-	cp 120
-endc
 	jp nc, .return
 	call MobilePrepareCommand
 	jp .return
@@ -194,11 +188,7 @@ endc
 ; IRQs may have completed a byte since the outer admission check. Check the
 ; budget again after choosing the actual expensive state, before touching it.
 	ldh a, [rLY]
-if DEF(MOBILE_VIRTUAL_ACTORS)
 	cp 116
-else
-	cp 120
-endc
 	jp nc, .return
 	call MobileAppendPending
 	jp c, .protocol_error
@@ -231,11 +221,7 @@ endc
 ; IRQs may have completed a byte since the outer admission check. Check the
 ; budget again after choosing the actual expensive state, before touching it.
 	ldh a, [rLY]
-if DEF(MOBILE_VIRTUAL_ACTORS)
 	cp 116
-else
-	cp 120
-endc
 	jp nc, .return
 	call MobileValidateResponseSlice
 	jp c, .packet_error
@@ -697,10 +683,8 @@ MobileSerialIRQ::
 .counted
 	ld hl, wMobileBurst
 	dec [hl]
-if DEF(MOBILE_VIRTUAL_ACTORS)
 	ld hl, wMobileVirtualSerialSlice
 	dec [hl]
-endc
 	ldh a, [rSB]
 	ld d, a
 	ld a, [wMobileWire]
@@ -766,7 +750,6 @@ endc
 	ld [wMobileWire], a
 	jr .return
 .next
-if DEF(MOBILE_VIRTUAL_ACTORS)
 	ldh a, [rLY]
 	cp 136
 	jr nc, .return ; finish this byte, then give the awaited VBlank to the game
@@ -776,7 +759,6 @@ if DEF(MOBILE_VIRTUAL_ACTORS)
 	ld a, [wMobileVirtualSerialSlice]
 	and a
 	jr z, .return ; return the idle CPU to presentation after a bounded byte slice
-endc
 	ld a, [wMobileBurst]
 	and a
 	jr z, .return
@@ -1159,20 +1141,12 @@ ASSERT MobileRequestVectorEnd - MobileRequestVector == 12
 MobileReplyHeader:
 	db $50, $43, 1, 2
 INCLUDE "mobile_adapter/rom/session.asm"
-if DEF(MOBILE_VIRTUAL_ACTORS)
 INCLUDE "mobile_adapter/rom/virtual_actors.asm"
-else
-INCLUDE "mobile_adapter/rom/native_actors.asm"
-endc
 INCLUDE "mobile_adapter/rom/menu.asm"
 MobileCodeEnd::
 ASSERT MobileCodeEnd - MobileCodeStart <= 8192
 INCLUDE "mobile_adapter/rom/native_instance.asm"
-INCLUDE "mobile_adapter/rom/native_tile_backup.asm"
-INCLUDE "mobile_adapter/rom/native_save.asm"
 INCLUDE "mobile_adapter/rom/native_palettes.asm"
 
-if DEF(MOBILE_VIRTUAL_ACTORS)
 INCLUDE "mobile_adapter/rom/virtual_renderer.asm"
 mobile_virtual_assets
-endc

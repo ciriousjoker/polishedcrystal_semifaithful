@@ -1,5 +1,42 @@
 # Mobile Adapter multiplayer plan
 
+## 2026-10-12: final independent-renderer acceptance in progress
+
+The autonomous M2 run is continuing. Do not declare completion until the final
+source passes the full local suite and special graphics fixtures. Phone and
+public Cloudflare deployment remain explicitly outside this run.
+
+`make mobile` now selects independent private peer records and presentation.
+The temporary renderer switch and all native NPC lease/eviction/LZ assembly have
+been removed. Original save routines and NPC palette scans have no multiplayer
+hooks. The only multiplayer compiler switch is `MOBILE_ADAPTER`. All banked
+feature sections remain in the upper 2 MiB. Current build evidence checks 23,373
+unchanged original RAM symbols, no multiplayer SRAM, 19,073 upper feature bytes,
+154 net lower integration bytes, and the exact disabled Standard SHA-256.
+The Makefile uses the explicit copyright source path to avoid an empty artwork
+artifact observed in the forced GNU Make 3.81 parallel rebuild.
+
+Cold admission counts admitted figures rather than incomplete peer candidates.
+Movement-mode changes retain the last coherent GPU pose until the new immutable
+pose commits in early VBlank. Private loaded movement metadata prevents an equal
+pose index from reusing the previous mode's tiles. Existing exact native colors
+are searched before constructing private colors.
+
+The independent hardware observer recognizes coherent figures clipped at the
+viewport boundary. Temporal expectations revalidate the accepted peer status,
+map and instance, rather than stale projection alone. Native waits at/after
+LY 136 have no admitted background window; those frames are explicitly reported
+separately and reset the three-frame idle visibility bound. Frozen Start-menu
+occlusion is checked separately. This is not a claim that a figure was drawn in
+native-heavy frames, or a relaxation of native frame-cadence acceptance.
+
+The final suite is retained at
+`/Volumes/Storage/Cache/mobileadapter/independent-final-suite-20261012`.
+Its cases include four actual clients at speeds 1..4, unchanged native inventory,
+equal ordinary-avatar controls, local/100-ms-RTT hosted motion, priority recovery,
+fault saves, mode transitions, menu/warp/turn/rejoin and duplicate trainer IDs.
+Required special scenes include Route 37, Alolan Exeggutor, snow and night.
+
 ## 2026-10-12: active M2 follow-up, independent rendering
 
 The user explicitly authorized autonomous work through full M2 acceptance,

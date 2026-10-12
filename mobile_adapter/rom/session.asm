@@ -802,14 +802,7 @@ MobileValidatePeer:
 MobileMapEntered::
 	farcall MobileNativeInvalidateHash
 	call MobileNativeResetLeases
-if !DEF(MOBILE_VIRTUAL_ACTORS)
-	ld hl, wMobileSavedFacings
-	ld bc, MOBILE_PEERS
 	xor a
-	rst ByteFill
-else
-	xor a
-endc
 	ld [wMobileBudgetCursor], a
 	ld [wMobileBudgetPriority], a
 	ld [wMobileVisibleCount], a
@@ -859,22 +852,16 @@ MobileCapture::
 	and a
 	jr z, .safe
 .paused
-if DEF(MOBILE_VIRTUAL_ACTORS)
 	call MobileFrozenOverworld
 	jr z, .frozen ; ordinary Start menu retains its stationary world graphics
-endc
 	farcall MobileNativeInvalidateHash
 	xor a
 	ld [wMobileLocalValid], a
-if DEF(MOBILE_VIRTUAL_ACTORS)
 ; Native menu/map graphics may overwrite private pose windows. Force a complete
 ; validated reload when returning, without touching any ordinary game record.
 	ld [wMobileVirtualWindowOwners], a
 	ld [wMobileVirtualWindowOwners + 1], a
 	ld [wMobileVirtualWindowOwners + 2], a
-else
-	ld [wMobileGraphicsReady], a
-endc
 .frozen
 	pop af
 	ldh [rWBK], a
@@ -1104,7 +1091,6 @@ MobileSceneIsSafe:
 	cp PLAYEREVENT_JOYCHANGEFACING
 	ret
 
-if DEF(MOBILE_VIRTUAL_ACTORS)
 MobileFrozenOverworld:
 ; Z only for the ordinary paused overworld, never a bag, battle, camera or map
 ; transition. Projection/upload remain frozen; accepted network state is private.
@@ -1126,7 +1112,6 @@ MobileFrozenOverworld:
 	ld a, [wScriptRunning]
 	cp $ff
 	ret
-endc
 
 MobileStepProgress:
 ; Camera movement cancels OBJECT_SPRITE_X/Y before logical tile coordinates

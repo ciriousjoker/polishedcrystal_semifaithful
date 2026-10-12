@@ -73,9 +73,7 @@ wMobileBudgetOptional:: db
 wMobileBudgetCursor:: db
 wMobileIRQTrampoline:: ds MOBILE_IRQ_TRAMPOLINE_SIZE
 wMobilePumpCount:: db
-if DEF(MOBILE_VIRTUAL_ACTORS)
 wMobileVirtualActorMode::
-endc
 wMobileNativeActorMode::
 wMobileFacingsSuppressed:: db
 wMobileColdFrame:: db
@@ -89,11 +87,7 @@ ASSERT wMobileResidentEnd - wMobileResidentStart <= 128
 ; This unbanked view stays outside the original game's serialized WRAM span.
 SECTION "Mobile Native Object Views", WRAM0[$cf44]
 wMobileNativeOriginals::
-if DEF(MOBILE_VIRTUAL_ACTORS)
 	ds NUM_OBJECT_STRUCTS * 8
-else
-	ds MOBILE_PEERS * OBJECT_LENGTH
-endc
 wMobilePrivatePalRequest:: db
 wMobilePrivatePalSlot:: db
 wMobilePrivatePalUsed:: db
@@ -152,7 +146,8 @@ wMobilePeer{d:peer}NativeFacing:: db
 wMobilePeer{d:peer}BackupStage:: db
 wMobilePeer{d:peer}PrivatePalValid:: db
 wMobilePeer{d:peer}PendingLease:: db
-ds MOBILE_PEER_SIZE - 56
+wMobilePeer{d:peer}LoadedMovement:: db ; immutable GPU pose identity
+ds MOBILE_PEER_SIZE - 57
 endr
 wMobileLZScratch::
 wMobileLZBank:: db
@@ -222,15 +217,12 @@ ASSERT wMobileActorBackupEnd <= $dd00
 ASSERT wMobileActorTilesEnd <= $dd00
 ASSERT wMobilePrivatePalEnd <= $dd00
 
-if DEF(MOBILE_VIRTUAL_ACTORS)
 SECTION "Mobile Virtual Scratch", WRAMX[$dab0], BANK[MOBILE_BACKUP_BANK]
 wMobileVirtualScratch:: ds 224
 wMobileVirtualScratchEnd::
 ASSERT wMobilePrivatePalEnd <= wMobileVirtualScratch
 ASSERT wMobileVirtualScratchEnd <= $dd00
-endc
 
-if DEF(MOBILE_VIRTUAL_ACTORS)
 ; 13 immutable foreground descriptors, each x/y/tile/flags/source/count/relative.
 ; The virtual renderer never leases ordinary objects. Reuse the old lease-index
 ; storage exclusively for a private, bounded pending graphics transaction.
@@ -241,9 +233,12 @@ DEF wMobileVirtualQueuedFrame EQU wMobileSavedFacings + 4
 DEF wMobileVirtualQueuedFacing EQU wMobileSavedFacings + 5
 DEF wMobileVirtualQueuedSprite EQU wMobileSavedFacings + 6
 DEF wMobileVirtualQueuedAvatar EQU wMobileSavedFacings + 7
+DEF wMobileVirtualQueuedMovement EQU wMobileSavedFacings + 8
+ASSERT 9 <= NUM_OBJECT_STRUCTS
 EXPORT wMobileVirtualQueuedPeer, wMobileVirtualQueuedWindow, wMobileVirtualQueuedSource
 EXPORT wMobileVirtualQueuedFrame, wMobileVirtualQueuedFacing, wMobileVirtualQueuedSprite
 EXPORT wMobileVirtualQueuedAvatar
+EXPORT wMobileVirtualQueuedMovement
 ASSERT MOBILE_PEERS == 3
 ASSERT FIRST_VRAM1_OBJECT_STRUCT * 12 + 3 <= $64
 ASSERT (NUM_OBJECT_STRUCTS - FIRST_VRAM1_OBJECT_STRUCT) * 12 + 3 <= $3f
@@ -278,9 +273,7 @@ ASSERT wMobileVirtualNativeRaw + NUM_OBJECT_STRUCTS * 64 == wMobileVirtualOutput
 ASSERT wMobileVirtualOutput + OAM_SIZE == wMobileVirtualLines
 ASSERT wMobileVirtualLines + SCREEN_HEIGHT_PX <= wMobileActorTilesEnd
 ASSERT wMobileVirtualMergedPalette + 8 palettes <= wMobileVirtualScratchEnd
-endc
 
-if DEF(MOBILE_VIRTUAL_ACTORS)
 EXPORT wMobileVirtualDescriptors
 EXPORT wMobileVirtualWindowOwners
 EXPORT wMobileVirtualIndex
@@ -301,9 +294,7 @@ EXPORT wMobileVirtualTemplate
 EXPORT wMobileVirtualGroupLength
 EXPORT wMobileVirtualRejected
 EXPORT wMobileVirtualGroupPalette
-endc
 
-if DEF(MOBILE_VIRTUAL_ACTORS)
 SECTION "Mobile Virtual Admission", WRAM0[$cfc0]
 wMobileVirtualFastAdmission:: db
 wMobileVirtualAttempts:: db
@@ -335,4 +326,3 @@ wMobileVirtualNativeColors:: ds NUM_PLAYER_GENDERS / 2
 wMobileVirtualNeedColorAudit:: db
 ASSERT NUM_PLAYER_GENDERS == 4
 ASSERT @ <= $cff0
-endc

@@ -302,9 +302,6 @@ SavePlayerData:
 	ld de, sPlayerData
 	ld bc, wPlayerDataEnd - wPlayerData
 	rst CopyBytes
-if DEF(MOBILE_ADAPTER)
-	farcall MobileNativeSaveObjects
-endc
 	ld hl, wCurMapData
 	ld de, sMapData
 	ld bc, wCurMapDataEnd - wCurMapData
@@ -359,9 +356,6 @@ SaveBackupPlayerData:
 	ld de, sBackupPlayerData
 	ld bc, wPlayerDataEnd - wPlayerData
 	rst CopyBytes
-if DEF(MOBILE_ADAPTER)
-	farcall MobileNativeSaveObjects
-endc
 	ld hl, wCurMapData
 	ld de, sBackupMapData
 	ld bc, wCurMapDataEnd - wCurMapData

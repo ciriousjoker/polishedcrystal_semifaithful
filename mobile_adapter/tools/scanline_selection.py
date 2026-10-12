@@ -53,19 +53,33 @@ def virtual_temporal_report(rows, max_absent_frames=3):
     """Bound omission after a visible, decoded avatar is ready for presentation.
 
     Identity changes, scene exits and decode invalidation start a new segment.
+    Visibility projection can lag an accepted network record. A peer that has
+    already reported a menu or another scene is not eligible for drawing even
+    while its old projected Visible flag remains set.
     Read actual hardware membership, never the CPU's staging rendered counter.
-    This is a receiver-frame gate; fast-forward senders do not relax it.
+    This is a receiver-frame gate; fast-forward senders do not relax it. A native
+    wait starting at/after LY 136 has no admitted background window. Such frames
+    reset this idle-work bound and are reported separately, without pretending
+    that a remote figure was displayed. Native frame cadence has its own oracle.
     """
     last = {}
     maximum = 0
     witnesses = []
+    native_busy = []
     for row in rows:
         state, frame = row["symbols"], row["frame"]
         active = set()
-        if state["wMobileOnline"] and state.get('wScriptRunning', 0) != 255:
+        eligible_world = state["wMobileOnline"] and state.get('wScriptRunning', 0) != 255
+        if eligible_world and state.get('hDelayFrameLY', 0) >= 136:
+            native_busy.append(frame)
+        if eligible_world and state.get('hDelayFrameLY', 0) < 136:
             for peer in range(1, state["wMobilePeerCount"] + 1):
                 prefix = f"wMobilePeer{peer}"
-                if not state[prefix + "Visible"] or state[prefix + "NativeStage"] != 7:
+                if (not state[prefix + "Visible"] or state[prefix + "NativeStage"] != 7 or
+                    state[prefix + "Status"] != 1 or
+                    state[prefix + "MapGroup"] != state["wMapGroup"] or
+                    state[prefix + "MapNumber"] != state["wMapNumber"] or
+                    state[prefix + "Instance"] != state["wMobileInstanceKey"]):
                     continue
                 identity = (peer, state[prefix + "Id"], state[prefix + "Generation"])
                 active.add(identity)
@@ -79,7 +93,9 @@ def virtual_temporal_report(rows, max_absent_frames=3):
                 last[identity] = frame if visible else prior
         last = {key: value for key, value in last.items() if key in active}
     return {"passed": not witnesses, "maximum_absent_frames": maximum,
-            "allowed_absent_frames": max_absent_frames, "witnesses": witnesses}
+            "allowed_absent_frames": max_absent_frames, "witnesses": witnesses,
+            "native_busy_frames": len(native_busy), "native_busy_frame_samples": native_busy[:16],
+            "scope": "Eligible world frames with an admitted native idle window; native-heavy graphics frames and frozen menu occlusion are separate."}
 
 
 def verify_native_scanlines(output, players):

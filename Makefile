@@ -48,13 +48,8 @@ $(error Mobile Adapter currently supports standard and faithful GBC builds)
 endif
 MODIFIERS := $(MODIFIERS)-mobile
 RGBASMFLAGS += -DMOBILE_ADAPTER
-# Keep an unaccepted renderer candidate out of the human development launcher.
-MOBILE_RENDERER ?= native
-ifeq ($(MOBILE_RENDERER),virtual)
-MODIFIERS := $(MODIFIERS)-virtual
-RGBASMFLAGS += -DMOBILE_VIRTUAL_ACTORS
-else ifneq ($(MOBILE_RENDERER),native)
-$(error MOBILE_RENDERER must be native or virtual)
+ifdef MOBILE_RENDERER
+$(error MOBILE_RENDERER was a temporary prototype switch; use make mobile)
 endif
 endif
 ifeq ($(filter monochrome,$(MAKECMDGOALS)),monochrome)
@@ -91,12 +86,10 @@ endif
 ifeq ($(filter mobile,$(MAKECMDGOALS)),mobile)
 MOBILE_OBJ_DIR := mobile_adapter/build$(MODIFIERS)
 MOBILE_MKDIR = @mkdir -p $(dir $@)
-ifeq ($(MOBILE_RENDERER),virtual)
 MOBILE_AVATAR_RAW := $(shell python3 mobile_adapter/tools/prepare_virtual_avatars.py --dependencies)
 $(MOBILE_OBJ_DIR)/virtual-avatars.asm: mobile_adapter/tools/prepare_virtual_avatars.py data/player/state_sprites.asm constants/sprite_constants.asm data/sprites/sprites.asm gfx/sprites.asm $(MOBILE_AVATAR_RAW)
 	python3 mobile_adapter/tools/prepare_virtual_avatars.py --output "$@"
 $(MOBILE_OBJ_DIR)/main.o: $(MOBILE_OBJ_DIR)/virtual-avatars.asm
-endif
 endif
 
 rom_obj := \
@@ -136,25 +129,18 @@ crystal: $$(ROM_NAME).$$(EXTENSION)
 faithful: crystal
 mobile: crystal
 ifdef MOBILE_OBJ_DIR
-.PHONY: mobile-lease-policy mobile-layout-check
+.PHONY: mobile-layout-check
 mobile: mobile-layout-check
 mobile-layout-check: $$(ROM_NAME).$$(EXTENSION)
 	python3 mobile_adapter/tools/audit_rom_budget.py --mobile "$(ROM_NAME).gbc" --layout-only
-mobile-lease-policy:
-	python3 mobile_adapter/tools/audit_native_leases.py --check-sources
-	python3 mobile_adapter/tools/audit_native_capacity.py --check-sources
-ifneq ($(MOBILE_RENDERER),virtual)
-$(MOBILE_OBJ_DIR)/main.o: | mobile-lease-policy
-endif
 endif
 MOBILE_CARGO ?= cargo
 test-mobile-host:
 	$(MOBILE_CARGO) test --locked --manifest-path mobile_adapter/server/Cargo.toml
 	python3 mobile_adapter/tools/test_asm_contracts.py --rgbds "$(or $(RGBDS),./)"
-	python3 mobile_adapter/tools/test_asm_contracts.py --rgbds "$(or $(RGBDS),./)" --renderer virtual
 	python3 -m unittest discover -s mobile_adapter/tools -p 'test_dev_session.py'
 	python3 -m unittest discover -s mobile_adapter/tools -p 'test_save_scenarios.py'
-	python3 -m unittest discover -s mobile_adapter/tools -p 'test_native_leases.py'
+	python3 -m unittest discover -s mobile_adapter/tools -p 'test_independent_maps.py'
 	python3 -m unittest discover -s mobile_adapter/tools -p 'test_scanline_selection.py'
 	python3 -m unittest discover -s mobile_adapter/tools -p 'test_native_scanlines.py'
 	python3 -m unittest discover -s mobile_adapter/tools -p 'test_rom_budget.py'
@@ -165,7 +151,7 @@ MOBILE_TEST_PROFILE_CORE ?=
 MOBILE_CORE_ARGS = $(if $(MOBILE_TEST_CORE),--core "$(MOBILE_TEST_CORE)") $(if $(MOBILE_TEST_PROFILE_CORE),--profile-core "$(MOBILE_TEST_PROFILE_CORE)")
 MOBILE_TEST_CONTROL ?=
 MOBILE_TEST_OUTPUT ?= $(MOBILE_TEST_CACHE)/acceptance-$(shell date +%Y%m%d-%H%M%S)
-MOBILE_TEST_CASES ?= cadence,local-latency,hosted-latency,priority,saves,running,start-menu,warp,warp-turn,rejoin,save-caches,duplicate-ids
+MOBILE_TEST_CASES ?= cadence,avatar-load,local-latency,hosted-latency,priority,saves,running,start-menu,warp,warp-turn,rejoin,save-caches,duplicate-ids
 .PHONY: prepare-mobile-core
 prepare-mobile-core:
 	python3 mobile_adapter/tools/prepare_mbc30_core.py --profile
@@ -181,9 +167,9 @@ test-mobile-mbc30:
 	python3 mobile_adapter/tools/verify_milestone2.py --cache "$(MOBILE_TEST_CACHE)" $(MOBILE_CORE_ARGS) --output "$(MOBILE_TEST_OUTPUT)" --cases "$(MOBILE_TEST_CASES)"
 .PHONY: test-mobile-maps
 test-mobile-maps:
+	$(MAKE) crystal RGBDS="$(RGBDS)"
 	$(MAKE) mobile RGBDS="$(RGBDS)"
-	python3 mobile_adapter/tools/audit_native_capacity.py --rom polishedcrystal-mobile-$(VERSION).gbc --sym polishedcrystal-mobile-$(VERSION).sym --output "$(MOBILE_TEST_OUTPUT)-capacity.json"
-	python3 mobile_adapter/tools/audit_native_scanlines.py --rom polishedcrystal-mobile-$(VERSION).gbc --sym polishedcrystal-mobile-$(VERSION).sym --output "$(MOBILE_TEST_OUTPUT)-scanlines.json" --strict
+	python3 mobile_adapter/tools/audit_independent_maps.py --baseline polishedcrystal-$(VERSION).gbc --mobile polishedcrystal-mobile-$(VERSION).gbc --output "$(MOBILE_TEST_OUTPUT)-maps.json"
 .PHONY: test-mobile-budget
 test-mobile-budget:
 	$(MAKE) crystal RGBDS="$(RGBDS)"
@@ -354,7 +340,7 @@ gfx/slots/slots_2.2bpp: tools/gfx += --interleave --png=$<
 gfx/slots/slots_3.2bpp: tools/gfx += --interleave --png=$< --remove-duplicates --keep-whitespace --remove-xflip
 
 gfx/splash/copyright.2bpp: gfx/splash/copyright.txt tools/fine_print.c
-	$Qtools/fine_print -c 013 -s 0 '$(shell cat $<)' $@
+	$Qtools/fine_print -c 013 -s 0 '$(shell cat gfx/splash/copyright.txt)' $@
 
 gfx/stats/%.bin: gfx/stats/%.tilemap gfx/stats/%.attrmap ; $Qcat $^ > $@
 gfx/stats/judge.2bpp: tools/gfx += --trim-whitespace

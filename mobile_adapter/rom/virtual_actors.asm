@@ -442,6 +442,21 @@ MobileNativeUpload:
 	cp [hl]
 	jr z, .sprite_ready
 	ld [hli], a
+	ld a, [hl]
+	cp 7
+	jr nz, .invalidate_pose
+; A movement-mode change has the same color and a complete old GPU pose.
+; Keep that presentation coherent until the new immutable job commits.
+	push hl
+	ld bc, MOBILE_PEER_LOADED_SPRITE - 34
+	add hl, bc
+	ld a, [hl]
+	ld bc, 18 - MOBILE_PEER_LOADED_SPRITE
+	add hl, bc
+	cp [hl]
+	pop hl
+	jr z, .sprite_ready
+.invalidate_pose
 	ld [hl], 0
 	ld de, 2
 	add hl, de
@@ -542,7 +557,14 @@ MobileNativeUpload:
 	jr nz, .copy
 	ld a, [wMobileVirtualCacheHit]
 	and a
-	jp nz, .publish_facing
+	jr z, .copy
+	ld bc, MOBILE_PEER_LOADED_MOVEMENT - MOBILE_PEER_LOADED_FRAME
+	add hl, bc
+	ld a, [hl]
+	ld bc, 19 - MOBILE_PEER_LOADED_MOVEMENT
+	add hl, bc
+	cp [hl]
+	jp z, .publish_facing
 .copy
 	ld a, [wMobileBudgetIndex]
 	call MobileNativePeerPointer
@@ -605,6 +627,9 @@ MobileNativeUpload:
 	add hl, bc
 	ld a, [hl]
 	ld [wMobileVirtualQueuedAvatar], a
+	inc hl
+	ld a, [hl]
+	ld [wMobileVirtualQueuedMovement], a
 	ld a, [wMobileBudgetIndex]
 	inc a
 	ld [wMobileVirtualQueuedPeer], a ; publish the complete transaction last
@@ -632,40 +657,36 @@ MobileNativeUpload:
 	ret
 
 MobileVirtualExactPalette:
-; A native base color, C last hardware slot. Revalidate the specific ordinary
+; A native base color, C last hardware slot. Revalidate an exact ordinary
 ; source without rebuilding its private copy. Native palette metadata, fades and
 ; glow state stay authoritative. A changed or unavailable source takes the full
 ; isolated constructor path. Preserve the peer pointer and selected WRAM bank.
 	push af
 	push hl
 	push de
-	ld e, a
+	ld b, a
 	ldh a, [rWBK]
 	push af
-	ld a, c
-	cp PAL_OW_WEATHER
-	jr nc, .missing
 	ld a, 1
 	ldh [rWBK], a
-	ld d, 0
-	ld hl, wLoadedObjPal0
-	ld a, e
-	ld e, c
-	add hl, de
-	cp [hl]
-	jr nz, .missing
-	ld hl, wLoadedObjPalGlows
-	add hl, de
-	ld a, [hl]
-	ld hl, wLoadedObjPalPrevGlows
-	add hl, de
-	or [hl]
-	jr nz, .missing
-	ld hl, MobileVirtualPaletteBits
-	add hl, de
-	ld a, [wLoadedObjPalType]
-	and [hl]
-	jr nz, .missing
+	ld a, c
+	cp PAL_OW_WEATHER
+	jr nc, .scan
+	call .check_slot
+	jr nc, .found
+.scan
+; Native palette slots can move as ordinary NPCs load. Find an existing exact
+; color before invoking the isolated constructor and copying a private cache.
+	ld c, 0
+.slot
+	call .check_slot
+	jr nc, .found
+	inc c
+	ld a, c
+	cp PAL_OW_WEATHER
+	jr c, .slot
+	jr .missing
+.found
 	pop af
 	ldh [rWBK], a
 	pop de
@@ -673,6 +694,31 @@ MobileVirtualExactPalette:
 	pop af
 	ld a, c
 	and a
+	ret
+.check_slot
+	ld d, 0
+	ld hl, wLoadedObjPal0
+	ld e, c
+	add hl, de
+	ld a, b
+	cp [hl]
+	jr nz, .slot_missing
+	ld hl, wLoadedObjPalGlows
+	add hl, de
+	ld a, [hl]
+	ld hl, wLoadedObjPalPrevGlows
+	add hl, de
+	or [hl]
+	jr nz, .slot_missing
+	ld hl, MobileVirtualPaletteBits
+	add hl, de
+	ld a, [wLoadedObjPalType]
+	and [hl]
+	jr nz, .slot_missing
+	and a
+	ret
+.slot_missing
+	scf
 	ret
 .missing
 	pop af

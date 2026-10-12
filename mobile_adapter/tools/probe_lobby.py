@@ -293,7 +293,7 @@ def verify_avatar_graphics(states):
             peer = f"wMobilePeer{index}"
             if not state[peer + "Visible"] or ("wMobileVirtualActorMode" in state and state[peer + "OAMStart"] > 144):
                 continue
-            mode = state[peer + "Movement"]
+            mode = state[peer + ("LoadedMovement" if "wMobileVirtualActorMode" in state else "Movement")]
             name = "surf_pikachu" if mode == 5 else figures[state[peer + "Avatar"]] + modes[mode]
             source = (REPO / "gfx/sprites" / (name + ".2bpp")).read_bytes()
             require(len(source) == 384, "Remote player sprite size changed")

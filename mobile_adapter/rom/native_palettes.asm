@@ -5,11 +5,7 @@ MobileNativePaletteCodeStart::
 MobileEmergencyInput::
 	call MobileEmergencyKeys
 	call MobileNativePaletteFadeDirty
-if DEF(MOBILE_VIRTUAL_ACTORS)
 	jp MobileVirtualCommitPose
-else
-	ret
-endc
 
 ; VBlank already saved all registers and keeps IME disabled. Read physical
 ; buttons before any native input lock can filter them. No packet or cache data
@@ -112,100 +108,9 @@ endr
 ; Select+B toggles the lobby; adding A runs the one-shot transport diagnostic.
 
 
-if !DEF(MOBILE_VIRTUAL_ACTORS)
-MobileNativeOriginalPointer::
-; A bounded pool index -> unbanked original record, preserving BC/DE.
-	push bc
-	push de
-	ld hl, wMobileNativeOriginals
-	ld de, OBJECT_LENGTH
-	cp MOBILE_PEERS
-	jr nc, .done
-.loop
-	and a
-	jr z, .done
-	add hl, de
-	dec a
-	jr .loop
-.done
-	pop de
-	pop bc
-	ret
-
-MobileNativeCaptureOriginal::
-; Bank 1, BC native object. This view may be read by normal palette scans.
-	push af
-	push bc
-	push de
-	push hl
-	ld d, 0 ; E is the verified native slot supplied by the lease allocator
-	ld hl, wMobileNativePaletteOwners
-	add hl, de
-	ld a, [wMobileBudgetIndex]
-	inc a
-	ld [hl], a
-	ld a, [wMobileBudgetIndex]
-	call MobileNativeOriginalPointer
-	ld d, h
-	ld e, l
-	ld h, b
-	ld l, c
-	ld bc, OBJECT_LENGTH
-	rst CopyBytes
-	ld a, MOBILE_WRAM_BANK
-	ldh [rWBK], a
-	ld a, [wMobileBudgetIndex]
-	farcall MobileNativePeerPointer
-	ld bc, 54
-	add hl, bc
-	ld [hl], 0
-	inc hl
-	ld [hl], 0 ; consume a pending lease when the original is captured
-	ld a, 1
-	ldh [rWBK], a
-	pop hl
-	pop de
-	pop bc
-	pop af
-	ret
-
-endc
 
 MobileNativeClearPaletteSource::
-if DEF(MOBILE_VIRTUAL_ACTORS)
 	ret ; no ordinary palette or object lease exists in this renderer
-else
-; Clear only the table entry still owned by this pool record.
-	push af
-	push bc
-	push de
-	push hl
-	ld a, [wMobileBudgetIndex]
-	ld c, a
-	ld e, a
-	ld d, 0
-	ld hl, wMobileSavedFacings
-	add hl, de
-	ld a, [hl]
-	and a
-	jr z, .done
-	cp NUM_OBJECT_STRUCTS
-	jr nc, .done
-	ld e, a
-	ld hl, wMobileNativePaletteOwners
-	add hl, de
-	inc c
-	ld a, [hl]
-	cp c
-	jr nz, .done
-	ld [hl], 0
-.done
-	pop hl
-	pop de
-	pop bc
-	pop af
-	ret
-endc
 
 MobileNativePrivatePalette::
 ; A base color, C previous hardware slot. Native save metadata is never written.
@@ -220,11 +125,8 @@ MobileNativePrivatePalette::
 	ld hl, wMobileSavedFacings
 	add hl, de
 	ld a, [hl]
-if DEF(MOBILE_VIRTUAL_ACTORS)
 	ld a, 255
-endc
 	ld [wMobilePrivatePalCurrent], a
-if DEF(MOBILE_VIRTUAL_ACTORS)
 ; The compositor audits current native sources. A constructed private color
 ; already has its own identity/dirty validation below; rescanning six ordinary
 ; palette entries on every unchanged pose job adds no ownership information.
@@ -237,7 +139,6 @@ if DEF(MOBILE_VIRTUAL_ACTORS)
 	ld a, [hl]
 	cp 1
 	jp z, .borrow
-endc
 ; Reuse an exact ordinary color without changing its manager metadata.
 	ld a, 1
 	ldh [rWBK], a
@@ -300,113 +201,12 @@ endc
 	inc c
 	jr .native
 .borrow
-if DEF(MOBILE_VIRTUAL_ACTORS)
 ; This is a private color cache, not a native palette lease. Hardware ownership
 ; is decided from current draw groups by the compositor, so scanning thirteen
 ; native object records here cannot inform the decision and wastes idle time.
 	ld a, 1
 	ld [wMobilePrivatePalSlot], a
 	jp .cached
-else
-	xor a
-	ld [wMobilePrivatePalUsed], a
-	ld [wMobilePrivatePalBlocked], a
-	ld a, 1
-	ldh [rWBK], a
-	ld de, wObjectStructs
-	lb bc, NUM_OBJECT_STRUCTS, 0
-.objects
-	ld a, [wMobilePrivatePalCurrent]
-	cp c
-	jr z, .advance
-	ld a, [de]
-	and a
-	jr z, .advance
-	ld hl, OBJECT_FLAGS1
-	add hl, de
-	bit INVISIBLE_F, [hl]
-	jr nz, .advance
-	inc hl
-	bit OFF_SCREEN_F, [hl]
-	jr nz, .advance
-	ld hl, OBJECT_PALETTE
-	add hl, de
-	ld a, [hl]
-	and OAM_PALETTE
-	push bc
-	ld c, a
-	call .bit
-	ld c, a
-	ld a, [wMobilePrivatePalUsed]
-	or c
-	ld [wMobilePrivatePalUsed], a
-	ld hl, OBJECT_MAP_OBJECT_INDEX
-	add hl, de
-	ld a, [hl]
-	cp TEMP_OBJECT
-	jr nz, .ordinary
-	ld hl, OBJECT_FLAGS2
-	add hl, de
-	ld a, [hl]
-	and HIGH_PRIORITY | FROZEN
-	cp HIGH_PRIORITY | FROZEN
-	jr nz, .ordinary
-	ld hl, OBJECT_PAL_INDEX
-	add hl, de
-	ld a, [wMobilePrivatePalRequest]
-	cp [hl]
-	jr z, .ordinary
-	ld a, [wMobilePrivatePalBlocked]
-	or c
-	ld [wMobilePrivatePalBlocked], a
-.ordinary
-	pop bc
-.advance
-	ld hl, OBJECT_LENGTH
-	add hl, de
-	ld d, h
-	ld e, l
-	inc c
-	dec b
-	jr nz, .objects
-; Slots 6/7 belong to weather and menu/effect users. Other unused hardware
-; colors are borrowed privately, while both ordinary palette buffers stay intact.
-	ld a, [wMobilePrivatePalSlot]
-	cp PAL_OW_WEATHER
-	jr nc, .choose
-	ld c, a
-	call .bit
-	ld b, a
-	ld a, [wMobilePrivatePalUsed]
-	and b
-	jr z, .cached
-.choose
-	ld c, 0
-.empty
-	call .bit
-	ld b, a
-	ld a, [wMobilePrivatePalUsed]
-	and b
-	jr z, .selected
-	inc c
-	ld a, c
-	cp PAL_OW_WEATHER
-	jr c, .empty
-if DEF(MOBILE_VIRTUAL_ACTORS)
-; Cache construction only: final compositor assigns an unused hardware slot.
-	ld c, 1
-	jr .selected
-else
-	pop af
-	ldh [rWBK], a
-	scf
-	ret
-endc
-.selected
-	ld a, c
-	ld [wMobilePrivatePalSlot], a
-	jr .generate
-endc
 .cached
 	ld a, MOBILE_WRAM_BANK
 	ldh [rWBK], a
@@ -537,18 +337,6 @@ endr
 	add hl, bc
 	ld [hl], 1
 	call MobileNativeClearPaletteBinding
-if !DEF(MOBILE_VIRTUAL_ACTORS)
-	ld a, MOBILE_BACKUP_BANK
-	ldh [rWBK], a
-	ld a, [wMobilePrivatePalSlot]
-	ld e, a
-	ld d, 0
-	ld hl, wMobilePrivatePalBindings
-	add hl, de
-	ld a, [wMobileBudgetIndex]
-	inc a
-	ld [hl], a
-endc
 	ld a, TRUE
 	ldh [hCGBPalUpdate], a
 	jr .success
@@ -666,46 +454,7 @@ MobileNativeClearPaletteBinding:
 	ldh [rWBK], a
 	ret
 
-MobileNativePaletteNPCBound::
-; Ordinary actors take priority over borrowed hardware colors. The palette
-; scan's original-record views are unbanked; they are not visible game actors.
-	push af
-	ld a, d
-	cp HIGH(STARTOF(WRAMX))
-	jr c, .done
-	push bc
-	push de
-	push hl
-	ldh a, [rWBK]
-	push af
-	ld a, MOBILE_BACKUP_BANK
-	ldh [rWBK], a
-	ld a, [wMobileOnline]
-	and a
-	jr z, .restore
-	ld a, [wMobileWanted]
-	and a
-	jr z, .restore
-	ld hl, sp + 9 ; original A, full ordinary OAM palette byte
-	ld a, [hl]
-	and OAM_PALETTE
-	ld e, a
-	ld d, 0
-	ld hl, wMobilePrivatePalBindings
-	add hl, de
-	ld [hl], 0
-.restore
-	pop af
-	ldh [rWBK], a
-	pop hl
-	pop de
-	pop bc
-.done
-	pop af
-	ret
-
 MobileNativeUpdateOBPalettes::
-if DEF(MOBILE_VIRTUAL_ACTORS)
 	ldh a, [hInMenu]
 	and a
 	jr nz, .virtual_ordinary
@@ -735,122 +484,43 @@ endr
 	dec b
 	jr nz, .virtual_upload
 	ret
-endc
-; ForceUpdateCGBPals already selected bank 5 and enabled OCPS auto-increment.
-; Use the native 64-byte upload, selecting private colors only for extant,
-; visible leases. No ordinary palette buffer or save metadata is modified.
-	push de
-	ld d, 0
-	lb bc, 8, LOW(rOBPD)
-.palette
-	push hl
-	call .source
-rept 1 palettes
-	ld a, [hli]
-	ldh [c], a
-endr
-	pop hl
-rept 1 palettes
-	inc hl
-endr
-	inc d
-	dec b
-	jr nz, .palette
-	pop de
-	ret
-.source
-if DEF(MOBILE_VIRTUAL_ACTORS)
-	jp MobileVirtualPaletteSource
-endc
+MobileNativePaletteGuard::
+; Native palette scratch also lies inside wPlayerData. Preserve it across our
+; ordinary allocator call, including failed allocations and cached palettes.
 	push af
-	push bc
-	push de
-	ld a, [wMobileOnline]
-	and a
-	jr z, .ordinary
-	ld a, [wMobileWanted]
-	and a
-	jr z, .ordinary
-	push hl
-	ld a, d
-	ld e, a
-	ld d, 0
-	ld hl, wMobilePrivatePalBindings
-	add hl, de
-	ld a, [hl]
-	and a
-	jr z, .no_owner
-	cp MOBILE_PEERS + 1
-	jr nc, .no_owner
-	dec a
-	push af ; pool index
-	ld e, a
-	ld hl, wMobileSavedFacings
-	add hl, de
-	ld a, [hl]
-	and a
-	jr z, .not_visible
-	cp NUM_OBJECT_STRUCTS
-	jr nc, .not_visible
-; slot * 34, bounded before pointer arithmetic
-	ld l, a
-	ld h, 0
-	add hl, hl
-	ld b, h
-	ld c, l
-rept 4
-	add hl, hl
-endr
-	add hl, bc
-	ld bc, wObjectStructs + OBJECT_MAP_OBJECT_INDEX
-	add hl, bc
+	ldh a, [rWBK]
+	push af
 	ld a, 1
 	ldh [rWBK], a
-	ld a, [hl]
-	cp TEMP_OBJECT
-	jr nz, .not_visible
-	ld bc, OBJECT_FLAGS1 - OBJECT_MAP_OBJECT_INDEX
-	add hl, bc
-	bit INVISIBLE_F, [hl]
-	jr nz, .not_visible
-	inc hl
-	ld a, [hli]
-	and HIGH_PRIORITY | FROZEN | OFF_SCREEN
-	cp HIGH_PRIORITY | FROZEN
-	jr nz, .not_visible
-	ld a, [hl] ; OBJECT_PALETTE
-	and OAM_PALETTE
-	ld hl, sp + 5 ; saved D, the hardware color being uploaded
-	cp [hl]
-	jr nz, .not_visible
-	pop af
+	ld a, [wNeededPalIndex]
 	push af
-	ld a, MOBILE_WRAM_BANK
-	ldh [rWBK], a
-	ld hl, sp + 1
+	ld a, [wNeededPalType]
+	push af
+	ld a, [wNeededObjPalGlow]
+	push af
+	ld a, [wPrevNeededObjPalGlow]
+	push af
+	ld a, [wNeededMonPalLight]
+	push af
+	ld hl, sp + 13
 	ld a, [hl]
-	farcall MobileNativePeerPointer
-	ld de, 54
-	add hl, de
-	ld a, [hl]
-	cp 1
-	jr nz, .not_visible
+	farcall MobileNativePrivatePalette
+	push af
+	pop bc ; preserve returned palette and carry while restoring scratch
 	pop af
-	pop hl ; discard ordinary source, return a private color pointer
-	ld hl, wMobilePrivatePalColors
-	ld bc, 1 palettes
-	rst AddNTimes
-	jr .restore
-.not_visible
+	ld [wNeededMonPalLight], a
 	pop af
-.no_owner
-	pop hl
-.restore
-	ld a, MOBILE_BACKUP_BANK
+	ld [wPrevNeededObjPalGlow], a
+	pop af
+	ld [wNeededObjPalGlow], a
+	pop af
+	ld [wNeededPalType], a
+	pop af
+	ld [wNeededPalIndex], a
+	pop af
 	ldh [rWBK], a
-.ordinary
-	pop de
-	pop bc
+	pop af
+	push bc
 	pop af
 	ret
 

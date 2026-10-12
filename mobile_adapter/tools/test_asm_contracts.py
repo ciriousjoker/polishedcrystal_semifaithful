@@ -9,7 +9,7 @@ from probe_emulator import read_symbols, require
 REPO = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--rgbds", type=Path, required=True, help="Pinned RGBDS directory")
-parser.add_argument("--renderer", choices=("native", "virtual"), default="native")
+parser.add_argument("--renderer", choices=("virtual",), default="virtual", help="Independent renderer; retained for existing test commands")
 args = parser.parse_args()
 if args.renderer == "virtual":
     from prepare_virtual_avatars import inventory, source
@@ -19,7 +19,7 @@ if args.renderer == "virtual":
     paths = list(dict.fromkeys(row[2] for row in avatar_inventory))
     subprocess.run(["make", *paths, "RGBDS=" + str(args.rgbds) + "/"], cwd=REPO, check=True,
                    stdout=subprocess.DEVNULL)
-    assets = REPO / "mobile_adapter/build-mobile-virtual/virtual-avatars.asm"
+    assets = REPO / "mobile_adapter/build-mobile/virtual-avatars.asm"
     assets.parent.mkdir(parents=True, exist_ok=True)
     assets.write_text(source(avatar_inventory))
 with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
@@ -45,7 +45,7 @@ with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
     layout = (REPO / "layout.link").read_text()
     (out / "ram.link").write_text(layout[layout.index("VRAM $0"):])
     subprocess.run([str(args.rgbds / "rgbasm"), "-Weverything", "-DMOBILE_ADAPTER",
-                    *(["-DMOBILE_VIRTUAL_ACTORS"] if args.renderer == "virtual" else []), "-P", "includes.asm",
+                    "-P", "includes.asm",
                     "-o", str(out / "driver.o"), str(out / "driver.asm")], cwd=REPO, check=True)
     subprocess.run([str(args.rgbds / "rgblink"), "-Weverything", "-n", str(out / "driver.sym"),
                     "-l", str(out / "ram.link"), "-o", str(out / "driver.gb"), str(out / "driver.o")], cwd=REPO, check=True)
@@ -196,9 +196,8 @@ with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
             offset = bank * 0x4000 + address - 0x4000
             require(rom[offset:offset + 384] == (REPO / path).read_bytes(),
                     "Build-prepared avatar differs from native graphics: " + path)
-        bank, address = symbols["MobileNativeSaveObjects"]
-        offset = bank * 0x4000 + address - 0x4000
-        require(rom[offset] == 0xc9, "Virtual presentation must never project private data into saves")
+        require("MobileNativeSaveObjects" not in symbols,
+                "Independent presentation must not include save projection code")
     # Existing save/object/stack symbols must still retain their baseline addresses.
     for name, expected in {"wStackBottom": (0, 0xc000), "wStackTop": (0, 0xc0ff),
                            "hROMBank": (0, 0xff87)}.items():

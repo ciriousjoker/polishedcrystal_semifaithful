@@ -39,6 +39,7 @@ static unsigned char video_peer_tiles[128] = {};
 static unsigned char video_native_tiles[0x4000] = {};
 static unsigned char video_virtual_owners[3] = {};
 static unsigned char video_virtual_frames[3] = {};
+static unsigned char video_virtual_movements[3] = {};
 static unsigned char video_virtual_cache_poses[3][64] = {};
 static std::ofstream input_events;
 static std::set<std::pair<unsigned, unsigned>> logged_inputs;
@@ -131,7 +132,7 @@ static void load_bindings(const std::string& path) {
             if (name.rfind("wMobileVirtual", 0) != 0) fail("Invalid symbol location");
             const unsigned address = std::stoul(location, nullptr, 16);
             const bool resident_pose = name.rfind("wMobileVirtualQueued", 0) == 0 &&
-                                       address >= 0xcf0b && address <= 0xcf12;
+                                       address >= 0xcf0b && address <= 0xcf13;
             if (!resident_pose && (address < 0xcf44 || address >= 0xdd00))
                 fail("Virtual alias outside audited private WRAM");
             bindings[name] = {address < 0xd000 ? 0u : 5u, address};
@@ -214,18 +215,21 @@ static std::map<std::string, unsigned> capture(const unsigned char* sram, size_t
                 for (unsigned i = 0; i <= 144; i += 4) {
                     unsigned mask = 0;
                     bool complete = true;
+                    bool visible = false;
                     for (unsigned q = 0; q < 4; ++q) {
                         unsigned tile = video_oam[i + q * 4 + 2];
                         const unsigned bank = (video_oam[i + q * 4 + 3] & 8) / 8;
                         const unsigned ordinal = window == 2 && bank == 1 && tile == 63 ? 3 :
                             bank == 0 && tile >= base && tile < base + (window == 2 ? 3 : 4) ? tile - base : 4;
-                        if (ordinal >= 4 ||
-                            !video_oam[i + q * 4] || video_oam[i + q * 4] >= 160) {
+                        if (ordinal >= 4) {
                             complete = false; break;
                         }
+                        visible |= video_oam[i + q * 4] >= 9 && video_oam[i + q * 4] < 160;
                         mask |= 1u << ordinal;
                     }
-                    if (complete && mask == 15) { slot = i; palette = video_oam[i + 3] & 7; break; }
+                    // A canonical figure crossing the viewport boundary still
+                    // has four coherent quads, although only some select rows.
+                    if (complete && visible && mask == 15) { slot = i; palette = video_oam[i + 3] & 7; break; }
                 }
                 unsigned hash = 2166136261u;
                 for (unsigned i = 0; i < 64; ++i) {
@@ -241,6 +245,7 @@ static std::map<std::string, unsigned> capture(const unsigned char* sram, size_t
             }
             values[prefix + "Palette"] = palette;
             values[prefix + "LoadedFrame"] = video_virtual_frames[peer[0] - '1'];
+            values[prefix + "LoadedMovement"] = video_virtual_movements[peer[0] - '1'];
             values[prefix + "OAMStart"] = slot;
         } else if (bindings.count("wMobileNativeActorMode")) {
             const auto slots = bindings.at("wMobileSavedFacings");
@@ -501,6 +506,8 @@ static void video(const void* data, unsigned w, unsigned h, size_t pitch) {
             video_virtual_owners[index] = ram[owners.address - 0xc000 + index];
             const auto frame = bindings.at("wMobilePeer" + std::to_string(index + 1) + "LoadedFrame");
             video_virtual_frames[index] = ram[frame.bank * 0x1000 + frame.address - 0xd000];
+            const auto movement = bindings.at("wMobilePeer" + std::to_string(index + 1) + "LoadedMovement");
+            video_virtual_movements[index] = ram[movement.bank * 0x1000 + movement.address - 0xd000];
             const auto cache = bindings.at("wMobileAvatarCache" + std::to_string(index + 1));
             const unsigned pose = video_virtual_frames[index];
             if (pose <= 20)
@@ -708,7 +715,12 @@ int main(int argc, char** argv) {
             configured = true;
         }
         if (!configured && bindings.count("wMobileOwner")) fail("MobileTick symbol missing");
-        if (native_addresses.count("MobileNativeSaveObjects")) {
+        if (bindings.count("wMobileVirtualActorMode")) {
+            const auto begin = native_addresses.at("wPlayerData").second;
+            symbol<void(*)(unsigned, unsigned, unsigned, unsigned, unsigned, unsigned, unsigned)>(core, "mobile_profile_save")(
+                0, 0x20, native_addresses.at("wPlayerDataEnd").second - begin,
+                0, begin, 0, 0);
+        } else if (native_addresses.count("MobileNativeSaveObjects")) {
             auto save = native_addresses.at("MobileNativeSaveObjects");
             const auto begin = native_addresses.at("wPlayerData").second;
             const auto objects = native_addresses.at("wObjectStructs").second;

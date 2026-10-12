@@ -249,14 +249,18 @@ static void mobile_profile_exit(MobileProfileSpan& span, gb* game, const cpu_reg
     span.active = false;
 }
 static void mobile_profile_before_instruction(gb* game, const cpu_regs& regs, int clock) {
+    const bool native_save_copy = mobile_save_bank == 0 && mobile_save_pc == 0x20;
     if (mobile_save_pc && regs.PC == mobile_save_pc && mobile_save_size <= sizeof(mobile_save_expected) &&
-        game->get_mbc()->get_rom() == game->get_rom()->get_rom() + (mobile_save_bank - 1) * 0x4000) {
+        (native_save_copy ? regs.HL.w == mobile_save_backups && regs.BC.w == mobile_save_size &&
+                            regs.DE.w >= 0xa000 && regs.DE.w + mobile_save_size <= 0xc000 :
+         game->get_mbc()->get_rom() == game->get_rom()->get_rom() + (mobile_save_bank - 1) * 0x4000)) {
         mobile_profile_enter(mobile_save_profile, game, regs, clock);
         mobile_save_page = game->get_mbc()->get_sram();
-        mobile_save_start = regs.DE.w - mobile_save_size - 0xa000;
+        mobile_save_start = regs.DE.w - (native_save_copy ? 0 : mobile_save_size) - 0xa000;
         auto* ram = game->get_cpu()->get_ram();
         for (unsigned i = 0; i < mobile_save_size; ++i)
-            mobile_save_expected[i] = mobile_save_page[mobile_save_start + i];
+            mobile_save_expected[i] = native_save_copy ? game->get_cpu()->read(regs.HL.w + i) :
+                                                        mobile_save_page[mobile_save_start + i];
         // The native CopyBytes already produced the complete vanilla payload.
         // Only still-owned slots may differ from that same-state native copy.
         for (unsigned i = 0; mobile_save_slots && i < 3; ++i) {
@@ -344,6 +348,14 @@ static void mobile_profile_after_instruction(gb* game, const cpu_regs& regs, int
         if (game->get_mbc()->get_sram() != mobile_save_page) mobile_save_byte_failures++;
         for (unsigned i = 0; i < mobile_save_size; ++i)
             if (mobile_save_page[mobile_save_start + i] != mobile_save_expected[i]) mobile_save_byte_failures++;
+        if (mobile_save_bank == 0 && mobile_save_pc == 0x20) {
+            // Vanilla CopyBytes consumes BC and advances both pointers. Its
+            // ordinary AF result is caller-clobbered; banks and SP stay fixed.
+            mobile_save_profile.before.AF = regs.AF;
+            mobile_save_profile.before.BC.w = 0;
+            mobile_save_profile.before.DE.w += mobile_save_size;
+            mobile_save_profile.before.HL.w += mobile_save_size;
+        }
         mobile_profile_exit(mobile_save_profile, game, regs, clock, false);
     }
     if (mobile_save_profile.active) mobile_profile_stack(mobile_save_profile, game, regs);

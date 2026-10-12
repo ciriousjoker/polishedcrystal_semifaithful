@@ -46,7 +46,7 @@ require(not any(name.startswith("sMobile") for name in new), "Mobile state must 
 helpers = sum(new[end][1] - new[start][1] for start, end in
               (("MobileNativeInstanceStart", "MobileNativeInstanceEnd"),
                ("MobileNativeTileCodeStart", "MobileNativeTileCodeEnd"),
-               ("MobileNativeSaveCodeStart", "MobileNativeSaveCodeEnd")))
+               ("MobileNativeSaveCodeStart", "MobileNativeSaveCodeEnd")) if start in new)
 virtual = "MobileVirtualActorVersion" in new
 if virtual:
     forbidden = ("MobileNativeLeaseSlot", "MobileNativeLoadLeasePolicy",

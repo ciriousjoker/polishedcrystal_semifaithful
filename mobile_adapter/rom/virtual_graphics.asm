@@ -82,6 +82,11 @@ MobileVirtualCommitPose::
 	add hl, bc
 	ld a, [wMobileVirtualQueuedAvatar]
 	cp [hl]
+	jp nz, .discard_avatar
+	inc hl
+	ld a, [wMobileVirtualQueuedMovement]
+	cp [hl]
+.discard_avatar
 	pop hl
 	jp nz, .discard
 	ld bc, 33
@@ -151,6 +156,10 @@ endr
 	ld bc, 52 - 34
 	add hl, bc
 	ld a, [wMobileVirtualQueuedFacing]
+	ld [hl], a
+	ld bc, MOBILE_PEER_LOADED_MOVEMENT - 52
+	add hl, bc
+	ld a, [wMobileVirtualQueuedMovement]
 	ld [hl], a
 	pop hl
 	call .patch_pose

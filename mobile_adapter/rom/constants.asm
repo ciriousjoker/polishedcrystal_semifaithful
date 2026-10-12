@@ -34,11 +34,7 @@ DEF MOBILE_BUFFER_SIZE EQU 272 ; maximum 8-bit adapter response plus framing
 DEF MOBILE_FRAME_SIZE EQU 128
 ; Bound serial/foreground work; strict native cadence is measured separately.
 DEF MOBILE_BURST_BYTES EQU 16
-if DEF(MOBILE_VIRTUAL_ACTORS)
 DEF MOBILE_PUMPS_PER_FRAME EQU 16
-else
-DEF MOBILE_PUMPS_PER_FRAME EQU 4
-endc
 DEF MOBILE_IRQ_TRAMPOLINE_SIZE EQU 14
 DEF MOBILE_COMMAND_TICKS EQU 120
 DEF MOBILE_COOLDOWN_TICKS EQU 240
@@ -47,19 +43,11 @@ DEF MOBILE_SERVER_PORT EQU 17423
 DEF MOBILE_DEVICE EQU $88 ; blue adapter, 8-bit mode
 ; The generated title dependency is explicit in Makefile.
 	if DEF(FAITHFUL)
-		if DEF(MOBILE_VIRTUAL_ACTORS)
-			DEF mobile_title_version EQUS "INCBIN \"mobile_adapter/build-faithful-mobile-virtual/title-version.2bpp.lzp\""
-			DEF mobile_virtual_assets EQUS "INCLUDE \"mobile_adapter/build-faithful-mobile-virtual/virtual-avatars.asm\""
-		else
 			DEF mobile_title_version EQUS "INCBIN \"mobile_adapter/build-faithful-mobile/title-version.2bpp.lzp\""
-		endc
+			DEF mobile_virtual_assets EQUS "INCLUDE \"mobile_adapter/build-faithful-mobile/virtual-avatars.asm\""
 	else
-		if DEF(MOBILE_VIRTUAL_ACTORS)
-			DEF mobile_title_version EQUS "INCBIN \"mobile_adapter/build-mobile-virtual/title-version.2bpp.lzp\""
-			DEF mobile_virtual_assets EQUS "INCLUDE \"mobile_adapter/build-mobile-virtual/virtual-avatars.asm\""
-		else
 			DEF mobile_title_version EQUS "INCBIN \"mobile_adapter/build-mobile/title-version.2bpp.lzp\""
-		endc
+			DEF mobile_virtual_assets EQUS "INCLUDE \"mobile_adapter/build-mobile/virtual-avatars.asm\""
 	endc
 
 DEF MOBILE_WIRE_IDLE EQU 0
@@ -121,6 +109,7 @@ ASSERT MOBILE_SERVER_PORT > 0 && MOBILE_SERVER_PORT < 65536
 
 DEF MOBILE_PEER_LOADED_SPRITE EQU 30
 DEF MOBILE_PEER_LOADED_FRAME EQU 31
+DEF MOBILE_PEER_LOADED_MOVEMENT EQU 56
 DEF MOBILE_PEER_PALETTE EQU 32
 
 INCLUDE "mobile_adapter/rom/native_palette_macros.asm"

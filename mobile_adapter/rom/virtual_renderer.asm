@@ -216,9 +216,13 @@ endr
 ; Independent avatars precede ordinary figures only in presentation admission.
 ; Native NPC state/simulation remains untouched when total OAM capacity is full.
 	ld a, [wMobileVirtualCursor]
+	cp MOBILE_PEERS
+	jr nc, .urgent_done
 	ld b, a
+	ld a, [wMobileRenderedCount]
+	ld c, a
 	ld a, [wMobileVirtualRemoteLimit]
-	cp b
+	cp c
 	jr z, .urgent_done
 	ld a, b
 	ld b, a
@@ -235,9 +239,12 @@ endr
 	cp 3
 	ret nz
 	ld a, [wMobileVirtualCursor]
-	ld b, a
+	cp MOBILE_PEERS
+	jr nc, .urgent_done
+	ld a, [wMobileRenderedCount]
+	ld c, a
 	ld a, [wMobileVirtualRemoteLimit]
-	cp b
+	cp c
 	jr z, .urgent_done ; a completed last guest needs no second large-job admission
 	ret
 .urgent_done
@@ -1022,25 +1029,15 @@ MobileVirtualPeerGroup:
 	cp 1
 	jr nz, .ineligible
 	inc hl
-	ld a, [hli]
-	ld b, a
-	add a
-	add b
-	add a
-	add [hl]
-	ld c, a
-	ld b, 0
-	ld hl, MobileVirtualAssetSprites
-	add hl, bc
 	ld a, [hl]
 	ld b, a
-	pop hl
-	push hl
-	ld de, 33
+	ld de, MOBILE_PEER_LOADED_SPRITE - 18
 	add hl, de
 	ld a, [hl]
 	cp b
 	jr nz, .ineligible
+; The committed pose may retain its previous movement mode while new graphics
+; prepare. Its own uploaded tiles, facing and color remain authoritative.
 	pop hl
 	jr .eligible
 .ineligible

@@ -35,7 +35,7 @@ Do not implement wishlist features merely because they have been recorded.
   128. The lower half contains only minimal conditional integration. The build
   guard checks placement; the matching-counterpart budget gate additionally
   enforces a 256-byte net lower integration ceiling as an engineering regression
-  guard. Current measured integration is 174 bytes. Ordinary game helpers must
+  guard. Current measured integration is 154 bytes. Ordinary game helpers must
   not be relocated to fund that integration.
 
 Read [research/MBC30_MIGRATION.md](research/MBC30_MIGRATION.md) for current mapper,

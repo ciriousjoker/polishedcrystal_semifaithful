@@ -2,7 +2,28 @@
 
 Date: 2026-10-12. Experimental, not accepted M2 completion.
 
-## Active follow-up, 2026-10-12
+## Latest checkpoint, 2026-10-12
+
+The normal mobile target now compiles only the independent renderer. Retired
+native lease, eviction, LZ, tile-backup and save-projection assembly is removed.
+No feature hook remains in ordinary SavePlayerData/SaveBackupPlayerData or the
+ordinary NPC palette scans. The read-only save observer instead snapshots live
+vanilla CopyBytes input at its RST entry and checks the emitted SRAM payload.
+It no longer derives its expectation from a multiplayer post-copy callback.
+
+Ready-candidate admission and retained movement-mode poses address cold joins
+and running/walking transitions. Coherent clipped edge figures are recognized
+by the hardware observer. Accepted scene/status mismatches end old temporal
+segments immediately. Native idle waits at/after LY 136 are reported separately;
+no background job may take the native game's frame to satisfy a visibility bound.
+The three-frame bound remains for eligible idle world frames.
+
+Build/layout/map/host-assembly checks pass for the new target. The disabled
+Standard ROM has its exact original hash. Current placement is 19,073 upper
+bytes and 154 net lower bytes. The full final runtime suite and special-scene
+regressions are in progress; M2 is not yet accepted.
+
+## Previous active follow-up, 2026-10-12
 
 The current autonomous run removes avoidable network scheduling delay: an
 eligible Bridge presence forwards immediately, a newest presence replaces the

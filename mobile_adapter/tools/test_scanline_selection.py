@@ -37,6 +37,11 @@ class ScanlineSelectionTests(unittest.TestCase):
         self.assertEqual(demand[:9], [1] * 8 + [0])
         self.assertEqual(max(select_scanlines([0] * 40)[0]), 0)
 
+    def test_partial_native_figure_at_bottom_still_has_selected_visible_rows(self):
+        state = {f"vOAM{index}Y": y for index, y in enumerate([158, 158, 166, 166] + [0] * 36)}
+        state.update(wMobilePeerCount=1, wMobilePeer1OAMStart=0, vOAMMaxScanline=2)
+        self.assertEqual(inspect_native_frame(state)['dropped_peers'], [])
+
     def test_native_peer_selection_fails_even_with_complete_oam_membership(self):
         state = {f"vOAM{index}Y": y for index, y in enumerate(figures(6))}
         state.update(wMobilePeerCount=1, wMobilePeer1OAMStart=80, vOAMMaxScanline=12)
@@ -58,6 +63,9 @@ class ScanlineSelectionTests(unittest.TestCase):
     def test_temporal_visibility_uses_hardware_and_bounds_continuous_absence(self):
         def rows(visible_frames):
             return [{"frame": frame, "symbols": {
+                "wMapGroup": 1, "wMapNumber": 2, "wMobileInstanceKey": 123,
+                "wMobilePeer1Status": 1, "wMobilePeer1MapGroup": 1,
+                "wMobilePeer1MapNumber": 2, "wMobilePeer1Instance": 123,
                 "wMobileOnline": 1, "wMobilePeerCount": 1, "wMobileRenderedCount": 0,
                 "wMobilePeer1Visible": 1, "wMobilePeer1NativeStage": 7,
                 "wMobilePeer1Id": 12, "wMobilePeer1Generation": 1,
@@ -73,7 +81,10 @@ class ScanlineSelectionTests(unittest.TestCase):
         self.assertEqual(report["witnesses"][0]["frame"], 4)
 
     def test_temporal_segments_reset_on_scene_exit_or_identity_replacement(self):
-        base = {"wMobileOnline": 1, "wMobilePeerCount": 1,
+        base = {"wMapGroup": 1, "wMapNumber": 2, "wMobileInstanceKey": 123,
+                "wMobilePeer1Status": 1, "wMobilePeer1MapGroup": 1,
+                "wMobilePeer1MapNumber": 2, "wMobilePeer1Instance": 123,
+                "wMobileOnline": 1, "wMobilePeerCount": 1,
                 "wMobilePeer1Visible": 1, "wMobilePeer1NativeStage": 7,
                 "wMobilePeer1Id": 1, "wMobilePeer1Generation": 1,
                 "wMobilePeer1OAMStart": 160, "vMobilePeer1OAM0": 160}
@@ -84,7 +95,10 @@ class ScanlineSelectionTests(unittest.TestCase):
         self.assertTrue(virtual_temporal_report(rows)["passed"])
 
     def test_frozen_start_menu_occlusion_resets_only_the_paused_segment(self):
-        base = {"wMobileOnline": 1, "wMobilePeerCount": 1,
+        base = {"wMapGroup": 1, "wMapNumber": 2, "wMobileInstanceKey": 123,
+                "wMobilePeer1Status": 1, "wMobilePeer1MapGroup": 1,
+                "wMobilePeer1MapNumber": 2, "wMobilePeer1Instance": 123,
+                "wMobileOnline": 1, "wMobilePeerCount": 1,
                 "wMobilePeer1Visible": 1, "wMobilePeer1NativeStage": 7,
                 "wMobilePeer1Id": 1, "wMobilePeer1Generation": 1,
                 "wMobilePeer1OAMStart": 160, "vMobilePeer1OAM0": 160,
@@ -94,6 +108,40 @@ class ScanlineSelectionTests(unittest.TestCase):
             row['symbols']['wScriptRunning'] = 255
         self.assertTrue(virtual_temporal_report(rows)['passed'])
         rows.extend({'frame': frame, 'symbols': dict(base)} for frame in range(12, 14))
+        self.assertFalse(virtual_temporal_report(rows)['passed'])
+
+    def test_accepted_scene_exit_clears_stale_projection_expectation(self):
+        base = {"wMapGroup": 1, "wMapNumber": 2, "wMobileInstanceKey": 123,
+                "wMobilePeer1Status": 1, "wMobilePeer1MapGroup": 1,
+                "wMobilePeer1MapNumber": 2, "wMobilePeer1Instance": 123,
+                "wMobileOnline": 1, "wMobilePeerCount": 1,
+                "wMobilePeer1Visible": 1, "wMobilePeer1NativeStage": 7,
+                "wMobilePeer1Id": 1, "wMobilePeer1Generation": 1,
+                "wMobilePeer1OAMStart": 160, "vMobilePeer1OAM0": 160}
+        for field, value in (("Status", 0), ("MapGroup", 3),
+                             ("MapNumber", 4), ("Instance", 456)):
+            rows = [{"frame": frame, "symbols": dict(base)} for frame in range(10)]
+            for row in rows[3:7]:
+                row["symbols"]["wMobilePeer1" + field] = value
+            self.assertTrue(virtual_temporal_report(rows)["passed"], field)
+            rows.extend({"frame": frame, "symbols": dict(base)} for frame in range(10, 12))
+            self.assertFalse(virtual_temporal_report(rows)["passed"], field)
+
+    def test_native_busy_frame_is_reported_and_does_not_mask_idle_starvation(self):
+        base = {"wMapGroup": 1, "wMapNumber": 2, "wMobileInstanceKey": 123,
+                "wMobilePeer1Status": 1, "wMobilePeer1MapGroup": 1,
+                "wMobilePeer1MapNumber": 2, "wMobilePeer1Instance": 123,
+                "wMobileOnline": 1, "wMobilePeerCount": 1,
+                "wMobilePeer1Visible": 1, "wMobilePeer1NativeStage": 7,
+                "wMobilePeer1Id": 1, "wMobilePeer1Generation": 1,
+                "wMobilePeer1OAMStart": 160, "vMobilePeer1OAM0": 160,
+                "hDelayFrameLY": 106}
+        rows = [{"frame": frame, "symbols": dict(base)} for frame in range(7)]
+        rows[3]['symbols']['hDelayFrameLY'] = 137
+        result = virtual_temporal_report(rows)
+        self.assertTrue(result['passed'])
+        self.assertEqual(result['native_busy_frame_samples'], [3])
+        rows.append({'frame': 7, 'symbols': dict(base)})
         self.assertFalse(virtual_temporal_report(rows)['passed'])
 
     def test_interval_proof_matches_clipped_hardware_scanlines(self):
