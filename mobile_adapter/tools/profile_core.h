@@ -84,6 +84,14 @@ struct MobileRenderSpan {
     uint64_t maximum_cycles = 0, count = 0, total_cycles = 0;
 };
 static MobileRenderSpan mobile_render_spans[23];
+static unsigned mobile_scene_stage_address;
+static uint64_t mobile_scene_steps[9][6] = {};
+extern "C" void mobile_profile_scene(unsigned stage_address) {
+    mobile_scene_stage_address = stage_address;
+}
+extern "C" uint64_t mobile_profile_scene_metric(unsigned index) {
+    return index < 54 ? mobile_scene_steps[index / 6][index % 6] : 0;
+}
 static unsigned mobile_native_shadow_address, mobile_native_descriptor_address, mobile_native_object_address;
 static byte mobile_native_shadow[160], mobile_native_descriptors[13 * 8], mobile_native_identities[13 * 2];
 extern "C" void mobile_profile_native_oam(unsigned shadow, unsigned descriptors, unsigned objects) {
@@ -310,9 +318,12 @@ static void mobile_profile_before_instruction(gb* game, const cpu_regs& regs, in
     }
     for (unsigned index = 0; index < 25; ++index) {
         auto* point = mobile_overworld_points[index];
+        // Bank accessors are unnecessary for virtually every instruction. The
+        // PC comparison is sufficient to reject an inactive watchpoint first.
+        if (!point[1] || regs.PC != point[1]) continue;
         bool bank_matches = point[0] == 0 ? regs.PC < 0x4000 :
             game->get_mbc()->get_rom() == game->get_rom()->get_rom() + (point[0] - 1) * 0x4000;
-        if (!point[1] || regs.PC != point[1] || !bank_matches) continue;
+        if (!bank_matches) continue;
         if (index == 2) mobile_native_wait_frame_ly = game->get_cpu()->read(0xff44);
         if (index == 2 && mobile_render_spans[11].active) {
             mobile_upload_waits++;
@@ -332,6 +343,10 @@ static void mobile_profile_before_instruction(gb* game, const cpu_regs& regs, in
             if (ly < 154 && mobile_observed_frames >= mobile_world_start && mobile_observed_frames < mobile_world_start + 800) {
                 if (index == 14) mobile_composition_entry_lines[0][ly]++;
                 if (index >= 16 && index < 20) mobile_composition_entry_lines[index - 15][ly]++;
+            }
+            if (index == 16 && mobile_scene_stage_address) {
+                span.stage = game->get_cpu()->read(mobile_scene_stage_address);
+                span.ly = ly;
             }
             if (index == 13 || index == 14 || index == 15) {
                 span.stage = game->get_cpu()->read(regs.HL.w + 34);
@@ -416,6 +431,16 @@ static void mobile_profile_after_instruction(gb* game, const cpu_regs& regs, int
                     mobile_native_identities[i * 2] = actor[0];
                     mobile_native_identities[i * 2 + 1] = actor[1];
                 }
+            }
+            if (&span == &mobile_render_spans[14] && mobile_scene_stage_address && span.stage < 9) {
+                auto& step = mobile_scene_steps[span.stage];
+                step[0]++;
+                step[1] = std::max(step[1], elapsed);
+                step[2] += elapsed;
+                step[3] = std::max(step[3], uint64_t(span.ly));
+                step[4] = std::max(step[4], uint64_t(game->get_cpu()->read(0xff44)));
+                const unsigned next_stage = game->get_cpu()->read(mobile_scene_stage_address);
+                step[5] |= 1u << (next_stage < 9 ? next_stage : 15);
             }
             span.count++;
             span.total_cycles += elapsed;

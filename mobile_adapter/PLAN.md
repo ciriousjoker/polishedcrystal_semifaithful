@@ -1,5 +1,62 @@
 # Mobile Adapter multiplayer plan
 
+## 2026-10-12: aligned bucket experiment and independent assembly checks
+
+The first fast-color replay still fails. Capture/pose progress improved, but the
+coarse native-scene proof conflates adjacent 16-pixel rows, then repeatedly falls
+back or runs out of time before the guest deadline. A new experiment shifts the
+conservative bins by the native scene origin and retains exact admitted tops for
+boundary cases. Removing a loaned native presentation removes one matching top
+from that private list. No ordinary source record is changed.
+
+The host instruction oracle caught a clobbered D register in the new record
+pointer before acceptance. It is fixed with an explicit zero high byte. The
+previous `independent-aligned-color-pool-20261012` replay contains that defect and
+is invalid acceptance evidence. The corrected production assembly passes 30,720
+rectangle cases over all 16 origins, maximum 3,292 cycles, plus all 256 color masks,
+18,152 weather cases and 2,144 irregular count/rollback cases.
+
+Current unaccepted target: `independent-aligned-fixed-color-pool-20261012`, log
+`/private/tmp/mobile-aligned-fixed-color-pool.log`. Upper feature usage is 19,822
+bytes. Background jobs and hardware publication still need zero-crossing,
+native-cadence and three-frame visibility validation, then the entire final
+suite. Do not infer completion from these host-only checks.
+
+## 2026-10-12: measured scene starvation and fast-path color loan
+
+M2 is still open. The stage observer now records entry/exit LY, actual cycles
+and returned stages without changing CPU state or game timing. Its six native
+core tests pass. Profile-core SHA256:
+`f125cd63afc3b995995ab5b4fc21a14f999025c29da831225d3973406bebf9d5`.
+
+The `independent-scene-phases-fixed-pool-20261012` replay fails with stale remote
+positions. It retains all 13 native objects, 800/800 native world updates and zero
+awaited-VBlank crossings. Stage 1 and local admission repeat thousands of times,
+but only 12 to 19 complete publications occur. Once the eight native colors are
+occupied, the fast compositor permanently falls back to full admission, which
+cannot finish inside this dense scene's remaining idle window. The experimental
+quarter-frame optional-job policy also starves capture/pose jobs. These are
+production defects, not grounds to relax visibility or timing acceptance.
+
+Current unaccepted experiment loans one rotating non-avatar hardware color
+inside the existing coarse fast base. It temporarily omits complete native draw
+groups using that color and updates only private admission counters. Native NPC
+records, scripts, movement, palette metadata/buffers and battery bytes remain
+unchanged. No map allowlist or replaceable classification is introduced. Local
+and exact native avatar colors remain protected; a crowded frame admits one
+rotating guest. Publication hides rejected draw groups before inserting guests.
+Unused native holes cannot restore a figure with a loaned color. Optional jobs
+use their measured bounded LY130 admission, with actual crossing checks required.
+
+Active replay: `independent-fast-color-pool-20261012`, log
+`/private/tmp/mobile-fast-color-pool.log`. Fresh model creation restores the native
+map and exact production ROM before the replay. Do not mutate/build production
+while model creation is running. Upper feature usage is 19,380 bytes; lower
+integration is 184 bytes, with 13,777 lower bytes free. No final evidence exists
+yet for this experiment. Final 21-case acceptance, disabled Standard/Faithful
+hashes, Faithful runtime, host/layout/map/launcher checks and evidence updates
+remain mandatory. No phone or public Cloudflare deployment is part of this run.
+
 ## 2026-10-12: dense transport progresses; presentation still under test
 
 The direct canonical color lookup builds and host assembly contracts pass,

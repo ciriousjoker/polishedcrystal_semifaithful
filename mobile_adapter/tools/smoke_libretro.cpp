@@ -784,6 +784,8 @@ int main(int argc, char** argv) {
             }
         }
         if (bindings.count("wMobileVirtualActorMode")) {
+            if (auto scene = reinterpret_cast<void(*)(unsigned)>(dlsym(core, "mobile_profile_scene")))
+                scene(bindings.at("wMobileVirtualStage").address);
             auto observer = symbol<void(*)(unsigned, unsigned, unsigned)>(core, "mobile_profile_native_oam");
             observer(native_addresses.at("wShadowOAM").second,
                      bindings.at("wMobileVirtualDescriptors").address,
@@ -1106,6 +1108,12 @@ int main(int argc, char** argv) {
             for (unsigned stage = 0; stage < 3; ++stage)
                 for (unsigned field = 0; field < 6; ++field)
                     profile << ",\"" << stages[stage] << '_' << fields[field] << "\":" << transport(stage * 6 + field);
+        }
+        if (auto scene = reinterpret_cast<Metric>(dlsym(core, "mobile_profile_scene_metric"))) {
+            const char* fields[] = {"count", "max_cycles", "total_cycles", "max_entry_ly", "max_exit_ly", "return_stage_mask"};
+            for (unsigned stage = 0; stage < 9; ++stage)
+                for (unsigned field = 0; field < 6; ++field)
+                    profile << ",\"scene_stage" << stage << '_' << fields[field] << "\":" << scene(stage * 6 + field);
         }
         if (auto entry = reinterpret_cast<Metric>(dlsym(core, "mobile_profile_composition_entry"))) {
             const char* stages[] = {"idle", "compose", "native_group", "peer_group", "merge_palette"};
