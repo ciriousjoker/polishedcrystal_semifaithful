@@ -50,6 +50,46 @@ historical audit that exposed the former native-lease renderer's missing gates.
 
 ## Multiplayer capacity
 
+
+### Milestone-2 crowded-scene acceptance contract
+
+The following requirements are mandatory, including the most crowded current
+or future single-player scenarios. Temporal rendering changes presentation only.
+It never authorizes object eviction, map redesign, palette substitution, paused
+NPC simulation or modified ordinary saves.
+
+- **G4 MUST:** Support four NPCs, the local player and three remote players on
+  one hardware scanline through complete-figure temporal presentation when needed.
+- **G5 MUST:** Support the local player, all twelve ordinary object records and
+  three private remote records, including when all occupy the visible area.
+- **G6 MUST:** Support the local player's palette, seven unique ordinary NPC
+  palettes and three unique remote palettes on one map. Colors may share hardware
+  slots across frames, but every displayed figure must retain its correct colors.
+- **G7 MUST:** A remote avatar uses the correct palette for its selected appearance,
+  adjusted to the receiving game's local time of day and lighting. Compare the
+  native appearance under equivalent environmental conditions; differing local
+  lighting does not authorize using another appearance's palette.
+- **G8 MUST:** Hardware resource pressure never substitutes a different palette.
+- **G9 MUST:** The local player stays continuously visible whenever the unchanged
+  single-player renderer would display them.
+- **G10 MUST:** Preserve continuous presentation in this priority order: NPCs,
+  ordinary objects such as ground items, remote players. Resolve pressure by
+  sharing remote presentation first, ordinary-object presentation second and NPC
+  presentation last. All three classes are eligible for temporal presentation.
+- **G11 MUST:** Use temporal rendering only when the complete visible figures
+  cannot coexist within the current frame's hardware resource limits. A conflict
+  disappearing immediately restores continuous presentation.
+- **G12 MUST:** Every eligible figure receives regular presentation. Ties within
+  one priority class share fairly. Lower-priority classes are never permanently
+  starved, even if some higher-priority presentation must be shared to achieve it.
+
+This 2026-10-12 contract supersedes any earlier policy that unconditionally places
+remote figures before native NPCs or relies on replaceable NPC classifications.
+Admission considers actual visible resource use, not simply allocated offscreen
+object slots or palette-cache occupancy. Busy CPU scheduling must not manufacture
+unnecessary native figure omissions or relax the ordinary frame-timing gate.
+
+
 - **G1 MUST:** Support four simultaneous players in total, including the local
   player, with three remote peers per client. All four must be able to share the
   same map instance and appear together within the viewport in ordinary supported

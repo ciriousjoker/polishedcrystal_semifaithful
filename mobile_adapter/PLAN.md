@@ -1,5 +1,31 @@
 # Mobile Adapter multiplayer plan
 
+## 2026-10-12: final crowded-scene priority contract
+
+The user supplied the explicit mandatory M2 capacity/presentation checklist.
+It is preserved in REQUIREMENTS.md, G4 through G12. Test all four NPCs plus local
+plus three remotes on one line; local plus all twelve ordinary object records
+plus three remotes in one viewport; local plus seven unique NPC colors plus three
+unique guest colors. Never substitute an avatar palette. Appearance colors follow
+the receiving game's native time/lighting rules. Preserve the local player
+whenever vanilla would show them.
+
+Continuous presentation priority is NPCs, then ordinary objects (for example
+Pokeballs), then remotes. Temporal rendering first targets remotes, then objects,
+then NPCs. All classes are eligible, ties are fair and lower classes cannot
+starve. Only actual current-frame hardware conflicts justify sharing; restore
+continuous rendering immediately when they disappear. No map classification,
+object removal, interaction change or battery change is authorized.
+
+The current fast-color experiment predates this final priority policy and is not
+an accepted implementation. Its corrected aligned replay still fails: scene
+preparation completes too late for most guest admissions, and private publication
+crosses the awaited VBlank on two clients. Tighten the unsafe publication guard;
+then reduce/restructure work rather than widening timing gates. The time-based
+ordinary-group cutoff must be removed because it manufactures omissions before
+a hardware conflict is proven. All native/world/save and final-suite gates remain.
+
+
 ## 2026-10-12: aligned bucket experiment and independent assembly checks
 
 The first fast-color replay still fails. Capture/pose progress improved, but the
