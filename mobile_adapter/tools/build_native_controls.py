@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Build a disposable ordinary-NPC control, restore native source and baseline.
 
-The fixture uses existing object events and native sprite loading. No feature
-assembly, RAM injection or save modification is involved in the control ROM.
+The fixture uses existing object events and native sprite loading. Ordinary
+controls have no feature assembly. The explicit mobile stress target keeps the
+production feature unchanged. Neither path injects RAM or modifies saved bytes.
 """
 import argparse
 from pathlib import Path
@@ -24,6 +25,10 @@ def main():
                         help="Override an ordinary peer position as figure=x,y from observed reference state")
     parser.add_argument("--replace-object", action="append", type=int, default=[],
                         help="Map-object index actually reclaimed in the measured reference")
+    parser.add_argument('--keep-native-objects', action='store_true',
+                        help='Append ordinary avatars without replacing any original Game Corner event')
+    parser.add_argument('--mobile', action='store_true', help='Build a synthetic native-NPC stress scene with the production feature')
+    parser.add_argument('--stress-count', type=int, choices=(12,), help='Fill the native runtime pool using ordinary fixture NPCs')
     args = parser.parse_args()
     replacements = args.replace_object or [10, 11]
     require(len(replacements) == 2 and len(set(replacements)) == 2 and
@@ -49,17 +54,25 @@ def main():
         lines = text.splitlines(keepends=True)
         objects = [i for i, line in enumerate(lines) if line.lstrip().startswith("object_event ")]
         require(len(objects) == 12, "Game Corner object inventory changed")
-        for number, name in zip(replacements, ("crys", "beta")):
-            lines[objects[number - 1]] = f'INCLUDE "mobile_adapter/rom/fixtures/native_control_corner_{name}.asm"\n'
-        lines[objects[-1]] += 'INCLUDE "mobile_adapter/rom/fixtures/native_control_corner_extra.asm"\n'
+        if args.keep_native_objects:
+            require(not args.replace_object, 'Cannot preserve and replace native objects together')
+            lines[objects[-1]] += 'INCLUDE "mobile_adapter/rom/fixtures/native_control_objects.asm"\n'
+        else:
+            for number, name in zip(replacements, ("crys", "beta")):
+                lines[objects[number - 1]] = f'INCLUDE "mobile_adapter/rom/fixtures/native_control_corner_{name}.asm"\n'
+            lines[objects[-1]] += 'INCLUDE "mobile_adapter/rom/fixtures/native_control_corner_extra.asm"\n'
         fixture_text = "".join(lines)
     # Force the map dependency on both builds. macOS make can otherwise miss
     # a fast fixture restoration whose timestamp falls in the same second.
+    require(not args.stress_count or (args.mobile and args.scene == 'bedroom'),
+            'The full-pool stress fixture requires the mobile bedroom target')
+    rom_name = 'polishedcrystal-mobile-3.2.3' if args.mobile else 'polishedcrystal-3.2.3'
+    original_rom_hash = digest(REPO / (rom_name + '.gbc'))
     command = ["make", "-j4", "-W", str(source.relative_to(REPO)),
-               "crystal", f"RGBDS={args.rgbds}/"]
+               "mobile" if args.mobile else "crystal", f"RGBDS={args.rgbds}/"]
     fixture_originals = {}
     try:
-        if args.scene == "bedroom":
+        if args.scene == "bedroom" or args.keep_native_objects:
             fixture = REPO / "mobile_adapter/rom/fixtures/native_control_objects.asm"
             fixture_originals[fixture] = fixture.read_bytes()
             rows = []
@@ -70,8 +83,19 @@ def main():
                 x, y = positions.get(name, (x, y))
                 rows.append(f"\tobject_event {x}, {y}, SPRITE_{name.upper()}, SPRITEMOVEDATA_STANDING_{facing}, "
                             "0, 0, -1, 0, OBJECTTYPE_SCRIPT, 0, DoNothingScript, -1\n")
+            if args.stress_count:
+                # Keep the four ordinary movement destinations around (3,3)
+                # free while filling the viewport with native object records.
+                points = [(0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (1, 3),
+                          (1, 4), (1, 5), (5, 2), (5, 3), (5, 5), (6, 3)]
+                colors = ('DARK_RED', 'DARK_BLUE', 'DARK_GREEN', 'DARK_PURPLE',
+                          'GRAY', 'WHITE', 'BLACK')
+                rows = [f'\tobject_event {x}, {y}, SPRITE_POKEFAN_M, '
+                        f'SPRITEMOVEDATA_STANDING_DOWN, 0, 0, -1, PAL_NPC_{colors[index % len(colors)]}, '
+                        'OBJECTTYPE_SCRIPT, 0, DoNothingScript, -1\n'
+                        for index, (x, y) in enumerate(points)]
             fixture.write_text('; Disposable ordinary figures for a matched avatar-load control.\n' + ''.join(rows))
-        if args.scene == "game-corner":
+        if args.scene == "game-corner" and not args.keep_native_objects:
             # Each control must contain the corresponding OTHER figures, not
             # duplicate its local figure. All changes are disposable source data.
             figures = (("chris", 15, 5, "RIGHT"), ("kris", 14, 6, "DOWN"),
@@ -88,15 +112,15 @@ def main():
         with (args.output / "build.log").open("w") as log:
             subprocess.run(command, cwd=REPO, stdout=log, stderr=subprocess.STDOUT, check=True)
         for suffix in ("gbc", "sym", "map"):
-            shutil.copyfile(REPO / f"polishedcrystal-3.2.3.{suffix}", args.output / f"control.{suffix}")
+            shutil.copyfile(REPO / f"{rom_name}.{suffix}", args.output / f"control.{suffix}")
     finally:
         source.write_bytes(original)
         for fixture, contents in fixture_originals.items():
             fixture.write_bytes(contents)
         with (args.output / "restore.log").open("w") as log:
             subprocess.run(command, cwd=REPO, stdout=log, stderr=subprocess.STDOUT, check=True)
-        require(digest(REPO / "polishedcrystal-3.2.3.gbc") == BASELINE_SHA256,
-                "Native source restoration did not restore the exact baseline")
+        require(digest(REPO / (rom_name + '.gbc')) == (original_rom_hash if args.mobile else BASELINE_SHA256),
+                "Native source restoration did not restore the exact parent ROM")
     print(f"Native control built; source and baseline restored: {args.output}")
 
 

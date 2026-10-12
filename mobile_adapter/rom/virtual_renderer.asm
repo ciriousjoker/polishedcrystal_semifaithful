@@ -24,7 +24,6 @@ MobileVirtualBeginSprites::
 	ld [wMobileVirtualHasPrivateColors], a
 	ld [wMobileVirtualStage], a
 	ld [wMobileVirtualPublished], a
-	ld [wMobileVirtualThirdBlocked], a
 	ld [wMobileVirtualPreviousOAM], a
 	ld a, MOBILE_BACKUP_BANK
 	ldh [rWBK], a
@@ -161,7 +160,6 @@ endr
 	xor a
 .phase_ready
 	ld [wMobileVirtualPhase], a
-	ld [wMobileVirtualNextPhase], a
 	ldh a, [hVBlankCounter]
 	and $f
 	cp NUM_OBJECT_STRUCTS - 1
@@ -298,6 +296,14 @@ endr
 	ld a, [hl]
 	and $1f
 	jr z, .native
+	ld b, 110 ; retain the worst-case sixteen-quad construction/rollback bound
+	cp 5
+	jr nc, .native_shape_deadline
+	ld b, 131 ; ordinary four-quad figures use the unrolled row counter
+.native_shape_deadline
+	ldh a, [rLY]
+	cp b
+	ret nc ; defer this presentation, never a native game frame
 	ld a, c
 	call MobileVirtualNativeGroup
 	ret
@@ -348,8 +354,9 @@ endr
 	ld [wMobileVirtualStage], a
 	ret
 .weather
-	ld hl, wMobileVirtualGroup
-	call MobileVirtualScratchGroup
+	ldh a, [rLY]
+	cp 140
+	ret nc
 	ld a, [wMobileVirtualCursor]
 	ld c, a
 	ldh a, [hUsedWeatherSpriteIndex]
@@ -371,9 +378,13 @@ endr
 	ld l, c
 	ld a, [hl]
 	and a
-	ret z
+	jr z, .weather ; skip unused native OAM without another scheduler round
 	cp 160
-	ret nc
+	jr nc, .weather
+	push hl
+	ld hl, wMobileVirtualGroup
+	call MobileVirtualScratchGroup
+	pop hl
 	ld de, wMobileVirtualGroup
 	ld bc, OBJ_SIZE
 	rst CopyBytes
@@ -447,13 +458,8 @@ endr
 	ld [wMobileVirtualStage], a
 	ld a, 1
 	ld [wMobileVirtualPublished], a
-	ld a, [wMobileVirtualNextPhase]
-	ld b, a
-	ld a, [wMobileRenderedCount]
-	and a
-	ld a, b
-	jr nz, .next_phase
-	inc a ; unready peers cannot keep the ready peer outside the cyclic cohort
+	ld a, [wMobileVirtualPhase]
+	inc a ; advance the first choice, even when a later successful peer repeats
 	cp MOBILE_PEERS
 	jr c, .next_phase
 	xor a
@@ -579,6 +585,8 @@ MobileVirtualHideShadowSuffix:
 	jr .loop
 
 MobileVirtualCurrentColors:
+	xor a
+	ld [wMobileVirtualNativeAvatarColors], a
 ; Audit native hardware color metadata once for this composition. Peers reuse
 ; current exact sources, including a slot that moved since the last upload job.
 ; Private construction remains isolated from native save and palette metadata.
@@ -608,6 +616,18 @@ endr
 	ld a, [hl]
 	cp NUM_PLAYER_GENDERS
 	jr nc, .next
+; Reserve exact avatar sources before any private guest borrows a palette.
+; Otherwise the first guest can occupy a later guest's native color even when
+; an unused alternative exists, creating artificial temporal palette pressure.
+	push af
+	ld hl, MobileVirtualPaletteBits
+	ld e, c
+	ld d, 0
+	add hl, de
+	ld a, [wMobileVirtualNativeAvatarColors]
+	or [hl]
+	ld [wMobileVirtualNativeAvatarColors], a
+	pop af
 	bit 0, a
 	jr nz, .odd
 	srl a
@@ -1044,7 +1064,13 @@ MobileVirtualPeerGroup:
 	pop hl
 	ret
 .eligible
+	ld a, 1
+	ldh [rWBK], a
 	ld a, [wScriptRunning]
+	ld c, a
+	ld a, MOBILE_WRAM_BANK
+	ldh [rWBK], a
+	ld a, c
 	cp $ff
 	jr nz, .outside_menu
 	push hl
@@ -1136,6 +1162,9 @@ MobileVirtualPeerGroup:
 ; Private colors occupy only a currently unused palette. Local player was
 ; admitted first, so its hardware color cannot be borrowed.
 	ld a, [wMobileVirtualPaletteUsed]
+	ld b, a
+	ld a, [wMobileVirtualNativeAvatarColors]
+	or b
 	and (1 << PAL_OW_WEATHER) - 1
 	ld e, a
 	ld d, 0
@@ -1305,13 +1334,6 @@ MobileVirtualPeerGroup:
 	ld a, 1
 	ld [wMobileVirtualPlannedPrivateColors], a
 .bound
-	ld a, [wMobileBudgetIndex]
-	inc a
-	cp MOBILE_PEERS
-	jr c, .next_phase
-	xor a
-.next_phase
-	ld [wMobileVirtualNextPhase], a
 	ld a, MOBILE_WRAM_BANK
 	ldh [rWBK], a
 	ld a, [wMobileBudgetIndex]

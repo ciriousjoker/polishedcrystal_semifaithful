@@ -1,5 +1,9 @@
 # ROM capacity and scanline crowding audit
 
+Historical audit of the retired 2 MiB native-lease implementation. The current
+target uses MBC30 and independent whole-figure rendering. See
+[MILESTONE_2.md](MILESTONE_2.md) for current budgets, map contracts and acceptance.
+
 Audited 2026-10-11 against implementation checkpoint `4aff2149d`. This report
 qualifies the earlier milestone-2 completion claim: its finite local acceptance
 results remain valid, but scanline crowding and comprehensive future-map gates

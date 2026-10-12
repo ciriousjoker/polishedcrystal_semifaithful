@@ -3,7 +3,36 @@ MACRO mobile_virtual_capture
 ; it fits; a ROM template is retained for actors beyond vanilla OAM capacity.
 	ld a, [wMobileVirtualStage]
 	and a
-	jr z, .capture_done\@
+	jp z, .capture_done\@
+; The emitted facing contract proves every ordinary four-quad figure is a
+; rectangle. Its completed native OAM needs only a count and start offset.
+; Preserve BC/DE directly instead of constructing the general template path.
+	ldh a, [hUsedSpriteTile]
+	cp 4
+	jr nz, .general\@
+	ld a, c
+	cp OAM_SIZE - OBJ_SIZE + 1
+	jr nc, .general\@
+	cp 3 * OBJ_SIZE
+	jr c, .general\@
+	push hl
+	ld a, [wMobileVirtualIndex]
+	add a
+	add a
+	add a
+	add LOW(wMobileVirtualDescriptors + 6)
+	ld l, a
+	adc HIGH(wMobileVirtualDescriptors + 6)
+	sub l
+	ld h, a
+	ld [hl], $c4 ; current native OAM, canonical rectangle, four quads
+	inc hl
+	ld a, c
+	sub 3 * OBJ_SIZE
+	ld [hl], a
+	pop hl
+	jr .capture_done\@
+.general\@
 	push bc
 	push de
 	push hl

@@ -26,6 +26,14 @@ def trace_text(path):
         return trace.read()
 
 
+def trace_rows(path):
+    """Stream every frame without retaining a whole expanded hardware trace."""
+    opener = path.open if path.exists() else lambda: gzip.open(str(path) + '.gz', 'rt')
+    with opener() as trace:
+        for line in trace:
+            yield json.loads(line)
+
+
 BASELINE_SHA256 = "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e"
 from core_runtime import CORE_REVISION
 REPO = Path(__file__).resolve().parents[2]

@@ -10,7 +10,7 @@ import argparse
 import json
 from pathlib import Path
 import subprocess
-from audit_render_policy import generate
+from audit_independent_maps import map_inventory
 from probe_emulator import convert_png, digest, read_symbols, require, validate_battery
 
 REPO = Path(__file__).resolve().parents[2]
@@ -38,7 +38,7 @@ def main():
     require(not args.output.exists(), "Choose a fresh output directory")
     require(0 <= args.hour < 24 and 0 <= args.x < 128 and 0 <= args.y < 128, "Invalid fixture choices")
     args.output.mkdir(parents=True)
-    _, rows = generate(args.rom, args.symbols)
+    rows = map_inventory()
     record = next(row for row in rows if row["map"] == args.map)
     symbols = read_symbols(args.symbols)
 

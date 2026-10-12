@@ -7,6 +7,9 @@ pub const ENVELOPE_LEN: usize = 6;
 pub const MAX_MESSAGE: usize = ENVELOPE_LEN + HEADER_LEN + MAX_PAYLOAD;
 pub const MAX_STREAM: u16 = 16;
 pub const MAX_GROUPS: usize = 8;
+/// Latest-state cloud pushes are bounded to approximately thirty per second.
+/// Embedded play bypasses this network cadence without adding a second queue.
+pub const PRESENCE_INTERVAL_MS: u64 = 33;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Envelope {
@@ -258,7 +261,7 @@ impl Owner {
             if key != member.last
                 && (local
                     || member.last.is_empty()
-                    || now.saturating_sub(member.last_sent_at) >= 50)
+                    || now.saturating_sub(member.last_sent_at) >= PRESENCE_INTERVAL_MS)
             {
                 member.last = key;
                 member.last_sent_at = now;
@@ -277,7 +280,7 @@ impl Owner {
     }
 
     /// Earliest pending coalesced push. Hosting adapters schedule a short flush
-    /// only when needed; an idle room does not require a permanent 20Hz timer.
+    /// only when needed; an idle room does not require a permanent timer.
     pub fn flush_after(&mut self, now: u64) -> Option<u64> {
         self.members
             .values()
@@ -287,8 +290,9 @@ impl Owner {
                 for peer in key[5..].chunks_exact_mut(wire::PEER_LEN) {
                     peer[4..6].fill(0);
                 }
-                (key != member.last)
-                    .then(|| 50u64.saturating_sub(now.saturating_sub(member.last_sent_at)))
+                (key != member.last).then(|| {
+                    PRESENCE_INTERVAL_MS.saturating_sub(now.saturating_sub(member.last_sent_at))
+                })
             })
             .min()
     }

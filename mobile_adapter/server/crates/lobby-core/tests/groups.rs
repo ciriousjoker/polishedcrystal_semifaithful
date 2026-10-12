@@ -1,4 +1,4 @@
-use mobile_lobby_core::group::{Envelope, Owner, MAX_MESSAGE};
+use mobile_lobby_core::group::{Envelope, Owner, MAX_MESSAGE, PRESENCE_INTERVAL_MS};
 use mobile_protocol::{lobby as wire, Frame};
 
 fn hello(stream: u16) -> Envelope {
@@ -161,14 +161,15 @@ fn bounded_pushes_keep_latest_state_through_churn() {
 
 #[test]
 fn a_presence_at_the_flush_boundary_replaces_the_older_pending_position() {
+    let interval = PRESENCE_INTERVAL_MS;
     let mut owner = Owner::new(1).unwrap();
     let effects = owner.receive(1, hello(1), [1; 8], 0);
     let source =
         wire::Welcome::decode(&effects[0].envelope.frame.as_ref().unwrap().payload).unwrap();
     owner.receive(2, hello(1), [2; 8], 0);
-    owner.receive(1, presence(1, &source, 1, 1), [0; 8], 50);
-    owner.receive(1, presence(1, &source, 2, 2), [0; 8], 99);
-    let effects = owner.receive(1, presence(1, &source, 3, 3), [0; 8], 100);
+    owner.receive(1, presence(1, &source, 1, 1), [0; 8], interval);
+    owner.receive(1, presence(1, &source, 2, 2), [0; 8], interval * 2 - 1);
+    let effects = owner.receive(1, presence(1, &source, 3, 3), [0; 8], interval * 2);
     let rosters: Vec<_> = effects
         .iter()
         .filter(|e| e.group == 2)
@@ -182,20 +183,21 @@ fn a_presence_at_the_flush_boundary_replaces_the_older_pending_position() {
             .x,
         3
     );
-    assert_eq!(owner.flush_after(100), None);
+    assert_eq!(owner.flush_after(interval * 2), None);
 }
 
 #[test]
 fn a_fast_source_cannot_exceed_push_rate_and_the_pending_latest_state_flushes() {
+    let interval = PRESENCE_INTERVAL_MS;
     let mut owner = Owner::new(1).unwrap();
     let effects = owner.receive(1, hello(1), [1; 8], 0);
     let identity =
         wire::Welcome::decode(&effects[0].envelope.frame.as_ref().unwrap().payload).unwrap();
     owner.receive(2, hello(1), [2; 8], 0);
     // Establish the receiver's first snapshot and then send one update per ms.
-    owner.receive(1, presence(1, &identity, 1, 1), [0; 8], 50);
+    owner.receive(1, presence(1, &identity, 1, 1), [0; 8], interval);
     let mut delivered = Vec::new();
-    for now in 51..=199u64 {
+    for now in interval + 1..interval * 4 {
         for effect in owner.receive(
             1,
             presence(1, &identity, now as u16, now as u16),
@@ -216,10 +218,10 @@ fn a_fast_source_cannot_exceed_push_rate_and_the_pending_latest_state_flushes() 
         }
     }
     assert_eq!(delivered.len(), 2);
-    assert_eq!(delivered[1].0 - delivered[0].0, 50);
-    assert_eq!(owner.flush_after(199), Some(1));
-    assert!(owner.tick(199).is_empty());
-    let effects = owner.tick(200);
+    assert_eq!(delivered[1].0 - delivered[0].0, interval);
+    assert_eq!(owner.flush_after(interval * 4 - 1), Some(1));
+    assert!(owner.tick(interval * 4 - 1).is_empty());
+    let effects = owner.tick(interval * 4);
     let frame = effects
         .iter()
         .find(|e| e.group == 2)
@@ -233,10 +235,10 @@ fn a_fast_source_cannot_exceed_push_rate_and_the_pending_latest_state_flushes() 
             .unwrap()
             .snapshot
             .x,
-        199
+        (interval * 4 - 1) as u16
     );
-    assert_eq!(owner.flush_after(200), None);
-    assert!(owner.tick(201).is_empty());
+    assert_eq!(owner.flush_after(interval * 4), None);
+    assert!(owner.tick(interval * 4 + 1).is_empty());
 }
 
 #[test]

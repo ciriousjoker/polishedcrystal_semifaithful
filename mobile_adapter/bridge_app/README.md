@@ -29,7 +29,8 @@ The initial room codes are canonical nonzero 16-bit IDs. This is not a secure
 invite/password design or proof of collision-free lobby creation.
 
 Embedded local mode publishes dirty state immediately through the shared Rust
-owner. Internet mode coalesces upstream presence and authority pushes to 20Hz,
+owner. Internet mode coalesces upstream presence and authority pushes at a shared
+33ms interval (approximately 30Hz),
 retaining only the latest state. Frequent local ROM polls never become cloud
 requests. Transport modes use identical validation, capacity and identity rules.
 

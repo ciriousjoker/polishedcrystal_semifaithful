@@ -118,50 +118,67 @@ MobileNativeIdle::
 	ld a, [wMobileLastFrame]
 	cp b
 	jr z, .sample
+; A late native wait cannot afford the first network poll before composing
+; its ready avatars. Menu teardown is one ordinary source of such a frame.
+; The transport path still polls after composition when its deadline permits.
+	ldh a, [rLY]
+	cp 116
+	jp nc, .compose
 	call MobileTick
 	jp .done
 .sample
+; At most one optional capture, graphics or projection job per frame. Select
+; the oldest eligible job so a short idle window cannot permanently starve
+; projection behind capture and upload work. The remaining idle calls compose
+; the native scene and pump bounded transport.
+	ldh a, [hVBlankCounter]
+	ld b, a
+	ld a, [wMobileVirtualBackgroundFrame]
+	cp b
+	jp z, .compose
 	ldh a, [rLY]
 	cp 116
 	jr nc, .compose
-	ldh a, [hVBlankCounter]
-	ld b, a
 	ld hl, wMobileColdFrame
-	sub [hl]
-	cp 2
-	jr c, .pump
 	ld a, b
-	ld [wMobileColdFrame], a
-	call MobileCapture
-	jp .done
-.pump
-	ldh a, [rLY]
-	cp 116
-	jr nc, .project_admit
-	ldh a, [hVBlankCounter]
-	ld b, a
+	sub [hl]
+	ld c, a
+	ld hl, wMobileNativePrepareFrame
+	ld a, b
+	sub [hl]
+	ld d, a
 	ld hl, wMobileVirtualUploadFrame
+	ld a, b
 	sub [hl]
 	cp 4
-	jr c, .project_admit
+	jr c, .capture_or_project
+	cp c
+	jr c, .capture_or_project
+	cp d
+	jr c, .capture_or_project
 	ld a, b
 	ld [wMobileVirtualUploadFrame], a
+	ld [wMobileVirtualBackgroundFrame], a
 	call MobileVirtualUploadJob
 	jp .done
+.capture_or_project
+	ld a, c
+	cp d
+	jr c, .project_admit
+	cp 2
+	jr c, .compose
+	ld a, b
+	ld [wMobileColdFrame], a
+	ld [wMobileVirtualBackgroundFrame], a
+	call MobileCapture
+	jp .done
 .project_admit
-; Position projection and graphics are admitted independently. Every fourth
-; frame gives the cold cache first choice; no job consumes a native game frame.
-	ldh a, [rLY]
-	cp 116
-	jr nc, .compose
-	ldh a, [hVBlankCounter]
-	ld b, a
-	ld hl, wMobileNativePrepareFrame
-	sub [hl]
+	ld a, d
 	cp 2
 	jr c, .compose
 	ld a, b
 	ld [wMobileNativePrepareFrame], a
+	ld [wMobileVirtualBackgroundFrame], a
 	call MobileNativePrepareSpritesWork
 	jp .done
 
@@ -237,6 +254,23 @@ MobileVirtualCanCompose:
 	jr z, .small
 	cp 6
 	jr z, .weather_deadline
+	cp 4
+	jr z, .native_deadline
+	cp 2
+	jr nz, .start_deadline
+	ld a, [wMobileVirtualDescriptors + 6]
+	and $1f
+	cp 5
+	jr nc, .deadline
+	ld b, 131 ; bounded four-quad local figure, including exact row rollback
+	jr .deadline
+.native_deadline
+; Each native group applies its own shape deadline before doing expensive
+; admission. Empty descriptors must not inherit the sixteen-quad deadline.
+	ld b, 137
+	jr .deadline
+.start_deadline
+	ld a, [wMobileVirtualStage]
 	cp 1
 	jr nz, .shape_deadline
 	ld b, 133

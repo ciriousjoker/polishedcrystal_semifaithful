@@ -402,6 +402,16 @@ def main():
         data[0x14e:0x150] = ((sum(data[:0x14e]) + sum(data[0x150:])) & 65535).to_bytes(2, "big")
         args.household_rom = args.output / "household2.gbc"
         args.household_rom.write_bytes(data)
+    # Preserve test provenance even when a later runtime assertion fails.
+    # Only summary.json and the PASS line establish successful acceptance.
+    (args.output / "evidence.json").write_text(json.dumps({"scenario": args.scenario,
+        "test_rom_sha256": digest(args.rom), "symbols_sha256": digest(args.symbols),
+        "core_sha256": digest(args.core), "battery_sha256": battery_hashes,
+        "households": args.households,
+        "emulator_speeds": args.speed_values or [args.fast_speed if i == 0 and args.scenario == "speed" else 1 for i in range(args.players)],
+        "declared_client_server_rtt_ms": (args.test_one_way_delay_ms + args.declared_upstream_one_way_delay_ms) * 2,
+        "client_speed_multipliers": args.speed_values or [args.fast_speed if i == 0 and args.scenario == "speed" else 1 for i in range(args.players)],
+        "expected_deferral": args.deferred, "processes": args.players}, indent=2) + "\n")
     with (args.output / "server.log").open("w") as log:
         server_port = args.port + 1 if args.scenario == "resume" or args.test_one_way_delay_ms or args.trace_tcp else args.port
         proxy = None
@@ -703,14 +713,6 @@ def main():
         target = 200 if not (args.test_one_way_delay_ms or args.declared_upstream_one_way_delay_ms) else 300
         require(result["p95_ms"] < target, f"Visible movement p95 misses {target} ms target")
     (args.output / "summary.json").write_text(json.dumps(states, indent=2) + "\n")
-    (args.output / "evidence.json").write_text(json.dumps({"scenario": args.scenario,
-        "test_rom_sha256": digest(args.rom), "symbols_sha256": digest(args.symbols),
-        "core_sha256": digest(args.core), "battery_sha256": battery_hashes,
-        "households": args.households,
-        "emulator_speeds": args.speed_values or [args.fast_speed if i == 0 and args.scenario == "speed" else 1 for i in range(args.players)],
-        "declared_client_server_rtt_ms": (args.test_one_way_delay_ms + args.declared_upstream_one_way_delay_ms) * 2,
-        "client_speed_multipliers": [args.fast_speed] + [1] * (args.players - 1) if args.scenario == "speed" else [1] * args.players,
-        "expected_deferral": args.deferred, "processes": args.players}, indent=2) + "\n")
     print(f"PASS {args.players} actual ROMs, scenario={args.scenario}, deferral={args.deferred}: {args.output}")
 
 

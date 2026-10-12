@@ -34,6 +34,9 @@ static uint64_t audio_samples = 0, audio_batches = 0;
 static retro_pixel_format pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
 static std::vector<unsigned char> image;
 static unsigned char video_oam[160] = {};
+static unsigned (*native_oam_byte)(unsigned) = nullptr;
+static unsigned video_native_source_count[13] = {}, video_native_complete[13] = {};
+static unsigned video_native_source_sprite[13] = {}, video_native_source_map[13] = {};
 static unsigned char video_object_palettes[64] = {};
 static unsigned char video_peer_tiles[128] = {};
 static unsigned char video_native_tiles[0x4000] = {};
@@ -131,8 +134,9 @@ static void load_bindings(const std::string& path) {
         if (colon == std::string::npos) {
             if (name.rfind("wMobileVirtual", 0) != 0) fail("Invalid symbol location");
             const unsigned address = std::stoul(location, nullptr, 16);
-            const bool resident_pose = name.rfind("wMobileVirtualQueued", 0) == 0 &&
-                                       address >= 0xcf0b && address <= 0xcf13;
+            const bool resident_pose = (name.rfind("wMobileVirtualQueued", 0) == 0 ||
+                                        name == "wMobileVirtualBackgroundFrame") &&
+                                       address >= 0xcf0b && address <= 0xcf14;
             if (!resident_pose && (address < 0xcf44 || address >= 0xdd00))
                 fail("Virtual alias outside audited private WRAM");
             bindings[name] = {address < 0xd000 ? 0u : 5u, address};
@@ -398,6 +402,15 @@ static std::map<std::string, unsigned> capture(const unsigned char* sram, size_t
         values["vStoryFlagsHash"] = hash;
     }
     unsigned scanlines[144] = {};
+    if (native_oam_byte) {
+        for (unsigned slot = 0; slot < 13; ++slot) {
+            const std::string prefix = "vNativeSource" + std::to_string(slot);
+            values[prefix + "Count"] = video_native_source_count[slot];
+            values[prefix + "Complete"] = video_native_complete[slot];
+            values[prefix + "Sprite"] = video_native_source_sprite[slot];
+            values[prefix + "Map"] = video_native_source_map[slot];
+        }
+    }
     for (unsigned quad = 0; quad < 40; ++quad) {
         values["vOAM" + std::to_string(quad) + "Y"] = video_oam[quad * 4];
         for (int line = int(video_oam[quad * 4]) - 16; line < int(video_oam[quad * 4]) - 8; ++line)
@@ -499,6 +512,31 @@ static bool environment(unsigned command, void* data) {
 static void video(const void* data, unsigned w, unsigned h, size_t pitch) {
     ++video_frames;
     if (const auto* oam = descriptor(0xfe00)) std::memcpy(video_oam, oam, sizeof(video_oam));
+    if (native_oam_byte) {
+        for (unsigned slot = 0; slot < 13; ++slot) {
+            const unsigned flags = native_oam_byte(160 + slot * 8 + 6);
+            const unsigned count = flags & 31;
+            const unsigned start = native_oam_byte(160 + slot * 8 + 7);
+            video_native_source_sprite[slot] = native_oam_byte(264 + slot * 2);
+            video_native_source_map[slot] = native_oam_byte(265 + slot * 2);
+            video_native_source_count[slot] = 0;
+            video_native_complete[slot] = 0;
+            if (!(flags & 128) || !count || count > 16 || start + count * 4 > 160) continue;
+            bool visible = false;
+            for (unsigned quad = 0; quad < count; ++quad) {
+                const unsigned y = native_oam_byte(start + quad * 4);
+                visible |= y >= 9 && y < 160;
+            }
+            if (!visible) continue;
+            video_native_source_count[slot] = count;
+            for (unsigned target = 0; target + count * 4 <= 160; target += 4) {
+                bool equal = true;
+                for (unsigned i = 0; i < count * 4; ++i)
+                    if (video_oam[target + i] != native_oam_byte(start + i)) { equal = false; break; }
+                if (equal) { video_native_complete[slot] = 1; break; }
+            }
+        }
+    }
     if (bindings.count("wMobileVirtualActorMode") && descriptor(0xc000)) {
         const auto* ram = descriptor(0xc000);
         const auto owners = bindings.at("wMobileVirtualWindowOwners");
@@ -675,6 +713,8 @@ int main(int argc, char** argv) {
     Metric metric = nullptr;
     Metric idle_metric = reinterpret_cast<Metric>(dlsym(core, "mobile_profile_idle_metric"));
     Metric composition_metric = reinterpret_cast<Metric>(dlsym(core, "mobile_profile_composition_metric"));
+    auto native_graphics_wait = reinterpret_cast<uint64_t(*)()>(dlsym(core, "mobile_profile_native_graphics_wait"));
+    auto native_wait_ly = reinterpret_cast<uint64_t(*)()>(dlsym(core, "mobile_profile_native_wait_ly"));
     uint64_t previous_profile_cycles[5] = {};
     void (*profile_frame)() = nullptr;
     if (arguments.count("--profile-out")) {
@@ -734,13 +774,20 @@ int main(int argc, char** argv) {
             const char* points[] = {"MobilePrepareSprites", "MobileRenderSprites", "DelayFrame", "HandleNPCStep", "MobileBudgetNPCScanlines",
                 "MobileCheckNPCScanlines", "MobileCanSuppress", "MobileBudgetWeather",
                 "MobileCountObjectOAM", "MobilePreparePeerGraphics", "MobileProjectPeer", "MobileCapture", "_UpdateSprites", "MobileNativeUpload", "MobileNativeIdle", "MobileNativePrepareSpritesWork",
-                "MobileVirtualComposeStep", "MobileVirtualNativeGroup", "MobileVirtualPeerGroup", "MobileVirtualMergePalettes", "MobileVirtualCommitPose"};
+                "MobileVirtualComposeStep", "MobileVirtualNativeGroup", "MobileVirtualPeerGroup", "MobileVirtualMergePalettes", "MobileVirtualCommitPose", "GetUsedSprite"};
             for (unsigned i = 0; i < sizeof(points) / sizeof(points[0]); ++i) {
                 if (native_addresses.count(points[i])) {
                     auto point = native_addresses.at(points[i]);
                     observer(i, point.first, point.second);
                 }
             }
+        }
+        if (bindings.count("wMobileVirtualActorMode")) {
+            auto observer = symbol<void(*)(unsigned, unsigned, unsigned)>(core, "mobile_profile_native_oam");
+            observer(native_addresses.at("wShadowOAM").second,
+                     bindings.at("wMobileVirtualDescriptors").address,
+                     native_addresses.at("wObjectStructs").second);
+            native_oam_byte = symbol<unsigned(*)(unsigned)>(core, "mobile_profile_native_oam_byte");
         }
         const std::pair<const char*, const char*> cursor_ranges[] = {
             {"HBlankCopy1bpp", "ClearBGPalettes"},
@@ -848,6 +895,10 @@ int main(int argc, char** argv) {
         if (profile_frame) profile_frame();
         if (!trace_enabled && conditional_actions.empty() && walk_waypoints.empty()) continue;
         auto values = capture(sram, sram_size);
+        if (profile_frame && native_graphics_wait)
+            values["vNativeGraphicsWait"] = native_graphics_wait();
+        if (profile_frame && native_wait_ly)
+            values["vNativeWaitEntryLY"] = native_wait_ly();
         if (metric && idle_metric && composition_metric) {
             const uint64_t totals[] = {metric(7), idle_metric(3), idle_metric(7),
                                        composition_metric(2), composition_metric(14)};
@@ -912,9 +963,14 @@ int main(int argc, char** argv) {
                 entry.first == "wMobilePeer2ScreenX" || entry.first == "wMobilePeer2ScreenY")
                 progress.insert(entry);
         for (const auto& entry : values)
-            if (entry.first.rfind("vMobile", 0) == 0 || entry.first.rfind("vNPC", 0) == 0 || entry.first.rfind("vOAM", 0) == 0)
+            if (entry.first.rfind("vMobile", 0) == 0 || entry.first.rfind("vNPC", 0) == 0 || entry.first.rfind("vOAM", 0) == 0 || entry.first.rfind("vNativeSource", 0) == 0)
                 progress.insert(entry);
-        if (trace_enabled && progress != previous) {
+        // A temporal visibility oracle needs every connected video frame.
+        // Change-only traces omit repeated visible frames and can turn one
+        // missing frame into a false multi-frame absence during a cold join.
+        const bool temporal_frame = values.count("wMobileVirtualActorMode") &&
+                                    values.at("wMobileOnline");
+        if (trace_enabled && (progress != previous || temporal_frame || profile_frame)) {
             auto wall_us = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now().time_since_epoch()).count();
             std::ostringstream record;

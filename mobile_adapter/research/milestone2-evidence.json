@@ -1,6 +1,6 @@
 {
   "milestone": 2,
-  "status": "complete for the approved autonomous macOS/local-host scope",
+  "status": "historical native-lease evidence, superseded by independent-renderer acceptance in progress",
   "updated": "2026-10-11",
   "branch": "mobileadapter",
   "player_capacity": 4,
@@ -693,5 +693,7 @@
     "Phone and public Cloudflare deployment are deferred by the user. Other-platform native packaging/background lifecycle, especially iOS, is not verified.",
     "Transport/schema/capacity/mechanics checks exist. Generated semantic compatibility/import matching and secure invitations remain future work.",
     "Calls, action menus, battles, gifts, trades and quick travel belong to later milestones."
-  ]
+  ],
+  "current_report": "MILESTONE_2.md",
+  "historical_only": true
 }

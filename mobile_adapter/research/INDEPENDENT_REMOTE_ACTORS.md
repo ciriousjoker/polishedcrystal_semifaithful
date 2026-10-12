@@ -1,9 +1,10 @@
 # Independent remote actor presentation
 
-Date: 2026-10-12. Architecture analysis with an experimental implementation.
-Read [VIRTUAL_RENDERER_PROGRESS.md](VIRTUAL_RENDERER_PROGRESS.md) for the current
-checkpoint. The normal launcher retains the native comparison path; its separate
-OAM bounds safety fix changes the enabled hash. The disabled hash is unchanged.
+Historical architecture exploration from 2026-10-12. The independent renderer
+is now the normal mobile target; native leasing is retired. Read
+[MILESTONE_2.md](MILESTONE_2.md) for current implementation and acceptance status.
+The experimental/native comparisons below describe the transition, not the
+current launcher or an additional compiler switch.
 
 ## Existing foundation
 

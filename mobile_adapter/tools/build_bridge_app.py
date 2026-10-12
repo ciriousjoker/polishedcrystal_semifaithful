@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Build the native Rust engine and package it in the macOS Flutter shell."""
 import argparse
+import os
 from pathlib import Path
+import platform
 import shutil
 import subprocess
 
@@ -23,7 +25,14 @@ def main():
     if not args.debug:
         command += ["--release"]
     subprocess.run(command, cwd=ROOT, check=True)
-    subprocess.run([args.flutter, "build", "macos", "--" + profile], cwd=APP, check=True)
+    # Cargo's native library targets this host. Package the Flutter executable
+    # for that same architecture, rather than advertising an unsupported second
+    # architecture without a matching Rust engine.
+    architecture = platform.machine()
+    if architecture not in ("arm64", "x86_64"):
+        parser.error("The macOS bundle requires a native arm64 or x86_64 host")
+    environment = dict(os.environ, FLUTTER_XCODE_ARCHS=architecture)
+    subprocess.run([args.flutter, "build", "macos", "--" + profile], cwd=APP, env=environment, check=True)
     bundle = APP / f"build/macos/Build/Products/{profile.title()}/mobile_adapter_bridge.app"
     library = bundle / "Contents/Frameworks/libmobile_bridge.dylib"
     shutil.copy2(ROOT / f"mobile_adapter/server/target/{profile}/libmobile_bridge.dylib", library)

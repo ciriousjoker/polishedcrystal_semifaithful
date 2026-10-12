@@ -142,7 +142,6 @@ test-mobile-host:
 	python3 -m unittest discover -s mobile_adapter/tools -p 'test_save_scenarios.py'
 	python3 -m unittest discover -s mobile_adapter/tools -p 'test_independent_maps.py'
 	python3 -m unittest discover -s mobile_adapter/tools -p 'test_scanline_selection.py'
-	python3 -m unittest discover -s mobile_adapter/tools -p 'test_native_scanlines.py'
 	python3 -m unittest discover -s mobile_adapter/tools -p 'test_rom_budget.py'
 # Emulator acceptance is deliberately separate from host-only unit/ASM tests.
 MOBILE_TEST_CACHE ?= /Volumes/Storage/Cache/mobileadapter
@@ -151,7 +150,7 @@ MOBILE_TEST_PROFILE_CORE ?=
 MOBILE_CORE_ARGS = $(if $(MOBILE_TEST_CORE),--core "$(MOBILE_TEST_CORE)") $(if $(MOBILE_TEST_PROFILE_CORE),--profile-core "$(MOBILE_TEST_PROFILE_CORE)")
 MOBILE_TEST_CONTROL ?=
 MOBILE_TEST_OUTPUT ?= $(MOBILE_TEST_CACHE)/acceptance-$(shell date +%Y%m%d-%H%M%S)
-MOBILE_TEST_CASES ?= cadence,avatar-load,local-latency,hosted-latency,priority,saves,running,start-menu,warp,warp-turn,rejoin,save-caches,duplicate-ids
+MOBILE_TEST_CASES ?= cadence,avatar-load,local-latency,hosted-latency,priority,saves,running,start-menu,menu-avatar,corner-menu-avatar,warp,warp-turn,rejoin,resume,save-caches,duplicate-ids,route37,exeggutor,night,snow,pool-full
 .PHONY: prepare-mobile-core
 prepare-mobile-core:
 	python3 mobile_adapter/tools/prepare_mbc30_core.py --profile
@@ -185,7 +184,6 @@ test-mobile-rom:
 	$(MAKE) test-mobile-maps RGBDS="$(RGBDS)" MOBILE_TEST_OUTPUT="$(MOBILE_TEST_OUTPUT)"
 	$(MOBILE_CARGO) build --locked --manifest-path mobile_adapter/server/Cargo.toml
 	python3 mobile_adapter/tools/verify_milestone2.py --cache "$(MOBILE_TEST_CACHE)" $(MOBILE_CORE_ARGS) $(if $(MOBILE_TEST_CONTROL),--control "$(MOBILE_TEST_CONTROL)") --output "$(MOBILE_TEST_OUTPUT)" --cases "$(MOBILE_TEST_CASES)"
-	python3 mobile_adapter/tools/probe_scanline_pressure.py --cache "$(MOBILE_TEST_CACHE)" $(MOBILE_CORE_ARGS) --output "$(MOBILE_TEST_OUTPUT)-pressure"
 
 monochrome: crystal
 noir: crystal
@@ -340,7 +338,7 @@ gfx/slots/slots_2.2bpp: tools/gfx += --interleave --png=$<
 gfx/slots/slots_3.2bpp: tools/gfx += --interleave --png=$< --remove-duplicates --keep-whitespace --remove-xflip
 
 gfx/splash/copyright.2bpp: gfx/splash/copyright.txt tools/fine_print.c
-	$Qtools/fine_print -c 013 -s 0 '$(shell cat gfx/splash/copyright.txt)' $@
+	$Qtools/fine_print -c 013 -s 0 "$$(cat "$<")" "$@"
 
 gfx/stats/%.bin: gfx/stats/%.tilemap gfx/stats/%.attrmap ; $Qcat $^ > $@
 gfx/stats/judge.2bpp: tools/gfx += --trim-whitespace

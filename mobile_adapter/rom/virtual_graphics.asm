@@ -7,6 +7,12 @@ MobileVirtualCommitPose::
 	ld a, [wMobileVirtualQueuedPeer]
 	and a
 	ret z
+	ldh a, [hRequested2bpp]
+	and a
+	ret nz ; native graphics transfers own the early VBlank window
+	ldh a, [hRequested1bpp]
+	and a
+	ret nz
 	push af
 	push bc
 	push de

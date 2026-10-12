@@ -144,6 +144,80 @@ class ScanlineSelectionTests(unittest.TestCase):
         rows.append({'frame': 7, 'symbols': dict(base)})
         self.assertFalse(virtual_temporal_report(rows)['passed'])
 
+    def test_changed_avatar_is_not_ready_until_matching_gpu_tiles_commit(self):
+        base = {"wMapGroup": 1, "wMapNumber": 2, "wMobileInstanceKey": 123,
+                "wMobilePeer1Status": 1, "wMobilePeer1MapGroup": 1,
+                "wMobilePeer1MapNumber": 2, "wMobilePeer1Instance": 123,
+                "wMobileOnline": 1, "wMobilePeerCount": 1,
+                "wMobilePeer1Visible": 1, "wMobilePeer1NativeStage": 7,
+                "wMobilePeer1Id": 1, "wMobilePeer1Generation": 1,
+                "wMobilePeer1Avatar": 1, "wMobilePeer1LoadedSprite": 0,
+                "wMobilePeer1OAMStart": 160, "vMobilePeer1OAM0": 160}
+        rows = [{"frame": frame, "symbols": dict(base)} for frame in range(10)]
+        self.assertTrue(virtual_temporal_report(rows)['passed'])
+        for frame in range(10, 14):
+            row = dict(base, wMobilePeer1LoadedSprite=1)
+            rows.append({'frame': frame, 'symbols': row})
+        self.assertFalse(virtual_temporal_report(rows)['passed'])
+
+    def test_native_graphics_wait_resets_only_the_load_segment(self):
+        base = {"wMapGroup": 1, "wMapNumber": 2, "wMobileInstanceKey": 123,
+                "wMobilePeer1Status": 1, "wMobilePeer1MapGroup": 1,
+                "wMobilePeer1MapNumber": 2, "wMobilePeer1Instance": 123,
+                "wMobileOnline": 1, "wMobilePeerCount": 1,
+                "wMobilePeer1Visible": 1, "wMobilePeer1NativeStage": 7,
+                "wMobilePeer1Id": 1, "wMobilePeer1Generation": 1,
+                "wMobilePeer1OAMStart": 160, "vMobilePeer1OAM0": 160}
+        rows = [{"frame": frame, "symbols": dict(base)} for frame in range(7)]
+        rows[3]['symbols']['vNativeGraphicsWait'] = 1
+        result = virtual_temporal_report(rows)
+        self.assertTrue(result['passed'])
+        self.assertEqual(result['native_graphics_wait_frame_samples'], [3])
+        rows.append({'frame': 7, 'symbols': dict(base)})
+        self.assertFalse(virtual_temporal_report(rows)['passed'])
+
+    def test_sparse_connected_trace_cannot_claim_temporal_acceptance(self):
+        rows = [{'frame': frame, 'symbols': {'wMobileOnline': 1, 'wMobilePeerCount': 0}}
+                for frame in (0, 5)]
+        with self.assertRaisesRegex(ValueError, 'every connected frame'):
+            virtual_temporal_report(rows)
+
+    def test_reordered_identity_requires_a_valid_new_projection(self):
+        base = {"wMapGroup": 1, "wMapNumber": 2, "wMobileInstanceKey": 123,
+                "wMobilePeer1Status": 1, "wMobilePeer1MapGroup": 1,
+                "wMobilePeer1MapNumber": 2, "wMobilePeer1Instance": 123,
+                "wMobileOnline": 1, "wMobilePeerCount": 1,
+                "wMobilePeer1Visible": 1, "wMobilePeer1NativeStage": 7,
+                "wMobilePeer1Id": 2, "wMobilePeer1Generation": 1,
+                "wMobilePeer1Avatar": 2, "wMobilePeer1LoadedSprite": 2,
+                "wMobilePeer1DrawValid": 0,
+                "wMobilePeer1OAMStart": 160, "vMobilePeer1OAM0": 160}
+        # The same cached avatar can match a returning identity before its old
+        # screen coordinates become valid. Count only the new coherent segment.
+        rows = [{'frame': frame, 'symbols': dict(base)} for frame in range(6)]
+        rows += [{'frame': frame, 'symbols': dict(base, wMobilePeer1DrawValid=1)}
+                 for frame in range(6, 9)]
+        self.assertTrue(virtual_temporal_report(rows)['passed'])
+        rows.append({'frame': 9, 'symbols': dict(base, wMobilePeer1DrawValid=1)})
+        self.assertFalse(virtual_temporal_report(rows)['passed'])
+
+    def test_missing_native_wait_is_explicit_and_does_not_mask_later_starvation(self):
+        base = {"wMapGroup": 1, "wMapNumber": 2, "wMobileInstanceKey": 123,
+                "wMobilePeer1Status": 1, "wMobilePeer1MapGroup": 1,
+                "wMobilePeer1MapNumber": 2, "wMobilePeer1Instance": 123,
+                "wMobileOnline": 1, "wMobilePeerCount": 1,
+                "wMobilePeer1Visible": 1, "wMobilePeer1NativeStage": 7,
+                "wMobilePeer1Id": 1, "wMobilePeer1Generation": 1,
+                "wMobilePeer1OAMStart": 160, "vMobilePeer1OAM0": 160,
+                "hDelayFrameLY": 0, "vNativeWaitEntryLY": 104}
+        rows = [{"frame": frame, "symbols": dict(base)} for frame in range(7)]
+        rows[3]['symbols']['vNativeWaitEntryLY'] = 255
+        result = virtual_temporal_report(rows)
+        self.assertTrue(result['passed'])
+        self.assertEqual(result['native_no_wait_frame_samples'], [3])
+        rows.append({'frame': 7, 'symbols': dict(base)})
+        self.assertFalse(virtual_temporal_report(rows)['passed'])
+
     def test_interval_proof_matches_clipped_hardware_scanlines(self):
         # Independent oracle: actual 8x8 OAM selection across 144 screen rows.
         # Include partial figures at either viewport edge and equal/nearby tops.

@@ -47,10 +47,11 @@ def main():
                 stdout=log, stderr=subprocess.STDOUT, check=True)
         batteries.append(directory / "ingame.sav")
     command = ["python3", str(REPO / "mobile_adapter/tools/probe_lobby.py"),
-        "--runner", str(runner), "--core", str(core), "--server",
+        "--runner", str(runner), "--core", str(args.profile_core), "--server",
         str(REPO / "mobile_adapter/server/target/debug/mobile-bridge"), "--players", "4",
         "--native-actor-probe", "--rom", str(args.rom), "--symbols", str(args.symbols),
-        "--scenario", "scanline", "--port", str(args.port),
+        "--scenario", "scanline", "--profile", "--profile-window-start", "3300",
+        "--speeds", "1,2,3,4", "--observation-frames", "5500", "--port", str(args.port),
         "--output", str(args.output / "runtime"), "--battery", str(batteries[0]),
         "--second-battery", str(batteries[1]), "--different-battery", str(batteries[2]),
         "--fourth-battery", str(batteries[3])]
@@ -64,7 +65,8 @@ def main():
         require("Native scanline/visibility acceptance failed" in (args.output / "probe.log").read_text(),
                 "Diagnostic mode cannot absorb unrelated fixture failures")
     evidence = {"acceptance_passed": result["passed"], "rom_sha256": digest(args.rom),
-        "core_sha256": digest(core), "map": "Route37", "protected_map_indices": [2, 3],
+        "core_sha256": digest(args.profile_core), "map": "Route37", "protected_map_indices": [2, 3],
+        "speed_multipliers": [1, 2, 3, 4],
         "player_positions": [[8, 12]] * 4, "battery_sha256": [digest(path) for path in batteries],
         "note": "Distinct live players may overlap because remote hitboxes are disabled. X overlap does not reduce OAM selection demand.",
         "scanlines": result}

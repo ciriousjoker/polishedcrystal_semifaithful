@@ -108,7 +108,8 @@ ordinary save. Select+B joins or leaves; Select+A opens players and status;
 Select+B+A requests the echo diagnostic. Physical Select+B precedes native input
 locks and exits locally without waiting for a server. Initially overlapping
 players need to move apart. Remote players use the actual saved figure and native
-movement assets. Native NPC leases are protected by a reviewed source policy.
+movement assets. All remote records and graphics workspace are private; ordinary
+NPC records and map design remain unchanged.
 
 The feature builds are `make mobile` and `make faithful mobile`. Unsupported
 cosmetic/debug/VC/Pocket combinations fail explicitly. All feature assembly lives
@@ -141,8 +142,8 @@ make test-mobile-host RGBDS=/Volumes/Storage/Cache/mobileadapter/rgbds-1.0.4/
 cargo clippy --locked --manifest-path mobile_adapter/server/Cargo.toml --workspace --all-targets -- -D warnings
 ```
 
-They cover 35 Rust test functions, 19 launcher tests, six ordinary-save fixture
-tests and eight lease-policy tests, plus emitted protocol vectors and production
+They cover 37 Rust test functions, 22 launcher tests, eight ordinary-save fixture
+tests, dynamic map contracts and complete-figure selection, plus emitted protocol vectors and production
 assembly layout. The Rust suite checks bounded framing, arbitrary byte/event
 sequences, scoped identity, capacity, expiry, connection churn, aggressive clients,
 room isolation, multiplexed households and reconnect. Actual local workerd tests

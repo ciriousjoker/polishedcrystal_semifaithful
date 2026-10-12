@@ -2729,13 +2729,6 @@ _UpdateSprites::
 	ld a, 1
 	ldh [hOAMUpdate], a
 if DEF(MOBILE_ADAPTER)
-	ld a, [wScriptRunning]
-	and a
-	jr z, .native_sprites
-	farcall MobilePrepareSprites
-.native_sprites
-endc
-if DEF(MOBILE_ADAPTER)
 	farcall MobileVirtualBeginSprites
 endc
 	call InitSprites

@@ -35,7 +35,7 @@ Do not implement wishlist features merely because they have been recorded.
   128. The lower half contains only minimal conditional integration. The build
   guard checks placement; the matching-counterpart budget gate additionally
   enforces a 256-byte net lower integration ceiling as an engineering regression
-  guard. Current measured integration is 154 bytes. Ordinary game helpers must
+  guard. Current measured integration is 184 bytes. Ordinary game helpers must
   not be relocated to fund that integration.
 
 Read [research/MBC30_MIGRATION.md](research/MBC30_MIGRATION.md) for current mapper,
@@ -43,9 +43,10 @@ core and validation evidence. [research/ROM_BUDGET.md](research/ROM_BUDGET.md) i
 historical 2 MiB savings investigation, not the current acceptance cap.
 The strict `test-mobile-budget` gate remains included in full ROM acceptance.
 
-The latest measured ROM budget, scanline limits and missing future-map gates are
-recorded in [research/ROM_AND_RENDER_LIMITS.md](research/ROM_AND_RENDER_LIMITS.md).
-The earlier finite milestone-2 run does not prove those stronger properties.
+Current ROM budgets, whole-figure admission and dynamic map contracts are
+recorded in [research/MILESTONE_2.md](research/MILESTONE_2.md).
+[research/ROM_AND_RENDER_LIMITS.md](research/ROM_AND_RENDER_LIMITS.md) records the
+historical audit that exposed the former native-lease renderer's missing gates.
 
 ## Multiplayer capacity
 
@@ -335,7 +336,7 @@ camera so the avatar does not become stuck to the screen. Rendering that cached
 pose has a nonzero cost which must also fit the budget. Expensive animation/tile
 updates may be deferred independently of position updates.
 
-The native lease implementation now uses bounded idle jobs and retains complete
+The independent renderer now uses bounded idle jobs and retains complete
 cached appearance while a later update waits. The finite four-core cadence and
 latency measurements are in MILESTONE_2.md. This may reduce remote update frequency;
 it does not promise a fixed delay on every scene or WAN path. If a scene has no sufficient spare time for an
@@ -377,16 +378,17 @@ for stronger ROM validation and isolation discipline, not permission for interna
 errors to corrupt the game. External emulator/libmobile/host failures are outside
 the user's explicitly defined ROM-code guarantee.
 
-ROM space and sprite resources remain finite. At checkpoint 4aff2149d, standard
-enabled ROM0 has 39 free bytes and ROMX has 2,810 free bytes across all banks;
-the net feature cost is 11,112 bytes. Fragmentation limits placement. Future
-interactions/battles/transfers and upstream changes need explicit budgets.
+ROM space and sprite resources remain finite. The enabled target uses 4 MiB
+MBC30, with all banked feature code and assets in the upper 2 MiB and only guarded
+integration below. The disabled target retains the exact original 2 MiB hash.
+Future interactions/battles/transfers and upstream changes need explicit budgets.
 Hardware OAM has forty entries but displays at most ten objects on a scanline.
 Four ordinary avatars require eight per line; a second overlapping ordinary NPC
-exceeds that limit. The current native renderer has no dedicated whole-character
-scanline admission policy. Its global buffer guard and object leases do not
-prove full scanline visibility. Stronger acceptance is open, as documented in
-ROM_AND_RENDER_LIMITS.md; perfect CPU scheduling cannot remove this display limit.
+exceeds that limit. The independent renderer admits complete figures and shares
+presentation across frames only under hardware pressure, with local-player
+priority and unchanged NPC simulation. Tiles and colors have separate private
+budgets. Finite hardware traces and emitted-data contracts validate the current
+implementation; perfect CPU scheduling cannot remove the hardware display limits.
 
 ## Required acceptance additions
 
@@ -414,11 +416,10 @@ ROM_AND_RENDER_LIMITS.md; perfect CPU scheduling cannot remove this display limi
   local application and disconnect behavior; ordinary manual saving determines
   subsequent persistence. No journal or cross-restart transfer recovery tests.
 
-Current status: documentation only in this follow-up. No new 400%, emergency-exit,
-save-byte-equivalence or connected-state-restore acceptance result is claimed.
-The four-player layout test proves RAM placement only. Milestone 2 now additionally
-requires four-player implementation and matched-NPC timing; milestone 3 remains
-blocked by that acceptance work. Milestone 5 no longer requires durable recovery.
+Current implementation and acceptance status are maintained in
+[MILESTONE_2.md](research/MILESTONE_2.md), rather than the historical planning
+checkpoint. Four-player implementation and matched-NPC timing are mandatory M2
+gates. Milestone 5 does not require a save journal or cross-restart transfer recovery.
 
 ## Sources
 

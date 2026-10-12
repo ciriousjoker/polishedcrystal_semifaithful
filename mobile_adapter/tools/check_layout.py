@@ -87,7 +87,7 @@ for source in sorted((REPO / 'mobile_adapter/rom').rglob('*.asm')):
         require(origin[0] == target[0],
                 f'{source.relative_to(REPO)}:{number}: near call/jump {owner} -> {call[1]} crosses ROM banks')
 report = {"independent_native_objects": virtual, "banked_near_calls_checked": near_calls, "native_original_view_bytes": views, "private_palette_bytes": private_colors, "private_palette_code_bytes": palette_code, "existing_ram_symbols_checked": len(ram), "existing_ram_symbols_changed": changed,
-          "avatar_cache_bytes": avatar_bytes, "removed_legacy_renderer_bytes": 456, "resident_bytes": resident, "buffer_bytes": buffers, "banked_driver_bytes": code, "feature_helper_bytes": helpers, "lease_policy_bytes": policy_bytes, "raw_native_tile_backup_bytes": 1152}
+          "avatar_cache_bytes": avatar_bytes, "removed_legacy_renderer_bytes": 456, "resident_bytes": resident, "buffer_bytes": buffers, "banked_driver_bytes": code, "feature_helper_bytes": helpers, "lease_policy_bytes": policy_bytes, "private_render_workspace_bytes": 1152}
 for name in ("baseline", "mobile", "faithful"):
     path = getattr(args, name)
     if name != "baseline":

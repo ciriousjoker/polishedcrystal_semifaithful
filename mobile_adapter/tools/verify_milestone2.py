@@ -16,11 +16,12 @@ import time
 from probe_emulator import BASELINE_SHA256, require, read_symbols
 from save_scenarios import choose, session_battery, AVATARS
 from prepare_native_controls import compare_reference
+from probe_independent_scenes import SCENES
 
 REPO = Path(__file__).resolve().parents[2]
 CACHE = Path("/Volumes/Storage/Cache/mobileadapter")
 CASES = ("cadence", "avatar-load", "local-latency", "hosted-latency", "priority", "saves",
-         "running", "start-menu", "warp", "warp-turn", "rejoin", "save-caches", "duplicate-ids")
+         "running", "start-menu", "menu-avatar", "corner-menu-avatar", "warp", "warp-turn", "rejoin", "resume", "save-caches", "duplicate-ids", *SCENES)
 
 
 def main():
@@ -66,7 +67,13 @@ def main():
 
     for case in cases:
         print("ACCEPTANCE " + case, flush=True)
-        scene = "bedroom" if case in ("avatar-load", "local-latency", "hosted-latency", "warp", "rejoin", "save-caches", "duplicate-ids") else "game-corner"
+        if case in SCENES:
+            run("probe_independent_scenes.py", ["--runner", runner, "--core", profile,
+                "--server", binaries / "mobile-bridge", "--rom", args.rom,
+                "--symbols", args.symbols, "--scene", case, "--port", args.port,
+                "--rgbds", args.cache / "rgbds-1.0.4", "--output", args.output / case])
+            continue
+        scene = "bedroom" if case in ("avatar-load", "menu-avatar", "local-latency", "hosted-latency", "warp", "rejoin", "save-caches", "duplicate-ids") else "game-corner"
         batteries = [saves / scene / (name + ".sav") for name in ("chris", "kris", "crys", "beta")]
         if case == "duplicate-ids":
             symbols = read_symbols(args.symbols)
@@ -102,7 +109,10 @@ def main():
             if case == "cadence":
                 values += ["--require-npc-motion"]
         else:
-            values += ["--scenario", "start-menu" if case == "duplicate-ids" else case]
+            values += ["--scenario", "start-menu" if case in ("duplicate-ids", "menu-avatar", "corner-menu-avatar") else case]
+            if case in ("running", "start-menu", "duplicate-ids", "menu-avatar", "corner-menu-avatar"):
+                values[values.index("--core") + 1] = profile
+                values += ["--profile"]
         if case == "warp-turn":
             # Keep both the reported two-player case and the full-capacity gate.
             pair_values = list(values)
@@ -111,10 +121,17 @@ def main():
             run("probe_lobby.py", pair_values)
         if case not in ("cadence", "hosted-latency"):
             run("probe_lobby.py", values)
-            if case == "avatar-load":
+            if case in ("avatar-load", "menu-avatar", "corner-menu-avatar"):
                 run("prepare_avatar_controls.py", ["--runner", runner, "--core", args.core,
                     "--profile-core", args.profile_core, "--rgbds", args.cache / "rgbds-1.0.4",
-                    "--reference", args.output / case, "--output", args.output / "avatar-controls"])
+                    "--workload", "cadence" if case == "avatar-load" else "start-menu",
+                    "--scene", scene,
+                    "--reference", args.output / case, "--output", args.output / (case + "-controls")])
+            if case in ("running", "start-menu"):
+                seeds = [item for path in batteries for item in ("--battery", path)]
+                run("prepare_independent_controls.py", ["--profile-core", args.profile_core,
+                    "--runner", runner, "--workload", case, "--reference", args.output / case,
+                    "--output", args.output / (case + "-controls")] + seeds)
             continue
         host_port = args.port + 4
         log_path = args.output / (case + "-host.log")

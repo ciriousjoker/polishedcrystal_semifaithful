@@ -5,7 +5,7 @@ the ten-object selection limit. These checks model selection, not pixel priority
 against backgrounds or other sprites.
 """
 import json
-from probe_emulator import require, trace_text
+from probe_emulator import require, trace_rows
 
 
 def select_scanlines(ys, height=8):
@@ -58,7 +58,9 @@ def virtual_temporal_report(rows, max_absent_frames=3):
     while its old projected Visible flag remains set.
     Read actual hardware membership, never the CPU's staging rendered counter.
     This is a receiver-frame gate; fast-forward senders do not relax it. A native
-    wait starting at/after LY 136 has no admitted background window. Such frames
+    sprite reload, missing native wait, or wait starting at/after LY 136 has no
+    admitted background window. The instruction observer detects a missing wait
+    even when menu teardown has already reset the cached hDelayFrameLY to zero. Such frames
     reset this idle-work bound and are reported separately, without pretending
     that a remote figure was displayed. Native frame cadence has its own oracle.
     """
@@ -66,22 +68,36 @@ def virtual_temporal_report(rows, max_absent_frames=3):
     maximum = 0
     witnesses = []
     native_busy = []
+    native_graphics = []
+    native_no_wait = []
+    previous = None
     for row in rows:
         state, frame = row["symbols"], row["frame"]
+        if previous is not None and state['wMobileOnline'] and previous['symbols']['wMobileOnline']:
+            require(frame == previous['frame'] + 1, 'Temporal visibility requires every connected frame')
+        previous = row
         active = set()
         eligible_world = state["wMobileOnline"] and state.get('wScriptRunning', 0) != 255
-        if eligible_world and state.get('hDelayFrameLY', 0) >= 136:
+        graphics_wait = state.get('vNativeGraphicsWait', 0)
+        wait_ly = state.get('vNativeWaitEntryLY', state.get('hDelayFrameLY', 0))
+        if eligible_world and state.get('vNativeWaitEntryLY') == 255:
+            native_no_wait.append(frame)
+        if eligible_world and graphics_wait:
+            native_graphics.append(frame)
+        if eligible_world and (wait_ly >= 136 or graphics_wait):
             native_busy.append(frame)
-        if eligible_world and state.get('hDelayFrameLY', 0) < 136:
+        if eligible_world and wait_ly < 136 and not graphics_wait:
             for peer in range(1, state["wMobilePeerCount"] + 1):
                 prefix = f"wMobilePeer{peer}"
-                if (not state[prefix + "Visible"] or state[prefix + "NativeStage"] != 7 or
+                if (not state[prefix + "Visible"] or not state.get(prefix + 'DrawValid', 1) or
+                    state[prefix + "NativeStage"] != 7 or
+                    state.get(prefix + 'LoadedSprite', 0) != state.get(prefix + 'Avatar', 0) or
                     state[prefix + "Status"] != 1 or
                     state[prefix + "MapGroup"] != state["wMapGroup"] or
                     state[prefix + "MapNumber"] != state["wMapNumber"] or
                     state[prefix + "Instance"] != state["wMobileInstanceKey"]):
                     continue
-                identity = (peer, state[prefix + "Id"], state[prefix + "Generation"])
+                identity = (peer, state[prefix + "Id"], state[prefix + "Generation"], state.get(prefix + 'Avatar', 0))
                 active.add(identity)
                 visible = (state[prefix + "OAMStart"] <= 144 and
                            0 < state[f"vMobilePeer{peer}OAM0"] < 160)
@@ -95,6 +111,8 @@ def virtual_temporal_report(rows, max_absent_frames=3):
     return {"passed": not witnesses, "maximum_absent_frames": maximum,
             "allowed_absent_frames": max_absent_frames, "witnesses": witnesses,
             "native_busy_frames": len(native_busy), "native_busy_frame_samples": native_busy[:16],
+            "native_graphics_wait_frames": len(native_graphics), "native_graphics_wait_frame_samples": native_graphics[:16],
+            "native_no_wait_frames": len(native_no_wait), "native_no_wait_frame_samples": native_no_wait[:16],
             "scope": "Eligible world frames with an admitted native idle window; native-heavy graphics frames and frozen menu occlusion are separate."}
 
 
@@ -103,8 +121,8 @@ def verify_native_scanlines(output, players):
     for client in range(players):
         samples, failures, maximum, witnesses = 0, 0, 0, []
         temporal_seen = set()
-        rows = [json.loads(line) for line in trace_text(output / str(client) / "trace.jsonl").splitlines()]
-        for row in rows:
+        trace_path = output / str(client) / "trace.jsonl"
+        for row in trace_rows(trace_path):
             state = row["symbols"]
             if "wMobileVirtualActorMode" in state and state["wMobileOnline"]:
                 for peer in range(1, state["wMobilePeerCount"] + 1):
@@ -127,7 +145,7 @@ def verify_native_scanlines(output, players):
         temporal = None
         never_presented = []
         if "wMobileVirtualActorMode" in final_state:
-            temporal = virtual_temporal_report(rows)
+            temporal = virtual_temporal_report(trace_rows(trace_path))
             expected = {peer for peer in range(1, final_state["wMobilePeerCount"] + 1)
                         if final_state[f"wMobilePeer{peer}Visible"]}
             never_presented = sorted(expected - temporal_seen)

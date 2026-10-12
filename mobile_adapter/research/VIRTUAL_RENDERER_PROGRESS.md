@@ -1,5 +1,8 @@
 # Independent renderer implementation checkpoint
 
+Historical implementation checkpoints. The current normal mobile target and
+acceptance evidence are maintained in [MILESTONE_2.md](MILESTONE_2.md).
+
 Date: 2026-10-12. Experimental, not accepted M2 completion.
 
 ## Latest checkpoint, 2026-10-12

@@ -83,8 +83,29 @@ struct MobileRenderSpan {
     uint64_t crossings = 0;
     uint64_t maximum_cycles = 0, count = 0, total_cycles = 0;
 };
-static MobileRenderSpan mobile_render_spans[19];
-static unsigned mobile_overworld_points[21][2] = {};
+static MobileRenderSpan mobile_render_spans[20];
+static unsigned mobile_native_shadow_address, mobile_native_descriptor_address, mobile_native_object_address;
+static byte mobile_native_shadow[160], mobile_native_descriptors[13 * 8], mobile_native_identities[13 * 2];
+extern "C" void mobile_profile_native_oam(unsigned shadow, unsigned descriptors, unsigned objects) {
+    mobile_native_shadow_address = shadow;
+    mobile_native_descriptor_address = descriptors;
+    mobile_native_object_address = objects;
+}
+extern "C" unsigned mobile_profile_native_oam_byte(unsigned index) {
+    if (index < 160) return mobile_native_shadow[index];
+    if (index < 264) return mobile_native_descriptors[index - 160];
+    if (index < 290) return mobile_native_identities[index - 264];
+    return 0;
+}
+static unsigned mobile_overworld_points[22][2] = {};
+static bool mobile_native_graphics_frame = false, mobile_native_graphics_last_frame = false;
+static unsigned mobile_native_wait_frame_ly = 255, mobile_native_wait_last_frame_ly = 255;
+extern "C" uint64_t mobile_profile_native_wait_ly() {
+    return mobile_native_wait_last_frame_ly;
+}
+extern "C" uint64_t mobile_profile_native_graphics_wait() {
+    return mobile_native_graphics_last_frame;
+}
 extern "C" uint64_t mobile_profile_pose_metric(unsigned index) {
     const auto& span = mobile_render_spans[18];
     const uint64_t values[] = {span.count, span.maximum_cycles, span.total_cycles,
@@ -141,7 +162,7 @@ extern "C" uint64_t mobile_profile_idle_metric(unsigned index) {
 static uint64_t mobile_prepare_waits = 0, mobile_world_updates = 0, mobile_world_max_gap = 0;
 
 extern "C" void mobile_profile_overworld(unsigned index, unsigned bank, unsigned pc) {
-    if (index < 21) {
+    if (index < 22) {
         mobile_overworld_points[index][0] = bank;
         mobile_overworld_points[index][1] = pc;
     }
@@ -192,6 +213,10 @@ extern "C" uint64_t mobile_profile_metric(unsigned index) {
     return index < sizeof(tail) / sizeof(tail[0]) ? tail[index] : 0;
 }
 extern "C" void mobile_profile_frame() {
+    mobile_native_wait_last_frame_ly = mobile_native_wait_frame_ly;
+    mobile_native_wait_frame_ly = 255;
+    mobile_native_graphics_last_frame = mobile_native_graphics_frame;
+    mobile_native_graphics_frame = mobile_render_spans[19].active;
     mobile_observed_frames++;
     mobile_serial_max_frame_cycles = std::max(mobile_serial_max_frame_cycles, mobile_serial_frame_cycles);
     mobile_serial_frame_cycles = 0;
@@ -276,17 +301,19 @@ static void mobile_profile_before_instruction(gb* game, const cpu_regs& regs, in
             mobile_save_projected++;
         }
     }
-    for (unsigned index = 0; index < 21; ++index) {
+    for (unsigned index = 0; index < 22; ++index) {
         auto* point = mobile_overworld_points[index];
         bool bank_matches = point[0] == 0 ? regs.PC < 0x4000 :
             game->get_mbc()->get_rom() == game->get_rom()->get_rom() + (point[0] - 1) * 0x4000;
         if (!point[1] || regs.PC != point[1] || !bank_matches) continue;
+        if (index == 2) mobile_native_wait_frame_ly = game->get_cpu()->read(0xff44);
         if (index == 2 && mobile_render_spans[11].active) {
             mobile_upload_waits++;
             if (mobile_upload_waits < 10) std::fprintf(stderr, "UPLOAD_DELAY frame=%u ly=%u\n", mobile_observed_frames, game->get_cpu()->read(0xff44));
         }
         if (index < 2 || index >= 4) {
             auto& span = mobile_render_spans[index < 2 ? index : index - 2];
+            if (index == 21) mobile_native_graphics_frame = true;
             span.active = true;
             span.sp = regs.SP;
             span.return_pc = game->get_cpu()->readw(regs.SP);
@@ -367,12 +394,29 @@ static void mobile_profile_after_instruction(gb* game, const cpu_regs& regs, int
         }
         if (span.active && returned_from_render && regs.SP == span.sp + 2 && regs.PC == span.return_pc) {
             auto elapsed = uint64_t(static_cast<uint32_t>(clock) - span.clock);
+            if (&span == &mobile_render_spans[10] && mobile_native_descriptor_address) {
+                // Snapshot vanilla's finished OAM before idle-time composition.
+                // Reads physical pages directly; no selector or game byte changes.
+                const auto* ram = game->get_cpu()->get_ram();
+                for (unsigned i = 0; i < 160; ++i)
+                    mobile_native_shadow[i] = ram[mobile_native_shadow_address - 0xc000 + i];
+                for (unsigned i = 0; i < 104; ++i)
+                    mobile_native_descriptors[i] = ram[(mobile_native_descriptor_address < 0xd000 ?
+                        mobile_native_descriptor_address - 0xc000 :
+                        0x5000 + mobile_native_descriptor_address - 0xd000) + i];
+                for (unsigned i = 0; i < 13; ++i) {
+                    const auto* actor = ram + 0x1000 + mobile_native_object_address - 0xd000 + i * 34;
+                    mobile_native_identities[i * 2] = actor[0];
+                    mobile_native_identities[i * 2 + 1] = actor[1];
+                }
+            }
             span.count++;
             span.total_cycles += elapsed;
             span.maximum_cycles = std::max(span.maximum_cycles, elapsed);
             if (game->get_cpu()->read(mobile_vblank_address) != span.vblank) span.crossings++;
             if (&span == &mobile_render_spans[11] && elapsed > 8000 && mobile_observed_frames >= mobile_world_start && mobile_observed_frames < mobile_world_start + 800) std::fprintf(stderr, "LONG_UPLOAD frame=%u cycles=%llu ly=%u/%u stage=%u crossing=%u\n", mobile_observed_frames, (unsigned long long)elapsed, span.ly, game->get_cpu()->read(0xff44), span.stage, game->get_cpu()->read(mobile_vblank_address) != span.vblank);
-            if (game->get_cpu()->read(mobile_vblank_address) != span.vblank && &span >= &mobile_render_spans[11])
+            if (game->get_cpu()->read(mobile_vblank_address) != span.vblank &&
+                &span >= &mobile_render_spans[11] && &span < &mobile_render_spans[19])
                 std::fprintf(stderr, "BACKGROUND_CROSS kind=%u frame=%u cycles=%llu ly=%u/%u\n",
                     unsigned(&span - mobile_render_spans), mobile_observed_frames,
                     (unsigned long long)elapsed, span.ly, game->get_cpu()->read(0xff44));

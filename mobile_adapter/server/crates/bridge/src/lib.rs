@@ -482,10 +482,10 @@ pub async fn serve(
             },
             incoming = backend.next() => incoming.map(|envelope| vec![envelope]),
             _ = tick.tick() => {
-                // Cloud-bound presence is coalesced to 20Hz. An embedded owner
+                // Cloud-bound presence uses the shared bounded cadence. An embedded owner
                 // needs no second network throttle ahead of its own bounded
                 // dirty-roster cadence. Keep the same latest-only queue.
-                let presence_interval = if matches!(backend, Backend::Local(_)) { 0 } else { 50 };
+                let presence_interval = if matches!(backend, Backend::Local(_)) { 0 } else { mobile_lobby_core::group::PRESENCE_INTERVAL_MS };
                 let mut pending = Vec::new();
                 for (&id, client) in &mut clients {
                     if client.writer.is_none() { continue; }

@@ -234,11 +234,13 @@ DEF wMobileVirtualQueuedFacing EQU wMobileSavedFacings + 5
 DEF wMobileVirtualQueuedSprite EQU wMobileSavedFacings + 6
 DEF wMobileVirtualQueuedAvatar EQU wMobileSavedFacings + 7
 DEF wMobileVirtualQueuedMovement EQU wMobileSavedFacings + 8
-ASSERT 9 <= NUM_OBJECT_STRUCTS
+DEF wMobileVirtualBackgroundFrame EQU wMobileSavedFacings + 9
+ASSERT 10 <= NUM_OBJECT_STRUCTS
 EXPORT wMobileVirtualQueuedPeer, wMobileVirtualQueuedWindow, wMobileVirtualQueuedSource
 EXPORT wMobileVirtualQueuedFrame, wMobileVirtualQueuedFacing, wMobileVirtualQueuedSprite
 EXPORT wMobileVirtualQueuedAvatar
 EXPORT wMobileVirtualQueuedMovement
+EXPORT wMobileVirtualBackgroundFrame
 ASSERT MOBILE_PEERS == 3
 ASSERT FIRST_VRAM1_OBJECT_STRUCT * 12 + 3 <= $64
 ASSERT (NUM_OBJECT_STRUCTS - FIRST_VRAM1_OBJECT_STRUCT) * 12 + 3 <= $3f
@@ -252,8 +254,6 @@ DEF wMobileVirtualPhase EQU wMobileNativePaletteOwners + 6
 DEF wMobileVirtualCursor EQU wMobileNativePaletteOwners + 7
 DEF wMobileVirtualPaletteUsed EQU wMobileNativePaletteOwners + 8
 DEF wMobileVirtualThirdBlocked EQU wMobileNativePaletteOwners + 9
-DEF wMobileVirtualNextPhase EQU wMobileVirtualThirdBlocked
-EXPORT wMobileVirtualNextPhase
 DEF wMobileVirtualWindow EQU wMobileNativePaletteOwners + 10
 DEF wMobileVirtualCacheHit EQU wMobileNativePaletteOwners + 11
 DEF wMobileVirtualFrame EQU wMobileNativePaletteOwners + 12
@@ -283,6 +283,8 @@ EXPORT wMobileVirtualPhase
 EXPORT wMobileVirtualCursor
 EXPORT wMobileVirtualPaletteUsed
 EXPORT wMobileVirtualThirdBlocked
+DEF wMobileVirtualNativeAvatarColors EQU wMobileVirtualThirdBlocked
+EXPORT wMobileVirtualNativeAvatarColors
 EXPORT wMobileVirtualWindow
 EXPORT wMobileVirtualCacheHit
 EXPORT wMobileVirtualFrame

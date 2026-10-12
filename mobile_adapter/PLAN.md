@@ -1,5 +1,223 @@
 # Mobile Adapter multiplayer plan
 
+## 2026-10-12: exact-color reservation and native hardware visibility
+
+Current Standard mobile SHA-256 is
+`7f9c198ba80f9b4cba56b74371a539d3ae355648ed3a890c5ca0b0b33a9fe1e2`:
+19,160 upper feature bytes, 184 lower integration bytes, 13,777 lower free bytes.
+The Exeggutor target now passes all four clients at 100/200/300/400 percent,
+with maximum ready-avatar absence two frames on every client and unchanged
+native cadence. Evidence: `/Volumes/Storage/Cache/mobileadapter/independent-irregular-reserved-colors-20261012`.
+
+The previous failure was avoidable palette interference: a private guest borrowed
+an exact color needed by a later guest while other colors were available. Current
+native avatar color sources are now reserved before choosing a private palette.
+The mask occupies an already unused private byte; ordinary palette metadata,
+native actors and saves are unchanged. This removes artificial rotation rather
+than relaxing the three-frame visibility gate.
+
+A new read-only instruction observer snapshots the complete native ShadowOAM and
+raw descriptor groups after `_UpdateSprites`, before background composition. The
+runner compares those complete source groups against actual video-time hardware
+OAM. This will prevent accepting a large actor merely because its logical native
+object remains loaded while its presentation is never admitted. No emulated CPU
+state, RAM, selector or cycle timing is changed by this observer.
+
+Observer build is complete. Active targeted replay:
+`/Volumes/Storage/Cache/mobileadapter/independent-native-oam-exeggutor-20261012`,
+The first observer attempt rejected an alias lookup before any client booted;
+its corrected replay is `independent-native-oam-exeggutor2-20261012` and passes.
+Large native complete-group observations: 707/1337/2320/2613 video frames, from
+2150/4399/6650/8858 native source frames. This is finite presentation evidence,
+not a claim that every ordinary figure is continuously visible under pressure.
+Observer core SHA-256 is `5cab152f5bdf1a0c0c4dd3988c7c3a642e1889a98915933aaa4a07a7071b5cee`.
+Active remaining-special-case suite: `independent-final-special-20261012`,
+log `/private/tmp/mobile-independent-final-special.log`, exec session 1440.
+Automatic interrupted-socket resume has passed; night is running.
+Production sources must stay immutable while replay/fixture controls run.
+Remaining gates are the final 21-case suite including resume/night/snow/full-pool,
+forced disabled hashes and Faithful runtime, final host/layout/map checks,
+human prepare-only launch artifacts, current evidence JSON and local commit.
+No public Cloudflare deployment, phone testing, upstream PR or push is authorized.
+
+## 2026-10-12: irregular native presentation acceptance
+
+Continue autonomously through M2. Current source SHA-256:
+`a779676d1f9f0df5502aedd2378709dd45c296e989603d3b3af102e838c29491`.
+Upper feature bytes: 19,138; lower integration: 184; lower free bytes: 13,777.
+All earlier successful cases on SHA609b are intermediate evidence and must be
+rerun after the current renderer fixes before declaring completion.
+
+Route37's stationary native replay has callback-window gaps even in the exact
+disabled ROM (776/744/770/744 update-bearing frames, gap two), versus the previous
+mobile 797/800/795/800. Special outdoor scenes now require an unchanged-native
+inventory replay with the same batteries and inputs; no added missed/duplicate
+world updates or larger gap is allowed. Strict 800/800 dense-room and equal-avatar
+gates remain unchanged. The special scene wrapper uses stationary geometry;
+movement remains separately tested. No scene is accepted just by its map name.
+
+The large Alolan Exeggutor exposed a real failure: general composition never
+published. Empty/small native descriptors inherited the sixteen-quad deadline.
+Local four-quad admission now has a bounded small deadline; native candidates
+check their actual count before expensive work, with the original large-shape
+bound retained. A second failure locked one ready peer out under a color conflict:
+phase followed the last successful guest. Every committed frame now advances the
+first choice cyclically instead. Empty weather-prefix OAM is scanned in a bounded
+loop, without a scheduler round per empty entry. All work retains LY deadlines.
+
+An intermediate deadline-only run presented all figures on three clients but
+starved one peer on the fourth. The phase fix reduced absence to at most five,
+still failing the unchanged three-frame gate. One subsequent test overlapped an
+unfinished build and is discarded. The current finished-build Exeggutor probe is
+`/Volumes/Storage/Cache/mobileadapter/independent-irregular-weather-confirm-20261012`,
+log `/private/tmp/mobile-independent-irregular-weather-confirm.log`, session28306.
+It uses existing ordinary fixtures from independent-acceptance-special-20261012.
+Do not change the ROM while probes/fixture builders are active.
+
+The remaining complete suite must include night, snow, pool-full and automatic
+transport resume, then all other cases on the final source. Pool-full is a
+synthetic ordinary-event bedroom build with twelve NPCs, movement destinations
+kept free, varied dark/gray/white/black native palettes, and explicit checks for
+all thirteen native runtime records plus all six ordinary native palette slots.
+Its exact parent ROM is restored. This fixture is not the canonical production
+ROM and must be identified as such in evidence.
+
+Host checks passed before the newest assembly scheduling changes: 37 Rust tests,
+assembly contracts, 22 launcher, 8 save-fixture, 4 dynamic-map, 20 hardware-selection
+and 11 budget tests. Local workerd/hibernation and four real-FFI/widget tests passed;
+Debug/Release ARM64 Flutter bundles are built and signed. The pinned release
+MBC30 mapper probe passes bank01/80/FF. Final disabled Standard/Faithful hashes,
+Faithful-mobile build/runtime, map/layout/budget reports, human preparation,
+current JSON evidence, English report and local commit remain required.
+
+## 2026-10-12: resumed final acceptance
+
+Continuation update: local motion p95=179.609ms and hosted RTT100 motion
+p95=286.573ms pass unchanged 200/300ms gates. Priority compatible-state recovery,
+all five fault-save cases, running and strict full-native-inventory cadence
+controls pass. Debug/Release Flutter bundles and the real FFI/widget suite pass.
+The main suite stopped on a false readiness expectation during roster reordering:
+LoadedSprite happened to match the returning identity while DrawValid=0. The ROM
+correctly omitted that stale projection. The temporal oracle now requires the
+same DrawValid condition as the renderer, retains the three-frame threshold and
+passes all twenty unit tests, including renewed-starvation rejection after cold
+projection. Replaying the full recorded hardware trace passes (max absence one).
+
+Remaining cases run at
+`/Volumes/Storage/Cache/mobileadapter/independent-acceptance-rest-20261012`, log
+`/private/tmp/mobile-independent-acceptance-rest.log`. They additionally include
+a dense-room ordinary-avatar control that appends events without replacing any
+native NPC. The original Game Corner fixture has twelve NPC events, but only
+7..9 active native objects at the tested viewport; do not call it a saturated
+thirteen-object test. A separate synthetic bedroom fixture fills all thirteen
+runtime objects through ordinary NPC events, New Game and Save. It tests the
+unchanged feature assembly without RAM injection or production map edits.
+The synthetic map build restores the exact parent mobile hash afterward. No
+current normal map has twelve always-active actors clustered in one viewport;
+the contest gate's twelve records do not all coexist because native selection
+permits only five contestants. The full-pool gate is still pending.
+
+Continue autonomously through M2, without the phone or public cloud credentials.
+Current enabled SHA-256 is
+`609b7c19dd1da0dc7feff2c4ede4cc3dc94b246921285ed2802d32fa94970482`.
+Upper feature bytes: 19,112; net lower integration bytes: 184; lower free bytes:
+13,777. An obsolete no-op foreground sprite hook is removed. Native 1bpp/2bpp
+requests take priority over queued private pose DMA. All 37 Rust tests, host
+contracts and local real-workerd/hibernation tests pass. Cloud presence and
+authority share a 33ms cadence instead of 50ms, still latest-only and bounded.
+
+The dense-room Start menu closes one frame later than the pristine ROM containing
+three fewer figures (509-frame vs 508-frame native update gap). Preserve this
+unequal-load diagnostic; it is not a matched-NPC parity proof. The mandatory
+equal-avatar menu control uses three ordinary NPC avatars in the unsaturated
+bedroom, same positions and ordinary inputs. All four controls pass; the menu
+client has 297 vs 296 update-bearing frames and maximum gap 504 vs 505. Steady
+full native inventory and equal-avatar cadence retain their strict gates.
+No timing threshold was increased. The last hosted-motion run narrowly missed
+300ms (300.352ms); repeat with the shared 33ms cadence. Local p95 was 196.562ms.
+
+The complete final run is
+`/Volumes/Storage/Cache/mobileadapter/independent-acceptance-20261012`, log
+`/private/tmp/mobile-independent-acceptance.log`. New special-scene gates cover
+protected Route37 pairs, large Exeggutor, outdoor night and snow, with actual
+condition checks and 800/800 steady world frames. Fixture builds temporarily
+change source and restore it; no simultaneous ROM builds. Do not mark M2 complete
+before these final gates, refreshed builds/layout, native Flutter packaging and
+current evidence pass. The old milestone2-evidence.json describes retired native
+leasing and must be replaced before completion.
+
+## 2026-10-12: native menu timing and fair background scheduling
+
+M2 is still under autonomous final acceptance. The newest source chooses the
+oldest eligible capture/upload/projection job, with at most one optional job per
+frame. Fixed priority could permanently starve projection on one accelerated
+client. The corrected dense four-core run has 800/800 world-update frames on all
+clients and each client presents its peers.
+
+A late native wait composes before its first network poll. The read-only native
+DelayFrame observer also distinguishes a genuinely missing idle window from a
+cached hDelayFrameLY=0 after menu teardown. Such frames are counted separately,
+never claimed as drawn avatars. The absence threshold stays at three eligible
+frames. Connected hardware traces include every video frame.
+
+A new exact-disabled-ROM Start-menu control uncovered one extra paused frame at
+menu close (509 rather than 508 world-frame gap, 292 rather than 293 update-bearing
+frames). This was reported to the user and remains a blocker. Simply skipping
+metadata during the menu loses frozen remote sprites and was rejected. The newest
+source instead has a compact canonical native-OAM metadata path which preserves
+BC/DE directly. Full admission/materialization remains for irregular or overflowing
+figures. Its acceptance and integration budget are pending. The peer menu-occlusion
+query explicitly selects native WRAM bank 1 before reading wScriptRunning.
+
+Latest build log: /private/tmp/mobile-native-metadata-fast-build.log.
+The next run must repeat Start-menu with matching native controls, dense cadence
+and local/100-ms-RTT hosted latency before the remaining final gates. Do not declare
+completion while the menu cadence comparison or any final gate fails. Source
+fixture mutations must still be restored before ordinary builds and commits.
+
+
+## 2026-10-12: resumed autonomous final acceptance
+
+The user interrupted the turn and explicitly requested continuation. Continue
+through M2 acceptance without phone or public Cloudflare access. Current source
+adds one bounded optional capture/graphics/projection job per frame before scene
+publication. This prevents stacked background jobs consuming the current frame's
+entire presentation window. Dense four-core cadence at speeds 1..4 passes again.
+Current footprint is 19,092 upper feature bytes and 154 net lower integration
+bytes, with 13,807 lower bytes free. Both disabled Standard and Faithful hashes
+were checked against the recorded originals.
+
+The observer now records every connected frame and rejects sparse temporal traces.
+Change-only traces had falsely counted repeated visible frames as absence during
+cold joins. Readiness now requires LoadedSprite=Avatar, in addition to native
+stage and accepted scene/status. A read-only GetUsedSprite instruction observer
+reports native sprite-reload frames separately. Exact disabled-ROM running replay
+has the same 798/800 update-bearing frames and maximum gap two as the enabled
+running scene, with no added native gap. These ordinary graphics pauses are not
+claimed as continuously drawn remote frames. Steady world visibility retains the
+three-frame bound; frozen menu clipping remains a separate case.
+
+The complete final suite is running at
+`/Volumes/Storage/Cache/mobileadapter/independent-final-all-20261012` with current
+observer and ROM source. It includes all previous gates plus Route37, Exeggutor,
+night and snow. Do not mark completion until the full suite, final host/layout
+checks and latency thresholds pass. The first cadence and avatar-load cases pass;
+the equal-avatar controls are being generated. Fixture builds temporarily modify
+PlayersHouse2F/native_control_objects and restore them; do not build concurrently
+or commit those temporary mutations.
+
+Ordinary fixture generation now reads a dynamic native map inventory, avoiding
+the retired rendering-policy generator's frozen 611-map count and NPC permissions.
+The all-map audit additionally checks compiled tileset/environment/location/music/
+palette headers. Future map additions are accepted without per-map review lists.
+Current host results: 37 Rust tests, Clippy, Flutter's real native FFI plus three
+widget tests, and host assembly/launcher/save/geometry tests pass. The macOS
+Debug and Release Flutter bundles are built and signed. The packaging helper
+matches Flutter's architecture to Cargo's native engine, avoiding a misleading
+universal executable with only an ARM64 engine. The copyright recipe reads its
+input at shell execution time; GNU Make 3.81's parallel shell expansion produced
+an empty image in a forced rebuild. The corrected asset restores the exact hash.
+
 ## 2026-10-12: final independent-renderer acceptance in progress
 
 The autonomous M2 run is continuing. Do not declare completion until the final
@@ -408,27 +626,27 @@ and approves local handling of frequent ROM polls. Lobby management is now
 preferred in the Bridge app. A build-generated, embedded compatibility hash is
 desired; the stronger claim that all semantically compatible versions necessarily
 hash alike remains an unresolved feasibility goal, not an established property.
-Status: milestone 1 complete. Milestone 2's implemented local path passes its
-finite suite, with scanline/future-map assurance reopened by the latest audit.
-The normal mobile build now uses schema 4, four total players, native actor leases,
-the Flutter/native Rust Bridge and the shared embedded/hosted/WASM Owner.
-Historical three-player completion statements below do not establish this result.
-The final native build isolates original leased objects and palette state from
-ordinary primary/backup saves. Final-source results and resource measurements
-are recorded in research/MILESTONE_2.md and research/milestone2-evidence.json.
+Status: milestone 1 complete; revised milestone 2 is under final acceptance.
+The normal mobile build uses schema 4, four total players, independent private
+remote records, the Flutter/native Rust Bridge and shared embedded/hosted/WASM
+Owner. Native NPC state, save routines and palette metadata are unchanged.
+Historical three-player/native-lease completion statements below do not establish
+this result. Current results and budgets are recorded in research/MILESTONE_2.md;
+the JSON evidence is being replaced after final acceptance.
 No milestone-3 gameplay feature has started.
 Working branch: `mobileadapter`.
 Base commit: `8f3c7e9651e988d876e32a4c7ad9ef1bb76702a8`.
 
 Manual testing workflow: `python3 mobile_adapter/tools/dev_session.py` now builds
-and starts the local server on fixed TCP port 17423, launches the Mac client at
+and starts the Bridge on fixed TCP port 17423 and hosted simulator on 8787,
+launches the selected number of Mac clients at
 5% emulator volume, pushes stable ROM/save/config paths to Android's
 Downloads/polishedcrystal_mobile_adapter and directly launches RetroArch there.
 Every build gets a fresh start snapshot derived from an ordinary in-game save;
 Android generates its own snapshot with the Android core. No Android launcher
-app is wanted or produced. Verified on native M2 macOS and a physical Pixel 9 Pro:
-both clients joined the same lobby through the Mac's LAN IPv4, displayed each
-other and moved. See MANUAL_TESTING.md for commands, prerequisites and limitations.
+app is wanted or produced. The earlier 2 MiB implementation was verified on a
+physical Pixel 9 Pro. Current MBC30 phone-core validation is deferred because the
+phone is unavailable. See MANUAL_TESTING.md for commands and prerequisites.
 
 The following workflow follow-up records the earlier milestone 1 behavior;
 milestone 2 replaces the short-lived echo gesture with persistent lobby joining.
@@ -499,11 +717,11 @@ requirements in REQUIREMENTS.md continue to apply to all implemented features.
 
 | Feature | Priority and architectural consequence |
 | --- | --- |
-| Up to four players at once, including the same map | MUST. Generic peer collections and three remote actor leases per client. |
+| Up to four players at once, including the same map | MUST. Generic peer collections and three private remote records per client, outside the native object pool. |
 | Start-menu connection indicator in the top-right corner | Desired. Three ascending vertical bars based on Material Symbol `signal_cellular_alt`, adapted to the GBC tile grid. Expose connection status independently of UI; exact offline/connecting/online/error visuals remain to be designed. Adapter attachment alone must not imply a joined lobby. |
 | Move/run together in the overworld and talk | Desired. Preserve native movement, distinct peer identity and an explicit interaction target. Talking currently means the interaction menu, not free-text or voice chat. |
 | Compile-time overworld hitbox toggle, potentially an in-game option later | Desired. Initially interpreted as collision with remote avatars, not disabling native terrain/NPC collision. Keep collision policy separate from transport/rendering; clarify any broader noclip intent before implementation. Default remains nonblocking. All combinations with multiplayer disabled preserve the pristine build. |
-| Temporarily remove NPCs when peers need sprite resources; restore them on departure | Desired resource strategy. Allocate only for local visibility demand; use audited optional actors, preserve local state and event identity, and restore safely. Same-map membership need not reserve an offscreen sprite. |
+| Share presentation when hardware sprite resources are exhausted | The later map-independence requirement supersedes NPC removal. Admit complete figures and rotate presentation only under actual pressure, preserving local-player priority and all native NPC simulation. |
 | Adjacent-player actions: Battle, Trade, Gift item | Desired. Share typed, validated action requests and explicit participant IDs. Keep inventory and save authority local. |
 | Call a player from anywhere | Desired. Reuse the common action menu and add context-specific actions without duplicating the transport/session model. |
 | Quick travel to a called player | Desired, new. Separate a travel request from presence updates and ordinary movement. The receiving game validates map/story compatibility, destination freshness, a safe entry tile and native warp lifecycle. No packet may force an arbitrary warp or mutate progression flags. Consent and exact restrictions need design before implementation. |
@@ -514,51 +732,26 @@ supported constraints. Rendering bindings must not double as player identity or
 action authority. Shared protocol capability/version checks should allow later
 features and reject incompatible actions without changing the ordinary save.
 
-### NPC eligibility and restoration policy
+### Native NPC independence
 
-User-approved on 2026-10-11: protected-by-default eligibility, an audited
-feature-owned allowlist, free/offscreen/distant selection and safe restoration.
+The later user requirement supersedes the previously approved NPC allowlist and
+lease strategy. No native NPC is deleted, leased, backed up or restored by the
+current renderer. Private peer records and fixed graphics windows consume zero
+ordinary object structures. No map-specific eligibility annotations are needed.
 
-The current generated `rom/replaceable.asm` table supports frame-local rendering
-suppression only. `tools/audit_render_policy.py` recognizes pure-text scripts,
-generic trainers and no-op decoration; runtime guards protect nearby actors and
-unsafe scenes. This is not evidence that those actors can safely be deleted from
-runtime object storage. Do not automatically reuse it as a resource-eviction list.
-
-For native resource leasing, default every actor to protected. Keep a feature-owned
-allowlist keyed by map and stable map-object identity, with a reason and priority.
-Use analysis to propose candidates and detect script references; verify each
-accepted rule and exception. Decorative/no-op and pure-dialogue actors can qualify
-only if no external script or gameplay role depends on their continued presence.
-Keep plot actors, active or triggerable trainers, shops/healers, followers,
-puzzle objects, camera proxies and active movement/script targets protected unless
-an explicit safe lifecycle has been demonstrated. A simple script prefix, sprite
-type or offscreen position is insufficient proof.
-
-At runtime, prefer an empty eligible slot, then an approved offscreen actor, then
-the lowest-priority approved distant visible actor. Recheck current interactions,
-script ownership and special graphics before leasing. Hold a stable lease to avoid
-NPC flicker near viewport edges. Preserve the actor's current position, facing and
-other required runtime state, plus its map/event identity. Suppress native respawn
-temporarily without changing story/save flags; restore on release only if the
-current native map/event conditions still permit that actor to exist. Never
-resurrect an actor legitimately removed by game progression.
-
-The build audit must detect changes to allowlisted object definitions, references
-or map ordering and require review rather than silently reassign eligibility.
-Unknown/new actors remain protected. If no safe allocation can display four
-players, report the exact map/state and solve that case; do not silently weaken
-four-player support. No map event data needs new multiplayer flags.
+Hardware sprite pressure is handled through whole-figure presentation admission,
+with native movement, scripts, interactions and story state left intact. The
+dynamic compiled-map contract checks that native map data is unchanged. Historical
+allowlist investigations below remain useful background, not current policy.
 
 ### Development experience and autonomous testing
 
 Keep `tools/dev_session.py` as the single human entry point. The current workflow
 is accepted for now; retain stable Android paths, scenario selection, correct
 intent/config/save selection, 5% Mac volume, visible connection logs and clean
-Ctrl+C/occupied-port handling as it evolves. The future version also starts the
-local bridges and local backend. An Android bridge service is now planned; a
-separate app merely to launch RetroArch is still unnecessary. Do not replace the
-current working workflow during this planning-only follow-up.
+Ctrl+C/occupied-port handling as it evolves. The current version starts the native
+Flutter Bridge and local Worker/lobby simulator. An Android bridge service remains
+delivery work; a separate app merely to launch RetroArch is still unnecessary.
 
 Every multiplayer feature needs an agent-runnable test path with bounded waits,
 semantic success/failure oracles, pinned tool/core versions, reproducible input
@@ -566,12 +759,12 @@ and fault seeds, and machine-readable artifacts. Agent acceptance must not depen
 on someone unlocking a phone. Use native headless cores for automatic execution
 and retain ADB as a separate real-device compatibility path.
 
-The foundation already includes `make test-mobile-host`, native ROM probes,
-ordinary `.sav` scenarios, current-symbol memory observations, images, transport
-fault injection and cadence measurement. Improvements still needed: a unified
-ROM-suite command, four-client/400% scenarios, the matched-NPC control, priority
-disconnect and compatible-state recovery coverage, and server property/fuzz plus
-resource-isolation tests. Add scenarios when implementing each future action.
+The foundation includes `make test-mobile-host` and `make test-mobile-rom`, ordinary
+`.sav` scenarios, current-symbol read-only observations, images, transport faults,
+four-client/400% cadence, matched ordinary-avatar controls, priority disconnect,
+compatible-state recovery and server property/resource-isolation tests. Current
+acceptance is recorded in research/MILESTONE_2.md. Add scenarios when implementing
+each future action.
 Coverage of current probes must not be called coverage of the entire future game.
 
 ### Server ownership, lobby UX and hosting outlook

@@ -10,9 +10,12 @@ class IndependentMapTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
-        for directory in ('data/maps', 'data/sprites'):
+        for directory in ('data/maps', 'data/sprites', 'constants'):
             (self.root / directory).mkdir(parents=True)
         (self.root / 'data/maps/attributes.asm').write_text('map_attributes First, 0\nmap_attributes Added, 0\n')
+        (self.root / 'data/maps/maps.asm').write_text('map First, 0\nmap Added, 0\n')
+        (self.root / 'constants/map_constants.asm').write_text(
+            'newgroup\nmap_const FIRST, 4, 5\nmap_const ADDED, 4, 5\n')
         (self.root / 'data/sprites/map_objects.asm').write_text('db 0\n' * 6)
         self.baseline = self.root / 'baseline.gbc'
         self.mobile = self.root / 'mobile.gbc'
@@ -21,12 +24,13 @@ class IndependentMapTests(unittest.TestCase):
 
     def write(self, path, script, feature=False):
         data = bytearray(0x1000)
-        names = {'SpriteMovementData': 0x600, 'NativeScript': script}
+        names = {'SpriteMovementData': 0x600, 'NativeScript': script, 'MapGroup1': 0xa00}
         for index, name in enumerate(('First', 'Added')):
             header, attribute = 0x100 + index * 0x100, 0x800 + index * 3
             names[name + '_MapScriptHeader'] = header
             names[name + '_MapAttributes'] = attribute
             data[attribute:attribute + 3] = bytes((0, 4, 5))
+            data[0xa00 + index * 7:0xa07 + index * 7] = bytes((1, 2)) + attribute.to_bytes(2, 'little') + bytes((3, 4, 5))
             data[header + 5] = 1
             record = bytearray((1, 8, 8, 2, 0, 0, 15, 0, 0, 0, 0, 255, 255))
             record[9:11] = script.to_bytes(2, 'little')
@@ -61,6 +65,15 @@ class IndependentMapTests(unittest.TestCase):
         self.mobile.write_bytes(data)
         with self.assertRaises(ValueError):
             audit(self.baseline, self.mobile, self.root)
+
+    def test_native_tileset_environment_and_palette_mutations_fail(self):
+        for offset in (0xa00, 0xa01, 0xa04, 0xa05, 0xa06):
+            self.write(self.mobile, 0x550, feature=True)
+            data = bytearray(self.mobile.read_bytes())
+            data[offset] ^= 1
+            self.mobile.write_bytes(data)
+            with self.assertRaises(ValueError):
+                audit(self.baseline, self.mobile, self.root)
 
 
 if __name__ == '__main__':
