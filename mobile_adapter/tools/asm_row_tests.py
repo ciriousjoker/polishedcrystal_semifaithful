@@ -14,7 +14,7 @@ def verify_rows(rom, symbols, require):
     rejected = length + 1
     lines = symbols['wMobileActorTiles1'][1] + 13 * 64 + 160
 
-    def execute(entry, memory):
+    def execute(entry, memory, weather=False):
         registers = {key: 0 for key in 'abcdehl'}
         registers['h'], registers['l'] = group >> 8, group & 255
         pc, zero, carry, cycles, stack = entry, False, False, 0, []
@@ -33,7 +33,8 @@ def verify_rows(rom, symbols, require):
             return memory[address]
 
         def write(address, value):
-            require(address == rejected or lines <= address < lines + 144,
+            require(address == rejected or lines <= address < lines + 144 or
+                    weather and (output <= address < output + 160 or address in (output_length, palette_used)),
                     f'Quad accounting wrote outside its private rows: {address:04x}, pc={pc:04x}, length={memory[length]}')
             memory[address] = value
 
@@ -71,9 +72,18 @@ def verify_rows(rom, symbols, require):
                 else:
                     write(address, registers['a'])
                 cycles += 16
-            elif opcode == 0x22:
-                write(pair('hl'), registers['a'])
+            elif opcode in (0x22, 0x2a):
+                if opcode == 0x22:
+                    write(pair('hl'), registers['a'])
+                else:
+                    registers['a'] = read(pair('hl'))
                 put_pair('hl', pair('hl') + 1)
+                cycles += 8
+            elif opcode == 0x12:
+                write(pair('de'), registers['a'])
+                cycles += 8
+            elif opcode == 0x13:
+                put_pair('de', pair('de') + 1)
                 cycles += 8
             elif opcode & 0xc7 in (0x04, 0x05):
                 index = opcode >> 3 & 7
@@ -94,12 +104,14 @@ def verify_rows(rom, symbols, require):
                 registers['a'] = a >> 1 | (a & 1) << 7
                 zero, carry = False, bool(a & 1)
                 cycles += 4
-            elif opcode in (0xa7, 0xaf, 0x81, 0xc6, 0xd6) or 0x90 <= opcode <= 0x97 or 0xb8 <= opcode <= 0xbf or opcode == 0xfe:
+            elif opcode in (0xe6, 0xa7, 0xaf, 0xb6, 0x81, 0xc6, 0xd6) or 0x90 <= opcode <= 0x97 or 0xb8 <= opcode <= 0xbf or opcode == 0xfe:
                 a = registers['a']
-                immediate = opcode in (0xc6, 0xd6, 0xfe)
+                immediate = opcode in (0xe6, 0xc6, 0xd6, 0xfe)
                 operand = fetch() if immediate else value(opcode & 7)
-                if opcode == 0xa7:
-                    result, carry = a, False
+                if opcode in (0xa7, 0xe6):
+                    result, carry = a & operand, False
+                elif opcode == 0xb6:
+                    result, carry = a | operand, False
                 elif opcode == 0xaf:
                     result, carry = 0, False
                 elif opcode in (0x81, 0xc6):
@@ -107,9 +119,9 @@ def verify_rows(rom, symbols, require):
                 else:
                     result, carry = (a - operand) & 255, a < operand
                 zero = result == 0
-                if opcode < 0xb8 or opcode in (0xc6, 0xd6):
+                if opcode < 0xb8 or opcode in (0xe6, 0xc6, 0xd6):
                     registers['a'] = result
-                cycles += 8 if immediate or opcode == 0xbe else 4
+                cycles += 8 if immediate or opcode in (0xbe, 0xb6) else 4
             elif opcode in (0xc5, 0xd5, 0xe5, 0xc1, 0xd1, 0xe1):
                 name = {0xc0: 'bc', 0xd0: 'de', 0xe0: 'hl'}[opcode & 0xf0]
                 if opcode & 4:
@@ -127,12 +139,70 @@ def verify_rows(rom, symbols, require):
                 if taken:
                     pc = target
                 cycles += (16 if taken else 12) if absolute else (12 if taken else 8)
-            elif opcode == 0xc9:
-                require(not stack, 'Quad accounting left an unbalanced stack')
-                return cycles + 16
+            elif opcode in (0xc9, 0xc0, 0xc8, 0xd0, 0xd8):
+                taken = {0xc9: True, 0xc0: not zero, 0xc8: zero, 0xd0: not carry, 0xd8: carry}[opcode]
+                if taken:
+                    require(not stack, 'Quad accounting left an unbalanced stack')
+                    return cycles + (16 if opcode == 0xc9 else 20)
+                cycles += 8
             else:
                 raise ValueError(f'Unexpected emitted row-accounting opcode {opcode:02x}')
         raise ValueError('Quad accounting failed to terminate')
+
+    output = lines - 160
+    # RGBDS writes EQU exports without a bank prefix. Derive these aliases
+    # from the real storage label, as for the group and scanline arrays above.
+    output_length = symbols['wMobileNativePaletteOwners'][1] + 5
+    palette_used = symbols['wMobileNativePaletteOwners'][1] + 8
+    bindings = symbols['wMobileVirtualScratch'][1] + 64
+
+    def weather_case(y, baseline, palette, owner, used_length):
+        memory = bytearray(65536)
+        memory[lines:lines + 144] = bytes(baseline)
+        memory[output:output + 160] = bytes([0x55] * 160)
+        memory[output_length] = used_length
+        memory[palette_used] = 0x20
+        quad = bytes([y, 77, 19, palette | 0x80])
+        memory[group:group + 4] = quad
+        memory[bindings + palette] = owner
+        affected = [row for row in range(144) if y - 16 <= row < y - 8]
+        admitted = (bool(affected) and used_length <= 156 and not used_length % 4 and
+                    not owner and all(baseline[row] < 10 for row in affected))
+        cycles = execute(symbols['MobileVirtualAdmitWeatherQuad'][1], memory, weather=True)
+        expected = [count + int(admitted and row in affected) for row, count in enumerate(baseline)]
+        require(list(memory[lines:lines + 144]) == expected, 'Weather clipping/rejection changed the wrong rows')
+        expected_output = bytearray([0x55] * 160)
+        if admitted:
+            expected_output[used_length:used_length + 4] = quad
+        require(memory[output:output + 160] == expected_output and
+                memory[output_length] == used_length + (4 if admitted else 0) and
+                memory[palette_used] == (0x20 | (1 << palette) if admitted else 0x20),
+                'Weather publication bounds or palette ownership changed')
+        require(memory[group:group + 4] == quad and memory[bindings + palette] == owner,
+                'Weather admission modified its immutable native source or palette binding')
+        return cycles
+
+    weather_maximum, weather_cases = 0, 0
+    for y in range(256):
+        for depth in range(11):
+            for palette in (0, 6, 7):
+                for owner in (0, 1):
+                    weather_maximum = max(weather_maximum, weather_case(y, [depth] * 144, palette, owner, 12))
+                    weather_cases += 1
+    for used_length in range(256):
+        weather_maximum = max(weather_maximum, weather_case(76, [0] * 144, 6, 0, used_length))
+        weather_cases += 1
+    # Mixed pressure rejects after any row of the read-only check, proving that
+    # a late full row cannot leave earlier row counters partially incremented.
+    weather_rng = random.Random(0x534e4f57)
+    for _ in range(1000):
+        weather_maximum = max(weather_maximum, weather_case(
+            weather_rng.randrange(9, 160),
+            [weather_rng.randrange(11) for _ in range(144)],
+            weather_rng.randrange(8), 0, weather_rng.randrange(40) * 4))
+        weather_cases += 1
+    require(weather_maximum <= 1800, f'Weather quad exceeds the bounded idle slice: {weather_maximum}')
+    print(f'Emitted weather instructions: {weather_cases} cases, maximum {weather_maximum} cycles')
 
     rng = random.Random(0x4f414d)
     groups = [[y] for y in range(256)]

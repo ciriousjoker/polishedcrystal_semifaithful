@@ -1,5 +1,32 @@
 # Mobile Adapter multiplayer plan
 
+## 2026-10-12: bounded weather presentation, final acceptance continues
+
+The first genuine snow replay exposed an independent-renderer deadline failure:
+all peers were ready, but the many native weather quads consumed the publication
+window. Native world updates remained bounded. A direct quad admission path now
+checks clipped rows before writing any counter and copies accepted effects once.
+Actual emitted-instruction tests cover all Y bytes, palette ownership, all output
+lengths and mixed late-row pressure, without a Game Boy emulator.
+
+Weather admission stops at LY126 to reserve the existing palette/OAM publication
+deadline. This does not relax native timing or the three-frame ready-peer gate.
+Particles may be omitted when the remaining presentation capacity or time is
+exhausted; their ordinary simulation, palette buffers and game state are unchanged.
+No ordinary NPC is removed, leased or marked replaceable. The actual hardware
+weather replay passes all four speeds, maximum ready-peer absence two frames
+on every client, and the mandatory unchanged-native cadence control.
+
+Passed target: `/Volumes/Storage/Cache/mobileadapter/independent-reserved-weather-snow-20261012`.
+Current ROM SHA-256: `c65a0b661886b777fed993b04de3c0de5f36b1e6ac42ba5fa34c60c34b323fa0`.
+18,152 emitted weather cases pass, maximum 1,268 cycles. Upper feature usage is
+19,289 bytes; lower integration remains 184 bytes. Active full-pool target:
+`independent-final-full-pool-20261012`, log `/private/tmp/mobile-independent-final-full-pool.log`, session 93583.
+Previous `independent-direct-weather-snow-20261012` is failed intermediate evidence.
+Remaining gates: full native pool, final 21 cases, forced disabled hashes/Faithful
+runtime, final host/layout/budget/all-map checks, prepare-only human launch,
+current evidence/report and local commit. M2 remains open until these pass.
+
 ## 2026-10-12: exact-color reservation and native hardware visibility
 
 Current Standard mobile SHA-256 is

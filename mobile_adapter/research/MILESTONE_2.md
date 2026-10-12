@@ -39,7 +39,13 @@ before a private guest chooses a free color, avoiding an unnecessary conflict
 with another guest that already has an exact ordinary source. Otherwise private colors borrow a
 currently unused hardware palette. A generic full admission path handles palette
 pressure. Native palette buffers/cache and serialized construction scratch remain
-unchanged. Weather/effect palettes retain their native roles. Fades defer new
+unchanged. Weather/effect palettes retain their native roles. Weather quads use a direct
+clipped-row check and single copy. Admission stops at LY126 to reserve the existing
+complete publication deadline. Particles that exceed OAM/scanline capacity or the
+remaining presentation time are omitted for that frame; ordinary simulation and
+NPC state are unchanged. The four-speed snow replay passes the unchanged-native timing
+control and the three-frame hardware visibility gate. Emitted weather instructions
+pass 18,152 clipping, pressure, ownership and output-bound cases (maximum 1,268 cycles). Fades defer new
 private construction while retaining complete existing appearance.
 
 ## Scheduling and observations

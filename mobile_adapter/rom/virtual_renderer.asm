@@ -355,8 +355,11 @@ endr
 	ret
 .weather
 	ldh a, [rLY]
-	cp 140
-	ret nc
+	cp 126
+	jr nc, .weather_done
+; Effects are optional presentation, unlike the native game update. Reserve the
+; palette merge and complete OAM publication window before accepting more of
+; their quads. A dense weather prefix must not discard every completed avatar.
 	ld a, [wMobileVirtualCursor]
 	ld c, a
 	ldh a, [hUsedWeatherSpriteIndex]
@@ -377,20 +380,14 @@ endr
 	ld h, HIGH(wShadowOAM)
 	ld l, c
 	ld a, [hl]
-	and a
-	jr z, .weather ; skip unused native OAM without another scheduler round
+	cp 9
+	jr c, .weather ; skip native quads with no visible hardware row
 	cp 160
 	jr nc, .weather
-	push hl
-	ld hl, wMobileVirtualGroup
-	call MobileVirtualScratchGroup
-	pop hl
-	ld de, wMobileVirtualGroup
-	ld bc, OBJ_SIZE
-	rst CopyBytes
-	ld a, OBJ_SIZE
-	ld [wMobileVirtualGroupLength], a
-	call MobileVirtualAdmitGroup
+	ld a, [wMobileVirtualLength]
+	cp OAM_SIZE - OBJ_SIZE + 1
+	jr nc, .weather_done ; the completed buffer cannot admit another effect
+	call MobileVirtualAdmitWeatherQuad
 	ret
 .weather_done
 	ld a, 7
@@ -569,6 +566,101 @@ endr
 	ld a, c
 	cp OAM_COUNT / 4
 	jp c, .extra
+	ret
+
+MobileVirtualAdmitWeatherQuad:
+; HL is one current native effect quad with visible Y. Admit directly from OAM
+; instead of materializing a general actor and copying its group twice. Read all
+; affected row counters before incrementing, so rejection needs no rollback.
+	ld a, [hl]
+	cp 9
+	ret c
+	cp SCREEN_HEIGHT_PX + OAM_Y_OFS
+	ret nc
+	ld a, [wMobileVirtualLength]
+	cp OAM_SIZE - OBJ_SIZE + 1
+	ret nc
+	and OBJ_SIZE - 1
+	ret nz
+	push hl
+	ld de, 3
+	add hl, de
+	ld a, [hl]
+	and OAM_PALETTE
+	ld c, a
+	ld e, a
+	ld d, 0
+	ld hl, wMobileVirtualBindings
+	add hl, de
+	ld a, [hl]
+	and a
+	jp nz, .rejected ; a private hardware color cannot recolor a native effect
+	pop hl
+	push hl
+	ld a, [hl]
+	cp OAM_Y_OFS
+	jr c, .top_clip
+	sub OAM_Y_OFS
+	ld e, a
+	ld d, 0
+	ld b, 8
+	cp SCREEN_HEIGHT_PX - 8 + 1
+	jr c, .rows_ready
+	ld a, SCREEN_HEIGHT_PX
+	sub e
+	ld b, a
+	jr .rows_ready
+.top_clip
+	sub OAM_Y_OFS - 8
+	ld b, a ; visible Y=9..15 contributes one through seven rows
+	ld de, 0
+.rows_ready
+	ld hl, wMobileVirtualLines
+	add hl, de
+	push hl
+	push bc
+.check
+	ld a, [hli]
+	cp 10
+	jr nc, .rows_full
+	dec b
+	jr nz, .check
+	pop bc
+	pop hl
+.increment
+	inc [hl]
+	inc hl
+	dec b
+	jr nz, .increment
+	ld e, c
+	ld d, 0
+	ld hl, MobileVirtualPaletteBits
+	add hl, de
+	ld a, [wMobileVirtualPaletteUsed]
+	or [hl]
+	ld [wMobileVirtualPaletteUsed], a
+	ld a, [wMobileVirtualLength]
+	ld e, a
+	ld d, 0
+	ld hl, wMobileVirtualOutput
+	add hl, de
+	ld d, h
+	ld e, l
+	pop hl
+rept OBJ_SIZE
+	ld a, [hli]
+	ld [de], a
+	inc de
+endr
+	ld a, [wMobileVirtualLength]
+	add OBJ_SIZE
+	ld [wMobileVirtualLength], a
+	ret
+.rows_full
+	pop bc
+	pop hl
+.rejected
+	pop hl
 	ret
 
 MobileVirtualHideShadowSuffix:
