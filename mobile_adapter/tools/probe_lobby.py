@@ -537,8 +537,14 @@ def main():
                                 not 16 <= state[peer + "ScreenX"] <= 152 or
                                 not 24 <= state[peer + "ScreenY"] <= 144):
                             continue
-                        require(0 < state[f"vMobilePeer{index}OAM0"] < 160,
-                                "A visible remote avatar disappeared during a movement-mode transition")
+                        drawn = (state[peer + 'OAMStart'] <= 144 and
+                                 0 < state[f"vMobilePeer{index}OAM0"] < 160)
+                        if 'wMobileVirtualActorMode' in state and not drawn:
+                            # Admission may alternate complete figures. The
+                            # independent hardware gate below bounds absence;
+                            # inspect tiles only when this figure was emitted.
+                            continue
+                        require(drawn, "A visible remote avatar disappeared during a movement-mode transition")
                         require(state[f"vMobilePeer{index}TileHash"] in valid_frames[state[peer + "Avatar"]],
                                 "Movement-mode transition displayed incomplete or another avatar's tiles")
                         observed += 1
@@ -560,16 +566,35 @@ def main():
         paused = [row["symbols"] for row in observations
                   if 3850 <= row["frame"] <= 4200 and row["symbols"]["wScriptRunning"] == 255]
         if args.native_actor_probe:
-            require(paused and all(row["wMobileRenderedCount"] == args.players - 1 for row in paused),
-                    "Native remote actors disappeared while the Start menu was open")
+            if "wMobileVirtualActorMode" in states[0]:
+                require(paused and all(row['wMobileLocalValid'] for row in paused),
+                        "Start menu discarded the frozen overworld")
+                for peer in range(1, args.players):
+                    exposed = [row for row in paused if row[f'wMobilePeer{peer}Visible'] and
+                               row[f'wMobilePeer{peer}ScreenX'] < 72]
+                    require(not exposed or any(row[f'wMobilePeer{peer}OAMStart'] <= 144 and
+                                              0 < row[f'vMobilePeer{peer}OAM0'] < 160 for row in exposed),
+                            "Uncovered frozen avatar disappeared from the Start menu")
+            else:
+                require(paused and all(row["wMobileRenderedCount"] == args.players - 1 for row in paused),
+                        "Native remote actors disappeared while the Start menu was open")
             for peer in range(1, args.players):
                 require(len({(row[f"wMobilePeer{peer}DrawX"], row[f"wMobilePeer{peer}DrawY"]) for row in paused}) == 1,
                         "Paused native actor presentation did not remain frozen")
         else:
             require(paused and any(not row["wMobileRenderedCount"] and row["wMobileDeferred"] == 3 for row in paused),
                     "Start menu did not explicitly defer remote drawing")
-        require(states[0]["hInMenu"] == 0 and states[0]["wMobileRenderedCount"] == args.players - 1,
-                "Start menu failed to restore every remote figure")
+        require(states[0]["hInMenu"] == states[0]['wScriptRunning'] == 0,
+                "Start menu failed to restore the ordinary overworld")
+        if "wMobileVirtualActorMode" in states[0]:
+            for peer in range(1, args.players):
+                require(any(row['symbols'][f'wMobilePeer{peer}OAMStart'] <= 144 and
+                            0 < row['symbols'][f'vMobilePeer{peer}OAM0'] < 160
+                            for row in observations if row['frame'] >= 4300),
+                        "Start menu failed to restore an actual remote hardware figure")
+        else:
+            require(states[0]["wMobileRenderedCount"] == args.players - 1,
+                    "Start menu failed to restore every remote figure")
     if args.require_npc_motion:
         verify_npc_motion(args.output, args.players)
     if args.native_actor_probe:

@@ -250,7 +250,10 @@ def run_case(args, case, index):
                 profile['save_copy_byte_failures'] == 0,
                 "Primary/backup native save copies differed from their same-state ordinary payloads")
         require(profile['save_copy_lowest_sp'] >= 0xc040, 'Insufficient native-save stack headroom')
-        if case == 'connected':
+        if 'MobileVirtualActorVersion' in bindings:
+            require(profile['save_projected_objects'] == 0,
+                    'Independent presentation must never transform an ordinary save copy')
+        elif case == 'connected':
             require(profile['save_projected_objects'] == 2 * peer_count,
                     "Connected save did not project every original native object into both copies")
     before = digest(battery)

@@ -30,6 +30,12 @@ MobileVirtualCommitPose::
 	ldh a, [hVBlank]
 	and $f
 	jp nz, .restore ; ordinary world VBlank owns the matching OAM publication
+	ldh a, [hDMATransfer]
+	and a
+	jp nz, .restore ; do not overwrite a native transfer's prepared DMA registers
+	ldh a, [rVDMA_LEN]
+	bit B_VDMA_LEN_BUSY, a
+	jp z, .restore
 	ldh a, [rLCDC]
 	bit B_LCDC_ENABLE, a
 	jr z, .safe_lcd

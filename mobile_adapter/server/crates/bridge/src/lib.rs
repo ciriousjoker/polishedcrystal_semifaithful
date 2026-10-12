@@ -177,6 +177,15 @@ struct Client {
     delivered: Vec<u8>,
 }
 impl Client {
+    fn take_presence(&mut self, now: u64, interval: u64) -> Option<Frame> {
+        if now < self.next_presence_at {
+            return None;
+        }
+        let frame = self.presence.take()?;
+        self.next_presence_at = now.saturating_add(interval);
+        Some(frame)
+    }
+
     fn identity(&self) -> Vec<u8> {
         let mut bytes = self.player.unwrap_or(0).to_be_bytes().to_vec();
         bytes.extend(self.generation.to_be_bytes());
@@ -441,7 +450,13 @@ pub async fn serve(
                                     } else {
                                         c.publish_cached();
                                         c.presence = Some(frame);
-                                        Ok(Vec::new())
+                                        let interval = if matches!(backend, Backend::Local(_)) { 0 } else { 50 };
+                                        let at = started.elapsed().as_millis() as u64;
+                                        if let Some(frame) = c.take_presence(at, interval) {
+                                            backend.input(Envelope { stream: id, frame: Some(frame) }, at).await
+                                        } else {
+                                            Ok(Vec::new())
+                                        }
                                     }
                                 },
                                 wire::POLL if c.joined && frame.sequence == 0 && frame.payload.is_empty() => {
@@ -479,11 +494,8 @@ pub async fn serve(
                         pending.push(Envelope { stream: id, frame: None });
                         continue;
                     }
-                    if now >= client.next_presence_at {
-                        if let Some(frame) = client.presence.take() {
-                            client.next_presence_at = now.saturating_add(presence_interval);
-                            pending.push(Envelope { stream: id, frame: Some(frame) });
-                        }
+                    if let Some(frame) = client.take_presence(now, presence_interval) {
+                        pending.push(Envelope { stream: id, frame: Some(frame) });
                     }
                 }
                 let mut effects = Vec::new();
@@ -551,6 +563,42 @@ pub async fn serve(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn presence_is_immediately_eligible_but_coalesces_inside_the_cloud_interval() {
+        let mut client = Client {
+            writer: None,
+            local_lobby: 1,
+            presence: None,
+            next_presence_at: 0,
+            joined: true,
+            player: Some(1),
+            generation: 1,
+            authority_at: 0,
+            roster: None,
+            local_credit: false,
+            delivered: Vec::new(),
+        };
+        let presence = |sequence| Frame {
+            kind: wire::PRESENCE,
+            sequence,
+            payload: vec![],
+        };
+        client.presence = Some(presence(1));
+        assert_eq!(client.take_presence(0, 50), Some(presence(1)));
+        for now in 1..50 {
+            client.presence = Some(presence(now as u16));
+            assert_eq!(client.take_presence(now, 50), None);
+        }
+        assert_eq!(client.take_presence(50, 50), Some(presence(49)));
+        assert_eq!(client.take_presence(500, 50), None);
+        client.presence = Some(presence(50));
+        assert_eq!(client.take_presence(500, 50), Some(presence(50)));
+        client.presence = Some(presence(51));
+        assert_eq!(client.take_presence(550, 0), Some(presence(51)));
+        client.presence = Some(presence(52));
+        assert_eq!(client.take_presence(550, 0), Some(presence(52)));
+    }
+
     #[test]
     fn local_delivery_coalesces_positions_and_deltas_preserve_membership() {
         let (tx, mut rx) = mpsc::channel(8);

@@ -23,6 +23,9 @@ BUTTONS = {4: 'UP', 5: 'DOWN', 6: 'LEFT', 7: 'RIGHT'}
 def compare_reference(reference, controls):
     """Reject stale controls and compare native world cadence for this run."""
     manifest = json.loads((controls / 'controls.json').read_text())
+    if manifest.get('kind') == 'unchanged-native-inventory':
+        from prepare_independent_controls import compare
+        return compare(reference, controls)
     require(manifest['passed'], 'Native controls did not pass actor validation')
     comparisons = []
     states = [json.loads((reference / str(i) / 'state.json').read_text())['symbols'] for i in range(4)]

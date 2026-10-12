@@ -62,7 +62,7 @@ def virtual_temporal_report(rows, max_absent_frames=3):
     for row in rows:
         state, frame = row["symbols"], row["frame"]
         active = set()
-        if state["wMobileOnline"]:
+        if state["wMobileOnline"] and state.get('wScriptRunning', 0) != 255:
             for peer in range(1, state["wMobilePeerCount"] + 1):
                 prefix = f"wMobilePeer{peer}"
                 if not state[prefix + "Visible"] or state[prefix + "NativeStage"] != 7:

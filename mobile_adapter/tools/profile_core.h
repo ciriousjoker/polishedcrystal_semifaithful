@@ -259,7 +259,7 @@ static void mobile_profile_before_instruction(gb* game, const cpu_regs& regs, in
             mobile_save_expected[i] = mobile_save_page[mobile_save_start + i];
         // The native CopyBytes already produced the complete vanilla payload.
         // Only still-owned slots may differ from that same-state native copy.
-        for (unsigned i = 0; i < 3; ++i) {
+        for (unsigned i = 0; mobile_save_slots && i < 3; ++i) {
             unsigned slot = ram[mobile_save_slots - 0xc000 + i];
             if (!slot || slot >= 13) continue;
             auto* object = ram + 0x1000 + mobile_save_objects - 0xd000 + 34 * slot;

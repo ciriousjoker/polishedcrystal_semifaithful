@@ -133,6 +133,12 @@ MobileTick::
 	and a
 	jr z, .available
 .paused
+if DEF(MOBILE_VIRTUAL_ACTORS)
+	xor a
+	ld [wMobileAvailability], a
+	call MobileFrozenOverworld
+	jr z, .available
+endc
 	farcall MobileNativeInvalidateHash
 	xor a
 	ld [wMobileAvailability], a

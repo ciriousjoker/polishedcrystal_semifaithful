@@ -160,6 +160,32 @@ fn bounded_pushes_keep_latest_state_through_churn() {
 }
 
 #[test]
+fn a_presence_at_the_flush_boundary_replaces_the_older_pending_position() {
+    let mut owner = Owner::new(1).unwrap();
+    let effects = owner.receive(1, hello(1), [1; 8], 0);
+    let source =
+        wire::Welcome::decode(&effects[0].envelope.frame.as_ref().unwrap().payload).unwrap();
+    owner.receive(2, hello(1), [2; 8], 0);
+    owner.receive(1, presence(1, &source, 1, 1), [0; 8], 50);
+    owner.receive(1, presence(1, &source, 2, 2), [0; 8], 99);
+    let effects = owner.receive(1, presence(1, &source, 3, 3), [0; 8], 100);
+    let rosters: Vec<_> = effects
+        .iter()
+        .filter(|e| e.group == 2)
+        .filter_map(|e| e.envelope.frame.as_ref().filter(|f| f.kind == wire::ROSTER))
+        .collect();
+    assert_eq!(rosters.len(), 1);
+    assert_eq!(
+        wire::Peer::decode(&rosters[0].payload[5..])
+            .unwrap()
+            .snapshot
+            .x,
+        3
+    );
+    assert_eq!(owner.flush_after(100), None);
+}
+
+#[test]
 fn a_fast_source_cannot_exceed_push_rate_and_the_pending_latest_state_flushes() {
     let mut owner = Owner::new(1).unwrap();
     let effects = owner.receive(1, hello(1), [1; 8], 0);

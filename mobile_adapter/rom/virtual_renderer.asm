@@ -1047,6 +1047,17 @@ MobileVirtualPeerGroup:
 	pop hl
 	ret
 .eligible
+	ld a, [wScriptRunning]
+	cp $ff
+	jr nz, .outside_menu
+	push hl
+	ld bc, MOBILE_PEER_SCREEN_X
+	add hl, bc
+	ld a, [hl]
+	pop hl
+	cp 9 * TILE_WIDTH
+	ret nc ; the ordinary Start menu hides sprites from X=10 tiles onward
+.outside_menu
 	ld bc, 34
 	add hl, bc
 	ld a, [hl]

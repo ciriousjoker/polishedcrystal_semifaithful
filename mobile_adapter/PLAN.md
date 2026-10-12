@@ -13,6 +13,31 @@ inside the existing metadata hook instead of rescanning thirteen descriptors.
 Native object records, map scripts and NPC simulation remain unchanged. A ready
 peer must not starve behind incomplete joins; cyclic admission now handles this.
 
+Latest transport changes remove an avoidable stale flush at the presence
+boundary, forward an eligible Bridge update immediately, and wake the hosted
+simulator at its next real owner/queue deadline rather than an idle poll tick.
+Finite intermediate-source evidence: local motion p95 176.135 ms; hosted p95
+291.330 ms with 100 ms injected RTT; four dense clients at speeds 1..4 with
+800/800 native world-update frames. These need final-source regression.
+Matched disabled controls replay the same batteries and ordinary movement
+while preserving the full native inventory. A separate unsaturated equal-avatar
+control is implemented but not yet executed.
+
+Frozen Start-menu rendering now retains accepted remote poses like ordinary
+NPCs and clips whole figures behind the menu. The independent hardware tests
+remain authoritative; temporary OAM staging counts are not display evidence.
+The dense menu probe still finds occasional four-frame omission, above the
+unchanged three-frame bound. Oldest-ready admission, an exact-native-coarse fallback and immediate cold
+pose preparation all worsened omission and were reverted. A smaller application
+copy slice is under detailed per-frame profiling; the visibility gate is unchanged.
+
+The new independent all-map audit passes 611 compiled maps against the exact
+disabled ROM. Object counts/data, script targets, tilesets/dimensions and native
+movement data match. Remote peers require zero native slots and no NPC
+permissions. This is a static data contract, not an exhaustive runtime proof.
+Ordinary in-game-save fixtures now exist for Alolan Exeggutor, night and snow;
+their final runtime graphics/timing tests are still required.
+
 The third private pose window is split across bank 0 tiles $6c..$6e and bank 1
 $3f. The other windows remain bank 0 $64..$67 and $68..$6b. This removes sharing
 with large native walking atlases. Emitted facing contracts reject future tile
@@ -1278,16 +1303,18 @@ generic object/graphics resource allocation to prototype.
 Handle walking, facing, relevant movement modes, warps, connected-map transitions,
 map-instance differences, and disconnect cleanup. Remote avatars are nonblocking
 and do not execute NPC scripts. Keep story, inventory pickups, encounters, and
-puzzles local. Implement the feature-owned replaceability table and temporary
-NPC suppression/restoration; preserve required actors and story flags.
+puzzles local. Keep all remote actors outside the native object pool. Preserve
+all ordinary NPC records, scripts, simulation and story flags. Whole-figure
+presentation may alternate under actual hardware resource pressure; no map
+designer permissions, NPC removal or map changes are required.
 
-Use the all-611-map audit to guide capacity checks. Cover the crowded retained-
+Use the compiled all-map comparison and emitted graphics contracts for current
+and future native maps. Cover the crowded retained-
 object and special-sprite cases dynamically, including Snowtop Mountain and
 Cinnabar Volcano. Audit object slots, VRAM tiles, palettes, and per-scanline OAM.
 Normal supported overworld scenes must actually display all three remote players;
 a permanently hidden peer in an ordinary scene is not a completed solution.
-If safe NPC suppression cannot meet that requirement, implement the necessary
-rendering allocation here. Protected cutscenes or resource-critical effects may
+Implement independent rendering allocation here. Protected cutscenes or resource-critical effects may
 temporarily defer avatars with a defined visible status and roster access; record
 those exceptions explicitly rather than silently dropping maps from coverage.
 
@@ -1300,7 +1327,7 @@ additional local-world-motion-to-remote-visible delay. The original full-input
 The revised additional-delay gate is p95 below 200 ms locally or 300 ms with
 approximately 100-ms client/server RTT. This is a changed acceptance definition,
 not evidence that the original targets passed. Static all-map checks and representative dynamic
-crowding/transition scenarios preserve required NPCs, restore suppressed objects,
+crowding/transition scenarios preserve ordinary NPC state and interactions,
 and avoid tile/palette corruption.
 
 **Milestone-2 acceptance and retained delivery work (2026-10-11):**

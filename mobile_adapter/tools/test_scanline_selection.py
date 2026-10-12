@@ -83,6 +83,19 @@ class ScanlineSelectionTests(unittest.TestCase):
             row["symbols"]["wMobilePeer1Generation"] = 2
         self.assertTrue(virtual_temporal_report(rows)["passed"])
 
+    def test_frozen_start_menu_occlusion_resets_only_the_paused_segment(self):
+        base = {"wMobileOnline": 1, "wMobilePeerCount": 1,
+                "wMobilePeer1Visible": 1, "wMobilePeer1NativeStage": 7,
+                "wMobilePeer1Id": 1, "wMobilePeer1Generation": 1,
+                "wMobilePeer1OAMStart": 160, "vMobilePeer1OAM0": 160,
+                "wScriptRunning": 0}
+        rows = [{"frame": frame, "symbols": dict(base)} for frame in range(12)]
+        for row in rows[3:9]:
+            row['symbols']['wScriptRunning'] = 255
+        self.assertTrue(virtual_temporal_report(rows)['passed'])
+        rows.extend({'frame': frame, 'symbols': dict(base)} for frame in range(12, 14))
+        self.assertFalse(virtual_temporal_report(rows)['passed'])
+
     def test_interval_proof_matches_clipped_hardware_scanlines(self):
         # Independent oracle: actual 8x8 OAM selection across 144 screen rows.
         # Include partial figures at either viewport edge and equal/nearby tops.

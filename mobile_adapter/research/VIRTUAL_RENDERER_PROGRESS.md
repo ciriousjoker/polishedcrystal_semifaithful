@@ -4,6 +4,40 @@ Date: 2026-10-12. Experimental, not accepted M2 completion.
 
 ## Active follow-up, 2026-10-12
 
+The current autonomous run removes avoidable network scheduling delay: an
+eligible Bridge presence forwards immediately, a newest presence replaces the
+older pending owner sample before its flush boundary, and the hosted adapter
+sleeps until its actual next owner/queue deadline. All Rust workspace tests pass.
+Finite intermediate motion results are 176.135 ms local p95 and 291.330 ms with
+100 ms injected RTT. `virtual-deadline-suite-20261012/cadence` passes all four
+800/800 world windows at speeds 1..4. Its exact disabled controls are retained
+in `virtual-deadline-native-controls-20261012`.
+
+Frozen Start menus keep accepted remote graphics and clip figures behind the
+ordinary menu. Private pose DMA refuses pending native DMA. Warm private color
+construction reuses its identity/dirty-checked cache. The current dense menu
+probe still finds occasional four-frame omission. Oldest-ready admission and
+an exact-native-coarse fallback cost more CPU and were removed; immediate cold
+pose preparation also regressed and was removed. A sixteen-byte application
+copy slice and per-frame Tick/upload/composition counters are being measured.
+Do not promote the candidate or lower the three-frame hardware visibility gate.
+
+`audit_independent_maps.py` compares all 611 current compiled maps with the exact
+disabled counterpart. Native object fields, script targets, tilesets, dimensions
+and movement data are preserved. Its tests reject mutations and changed formats
+while permitting relocated script addresses. This makes future map additions
+part of the same contract without NPC permissions or native slot requirements.
+It does not prove every reachable graphics state or timing.
+
+Priority recovery now observes real hardware readiness rather than retired NPC
+leases; a four-client menu snapshot without an adapter passes physical exit in
+at most two receiver frames. Save instrumentation correctly supplies zero native
+projection slots for independent peers. Complete fault-save acceptance remains
+pending. Equal-avatar native control tooling exists but has not yet executed.
+Ordinary save fixtures for Exeggutor, snow and night are retained under
+`virtual-special-fixtures-20261012` for the required special graphics regressions.
+
+
 The latest active plan entry supersedes the older implementation description
 below. Three private pose windows no longer overlap the native large-sprite
 atlas: bank 0 $64..$67, $68..$6b and $6c..$6e plus bank 1 $3f. Pending pose source,

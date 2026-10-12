@@ -114,9 +114,19 @@ async fn connection(
         let mut incoming_delay = VecDeque::<(Instant, Envelope)>::new();
         let mut outgoing_delay = VecDeque::<(Instant, Envelope)>::new();
         let mut housekeeping = Instant::now();
-        let mut idle = tokio::time::interval(Duration::from_millis(5));
-        idle.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
+            // Use the same pending-flush deadline as the Durable Object adapter.
+            // A periodic poll adds delay to both propagation directions and
+            // needlessly wakes an otherwise idle lobby.
+            let mut wake = housekeeping + Duration::from_millis(500);
+            for due in [incoming_delay.front().map(|e| e.0), outgoing_delay.front().map(|e| e.0)]
+                .into_iter().flatten() {
+                wake = wake.min(due);
+            }
+            if let Some(delay) = room.lock().map_err(network)?.owner
+                .flush_after(started.elapsed().as_millis() as u64) {
+                wake = wake.min(Instant::now() + Duration::from_millis(delay));
+            }
             tokio::select! {
                 incoming = socket.next() => {
                     let message = incoming.ok_or_else(|| invalid("Bridge disconnected"))?.map_err(network)?;
@@ -134,7 +144,7 @@ async fn connection(
                     if outgoing_delay.len() >= 256 { return Err(invalid("Delayed output queue capacity")); }
                     outgoing_delay.push_back((Instant::now() + one_way_delay, envelope));
                 },
-                _ = idle.tick() => {
+                _ = tokio::time::sleep_until(tokio::time::Instant::from_std(wake)) => {
                     // Due-time queues model propagation delay, rather than
                     // sleeping once per packet and accidentally throttling flow.
                     let due = Instant::now();

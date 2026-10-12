@@ -666,6 +666,9 @@ int main(int argc, char** argv) {
     if (!core) { std::cerr << dlerror() << '\n'; return 1; }
     using Metric = uint64_t(*)(unsigned);
     Metric metric = nullptr;
+    Metric idle_metric = reinterpret_cast<Metric>(dlsym(core, "mobile_profile_idle_metric"));
+    Metric composition_metric = reinterpret_cast<Metric>(dlsym(core, "mobile_profile_composition_metric"));
+    uint64_t previous_profile_cycles[5] = {};
     void (*profile_frame)() = nullptr;
     if (arguments.count("--profile-out")) {
         metric = symbol<Metric>(core, "mobile_profile_metric");
@@ -711,7 +714,7 @@ int main(int argc, char** argv) {
             const auto objects = native_addresses.at("wObjectStructs").second;
             symbol<void(*)(unsigned, unsigned, unsigned, unsigned, unsigned, unsigned, unsigned)>(core, "mobile_profile_save")(
                 save.first, save.second, native_addresses.at("wPlayerDataEnd").second - begin,
-                native_addresses.at("wMobileSavedFacings").second,
+                bindings.count("wMobileVirtualActorMode") ? 0 : native_addresses.at("wMobileSavedFacings").second,
                 native_addresses.at(native_addresses.count("wMobileNativeOriginals") ?
                     "wMobileNativeOriginals" : "wMobileActorBackup1").second, objects - begin, objects);
         }
@@ -833,6 +836,15 @@ int main(int argc, char** argv) {
         if (profile_frame) profile_frame();
         if (!trace_enabled && conditional_actions.empty() && walk_waypoints.empty()) continue;
         auto values = capture(sram, sram_size);
+        if (metric && idle_metric && composition_metric) {
+            const uint64_t totals[] = {metric(7), idle_metric(3), idle_metric(7),
+                                       composition_metric(2), composition_metric(14)};
+            const char* names[] = {"Tick", "Upload", "Idle", "Compose", "Peer"};
+            for (unsigned i = 0; i < 5; ++i) {
+                values[std::string("vProfile") + names[i] + "Cycles"] = totals[i] - previous_profile_cycles[i];
+                previous_profile_cycles[i] = totals[i];
+            }
+        }
         if (walk_index < walk_waypoints.size()) {
             auto& target = walk_waypoints[walk_index];
             if (input_frame >= target.earliest && input_frame >= walk_ready_frame) {

@@ -658,7 +658,7 @@ MobileAppendLobbyData:
 MobileAppendPending:
 ; Copy only to the next validated frame boundary. Header/body chunks replace
 ; repeated per-byte pointer construction, without enlarging either buffer.
-	ld c, 32 ; maximum bytes copied per pump; one published frame per pump
+	ld c, 16 ; bounded copy slice leaves idle time for presentation between phases
 .target
 	ld a, [wMobileAppCount]
 	and a
@@ -859,6 +859,10 @@ MobileCapture::
 	and a
 	jr z, .safe
 .paused
+if DEF(MOBILE_VIRTUAL_ACTORS)
+	call MobileFrozenOverworld
+	jr z, .frozen ; ordinary Start menu retains its stationary world graphics
+endc
 	farcall MobileNativeInvalidateHash
 	xor a
 	ld [wMobileLocalValid], a
@@ -871,6 +875,7 @@ if DEF(MOBILE_VIRTUAL_ACTORS)
 else
 	ld [wMobileGraphicsReady], a
 endc
+.frozen
 	pop af
 	ldh [rWBK], a
 	ret
@@ -1098,6 +1103,30 @@ MobileSceneIsSafe:
 	ret z
 	cp PLAYEREVENT_JOYCHANGEFACING
 	ret
+
+if DEF(MOBILE_VIRTUAL_ACTORS)
+MobileFrozenOverworld:
+; Z only for the ordinary paused overworld, never a bag, battle, camera or map
+; transition. Projection/upload remain frozen; accepted network state is private.
+	ldh a, [hInMenu]
+	and a
+	ret nz
+	ld a, [wMobileMenuState]
+	and a
+	ret nz
+	ld a, [wPanningAroundTinyMap]
+	and a
+	ret nz
+	ld a, [wBattleMode]
+	and a
+	ret nz
+	ld a, [wMapStatus]
+	cp MAPSTATUS_HANDLE
+	ret nz
+	ld a, [wScriptRunning]
+	cp $ff
+	ret
+endc
 
 MobileStepProgress:
 ; Camera movement cancels OBJECT_SPRITE_X/Y before logical tile coordinates

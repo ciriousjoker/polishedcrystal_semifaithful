@@ -224,6 +224,20 @@ if DEF(MOBILE_VIRTUAL_ACTORS)
 	ld a, 255
 endc
 	ld [wMobilePrivatePalCurrent], a
+if DEF(MOBILE_VIRTUAL_ACTORS)
+; The compositor audits current native sources. A constructed private color
+; already has its own identity/dirty validation below; rescanning six ordinary
+; palette entries on every unchanged pose job adds no ownership information.
+	ld a, MOBILE_WRAM_BANK
+	ldh [rWBK], a
+	ld a, [wMobileBudgetIndex]
+	farcall MobileNativePeerPointer
+	ld bc, 54
+	add hl, bc
+	ld a, [hl]
+	cp 1
+	jp z, .borrow
+endc
 ; Reuse an exact ordinary color without changing its manager metadata.
 	ld a, 1
 	ldh [rWBK], a

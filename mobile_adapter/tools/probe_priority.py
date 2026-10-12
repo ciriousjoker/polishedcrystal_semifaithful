@@ -98,9 +98,20 @@ def main():
                     "Fixture did not capture an actual connected menu")
             require(final["wMobilePeerCount"] == len(args.peer_battery), "Recovery did not capture all actual peers")
             if args.peer_battery and final.get("wMobileNativeActorMode") is not None:
-                require(final["wMobileRenderedCount"] == len(args.peer_battery), "No live native avatars before recovery")
-                require(any(final[f"wMobilePeer{i}NativeRole"] == 1 for i in range(1, len(args.peer_battery) + 1)),
-                        "Crowded recovery fixture did not capture a real NPC lease")
+                if "wMobileVirtualActorMode" in final:
+                    require(all(final[f"wMobilePeer{i}NativeStage"] == 7 and
+                                final[f"vMobilePeer{i}NativeSlot"] == 0
+                                for i in range(1, len(args.peer_battery) + 1)),
+                            "Recovery did not capture ready independent avatars")
+                    require(any(any(row['symbols'][f'wMobilePeer{i}OAMStart'] <= 144 and
+                                    0 < row['symbols'][f'vMobilePeer{i}OAM0'] < 160
+                                    for i in range(1, len(args.peer_battery) + 1))
+                                for row in online if 3600 <= row['frame'] < 3750),
+                            "No actual hardware avatars before recovery")
+                else:
+                    require(final["wMobileRenderedCount"] == len(args.peer_battery), "No live native avatars before recovery")
+                    require(any(final[f"wMobilePeer{i}NativeRole"] == 1 for i in range(1, len(args.peer_battery) + 1)),
+                            "Crowded recovery fixture did not capture a real NPC lease")
             restored = run("restore-without-adapter", "40 SELECT 8\n40 B 8\n120 B 8\n240 RIGHT 24\n", 1200,
                            0, snapshot_in=snapshot)
             live = run("connected-menu-exit", seed + "3800 SELECT 8\n3800 B 8\n3900 B 8\n4000 RIGHT 24\n", 4250, 1)

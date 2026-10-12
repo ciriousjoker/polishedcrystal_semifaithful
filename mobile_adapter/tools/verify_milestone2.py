@@ -19,7 +19,7 @@ from prepare_native_controls import compare_reference
 
 REPO = Path(__file__).resolve().parents[2]
 CACHE = Path("/Volumes/Storage/Cache/mobileadapter")
-CASES = ("cadence", "local-latency", "hosted-latency", "priority", "saves",
+CASES = ("cadence", "avatar-load", "local-latency", "hosted-latency", "priority", "saves",
          "running", "start-menu", "warp", "warp-turn", "rejoin", "save-caches", "duplicate-ids")
 
 
@@ -66,7 +66,7 @@ def main():
 
     for case in cases:
         print("ACCEPTANCE " + case, flush=True)
-        scene = "bedroom" if case in ("local-latency", "hosted-latency", "warp", "rejoin", "save-caches", "duplicate-ids") else "game-corner"
+        scene = "bedroom" if case in ("avatar-load", "local-latency", "hosted-latency", "warp", "rejoin", "save-caches", "duplicate-ids") else "game-corner"
         batteries = [saves / scene / (name + ".sav") for name in ("chris", "kris", "crys", "beta")]
         if case == "duplicate-ids":
             symbols = read_symbols(args.symbols)
@@ -95,10 +95,12 @@ def main():
             "--fourth-battery", batteries[3], "--players", 4, "--native-actor-probe"] + tail
         if case.endswith("latency"):
             values += ["--latency"]
-        elif case == "cadence":
+        elif case in ("cadence", "avatar-load"):
             values[values.index("--core") + 1] = profile
             values += ["--speeds", "1,2,3,4", "--profile", "--profile-window-start", 3300,
-                       "--require-npc-motion", "--observation-frames", 5500]
+                       "--observation-frames", 5500]
+            if case == "cadence":
+                values += ["--require-npc-motion"]
         else:
             values += ["--scenario", "start-menu" if case == "duplicate-ids" else case]
         if case == "warp-turn":
@@ -109,6 +111,10 @@ def main():
             run("probe_lobby.py", pair_values)
         if case not in ("cadence", "hosted-latency"):
             run("probe_lobby.py", values)
+            if case == "avatar-load":
+                run("prepare_avatar_controls.py", ["--runner", runner, "--core", args.core,
+                    "--profile-core", args.profile_core, "--rgbds", args.cache / "rgbds-1.0.4",
+                    "--reference", args.output / case, "--output", args.output / "avatar-controls"])
             continue
         host_port = args.port + 4
         log_path = args.output / (case + "-host.log")
@@ -128,8 +134,13 @@ def main():
     if "cadence" in cases:
         control = args.control or args.output / "native-controls"
         if args.control is None:
-            run("prepare_native_controls.py", ["--cache", args.cache, "--core", args.core, "--profile-core", args.profile_core, "--runner", runner,
-                "--reference", args.output / "cadence", "--output", control])
+            if "MobileVirtualActorVersion" in read_symbols(args.symbols):
+                seeds = [item for name in AVATARS for item in ("--battery", saves / "game-corner" / (name + ".sav"))]
+                run("prepare_independent_controls.py", ["--profile-core", args.profile_core, "--runner", runner,
+                    "--reference", args.output / "cadence", "--output", control] + seeds)
+            else:
+                run("prepare_native_controls.py", ["--cache", args.cache, "--core", args.core, "--profile-core", args.profile_core, "--runner", runner,
+                    "--reference", args.output / "cadence", "--output", control])
         comparison = compare_reference(args.output / "cadence", control)
         (args.output / "cadence-comparison.json").write_text(json.dumps(
             {"passed": True, "controls": str(control), "comparisons": comparison}, indent=2) + "\n")

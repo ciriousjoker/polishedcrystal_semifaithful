@@ -107,7 +107,12 @@ impl Owner {
             self.broadcast(now, &mut effects, false);
             return effects;
         };
-        self.broadcast(now, &mut effects, false);
+        // A due presence replaces the queued position before flushing it. Sending
+        // the previous position here would start another entire cadence interval
+        // for the newer state arriving at exactly the flush boundary.
+        if frame.kind != wire::PRESENCE {
+            self.broadcast(now, &mut effects, false);
+        }
         let result = if frame.kind == wire::HELLO && !self.members.contains_key(&key) {
             if self.members.len() >= usize::from(wire::CAPACITY) {
                 effects.push(Effect {

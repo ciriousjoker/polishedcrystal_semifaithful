@@ -59,6 +59,18 @@ def main():
                "crystal", f"RGBDS={args.rgbds}/"]
     fixture_originals = {}
     try:
+        if args.scene == "bedroom":
+            fixture = REPO / "mobile_adapter/rom/fixtures/native_control_objects.asm"
+            fixture_originals[fixture] = fixture.read_bytes()
+            rows = []
+            for name, x, y, facing in (("chris", 4, 3, "RIGHT"), ("kris", 3, 4, "DOWN"),
+                                       ("crys", 2, 3, "LEFT"), ("beta", 3, 2, "UP")):
+                if name == args.avatar:
+                    continue
+                x, y = positions.get(name, (x, y))
+                rows.append(f"\tobject_event {x}, {y}, SPRITE_{name.upper()}, SPRITEMOVEDATA_STANDING_{facing}, "
+                            "0, 0, -1, 0, OBJECTTYPE_SCRIPT, 0, DoNothingScript, -1\n")
+            fixture.write_text('; Disposable ordinary figures for a matched avatar-load control.\n' + ''.join(rows))
         if args.scene == "game-corner":
             # Each control must contain the corresponding OTHER figures, not
             # duplicate its local figure. All changes are disposable source data.
