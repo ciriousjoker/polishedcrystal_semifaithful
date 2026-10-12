@@ -3,6 +3,10 @@
 SECTION "Mobile Native Save Isolation", ROMX, BANK[MOBILE_ROM_BANK]
 MobileNativeSaveCodeStart::
 
+if DEF(MOBILE_VIRTUAL_ACTORS)
+MobileNativeSaveObjects::
+	ret ; private presentation never projects multiplayer data into ordinary saves
+else
 MobileNativeCaptureFree::
 ; Bank 1, BC native object. Capture even an empty slot's exact original bytes.
 	push bc
@@ -150,6 +154,8 @@ endr
 	pop bc
 	pop af
 	ret
+
+endc
 
 MobileNativePaletteGuard::
 ; Native palette scratch also lies inside wPlayerData. Preserve it across our

@@ -208,6 +208,9 @@ MobileNativePrivatePalette::
 	ld hl, wMobileSavedFacings
 	add hl, de
 	ld a, [hl]
+if DEF(MOBILE_VIRTUAL_ACTORS)
+	ld a, 255
+endc
 	ld [wMobilePrivatePalCurrent], a
 ; Reuse an exact ordinary color without changing its manager metadata.
 	ld a, 1
@@ -355,10 +358,16 @@ MobileNativePrivatePalette::
 	ld a, c
 	cp PAL_OW_WEATHER
 	jr c, .empty
+if DEF(MOBILE_VIRTUAL_ACTORS)
+; Cache construction only: final compositor assigns an unused hardware slot.
+	ld c, 1
+	jr .selected
+else
 	pop af
 	ldh [rWBK], a
 	scf
 	ret
+endc
 .selected
 	ld a, c
 	ld [wMobilePrivatePalSlot], a
@@ -493,6 +502,7 @@ endr
 	add hl, bc
 	ld [hl], 1
 	call MobileNativeClearPaletteBinding
+if !DEF(MOBILE_VIRTUAL_ACTORS)
 	ld a, MOBILE_BACKUP_BANK
 	ldh [rWBK], a
 	ld a, [wMobilePrivatePalSlot]
@@ -503,6 +513,7 @@ endr
 	ld a, [wMobileBudgetIndex]
 	inc a
 	ld [hl], a
+endc
 	ld a, TRUE
 	ldh [hCGBPalUpdate], a
 	jr .success
@@ -659,6 +670,34 @@ MobileNativePaletteNPCBound::
 	ret
 
 MobileNativeUpdateOBPalettes::
+if DEF(MOBILE_VIRTUAL_ACTORS)
+	ldh a, [hInMenu]
+	and a
+	jr nz, .virtual_ordinary
+	ld a, [wMobileLocalValid]
+	and a
+	jr z, .virtual_ordinary
+	ld a, [wMobileOnline]
+	and a
+	jr z, .virtual_ordinary
+	ld a, [wMobileWanted]
+	and a
+	jr z, .virtual_ordinary
+	ld a, [wMobileVirtualPublished]
+	and a
+	jr z, .virtual_ordinary
+	ld hl, wMobileVirtualMergedPalette
+.virtual_ordinary
+	lb bc, 4, LOW(rOBPD)
+.virtual_upload
+rept 2 palettes
+	ld a, [hli]
+	ldh [c], a
+endr
+	dec b
+	jr nz, .virtual_upload
+	ret
+endc
 ; ForceUpdateCGBPals already selected bank 5 and enabled OCPS auto-increment.
 ; Use the native 64-byte upload, selecting private colors only for extant,
 ; visible leases. No ordinary palette buffer or save metadata is modified.
@@ -682,6 +721,9 @@ endr
 	pop de
 	ret
 .source
+if DEF(MOBILE_VIRTUAL_ACTORS)
+	jp MobileVirtualPaletteSource
+endc
 	push af
 	push bc
 	push de

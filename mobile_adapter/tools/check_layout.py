@@ -47,13 +47,21 @@ helpers = sum(new[end][1] - new[start][1] for start, end in
               (("MobileNativeInstanceStart", "MobileNativeInstanceEnd"),
                ("MobileNativeTileCodeStart", "MobileNativeTileCodeEnd"),
                ("MobileNativeSaveCodeStart", "MobileNativeSaveCodeEnd")))
-policy_bytes = new["MobileNativePolicyEnd"][1] - new["MobileNativePolicyStart"][1]
-require(policy_bytes <= 1280, "Lease policy ROM budget exceeded")
+virtual = "MobileVirtualActorVersion" in new
+if virtual:
+    forbidden = ("MobileNativeLeaseSlot", "MobileNativeLoadLeasePolicy",
+                 "MobileNativeCaptureFree", "MobileNativeRestoreFree")
+    require(not any(name in new for name in forbidden),
+            "Independent presentation must not include native NPC eviction code")
+    policy_bytes = 0
+else:
+    policy_bytes = new["MobileNativePolicyEnd"][1] - new["MobileNativePolicyStart"][1]
+    require(policy_bytes <= 1280, "Lease policy ROM budget exceeded")
 require(helpers <= 768, "Feature helper ROM budget exceeded")
 views = new['wMobileNativeOriginalsEnd'][1] - new['wMobileNativeOriginals'][1]
 private_colors = new['wMobilePrivatePalEnd'][1] - new['wMobilePrivatePalTemporary'][1]
 palette_code = new['MobileNativePaletteCodeEnd'][1] - new['MobileNativePaletteCodeStart'][1]
-require(new['wMobileNativeOriginals'] == (0, 0xcf44) and views == 121 and
+require(new['wMobileNativeOriginals'] == (0, 0xcf44) and views == (123 if virtual else 121) and
         new['wMobileResidentEnd'][1] <= 0xcf44 and new['wMobileNativeOriginalsEnd'][1] <= 0xd000,
         'Native original views overlap resident or native memory')
 require(new['wMobilePrivatePalTemporary'] == new['wMobileActorTilesEnd'] and
@@ -78,7 +86,7 @@ for source in sorted((REPO / 'mobile_adapter/rom').rglob('*.asm')):
         near_calls += 1
         require(origin[0] == target[0],
                 f'{source.relative_to(REPO)}:{number}: near call/jump {owner} -> {call[1]} crosses ROM banks')
-report = {"banked_near_calls_checked": near_calls, "native_original_view_bytes": views, "private_palette_bytes": private_colors, "private_palette_code_bytes": palette_code, "existing_ram_symbols_checked": len(ram), "existing_ram_symbols_changed": changed,
+report = {"independent_native_objects": virtual, "banked_near_calls_checked": near_calls, "native_original_view_bytes": views, "private_palette_bytes": private_colors, "private_palette_code_bytes": palette_code, "existing_ram_symbols_checked": len(ram), "existing_ram_symbols_changed": changed,
           "avatar_cache_bytes": avatar_bytes, "removed_legacy_renderer_bytes": 456, "resident_bytes": resident, "buffer_bytes": buffers, "banked_driver_bytes": code, "feature_helper_bytes": helpers, "lease_policy_bytes": policy_bytes, "raw_native_tile_backup_bytes": 1152}
 for name in ("baseline", "mobile", "faithful"):
     path = getattr(args, name)

@@ -1,5 +1,54 @@
 # Mobile Adapter multiplayer plan
 
+## 2026-10-12: independent renderer implementation checkpoint
+
+G3 now requires map-design independence: no replaceable-NPC labels, native NPC
+removal, script changes or ordinary object leases. The experimental
+`make mobile MOBILE_RENDERER=virtual` path keeps all three remote actors in
+private WRAM and composes presentation separately. Its compiled ROM excludes
+NPC eviction and the map-specific lease policy. All assembly remains in
+`mobile_adapter/rom`; ordinary-engine changes are conditional metadata hooks.
+
+The normal development launcher still uses the previous native renderer as a
+comparison. It has not migrated to the replacement and does not satisfy G3.
+The additional renderer switch is temporary development instrumentation, not a
+new final product variant. The final contract remains one multiplayer on/off
+flag and an exact disabled-ROM counterpart.
+
+Current finite evidence: four real headless DoubleCherryGB clients with Chris,
+Kris, Crys and the fourth avatar pass the bedroom graphics/color, complete-figure
+hardware selection, bounded absence and 800/800 world-update gates at 100%,
+200%, 300% and 400%. The dense Game Corner prototype remains unaccepted: full
+composition repeatedly misses its idle deadline and one receiver has 799/800
+world-update frames. Do not count cached graphics, joined clients or partial
+staging lists as successful remote presentation.
+
+The best four-client prototype local-motion p95 was 203.832 ms with no injected
+RTT, above the unchanged 200 ms gate. More frequent graphics work regressed to
+314.047 ms; earlier projection alone regressed to 246.525 ms. Both were reverted.
+A larger foreground capture fast path also failed dense acceptance and was
+removed instead of retaining extra integration bytes for an unaccepted result.
+The next structural change should reuse/filter native OAM with substantially
+less repeated work, preserving current native coordinates and NPC simulation.
+
+The normal build received a separate OAM bounds fix: an exhausted reverse offset
+could wrap and permit writes beyond the 160-byte ShadowOAM buffer. Actual emitted
+instructions now pass all 65,536 count/offset combinations per renderer. The
+normal four-client dense mixed-speed regression passes. This is a verified safety
+fix, not completion of the independent-renderer performance requirement.
+
+The disabled Standard ROM still hashes to
+`314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e`.
+Both experimental Standard and Faithful builds compile without multiplayer SRAM.
+The Standard layout check preserves all 23,373 original RAM symbols. The independent Standard build has
+16,400 upper-half feature bytes, 156 net lower integration bytes and 13,805 lower
+bytes free. No original helper has been relocated.
+
+See `research/VIRTUAL_RENDERER_PROGRESS.md` and
+`research/virtual-renderer-evidence.json` for exact evidence boundaries, remaining
+VRAM/palette ownership risks and the next acceptance gates. M2 remains reopened;
+M3 ROM features must not start on an unaccepted renderer.
+
 ## 2026-10-12: independent remote presentation proposal
 
 Preferred next prototype: keep all three remote actors outside the thirteen

@@ -63,29 +63,20 @@ The earlier finite milestone-2 run does not prove those stronger properties.
   Raising capacity may legitimately fail a documented resource assertion; an
   advertised supported value must not require hand-editing several allocators.
 
-This replaces the original three-player target. The normal mobile build now
-supports four total players through native NPC object/graphics leases. Current
-acceptance and its finite coverage boundaries are recorded in
-[research/MILESTONE_2.md](research/MILESTONE_2.md). The original memory exploration
-remains in [research/FOUR_PLAYER_FEASIBILITY.md](research/FOUR_PLAYER_FEASIBILITY.md).
-The implemented architecture leases ordinary NPC object/graphics
-resources through the native renderer: use free slots first, then only explicitly
-replaceable NPCs, and restore them when the visible-peer demand ends. Actual resource
-release is required; hiding an NPC's OAM alone does not release its object slot or
-tile allocation. Connected peers on other maps need records but no local sprite
-lease. Preserve script actors, map/event identity and NPC state. Three remote
-players require at most three such actor leases, not four extra actors.
-The user additionally approved temporarily omitting an explicitly replaceable
-NPC's entire displayed figure under scanline pressure, then automatically
-restoring its display when resources return. This does not permit hiding protected
-actors or changing NPC/game/save state. Required/protected conflict pairs must be
-flagged for review. The current native path still needs this presentation policy;
-its new runtime/strict map gates expose unresolved failures. See
-[research/SCANLINE_AND_MBC30_FOLLOWUP.md](research/SCANLINE_AND_MBC30_FOLLOWUP.md).
-The user approved the protected-by-default, audited NPC allowlist and runtime
-selection/restoration policy in PLAN.md on 2026-10-11. The generated native lease
-allowlist is separate from the removed legacy render-suppression table. Source
-fingerprints and finite script-graph checks gate every mobile build.
+- **G3 MUST:** Multiplayer is independent of map-design choices. It must not
+  require redesigned maps, replaceable-NPC annotations, native-object eviction,
+  NPC state backups/restoration, altered scripts or changed collision/story
+  state. Remote actors use private records outside the ordinary object pool.
+  Necessary temporal omissions affect presentation only; native NPCs remain
+  simulated and interactable. Prefer normal continuous presentation whenever
+  hardware resources permit it, and preserve local-player priority.
+
+This requirement supersedes the earlier native lease/allowlist design. That
+implementation remains historical evidence, not permission to evict NPCs in the
+replacement. The independent renderer is under active implementation and must
+pass timing, colors, recovery and ordinary-save gates before acceptance. Existing
+static conflict lists are useful stress-fixture inventories, not requirements
+for map designers to change their maps.
 
 ## Save files and recovery
 

@@ -1,0 +1,228 @@
+{
+  "date": "2026-10-12",
+  "status": "experimental, replacement not accepted",
+  "rollout": "Normal human launcher remains on the native comparison renderer, which does not satisfy G3.",
+  "roms": {
+    "polishedcrystal-3.2.3.gbc": {
+      "bytes": 2097152,
+      "sha256": "314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e"
+    },
+    "polishedcrystal-mobile-3.2.3.gbc": {
+      "bytes": 4194304,
+      "sha256": "80e69941c881b58eb89ec113f67a976a8cc8055a09c81fb5a32db4232e079751"
+    },
+    "polishedcrystal-mobile-virtual-3.2.3.gbc": {
+      "bytes": 4194304,
+      "sha256": "0d67ba5431835479a3452c3977a390eec56f45570620a51bc8e4fb9acdd08796"
+    },
+    "polishedcrystal-faithful-mobile-virtual-3.2.3.gbc": {
+      "bytes": 4194304,
+      "sha256": "0b7a263d2a6a1da30f2dcf876bbc0af847857747ffdea6252fb8c0c07aeaf97f"
+    }
+  },
+  "disabled_standard_identity_passed": true,
+  "layout": {
+    "passed": true,
+    "artifact": "/Volumes/Storage/Cache/mobileadapter/virtual-clean-layout-20261012.json",
+    "standard_original_ram_symbols_checked": 23373,
+    "standard_original_ram_symbols_changed": {},
+    "independent_native_objects": true,
+    "lease_policy_bytes": 0
+  },
+  "budget": {
+    "passed": true,
+    "artifact": "/Volumes/Storage/Cache/mobileadapter/virtual-clean-budget-20261012.json",
+    "upper_feature_bytes": 16400,
+    "net_lower_integration_bytes": 156,
+    "lower_free_bytes": 13805
+  },
+  "host_checks": {
+    "passed": true,
+    "oam_bounds_byte_combinations_per_renderer": 65536,
+    "resource_unit_tests": 11,
+    "scope": "Actual emitted bounds instructions, native facing geometry and generated avatar bytes, layout/wire/save-hook contracts. Resource math and PPU model are not full assembly renderer execution."
+  },
+  "native_dense_regression": {
+    "passed": true,
+    "artifact": "/Volumes/Storage/Cache/mobileadapter/native-bounds-corner-20261012",
+    "players": 4,
+    "speeds": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "scope": "Moving Game Corner NPCs, actual graphics/colors, strict native cadence after OAM bounds safety fix."
+  },
+  "candidate_bedroom": {
+    "passed": true,
+    "artifact": "/Volumes/Storage/Cache/mobileadapter/virtual-clean-bedroom-20261012",
+    "players": 4,
+    "profiles": [
+      {
+        "client": 0,
+        "speed": 1,
+        "world_frames_with_update": 800,
+        "world_duplicate_updates": 0,
+        "world_max_frame_gap": 1,
+        "native_idle_vblank_crossings": 0,
+        "native_upload_vblank_crossings": 0
+      },
+      {
+        "client": 1,
+        "speed": 2,
+        "world_frames_with_update": 800,
+        "world_duplicate_updates": 0,
+        "world_max_frame_gap": 1,
+        "native_idle_vblank_crossings": 0,
+        "native_upload_vblank_crossings": 0
+      },
+      {
+        "client": 2,
+        "speed": 3,
+        "world_frames_with_update": 800,
+        "world_duplicate_updates": 0,
+        "world_max_frame_gap": 1,
+        "native_idle_vblank_crossings": 0,
+        "native_upload_vblank_crossings": 0
+      },
+      {
+        "client": 3,
+        "speed": 4,
+        "world_frames_with_update": 800,
+        "world_duplicate_updates": 0,
+        "world_max_frame_gap": 1,
+        "native_idle_vblank_crossings": 0,
+        "native_upload_vblank_crossings": 0
+      }
+    ],
+    "hardware_selection": {
+      "passed": true,
+      "object_height": 8,
+      "model": "first ten Y-matching hardware OAM entries",
+      "scope": "Frame-boundary hardware OAM selection, not background/pixel compositing or every mid-frame DMA state.",
+      "clients": [
+        {
+          "client": 0,
+          "samples": 1959,
+          "maximum_demand": 6,
+          "failing_samples": 0,
+          "witnesses": [],
+          "final_missing_peers": [],
+          "temporal_visibility": {
+            "passed": true,
+            "maximum_absent_frames": 1,
+            "allowed_absent_frames": 3,
+            "witnesses": []
+          },
+          "never_presented_peers": []
+        },
+        {
+          "client": 1,
+          "samples": 4003,
+          "maximum_demand": 8,
+          "failing_samples": 0,
+          "witnesses": [],
+          "final_missing_peers": [],
+          "temporal_visibility": {
+            "passed": true,
+            "maximum_absent_frames": 2,
+            "allowed_absent_frames": 3,
+            "witnesses": []
+          },
+          "never_presented_peers": []
+        },
+        {
+          "client": 2,
+          "samples": 6047,
+          "maximum_demand": 8,
+          "failing_samples": 0,
+          "witnesses": [],
+          "final_missing_peers": [],
+          "temporal_visibility": {
+            "passed": true,
+            "maximum_absent_frames": 2,
+            "allowed_absent_frames": 3,
+            "witnesses": []
+          },
+          "never_presented_peers": []
+        },
+        {
+          "client": 3,
+          "samples": 8080,
+          "maximum_demand": 8,
+          "failing_samples": 0,
+          "witnesses": [],
+          "final_missing_peers": [],
+          "temporal_visibility": {
+            "passed": true,
+            "maximum_absent_frames": 2,
+            "allowed_absent_frames": 3,
+            "witnesses": []
+          },
+          "never_presented_peers": []
+        }
+      ]
+    },
+    "source_match_after_test_port_normalization": true,
+    "test_rom_sha256": "605de1088f819492ec951508060e5eab71841f771a5b26dc78beb9bc043fe2cd",
+    "scope": "Actual four mixed-speed ROM clients, native avatar pose/color equality, complete hardware figures and bounded absence at video-frame boundaries. Only test port and ROM checksum differ from final build."
+  },
+  "candidate_latency_intermediate": {
+    "passed": false,
+    "artifact": "/Volumes/Storage/Cache/mobileadapter/virtual-direct-pose-latency-20261012/local-latency/latency.json",
+    "unchanged_p95_limit_ms": 200,
+    "measurements": {
+      "samples": 60,
+      "p50_ms": 184.313,
+      "p95_ms": 203.832,
+      "max_ms": 215.933,
+      "added_client_server_rtt_ms": 0,
+      "input_to_remote_p95_ms": 323.612,
+      "input_to_remote_max_ms": 334.449,
+      "measurement": "first captured local world motion to first directional position change of four-quad remote avatar bounds at native video callback; input-to-remote includes unchanged vanilla turn delay"
+    },
+    "scope": "Intermediate-source experiment, not final-source acceptance or a default human-launcher improvement."
+  },
+  "reverted_experiments": [
+    {
+      "artifact": "/Volumes/Storage/Cache/mobileadapter/virtual-final-room-latency-20261012/local-latency",
+      "p95_ms": 314.047,
+      "change": "More frequent early graphics/projection"
+    },
+    {
+      "artifact": "/Volumes/Storage/Cache/mobileadapter/virtual-candidate-latency-20261012/local-latency",
+      "p95_ms": 246.525,
+      "change": "Earlier projection alone"
+    },
+    {
+      "artifact": "/Volumes/Storage/Cache/mobileadapter/virtual-boundary-corner-20261012",
+      "change": "Larger fast foreground capture",
+      "reason": "Still fails dense acceptance; reject 40 additional lower integration bytes."
+    }
+  ],
+  "dense_blocker": {
+    "passed": false,
+    "artifact": "/Volumes/Storage/Cache/mobileadapter/virtual-oam-sharing-corner-20261012",
+    "scope": "Before dead-code removal, no later accepted dense run. Composition misses publication deadline; client 3 has 799/800 world-update frames, one duplicate and maximum gap 2. Joins and valid cached assets are not presentation acceptance."
+  },
+  "pending": [
+    "Dense native cadence/publication and native/remote fairness",
+    "Protected scanline-pressure fixtures",
+    "Large-sprite tile-window sharing",
+    "Committed OAM/VRAM scanout ownership",
+    "Palette demand preference, night/day/fades/weather/special forms",
+    "Final-source local/hosted latency",
+    "Priority cancel, malformed packets, reconnect, saves and adapter-free snapshots for replacement",
+    "Generic all-map/future resource acceptance"
+  ],
+  "test_ports": [
+    17800,
+    17830
+  ],
+  "user_ports_untouched": [
+    17423,
+    8787
+  ],
+  "cloudflare_or_android_tested": false
+}

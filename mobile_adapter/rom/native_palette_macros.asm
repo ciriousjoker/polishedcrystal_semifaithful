@@ -2,6 +2,7 @@
 ; A compact unbanked owner table avoids bank-switch calls for all ordinary NPCs
 ; during the per-frame collision/glow scan.
 MACRO mobile_native_palette_source
+if !DEF(MOBILE_VIRTUAL_ACTORS)
 	push af
 	push hl
 	ld h, d
@@ -49,4 +50,81 @@ MACRO mobile_native_palette_source
 .done\@
 	pop hl
 	pop af
+endc
+ENDM
+
+MACRO mobile_virtual_capture
+; Immutable render metadata only. Reuse the native ShadowOAM group whenever
+; it fits; a ROM template is retained for actors beyond vanilla OAM capacity.
+	ld a, [wMobileVirtualStage]
+	and a
+	jr z, .capture_done\@
+	push bc
+	push de
+	push hl
+	ld a, c
+	ld [wMobileVirtualHeaderOAM], a
+	ld b, h
+	ld c, l
+	ld e, d
+	ld a, [wMobileVirtualIndex]
+	add a
+	add a
+	add a
+	add LOW(wMobileVirtualDescriptors)
+	ld l, a
+	adc HIGH(wMobileVirtualDescriptors)
+	sub l
+	ld h, a
+	ldh a, [hCurSpriteXPixel]
+	ld [hli], a
+	ldh a, [hCurSpriteYPixel]
+	ld [hli], a
+	ldh a, [hCurSpriteTile]
+	ld [hli], a
+	ld [hl], e
+	inc hl
+	ld [hl], c
+	inc hl
+	ld [hl], b
+	inc hl
+	ldh a, [hUsedSpriteTile]
+	ld b, a
+; All native four-quad facings are canonical two-column rectangles. The host
+; contract checks the emitted facing data, including every future addition.
+	ld a, b
+	cp 4
+	jr nz, .shape_ready\@
+	set 6, b
+.shape_ready\@
+
+	ld a, b
+	and $1f
+	add a
+	add a
+	sub OBJ_SIZE
+	ld c, a
+	ld a, [wMobileVirtualHeaderOAM]
+	cp OAM_SIZE - OBJ_SIZE + 1
+	jr nc, .template\@
+	cp c
+	jr c, .template\@
+	sub c
+	ld c, a
+	ld a, b
+	or $80
+	ld [hli], a
+	ld [hl], c
+	jr .restore\@
+.template\@
+	ld [hl], b
+	inc hl
+	ldh a, [hCurSpriteOAMFlags]
+	ld [hl], a
+.restore\@
+	pop hl
+	pop de
+	pop bc
+.capture_done\@
+	ldh a, [hUsedSpriteTile]
 ENDM

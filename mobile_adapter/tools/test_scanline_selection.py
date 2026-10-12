@@ -1,6 +1,7 @@
 """Exercise actual selection limits, including incomplete and offscreen figures."""
 import unittest
-from scanline_selection import inspect_native_frame, missing_final_peers, select_scanlines
+import random
+from scanline_selection import inspect_native_frame, missing_final_peers, select_scanlines, virtual_temporal_report
 
 
 def figures(count, y=64):
@@ -53,6 +54,50 @@ class ScanlineSelectionTests(unittest.TestCase):
         self.assertEqual(missing_final_peers(state), [1])
         state["wMobileOnline"] = 0
         self.assertEqual(missing_final_peers(state), [])
+
+    def test_temporal_visibility_uses_hardware_and_bounds_continuous_absence(self):
+        def rows(visible_frames):
+            return [{"frame": frame, "symbols": {
+                "wMobileOnline": 1, "wMobilePeerCount": 1, "wMobileRenderedCount": 0,
+                "wMobilePeer1Visible": 1, "wMobilePeer1NativeStage": 7,
+                "wMobilePeer1Id": 12, "wMobilePeer1Generation": 1,
+                "wMobilePeer1OAMStart": 16 if frame in visible_frames else 160,
+                "vMobilePeer1OAM0": 64 if frame in visible_frames else 160,
+            }} for frame in range(12)]
+        report = virtual_temporal_report(rows({0, 3, 6, 9}))
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["maximum_absent_frames"], 2)
+        report = virtual_temporal_report(rows({0, 9}))
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["maximum_absent_frames"], 8)
+        self.assertEqual(report["witnesses"][0]["frame"], 4)
+
+    def test_temporal_segments_reset_on_scene_exit_or_identity_replacement(self):
+        base = {"wMobileOnline": 1, "wMobilePeerCount": 1,
+                "wMobilePeer1Visible": 1, "wMobilePeer1NativeStage": 7,
+                "wMobilePeer1Id": 1, "wMobilePeer1Generation": 1,
+                "wMobilePeer1OAMStart": 160, "vMobilePeer1OAM0": 160}
+        rows = [{"frame": frame, "symbols": dict(base)} for frame in range(8)]
+        rows[3]["symbols"]["wMobilePeer1Visible"] = 0
+        for row in rows[5:]:
+            row["symbols"]["wMobilePeer1Generation"] = 2
+        self.assertTrue(virtual_temporal_report(rows)["passed"])
+
+    def test_interval_proof_matches_clipped_hardware_scanlines(self):
+        # Independent oracle: actual 8x8 OAM selection across 144 screen rows.
+        # Include partial figures at either viewport edge and equal/nearby tops.
+        rng = random.Random(17423)
+        populations = [[1] * 6, [159] * 6, [1, 16, 16, 16, 16, 16],
+                       [1, 17, 17, 17, 17, 17], [64] * 5, [64] * 6]
+        populations += [[rng.randrange(1, 160) for _ in range(rng.randrange(1, 11))]
+                        for _ in range(1200)]
+        for tops in populations:
+            hardware = [y for top in tops for y in (top, top, top + 8, top + 8)]
+            hardware += [0] * (40 - len(hardware))
+            ordered = sorted(tops)
+            interval_overflow = any(ordered[i + 5] - ordered[i] < 16
+                                    for i in range(len(ordered) - 5))
+            self.assertEqual(interval_overflow, max(select_scanlines(hardware)[0]) > 10, tops)
 
     def test_unknown_or_truncated_observations_cannot_pass(self):
         with self.assertRaises(ValueError):

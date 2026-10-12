@@ -29,7 +29,7 @@ DeleteMapObject::
 	farjp CheckForUsedObjPals
 
 HandleObjectStep:
-if DEF(MOBILE_ADAPTER)
+if DEF(MOBILE_ADAPTER) && !DEF(MOBILE_VIRTUAL_ACTORS)
 	ld hl, OBJECT_MAP_OBJECT_INDEX
 	add hl, bc
 	ld a, [hl]
@@ -2745,6 +2745,9 @@ if DEF(MOBILE_ADAPTER)
 	farcall MobilePrepareSprites
 .native_sprites
 endc
+if DEF(MOBILE_VIRTUAL_ACTORS)
+	farcall MobileVirtualBeginSprites
+endc
 	call InitSprites
 	call .hide_unused_sprites
 	pop af
@@ -2920,7 +2923,13 @@ InitSprites:
 	ld a, [hli]
 	ld b, [hl]
 	ld c, a
+if DEF(MOBILE_VIRTUAL_ACTORS)
+	ld a, d
+	and $f
+	ld [wMobileVirtualIndex], a
+endc
 	call .InitSprite
+
 	pop hl
 	pop bc
 	jr .next_sprite
@@ -3005,9 +3014,17 @@ InitSprites:
 	add hl, bc
 	ld a, [hl]
 	cp STANDING
+if DEF(MOBILE_ADAPTER)
+	jp z, .done
+else
 	jr z, .done
+endc
 	cp NUM_FACINGS
+if DEF(MOBILE_ADAPTER)
+	jp nc, .done
+else
 	jr nc, .done
+endc
 	ld l, a
 	ld h, 0
 	add hl, hl
@@ -3024,6 +3041,9 @@ InitSprites:
 	ld b, HIGH(wShadowOAM)
 	ld a, [hli]
 	ldh [hUsedSpriteTile], a
+if DEF(MOBILE_VIRTUAL_ACTORS)
+	mobile_virtual_capture
+endc
 if DEF(MOBILE_ADAPTER)
 	mobile_native_oam_bounds
 else

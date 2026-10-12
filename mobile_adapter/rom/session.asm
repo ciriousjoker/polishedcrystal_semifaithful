@@ -858,7 +858,15 @@ MobileCapture::
 	farcall MobileNativeInvalidateHash
 	xor a
 	ld [wMobileLocalValid], a
+if DEF(MOBILE_VIRTUAL_ACTORS)
+; Native menu/map graphics may overwrite private pose windows. Force a complete
+; validated reload when returning, without touching any ordinary game record.
+	ld [wMobileVirtualWindowOwners], a
+	ld [wMobileVirtualWindowOwners + 1], a
+	ld [wMobileVirtualWindowOwners + 2], a
+else
 	ld [wMobileGraphicsReady], a
+endc
 	pop af
 	ldh [rWBK], a
 	ret

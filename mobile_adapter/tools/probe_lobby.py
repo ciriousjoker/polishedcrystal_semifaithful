@@ -229,6 +229,8 @@ def run_client(args, index):
                           "wMobileError": 1 if disconnected else 0, "wMobileServerError": 0,
                           "wMobileGuardStart": 165, "wMobileGuardTx": 165,
                           "wMobileGuardRx": 165, "wMobileGuardEnd": 165}.items():
+        if "wMobileVirtualActorMode" in state and key in ("wMobileRenderedCount", "wMobileDeferred"):
+            continue  # Temporal liveness is checked from hardware traces below.
         require(state[key] == expected, f"Client {index}: {key}={state[key]}, expected {expected}")
     # A stationary protected scene can receive just one full roster. Heartbeats
     # intentionally do not produce redundant pushed state.
@@ -289,16 +291,17 @@ def verify_avatar_graphics(states):
     for state in states:
         for index in range(1, state["wMobilePeerCount"] + 1):
             peer = f"wMobilePeer{index}"
-            if not state[peer + "Visible"]:
+            if not state[peer + "Visible"] or ("wMobileVirtualActorMode" in state and state[peer + "OAMStart"] > 144):
                 continue
             mode = state[peer + "Movement"]
             name = "surf_pikachu" if mode == 5 else figures[state[peer + "Avatar"]] + modes[mode]
             source = (REPO / "gfx/sprites" / (name + ".2bpp")).read_bytes()
             require(len(source) == 384, "Remote player sprite size changed")
-            require(state[f"vMobilePeer{index}CacheHash"] == byte_hash(source),
-                    "Remote graphics cache differs from the selected vanilla sprite")
             frame = state[peer + "LoadedFrame"]
             require(frame in (0, 4, 8, 12, 16, 20), "Invalid remote source frame")
+            cached = source[frame * 16:(frame + 4) * 16] if "wMobileVirtualActorMode" in state else source
+            require(state[f"vMobilePeer{index}CacheHash"] == byte_hash(cached),
+                    "Remote graphics cache differs from the selected native sprite/pose")
             require(state[f"vMobilePeer{index}TileHash"] == byte_hash(source[frame * 16:(frame + 4) * 16]),
                     "Displayed remote VRAM tiles differ from the selected vanilla frame")
             palette = state[peer + "Palette"]
@@ -579,6 +582,9 @@ def main():
                         require(state[f"vMobilePeer{peer}NativeSlot"] == 0 and
                                 state[f"wMobilePeer{peer}NativeRole"] == 0,
                                 "Ineligible map/instance retained a native actor lease")
+                    continue
+                if "wMobileVirtualActorMode" in state:
+                    require(state[f"vMobilePeer{peer}NativeSlot"] == 0, "Virtual peer entered the native object pool")
                     continue
                 require(0 < state[f"vMobilePeer{peer}OAM0"] < 160 and state[f"wMobilePeer{peer}OAMStart"] <= 144,
                         "Projected native actor was absent from actual hardware OAM")

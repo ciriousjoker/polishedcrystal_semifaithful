@@ -1,7 +1,9 @@
 # Independent remote actor presentation
 
-Date: 2026-10-12. Feasibility analysis and preferred prototype direction only.
-Production assembly and ROM hashes are unchanged.
+Date: 2026-10-12. Architecture analysis with an experimental implementation.
+Read [VIRTUAL_RENDERER_PROGRESS.md](VIRTUAL_RENDERER_PROGRESS.md) for the current
+checkpoint. The normal launcher retains the native comparison path; its separate
+OAM bounds safety fix changes the enabled hash. The disabled hash is unchanged.
 
 ## Existing foundation
 
@@ -11,11 +13,12 @@ and epoch, coordinates, facing, avatar/movement, projected position and renderin
 state. There are also three private 384-byte avatar caches in WRAM bank 2. This is
 Game Boy WRAM reserved for the feature, not memory provided by the Mobile Adapter.
 
-The current renderer couples those independent records to ordinary object slots:
+The native comparison renderer couples those independent records to ordinary object slots:
 `MobileNativeUpload` maps a leased native slot to sprite tile addresses, and
-`MobileRenderSprites` leaves emission to the native renderer. The allocator may
+`MobileRenderSprites` leaves emission to the native renderer. That historical allocator may
 borrow reviewed NPC resources and preserve their native records and graphics.
-Removing that visual coupling is feasible without replacing the networking model.
+G3 supersedes this policy. The experimental renderer removes that coupling and
+does not compile eviction code or map-specific lease masks.
 Unused lease backups can potentially be reclaimed after the replacement passes,
 but no extra free RAM or final graphics budget is established by this analysis.
 
@@ -68,7 +71,7 @@ to private rendering as already proven; it does not establish that an optimized
 private renderer is impossible. Keep the working path for comparison until the
 prototype passes, without adding large native-engine changes.
 
-Next prototype gates:
+Remaining replacement acceptance gates:
 
 1. A full twelve-NPC Game Corner with three independent remote actors. Confirm
    all ordinary NPC records, scripts and movement remain active.

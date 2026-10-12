@@ -37,6 +37,9 @@ static unsigned char video_oam[160] = {};
 static unsigned char video_object_palettes[64] = {};
 static unsigned char video_peer_tiles[128] = {};
 static unsigned char video_native_tiles[0x4000] = {};
+static unsigned char video_virtual_owners[3] = {};
+static unsigned char video_virtual_frames[3] = {};
+static unsigned char video_virtual_cache_poses[3][64] = {};
 static std::ofstream input_events;
 static std::set<std::pair<unsigned, unsigned>> logged_inputs;
 static std::vector<retro_memory_descriptor> memory_maps;
@@ -124,7 +127,13 @@ static void load_bindings(const std::string& path) {
         if (!(row >> location >> name) || location[0] == ';') continue;
         if (!watched.count(name) && name.rfind("wMobile", 0) != 0 && name.rfind("wLoadedObjPal", 0) != 0) continue;
         auto colon = location.find(':');
-        if (colon == std::string::npos) fail("Invalid symbol location");
+        if (colon == std::string::npos) {
+            if (name.rfind("wMobileVirtual", 0) != 0) fail("Invalid symbol location");
+            const unsigned address = std::stoul(location, nullptr, 16);
+            if (address < 0xcf44 || address >= 0xdd00) fail("Virtual alias outside audited private WRAM");
+            bindings[name] = {address < 0xd000 ? 0u : 5u, address};
+            continue;
+        }
         bindings[name] = {static_cast<unsigned>(std::stoul(location.substr(0, colon), nullptr, 16)),
                           static_cast<unsigned>(std::stoul(location.substr(colon + 1), nullptr, 16))};
     }
@@ -186,7 +195,48 @@ static std::map<std::string, unsigned> capture(const unsigned char* sram, size_t
         std::string prefix = std::string("wMobilePeer") + peer;
         if (!values.count(prefix + "OAMStart")) continue;
         unsigned slot = values.at(prefix + "OAMStart");
-        if (bindings.count("wMobileNativeActorMode")) {
+        if (bindings.count("wMobileVirtualActorMode")) {
+            values[std::string("vMobilePeer") + peer + "NativeSlot"] = 0;
+            unsigned cache_hash = 2166136261u;
+            for (unsigned char byte : video_virtual_cache_poses[peer[0] - '1'])
+                cache_hash = (cache_hash ^ byte) * 16777619u;
+            values[std::string("vMobilePeer") + peer + "CacheHash"] = cache_hash;
+            unsigned window = 3;
+            for (unsigned index = 0; index < 3; ++index)
+                if (video_virtual_owners[index] == unsigned(peer[0] - '0')) window = index;
+            slot = 160;
+            unsigned palette = values.at(prefix + "Palette") & 7;
+            if (window < 3) {
+                const unsigned base = window == 2 ? 124 : 100 + window * 4;
+                const unsigned bank = window == 2 ? 1 : 0;
+                for (unsigned i = 0; i <= 144; i += 4) {
+                    unsigned mask = 0;
+                    bool complete = true;
+                    for (unsigned q = 0; q < 4; ++q) {
+                        unsigned tile = video_oam[i + q * 4 + 2];
+                        if (tile < base || tile >= base + 4 ||
+                            (video_oam[i + q * 4 + 3] & 8) != bank * 8 ||
+                            !video_oam[i + q * 4] || video_oam[i + q * 4] >= 160) {
+                            complete = false; break;
+                        }
+                        mask |= 1u << (tile - base);
+                    }
+                    if (complete && mask == 15) { slot = i; palette = video_oam[i + 3] & 7; break; }
+                }
+                unsigned hash = 2166136261u;
+                for (unsigned i = 0; i < 64; ++i)
+                    hash = (hash ^ video_native_tiles[bank * 0x2000 + base * 16 + i]) * 16777619u;
+                values[std::string("vMobilePeer") + peer + "TileHash"] = hash;
+            }
+            if (descriptor(0x10000)) {
+                unsigned hash = 2166136261u;
+                for (unsigned i = 0; i < 8; ++i) hash = (hash ^ video_object_palettes[palette * 8 + i]) * 16777619u;
+                values[std::string("vMobilePeer") + peer + "PaletteHash"] = hash;
+            }
+            values[prefix + "Palette"] = palette;
+            values[prefix + "LoadedFrame"] = video_virtual_frames[peer[0] - '1'];
+            values[prefix + "OAMStart"] = slot;
+        } else if (bindings.count("wMobileNativeActorMode")) {
             const auto slots = bindings.at("wMobileSavedFacings");
             const auto objects = bindings.at("wObjectStructs");
             unsigned actor = observe(slots.bank, slots.address + peer[0] - '1', sram, sram_size);
@@ -438,6 +488,20 @@ static bool environment(unsigned command, void* data) {
 static void video(const void* data, unsigned w, unsigned h, size_t pitch) {
     ++video_frames;
     if (const auto* oam = descriptor(0xfe00)) std::memcpy(video_oam, oam, sizeof(video_oam));
+    if (bindings.count("wMobileVirtualActorMode") && descriptor(0xc000)) {
+        const auto* ram = descriptor(0xc000);
+        const auto owners = bindings.at("wMobileVirtualWindowOwners");
+        for (unsigned index = 0; index < 3; ++index) {
+            video_virtual_owners[index] = ram[owners.address - 0xc000 + index];
+            const auto frame = bindings.at("wMobilePeer" + std::to_string(index + 1) + "LoadedFrame");
+            video_virtual_frames[index] = ram[frame.bank * 0x1000 + frame.address - 0xd000];
+            const auto cache = bindings.at("wMobileAvatarCache" + std::to_string(index + 1));
+            const unsigned pose = video_virtual_frames[index];
+            if (pose <= 20)
+                std::memcpy(video_virtual_cache_poses[index],
+                    ram + cache.bank * 0x1000 + cache.address - 0xd000 + pose * 16, 64);
+        }
+    }
     if (const auto* colors = descriptor(0x10000))
         std::memcpy(video_object_palettes, colors, sizeof(video_object_palettes));
     if (const auto* vram = descriptor(0x8000)) {

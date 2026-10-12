@@ -9,12 +9,25 @@ MACRO mobile_native_oam_bounds
 ; A=quad count, C=last available reverse OAM address. Preserve all pointers.
 ; The original byte subtraction can wrap after OAM fills. Keep every write in
 ; ShadowOAM even when native actors enter between background admission jobs.
+	and a
+	jp z, .full
+	cp OAM_COUNT + 1
+	jp nc, .full
+	push af
+	ld a, c
+	cp OAM_SIZE - OBJ_SIZE + 1
+	jr nc, .mobile_oam_invalid\@
+	pop af
 	add a
 	add a
 	sub OBJ_SIZE
 	cp c
 	jr z, .mobile_oam_fits\@
-	jr nc, .full
+	jp nc, .full
+	jr .mobile_oam_fits\@
+.mobile_oam_invalid\@
+	pop af
+	jp .full
 .mobile_oam_fits\@
 ENDM
 DEF MOBILE_BUFFER_SIZE EQU 272 ; maximum 8-bit adapter response plus framing
@@ -30,9 +43,19 @@ DEF MOBILE_SERVER_PORT EQU 17423
 DEF MOBILE_DEVICE EQU $88 ; blue adapter, 8-bit mode
 ; The generated title dependency is explicit in Makefile.
 	if DEF(FAITHFUL)
-		DEF mobile_title_version EQUS "INCBIN \"mobile_adapter/build-faithful-mobile/title-version.2bpp.lzp\""
+		if DEF(MOBILE_VIRTUAL_ACTORS)
+			DEF mobile_title_version EQUS "INCBIN \"mobile_adapter/build-faithful-mobile-virtual/title-version.2bpp.lzp\""
+			DEF mobile_virtual_assets EQUS "INCLUDE \"mobile_adapter/build-faithful-mobile-virtual/virtual-avatars.asm\""
+		else
+			DEF mobile_title_version EQUS "INCBIN \"mobile_adapter/build-faithful-mobile/title-version.2bpp.lzp\""
+		endc
 	else
-		DEF mobile_title_version EQUS "INCBIN \"mobile_adapter/build-mobile/title-version.2bpp.lzp\""
+		if DEF(MOBILE_VIRTUAL_ACTORS)
+			DEF mobile_title_version EQUS "INCBIN \"mobile_adapter/build-mobile-virtual/title-version.2bpp.lzp\""
+			DEF mobile_virtual_assets EQUS "INCLUDE \"mobile_adapter/build-mobile-virtual/virtual-avatars.asm\""
+		else
+			DEF mobile_title_version EQUS "INCBIN \"mobile_adapter/build-mobile/title-version.2bpp.lzp\""
+		endc
 	endc
 
 DEF MOBILE_WIRE_IDLE EQU 0

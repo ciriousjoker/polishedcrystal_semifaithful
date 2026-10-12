@@ -1126,7 +1126,11 @@ ASSERT MobileRequestVectorEnd - MobileRequestVector == 12
 MobileReplyHeader:
 	db $50, $43, 1, 2
 INCLUDE "mobile_adapter/rom/session.asm"
+if DEF(MOBILE_VIRTUAL_ACTORS)
+INCLUDE "mobile_adapter/rom/virtual_actors.asm"
+else
 INCLUDE "mobile_adapter/rom/native_actors.asm"
+endc
 INCLUDE "mobile_adapter/rom/menu.asm"
 MobileCodeEnd::
 ASSERT MobileCodeEnd - MobileCodeStart <= 8192
@@ -1134,3 +1138,8 @@ INCLUDE "mobile_adapter/rom/native_instance.asm"
 INCLUDE "mobile_adapter/rom/native_tile_backup.asm"
 INCLUDE "mobile_adapter/rom/native_save.asm"
 INCLUDE "mobile_adapter/rom/native_palettes.asm"
+
+if DEF(MOBILE_VIRTUAL_ACTORS)
+INCLUDE "mobile_adapter/rom/virtual_renderer.asm"
+mobile_virtual_assets
+endc

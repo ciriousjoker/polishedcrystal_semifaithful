@@ -73,6 +73,9 @@ wMobileBudgetOptional:: db
 wMobileBudgetCursor:: db
 wMobileIRQTrampoline:: ds MOBILE_IRQ_TRAMPOLINE_SIZE
 wMobilePumpCount:: db
+if DEF(MOBILE_VIRTUAL_ACTORS)
+wMobileVirtualActorMode::
+endc
 wMobileNativeActorMode::
 wMobileFacingsSuppressed:: db
 wMobileColdFrame:: db
@@ -85,7 +88,12 @@ ASSERT wMobileResidentEnd - wMobileResidentStart <= 128
 ; Native palette scans need a normal object view without swapping live records.
 ; This unbanked view stays outside the original game's serialized WRAM span.
 SECTION "Mobile Native Object Views", WRAM0[$cf44]
-wMobileNativeOriginals:: ds MOBILE_PEERS * OBJECT_LENGTH
+wMobileNativeOriginals::
+if DEF(MOBILE_VIRTUAL_ACTORS)
+	ds NUM_OBJECT_STRUCTS * 8
+else
+	ds MOBILE_PEERS * OBJECT_LENGTH
+endc
 wMobilePrivatePalRequest:: db
 wMobilePrivatePalSlot:: db
 wMobilePrivatePalUsed:: db
@@ -213,3 +221,84 @@ ASSERT LOW(wMobileActorTiles1) & $f == 0
 ASSERT wMobileActorBackupEnd <= $dd00
 ASSERT wMobileActorTilesEnd <= $dd00
 ASSERT wMobilePrivatePalEnd <= $dd00
+
+if DEF(MOBILE_VIRTUAL_ACTORS)
+SECTION "Mobile Virtual Scratch", WRAMX[$dab0], BANK[MOBILE_BACKUP_BANK]
+wMobileVirtualScratch:: ds 224
+wMobileVirtualScratchEnd::
+ASSERT wMobilePrivatePalEnd <= wMobileVirtualScratch
+ASSERT wMobileVirtualScratchEnd <= $dd00
+endc
+
+if DEF(MOBILE_VIRTUAL_ACTORS)
+; 13 immutable foreground descriptors, each x/y/tile/flags/source/count/relative.
+DEF wMobileVirtualDescriptors EQU wMobileNativeOriginals
+ASSERT NUM_OBJECT_STRUCTS * 8 <= wMobileNativeOriginalsEnd - wMobileNativeOriginals
+DEF wMobileVirtualWindowOwners EQU wMobileNativePaletteOwners
+DEF wMobileVirtualIndex EQU wMobileNativePaletteOwners + 3
+DEF wMobileVirtualStage EQU wMobileNativePaletteOwners + 4
+DEF wMobileVirtualLength EQU wMobileNativePaletteOwners + 5
+DEF wMobileVirtualPhase EQU wMobileNativePaletteOwners + 6
+DEF wMobileVirtualCursor EQU wMobileNativePaletteOwners + 7
+DEF wMobileVirtualPaletteUsed EQU wMobileNativePaletteOwners + 8
+DEF wMobileVirtualThirdBlocked EQU wMobileNativePaletteOwners + 9
+DEF wMobileVirtualWindow EQU wMobileNativePaletteOwners + 10
+DEF wMobileVirtualCacheHit EQU wMobileNativePaletteOwners + 11
+DEF wMobileVirtualFrame EQU wMobileNativePaletteOwners + 12
+DEF wMobileVirtualNativeRaw EQU wMobileActorTiles1
+EXPORT wMobileVirtualNativeRaw
+DEF wMobileVirtualOutput EQU wMobileActorTiles1 + NUM_OBJECT_STRUCTS * 64
+DEF wMobileVirtualLines EQU wMobileVirtualOutput + OAM_SIZE
+DEF wMobileVirtualGroup EQU wMobileVirtualScratch
+DEF wMobileVirtualBindings EQU wMobileVirtualGroup + 64
+DEF wMobileVirtualTemplate EQU wMobileVirtualBindings + 8
+DEF wMobileVirtualGroupLength EQU wMobileVirtualTemplate + 80
+DEF wMobileVirtualRejected EQU wMobileVirtualGroupLength + 1
+DEF wMobileVirtualGroupPalette EQU wMobileVirtualRejected + 1
+DEF wMobileVirtualMergedPalette EQU wMobileVirtualGroupPalette + 1
+EXPORT wMobileVirtualMergedPalette
+ASSERT wMobileVirtualNativeRaw + NUM_OBJECT_STRUCTS * 64 == wMobileVirtualOutput
+ASSERT wMobileVirtualOutput + OAM_SIZE == wMobileVirtualLines
+ASSERT wMobileVirtualLines + SCREEN_HEIGHT_PX <= wMobileActorTilesEnd
+ASSERT wMobileVirtualMergedPalette + 8 palettes <= wMobileVirtualScratchEnd
+endc
+
+if DEF(MOBILE_VIRTUAL_ACTORS)
+EXPORT wMobileVirtualDescriptors
+EXPORT wMobileVirtualWindowOwners
+EXPORT wMobileVirtualIndex
+EXPORT wMobileVirtualStage
+EXPORT wMobileVirtualLength
+EXPORT wMobileVirtualPhase
+EXPORT wMobileVirtualCursor
+EXPORT wMobileVirtualPaletteUsed
+EXPORT wMobileVirtualThirdBlocked
+EXPORT wMobileVirtualWindow
+EXPORT wMobileVirtualCacheHit
+EXPORT wMobileVirtualFrame
+EXPORT wMobileVirtualOutput
+EXPORT wMobileVirtualLines
+EXPORT wMobileVirtualGroup
+EXPORT wMobileVirtualBindings
+EXPORT wMobileVirtualTemplate
+EXPORT wMobileVirtualGroupLength
+EXPORT wMobileVirtualRejected
+EXPORT wMobileVirtualGroupPalette
+endc
+
+if DEF(MOBILE_VIRTUAL_ACTORS)
+SECTION "Mobile Virtual Admission", WRAM0[$cfc0]
+wMobileVirtualFastAdmission:: db
+wMobileVirtualAttempts:: db
+wMobileVirtualPreviousOAM:: db
+wMobileVirtualGroupPointer:: ds 2
+wMobileVirtualNativeRotation:: db
+wMobileVirtualPublished:: db
+wMobileVirtualHeaderOAM:: db
+wMobileVirtualUploadFrame:: db
+wMobileVirtualMirror:: db
+wMobileVirtualRectangleCount:: db
+wMobileVirtualRectangleTop:: db
+wMobileVirtualRemoteLimit:: db
+ASSERT @ <= $d000
+endc

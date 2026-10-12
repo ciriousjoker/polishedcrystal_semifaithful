@@ -48,6 +48,14 @@ $(error Mobile Adapter currently supports standard and faithful GBC builds)
 endif
 MODIFIERS := $(MODIFIERS)-mobile
 RGBASMFLAGS += -DMOBILE_ADAPTER
+# Keep an unaccepted renderer candidate out of the human development launcher.
+MOBILE_RENDERER ?= native
+ifeq ($(MOBILE_RENDERER),virtual)
+MODIFIERS := $(MODIFIERS)-virtual
+RGBASMFLAGS += -DMOBILE_VIRTUAL_ACTORS
+else ifneq ($(MOBILE_RENDERER),native)
+$(error MOBILE_RENDERER must be native or virtual)
+endif
 endif
 ifeq ($(filter monochrome,$(MAKECMDGOALS)),monochrome)
 MODIFIERS := $(MODIFIERS)-monochrome
@@ -83,6 +91,12 @@ endif
 ifeq ($(filter mobile,$(MAKECMDGOALS)),mobile)
 MOBILE_OBJ_DIR := mobile_adapter/build$(MODIFIERS)
 MOBILE_MKDIR = @mkdir -p $(dir $@)
+ifeq ($(MOBILE_RENDERER),virtual)
+MOBILE_AVATAR_RAW := $(shell python3 mobile_adapter/tools/prepare_virtual_avatars.py --dependencies)
+$(MOBILE_OBJ_DIR)/virtual-avatars.asm: mobile_adapter/tools/prepare_virtual_avatars.py data/player/state_sprites.asm constants/sprite_constants.asm data/sprites/sprites.asm gfx/sprites.asm $(MOBILE_AVATAR_RAW)
+	python3 mobile_adapter/tools/prepare_virtual_avatars.py --output "$@"
+$(MOBILE_OBJ_DIR)/main.o: $(MOBILE_OBJ_DIR)/virtual-avatars.asm
+endif
 endif
 
 rom_obj := \
@@ -129,12 +143,15 @@ mobile-layout-check: $$(ROM_NAME).$$(EXTENSION)
 mobile-lease-policy:
 	python3 mobile_adapter/tools/audit_native_leases.py --check-sources
 	python3 mobile_adapter/tools/audit_native_capacity.py --check-sources
+ifneq ($(MOBILE_RENDERER),virtual)
 $(MOBILE_OBJ_DIR)/main.o: | mobile-lease-policy
+endif
 endif
 MOBILE_CARGO ?= cargo
 test-mobile-host:
 	$(MOBILE_CARGO) test --locked --manifest-path mobile_adapter/server/Cargo.toml
 	python3 mobile_adapter/tools/test_asm_contracts.py --rgbds "$(or $(RGBDS),./)"
+	python3 mobile_adapter/tools/test_asm_contracts.py --rgbds "$(or $(RGBDS),./)" --renderer virtual
 	python3 -m unittest discover -s mobile_adapter/tools -p 'test_dev_session.py'
 	python3 -m unittest discover -s mobile_adapter/tools -p 'test_save_scenarios.py'
 	python3 -m unittest discover -s mobile_adapter/tools -p 'test_native_leases.py'
