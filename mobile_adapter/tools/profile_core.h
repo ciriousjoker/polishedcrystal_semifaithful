@@ -83,7 +83,7 @@ struct MobileRenderSpan {
     uint64_t crossings = 0;
     uint64_t maximum_cycles = 0, count = 0, total_cycles = 0;
 };
-static MobileRenderSpan mobile_render_spans[20];
+static MobileRenderSpan mobile_render_spans[23];
 static unsigned mobile_native_shadow_address, mobile_native_descriptor_address, mobile_native_object_address;
 static byte mobile_native_shadow[160], mobile_native_descriptors[13 * 8], mobile_native_identities[13 * 2];
 extern "C" void mobile_profile_native_oam(unsigned shadow, unsigned descriptors, unsigned objects) {
@@ -97,7 +97,7 @@ extern "C" unsigned mobile_profile_native_oam_byte(unsigned index) {
     if (index < 290) return mobile_native_identities[index - 264];
     return 0;
 }
-static unsigned mobile_overworld_points[22][2] = {};
+static unsigned mobile_overworld_points[25][2] = {};
 static bool mobile_native_graphics_frame = false, mobile_native_graphics_last_frame = false;
 static unsigned mobile_native_wait_frame_ly = 255, mobile_native_wait_last_frame_ly = 255;
 extern "C" uint64_t mobile_profile_native_wait_ly() {
@@ -115,6 +115,13 @@ extern "C" uint64_t mobile_profile_pose_metric(unsigned index) {
 extern "C" uint64_t mobile_profile_composition_metric(unsigned index) {
     if (index >= 24) return 0;
     const auto& span = mobile_render_spans[14 + index / 6];
+    const uint64_t values[] = {span.count, span.maximum_cycles, span.total_cycles,
+        span.minimum_ly, span.maximum_ly, span.crossings};
+    return values[index % 6];
+}
+extern "C" uint64_t mobile_profile_transport_metric(unsigned index) {
+    if (index >= 18) return 0;
+    const auto& span = mobile_render_spans[20 + index / 6];
     const uint64_t values[] = {span.count, span.maximum_cycles, span.total_cycles,
         span.minimum_ly, span.maximum_ly, span.crossings};
     return values[index % 6];
@@ -162,7 +169,7 @@ extern "C" uint64_t mobile_profile_idle_metric(unsigned index) {
 static uint64_t mobile_prepare_waits = 0, mobile_world_updates = 0, mobile_world_max_gap = 0;
 
 extern "C" void mobile_profile_overworld(unsigned index, unsigned bank, unsigned pc) {
-    if (index < 22) {
+    if (index < 25) {
         mobile_overworld_points[index][0] = bank;
         mobile_overworld_points[index][1] = pc;
     }
@@ -301,7 +308,7 @@ static void mobile_profile_before_instruction(gb* game, const cpu_regs& regs, in
             mobile_save_projected++;
         }
     }
-    for (unsigned index = 0; index < 22; ++index) {
+    for (unsigned index = 0; index < 25; ++index) {
         auto* point = mobile_overworld_points[index];
         bool bank_matches = point[0] == 0 ? regs.PC < 0x4000 :
             game->get_mbc()->get_rom() == game->get_rom()->get_rom() + (point[0] - 1) * 0x4000;

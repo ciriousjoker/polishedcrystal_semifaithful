@@ -774,7 +774,8 @@ int main(int argc, char** argv) {
             const char* points[] = {"MobilePrepareSprites", "MobileRenderSprites", "DelayFrame", "HandleNPCStep", "MobileBudgetNPCScanlines",
                 "MobileCheckNPCScanlines", "MobileCanSuppress", "MobileBudgetWeather",
                 "MobileCountObjectOAM", "MobilePreparePeerGraphics", "MobileProjectPeer", "MobileCapture", "_UpdateSprites", "MobileNativeUpload", "MobileNativeIdle", "MobileNativePrepareSpritesWork",
-                "MobileVirtualComposeStep", "MobileVirtualNativeGroup", "MobileVirtualPeerGroup", "MobileVirtualMergePalettes", "MobileVirtualCommitPose", "GetUsedSprite"};
+                "MobileVirtualComposeStep", "MobileVirtualNativeGroup", "MobileVirtualPeerGroup", "MobileVirtualMergePalettes", "MobileVirtualCommitPose", "GetUsedSprite",
+                "MobilePrepareCommand", "MobileAppendPending", "MobileValidateResponseSlice"};
             for (unsigned i = 0; i < sizeof(points) / sizeof(points[0]); ++i) {
                 if (native_addresses.count(points[i])) {
                     auto point = native_addresses.at(points[i]);
@@ -881,13 +882,17 @@ int main(int argc, char** argv) {
     std::map<std::string, unsigned> checkpoint_previous;
     const bool barrier_enabled = arguments.count("--finish-barrier");
     bool announced_ready = false;
+    std::string deferred_failure;
     auto settle_started = std::chrono::steady_clock::time_point{};
     for (input_frame = 0; input_frame < frame_limit ||
          (barrier_enabled && std::ifstream(arguments.at("--finish-barrier")).good()); ++input_frame) {
         if (input_frame >= frame_limit) {
             if (input_frame == frame_limit) settle_started = std::chrono::steady_clock::now();
-            if (std::chrono::steady_clock::now() - settle_started > std::chrono::seconds(20))
-                fail("Lobby observation barrier did not settle");
+            if (std::chrono::steady_clock::now() - settle_started > std::chrono::seconds(20)) {
+                // Preserve traces and read-only metrics for a failed handshake.
+                deferred_failure = "Lobby observation barrier did not settle";
+                break;
+            }
             auto live = capture(sram, sram_size);
             if (!announced_ready && live.at("wMobileOnline") == (arguments.count("--expected-online") ? std::stoul(arguments.at("--expected-online")) : 1) && live.at("wMobilePeerCount") == (arguments.count("--expected-peers") ? std::stoul(arguments.at("--expected-peers")) : 2)) {
                 std::ofstream(arguments.at("--state-out") + ".ready") << "ready\n";
@@ -1020,7 +1025,8 @@ int main(int argc, char** argv) {
         missing_input = true;
     }
 
-    if (walk_index != walk_waypoints.size()) fail("Walk route did not complete");
+    if (walk_index != walk_waypoints.size() && deferred_failure.empty())
+        deferred_failure = "Walk route did not complete";
 
     std::set<unsigned> colors;
     for (size_t i = 0; i + 2 < image.size(); i += 3)
@@ -1094,6 +1100,13 @@ int main(int argc, char** argv) {
             for (unsigned i = 0; i < 6; ++i)
                 profile << ",\"pose_commit_" << names[i] << "\":" << pose(i);
         }
+        if (auto transport = reinterpret_cast<Metric>(dlsym(core, "mobile_profile_transport_metric"))) {
+            const char* stages[] = {"command_prepare", "application_parse", "response_checksum"};
+            const char* fields[] = {"count", "max_cycles", "total_cycles", "min_entry_ly", "max_entry_ly", "vblank_crossings"};
+            for (unsigned stage = 0; stage < 3; ++stage)
+                for (unsigned field = 0; field < 6; ++field)
+                    profile << ",\"" << stages[stage] << '_' << fields[field] << "\":" << transport(stage * 6 + field);
+        }
         if (auto entry = reinterpret_cast<Metric>(dlsym(core, "mobile_profile_composition_entry"))) {
             const char* stages[] = {"idle", "compose", "native_group", "peer_group", "merge_palette"};
             for (unsigned stage = 0; stage < 5; ++stage)
@@ -1166,7 +1179,7 @@ int main(int argc, char** argv) {
         if (!state) fail("Cannot write observer result");
     }
 
-    if (barrier_enabled) {
+    if (barrier_enabled && deferred_failure.empty() && !missing_input) {
         auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
         while (std::ifstream(arguments.at("--finish-barrier") + ".exit").good()) {
             if (std::chrono::steady_clock::now() >= deadline) fail("Final capture barrier timed out");
@@ -1175,7 +1188,8 @@ int main(int argc, char** argv) {
     }
     symbol<void(*)()>(core, "retro_unload_game")();
     symbol<void(*)()>(core, "retro_deinit")();
-    if (missing_input) {
+    if (missing_input || !deferred_failure.empty()) {
+        if (!deferred_failure.empty()) std::cerr << deferred_failure << '\n';
         dlclose(core);
         return 1;
     }

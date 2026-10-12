@@ -1,5 +1,112 @@
 # Mobile Adapter multiplayer plan
 
+## 2026-10-12: dense transport progresses; presentation still under test
+
+The direct canonical color lookup builds and host assembly contracts pass,
+including all256hardware palette-ownership masks. Intermediate footprint:
+19,354upper feature bytes,184lower integration bytes,13,777lower bytes free.
+The earlier duplicate-label build failed and was corrected before a valid replay.
+
+The first-poll full-pool replay keeps all four actual clients connected and
+advancing protocol sequence numbers, all with zero client error and800/800native
+update frames. It still fails acceptance: most remote poses remain at Stage1,
+and no coherent guest publication completes. No milestone completion is claimed.
+The direct color path reduces observed construction/pose cost; the first-poll
+replay has no background VBlank crossing on any client.
+
+Current unaccepted experiment gives a composing scene one serial IRQ per slice,
+reuses already valid clean private colors for unchanged pose jobs, rotates
+borrowed palette choices in full admission, and reserves publication time by
+ending optional native draw-group collection at LY131. One private guest has a
+separate publication deadline at LY136, requiring actual worst-case validation.
+Ordinary object simulation, palette metadata/buffers and save contents remain
+unchanged. No native object is removed or marked replaceable. Emitted quads,
+actual native figure fairness, the three-frame ready-peer visibility gate and
+zero awaited-VBlank crossings remain mandatory.
+
+Active experiment: `/Volumes/Storage/Cache/mobileadapter/independent-partial-dense-pool-20261012`,
+log `/private/tmp/mobile-partial-dense-pool.log`, session31784. Source/model builds
+must finish restoring native fixtures before any next production mutation/build.
+Previous diagnostic roots are failed intermediate evidence. Final21-case,
+hash/Faithful/host/layout/map/launcher/evidence gates remain as listed below.
+
+## 2026-10-12: dense-pool diagnosis and unaccepted changes
+
+M2 remains open. The cached-color and ready-peer full-pool replays failed.
+The diagnostic runner now preserves compressed traces and read-only profiles on
+an unsettled final barrier. It still exits unsuccessfully, so failure artifacts
+cannot be mistaken for acceptance.
+
+Read-only transport spans show command preparation up to 6,888 cycles and
+application parsing up to 6,120 cycles, without VBlank crossings. The renderer
+started with no usable remote pose and consumed every late idle window. A cold
+ready-peer gate now leaves that window to networking and asset preparation.
+That lets actual peers reach Stage7, but dense publication still starves.
+
+The ready-peer replay additionally exposed a real timing violation: the old
+private color allocator reached 36,040 inclusive cycles and crossed an awaited
+VBlank once on client1. Native steady cadence remained 800/800, but that crossing
+is an acceptance failure and must be removed, not waived. Current unaccepted
+source replaces the general allocator with a direct read-only native canonical
+palette lookup and an eight-byte private copy. Time/night/darkness/overcast,
+ordinary-buffer independence and emitted instruction bounds must be verified.
+
+The renderer now considers all eight hardware color slots, reserves active or
+cooling-down weather slot6, and uses the native allocator's conservative active
+color mask for the common rectangle scene instead of rescanning attributes.
+The latest build caught a duplicate local label in the new constructor before
+any valid replay; correct it, rebuild, then use a fresh diagnostic target.
+
+Diagnostic artifacts: `independent-diagnostic-protocol-pool-20261012` and
+`independent-ready-pool-20261012` under `/Volumes/Storage/Cache/mobileadapter`.
+New read-only profile core SHA256:
+`1bf941b6f05134a633780eea2d05b1954a800b99327f2b1b0ecc46753457b1b4`.
+Release core remains unchanged. Existing weather/native-control passes are
+intermediate evidence. Final full-pool, all21cases, disabled Standard/Faithful
+hashes, Faithful runtime, host/layout/map/launcher gates and final evidence/commit
+are still required. No phone or public Cloudflare deployment is authorized.
+
+## 2026-10-12: bounded late-window transport and retained poses
+
+The first split-job experiment still failed before any connection. The second
+experiment enabled local capture, proving the fixture/clock/core were working,
+but exposed the same blanket LY116 limit on command preparation and response
+parsing. Their small bounded phases never executed in this LY118/119 scene.
+Current targeted source permits these phases before LY126, admits short capture/
+projection before LY126 and larger palette jobs before LY120, and schedules a
+late frame's one optional job before its first poll. Existing serial/renderer
+publication deadlines and native-cadence gates remain unchanged.
+
+Color preparation uses the unused private peer role byte at offset35 as a pending
+job flag. It does not change a previously committed avatar's ready stage. Sprite
+identity invalidation clears the flag. Late color construction and banked pose
+copy are separate jobs, with no additional allocation or native object mutation.
+Active full-pool target: `independent-bounded-pumps-pool-20261012`, log
+`/private/tmp/mobile-bounded-pumps-pool.log`, session65614. Earlier full-pool targets
+are failed diagnostics. Current upper feature usage is19329bytes, lower184bytes.
+Actual cold/steady instruction crossing and hardware visibility must pass before
+acceptance. All final-suite/build/map/launcher/evidence gates remain pending.
+
+## 2026-10-12: dense native pool exposes job starvation
+
+The first full-pool fixture is valid: all thirteen native slots are occupied, and
+native world cadence remains 800/800. However native idle entry is consistently
+LY118/119. The previous blanket LY116 optional-job guard prevents map capture,
+projection and graphics forever; all clients remain at local-valid zero and no
+serial traffic starts. This is a production scheduling defect, not a failed core
+or a reason to remove native NPCs.
+
+A targeted experiment admits bounded jobs before LY120 and splits palette
+construction from the pose copy if the remaining window is small. Native deadline
+and hardware-visibility gates are unchanged. Active target:
+`/Volumes/Storage/Cache/mobileadapter/independent-split-jobs-pool-20261012`, log
+`/private/tmp/mobile-split-jobs-pool.log`, session 40174. The first failed fixture
+and reusable ordinary batteries are in `independent-final-full-pool-20261012`.
+The experiment must pass actual instruction-crossing/cadence/presentation gates
+before acceptance. Preserve existing committed poses while deferring optional
+updates; a pending job must not turn a formerly ready avatar into a hidden one.
+Final 21-case replay and all previous remaining gates still apply.
+
 ## 2026-10-12: bounded weather presentation, final acceptance continues
 
 The first genuine snow replay exposed an independent-renderer deadline failure:
@@ -14,7 +121,7 @@ deadline. This does not relax native timing or the three-frame ready-peer gate.
 Particles may be omitted when the remaining presentation capacity or time is
 exhausted; their ordinary simulation, palette buffers and game state are unchanged.
 No ordinary NPC is removed, leased or marked replaceable. The actual hardware
-weather replay passes all four speeds, maximum ready-peer absence two frames
+weather replay passes all four speeds, maximum ready-peer absence one frame
 on every client, and the mandatory unchanged-native cadence control.
 
 Passed target: `/Volumes/Storage/Cache/mobileadapter/independent-reserved-weather-snow-20261012`.
