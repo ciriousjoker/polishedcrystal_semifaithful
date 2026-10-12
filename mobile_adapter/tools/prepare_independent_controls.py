@@ -43,6 +43,7 @@ def compare(reference, controls):
         require(report['reference_rom_sha256'] == digest(reference / 'test.gbc') and
                 report['control_rom_sha256'] == BASELINE_SHA256 and
                 report['battery_sha256'] == evidence['battery_sha256'][i] and
+                report.get('rtc_sha256') == (evidence['rtc_sha256'][i] if evidence.get('rtc_sha256') else None) and
                 report['speed'] == evidence['emulator_speeds'][i] and
                 report['movement_events'] == movements and
                 report['native_actor_inventory'] == native_inventory and
@@ -128,6 +129,10 @@ def main():
             '--ram-out', str(directory / 'physical-wram.bin'), '--profile-out', str(directory / 'profile.json'),
             '--trace-out', str(directory / 'trace.jsonl.gz'),
             '--profile-window-start', '3300' if args.workload in ('cadence', 'stationary') else '3600']
+        if evidence.get('rtc_sha256'):
+            rtc = args.battery[i].with_suffix('.rtc')
+            require(digest(rtc) == evidence['rtc_sha256'][i], 'Native control clock differs from reference')
+            command += ['--rtc-in', str(rtc)]
         with (directory / 'process.log').open('w') as log:
             subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=120)
         state = json.loads((directory / 'state.json').read_text())['symbols']
@@ -138,7 +143,11 @@ def main():
         require(not state['hCrashCode'] and state['wPlayerGender'] == reference['wPlayerGender'] and
                 [state['wXCoord'], state['wYCoord']] == [reference['wXCoord'], reference['wYCoord']],
                 f'{figure}: ordinary movement replay differs')
+        if evidence.get('rtc_sha256'):
+            require(state['wTimeOfDay'] == reference['wTimeOfDay'],
+                    'Native control did not exercise the same ordinary time-of-day')
         reports.append({'figure': figure, 'speed': evidence['emulator_speeds'][i],
+            'rtc_sha256': digest(args.battery[i].with_suffix('.rtc')) if evidence.get('rtc_sha256') else None,
             'native_actor_inventory': native_inventory,
             'movement_events': [{'frame': e['frame'], 'button': e['button']} for e in moves],
             'local_position': [state['wXCoord'], state['wYCoord']],

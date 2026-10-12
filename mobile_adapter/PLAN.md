@@ -33,7 +33,23 @@ not a claim that every ordinary figure is continuously visible under pressure.
 Observer core SHA-256 is `5cab152f5bdf1a0c0c4dd3988c7c3a642e1889a98915933aaa4a07a7071b5cee`.
 Active remaining-special-case suite: `independent-final-special-20261012`,
 log `/private/tmp/mobile-independent-final-special.log`, exec session 1440.
-Automatic interrupted-socket resume has passed; night is running.
+Automatic interrupted-socket resume has passed. The first night attempt rejected
+its own fixture condition: the battery did not persist the core's system-clock
+offset. Ordinary frontend RTC persistence is now exposed separately in observed
+cores, produced by native RTC writes and restored before the first emulated frame.
+No CPU/game/SRAM bytes are injected. The pinned normal RTC getter indexes the
+wrong renderer and exposes fixed_time instead of the system offset; release core
+is unchanged. Night starts at 21:00, so night/snow fixtures now select 22:00.
+Active corrected suite: `independent-final-special-rtc-20261012`, log
+`/private/tmp/mobile-independent-final-special-rtc.log`, session 9645.
+It runs night/snow/full-pool. Night now passes with actual 22:00/NITE on all
+four clients, the same RTC sidecars in native replays and no extra native world
+cadence loss. Snow fixtures have been produced and the real weather probe is
+running. Current observed/profile core hashes:
+`e0045bce3f0dd78c4042b22636ceccf5036162282f6e22bfbdd142a1bd959f5c` /
+`9b71bd69213845e8eb8f2ec4e3cf9e659c67e393de69ebabe79fa17f63bff2f6`.
+Both mapper/native test builds pass all six CTests. Release core remains unchanged. Previous night artifacts are failed fixtures, not
+acceptance evidence. All successful final cases must use the updated observer.
 Production sources must stay immutable while replay/fixture controls run.
 Remaining gates are the final 21-case suite including resume/night/snow/full-pool,
 forced disabled hashes and Faithful runtime, final host/layout/map checks,

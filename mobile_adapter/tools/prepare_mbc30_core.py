@@ -63,6 +63,7 @@ def main():
         if not source.exists():
             subprocess.run(['python3', str(Path(__file__).with_name('prepare_profile_core.py')),
                             '--source', str(CORE_SOURCE), '--output', str(source)], check=True)
+        prepare(source)
         shutil.copyfile(Path(__file__).with_name('profile_core.h'), source / 'gb_core/profile_core.h')
         build(source, PROFILE_CORE.parent)
     print('MBC30 release core: ' + str(RELEASE_CORE))

@@ -19,8 +19,8 @@ FIGURES = ('chris', 'kris', 'crys', 'beta')
 SCENES = {
     'route37': ('Route37', 8, 12, 10),
     'exeggutor': ('ShamoutiIsland', 16, 10, 10),
-    'night': ('Route37', 8, 12, 20),
-    'snow': ('SnowtopMountainOutside', 17, 25, 20),
+    'night': ('Route37', 8, 12, 22),
+    'snow': ('SnowtopMountainOutside', 17, 25, 22),
     'pool-full': ('PlayersHouse2F', 3, 3, 10),
 }
 
@@ -137,6 +137,10 @@ def main():
                 metadata.get('hour', 10) == hour and metadata['avatar'] == figure and
                 metadata['source'] == 'ordinary New Game, character-choice menu and in-game Save menu',
                 f'{figure}: fixture does not describe the requested ordinary scene')
+        if args.scene in ('night', 'snow'):
+            require(metadata.get('rtc_source') == 'external cartridge clock offset produced by ordinary ROM RTC writes' and
+                    digest(battery.with_suffix('.rtc')) == metadata.get('rtc_sha256'),
+                    'Night/weather fixture is missing its ordinary external clock provenance')
         validate_battery(battery, symbols)
         require(digest(battery) == metadata['sha256'], f'{figure}: ordinary battery changed')
         fixtures.append(battery)
@@ -148,6 +152,8 @@ def main():
         '--battery', str(fixtures[0]), '--second-battery', str(fixtures[1]),
         '--different-battery', str(fixtures[2]), '--fourth-battery', str(fixtures[3]),
         '--port', str(args.port), '--output', str(args.output / 'probe')]
+    if args.scene in ('night', 'snow'):
+        command += ['--restore-fixture-rtc']
     if args.scene != 'pool-full':
         command += ['--scenario', 'scanline']
     subprocess.run(command, cwd=REPO, check=True)

@@ -213,6 +213,8 @@ def run_client(args, index):
                "--finish-barrier", str(args.output / "finish-barrier"),
                "--expected-online", str(int(not (args.scenario == "disconnect" and index == 0))),
                "--expected-peers", str(0 if args.scenario == "disconnect" and index == 0 else args.players - 2 if args.scenario == "disconnect" else args.players - 1)]
+    if args.restore_fixture_rtc:
+        command += ["--rtc-in", str(args.batteries[index].with_suffix('.rtc'))]
     if args.profile:
         command += ["--profile-out", str(directory / "profile.json"),
                     "--profile-window-start", str(args.profile_window_start)]
@@ -362,6 +364,7 @@ def main():
     parser.add_argument("--movement-mode", type=int, choices=range(6), help="Assert ordinary scene's movement state")
     parser.add_argument("--exercise-pressure", action="store_true", help="Require optional rendering pressure in the chosen dense scene")
     parser.add_argument("--deferred", type=int, choices=(0, 1, 2, 3), default=0)
+    parser.add_argument("--restore-fixture-rtc", action="store_true", help="Restore each battery's ordinary external cartridge clock sidecar")
     args = parser.parse_args()
     require(3300 <= args.join_frame <= 10000, "Join frame exceeds the bounded fixture range")
     require(args.scenario != "instance" or args.players >= 3, "Instance isolation needs at least three players")
@@ -407,6 +410,7 @@ def main():
     (args.output / "evidence.json").write_text(json.dumps({"scenario": args.scenario,
         "test_rom_sha256": digest(args.rom), "symbols_sha256": digest(args.symbols),
         "core_sha256": digest(args.core), "battery_sha256": battery_hashes,
+        "rtc_sha256": [digest(path.with_suffix('.rtc')) for path in args.batteries] if args.restore_fixture_rtc else None,
         "households": args.households,
         "emulator_speeds": args.speed_values or [args.fast_speed if i == 0 and args.scenario == "speed" else 1 for i in range(args.players)],
         "declared_client_server_rtt_ms": (args.test_one_way_delay_ms + args.declared_upstream_one_way_delay_ms) * 2,

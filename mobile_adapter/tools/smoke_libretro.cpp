@@ -108,7 +108,7 @@ static unsigned observe(unsigned bank, unsigned address, const unsigned char* sr
 static void load_bindings(const std::string& path) {
     const std::set<std::string> watched = {
         "hCGB", "hCrashCode", "hVBlankCounter", "hDelayFrameLY", "hInMenu", "wJumptableIndex",
-        "hNbTilesToCopy", "hRequested1bpp", "hRequested2bpp",
+        "hNbTilesToCopy", "hRequested1bpp", "hRequested2bpp", "hHours", "hMinutes", "wTimeOfDay",
         "wInputFlags", "wGameLogicPaused",
         "wSaveFileExists", "wMapGroup", "wMapNumber", "wXCoord", "wYCoord",
         "wPlayerMapX", "wPlayerMapY", "wPlayerSpriteX", "wPlayerSpriteY",
@@ -638,7 +638,7 @@ int main(int argc, char** argv) {
     for (int i = 5; i < argc; i += 2) {
         std::string key = argv[i];
         if (key != "--frames" && key != "--input" && key != "--symbols" &&
-            key != "--ram-out" && key != "--state-out" && key != "--save-in" && key != "--save-out" &&
+            key != "--rtc-in" && key != "--rtc-out" && key != "--ram-out" && key != "--state-out" && key != "--save-in" && key != "--save-out" &&
             key != "--adapter" && key != "--pace-from" && key != "--trace-out" &&
             key != "--checkpoint-dir" && key != "--profile-out" && key != "--profile-window-start" &&
             key != "--snapshot-out" && key != "--test-snapshot-out" && key != "--snapshot-in" && key != "--input-events" &&
@@ -833,6 +833,16 @@ int main(int argc, char** argv) {
         std::vector<char> bytes((std::istreambuf_iterator<char>(save)), {});
         if (!sram || bytes.size() != sram_size) fail("Expected raw SRAM-sized save without an RTC trailer");
         std::memcpy(sram, bytes.data(), sram_size);
+    }
+    if (arguments.count("--rtc-in")) {
+        // Persist only the external cartridge clock, as a frontend battery
+        // sidecar. No CPU, game RAM, SRAM or instruction state is restored.
+        uint32_t state[3] = {};
+        std::ifstream file(arguments.at("--rtc-in"), std::ios::binary);
+        file.read(reinterpret_cast<char*>(state), sizeof(state));
+        if (!file || file.peek() != std::char_traits<char>::eof()) fail("Invalid cartridge RTC sidecar");
+        if (!symbol<bool(*)(uint32_t*, bool)>(core, "mobile_frontend_rtc")(state, true))
+            fail("RTC sidecar does not match the frontend clock mode");
     }
     if (arguments.count("--snapshot-in")) {
         std::ifstream file(arguments.at("--snapshot-in"), std::ios::binary);
@@ -1100,6 +1110,14 @@ int main(int argc, char** argv) {
         std::ofstream save(arguments.at("--save-out"), std::ios::binary);
         save.write(reinterpret_cast<const char*>(sram), sram_size);
         if (!save) fail("Cannot write battery save");
+    }
+    if (arguments.count("--rtc-out")) {
+        uint32_t state[3] = {};
+        if (!symbol<bool(*)(uint32_t*, bool)>(core, "mobile_frontend_rtc")(state, false))
+            fail("Cannot persist cartridge RTC");
+        std::ofstream file(arguments.at("--rtc-out"), std::ios::binary);
+        file.write(reinterpret_cast<const char*>(state), sizeof(state));
+        if (!file) fail("Cannot write cartridge RTC sidecar");
     }
     if (arguments.count("--snapshot-out") || arguments.count("--test-snapshot-out")) {
         // Human-play fixtures stay offline. The explicit test option captures

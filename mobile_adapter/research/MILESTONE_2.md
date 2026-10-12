@@ -34,7 +34,9 @@ whole pose, before ordinary graphics work. A movement-mode change retains the
 last complete pose until the new graphics commit. Loaded movement metadata
 prevents an equal frame index from reusing tiles from the wrong movement mode.
 
-Exact current native colors are reused first. Otherwise private colors borrow a
+Exact current native colors are reused first. Native avatar sources are reserved
+before a private guest chooses a free color, avoiding an unnecessary conflict
+with another guest that already has an exact ordinary source. Otherwise private colors borrow a
 currently unused hardware palette. A generic full admission path handles palette
 pressure. Native palette buffers/cache and serialized construction scratch remain
 unchanged. Weather/effect palettes retain their native roles. Fades defer new
@@ -124,10 +126,19 @@ make test-mobile-rom RGBDS=/Volumes/Storage/Cache/mobileadapter/rgbds-1.0.4/
 
 The default cases include cadence, equal ordinary-avatar load, local and delayed
 hosted motion, priority escape, five fault-save cases, running, menu, warp,
-turn-after-peer-exit, rejoin, save-cache isolation, duplicate trainer IDs, protected
-Route37 trainers, large Alolan Exeggutor graphics, night and snow. Each run uses
+turn-after-peer-exit, rejoin, automatic interrupted-socket resume, save-cache
+isolation, duplicate trainer IDs, protected
+Route37 trainers, large Alolan Exeggutor graphics, night, snow and a synthetic
+full native pool with all six native object palettes occupied. Each run uses
 fresh artifacts and isolated ports. The pinned release core is unchanged;
-profiling cores add read-only observations. Current artifact root:
+profiling cores add read-only instruction/hardware observations. Night/weather
+fixtures additionally persist the external cartridge clock offset produced by
+ordinary RTC writes. The explicit frontend sidecar restore runs before the first
+emulated frame and never restores CPU, game RAM, SRAM or instruction state. The
+pinned core's ordinary RTC getter exposes the wrong instance/value for this mode;
+the isolated test frontend uses a separate cartridge-clock persistence hook.
+The source save and clock sidecar are checksum-pinned in both mobile and native
+replays. Native night starts at 21:00 in this game; the fixture chooses 22:00. Current artifact root:
 `/Volumes/Storage/Cache/mobileadapter/independent-final-all-20261012`.
 
 The all-map contract checks the current compiled map inventory dynamically,

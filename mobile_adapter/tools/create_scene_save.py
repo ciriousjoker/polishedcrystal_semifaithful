@@ -95,13 +95,14 @@ def main():
     command = [str(args.runner), str(args.core), str(rom), str(args.output / "screen.ppm"), str(args.output),
                "--frames", "12000", "--input", str(REPO / "mobile_adapter/tools/fixtures/new-game-save.input"),
                "--symbols", str(args.symbols), "--state-out", str(args.output / "state.json"),
-               "--save-out", str(args.output / "ingame.sav"), "--adapter", "0"]
+               "--save-out", str(args.output / "ingame.sav"), "--rtc-out", str(args.output / "ingame.rtc"), "--adapter", "0"]
     with (args.output / "process.log").open("w") as log:
         subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=90)
     state = json.loads((args.output / "state.json").read_text())["symbols"]
     for key, expected in {"hCrashCode": 0, "hInMenu": 0, "wMapGroup": record["group"],
                           "wMapNumber": record["number"], "wXCoord": args.x, "wYCoord": args.y,
-                          "wSaveFileExists": 1, "wPlayerGender": avatar}.items():
+                          "wSaveFileExists": 1, "wPlayerGender": avatar,
+                          "wTimeOfDay": 2 if args.hour >= 21 or args.hour < 5 else 0 if args.hour < 9 else 1 if args.hour < 17 else 3}.items():
         require(state[key] == expected, f"Scene producer: {key}={state[key]}, expected {expected}")
     metadata = validate_battery(args.output / "ingame.sav", symbols)
     metadata.update({"map": args.map, "x": args.x, "y": args.y, "hour": args.hour,
@@ -110,6 +111,8 @@ def main():
                      "production_rom_sha256": digest(args.rom), "producer_rom_sha256": digest(rom),
                      "changed_rom_bytes": [index for index, (old, new) in enumerate(zip(args.rom.read_bytes(), data)) if old != new],
                      "avatar": args.avatar, "player_gender": avatar,
+                     "rtc_sha256": digest(args.output / "ingame.rtc"),
+                     "rtc_source": "external cartridge clock offset produced by ordinary ROM RTC writes",
                      "source": "ordinary New Game, character-choice menu and in-game Save menu"})
     (args.output / "fixture.json").write_text(json.dumps(metadata, indent=2) + "\n")
     convert_png(args.output / "screen.ppm", args.output / "screen.png")
