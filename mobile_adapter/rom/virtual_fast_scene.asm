@@ -26,8 +26,9 @@ MobileVirtualAlignedScene:
 	ld a, [hl]
 	and $f
 	ld [wMobileVirtualLines + 15], a
-	ld a, 1
-	ld [wMobileVirtualForceFull], a
+	ld d, a
+	ld b, 0 ; accumulate only actual visible-source alignment differences
+	ld c, 0 ; visible native rectangles
 ; The completed native page already proves ten complete canonical rectangles.
 ; Inspect their literal native tops directly, then inspect only overflow
 ; templates. Do not duplicate thirteen groups into another metadata view.
@@ -37,15 +38,11 @@ for raw_slot, OAM_COUNT / 4
 	jr z, .raw_next{d:raw_slot}
 	cp SCREEN_HEIGHT_PX + OAM_Y_OFS
 	jr nc, .raw_next{d:raw_slot}
-	ld hl, wMobileVirtualLines + 14
-	inc [hl]
+	inc c
+	xor d
 	and $f
+	or b
 	ld b, a
-	ld a, [wMobileVirtualLines + 15]
-	cp b
-	jr z, .raw_next{d:raw_slot}
-	xor a
-	ld [wMobileVirtualForceFull], a
 .raw_next{d:raw_slot}
 endr
 for native_slot, NUM_OBJECT_STRUCTS
@@ -59,21 +56,21 @@ for native_slot, NUM_OBJECT_STRUCTS
 	jr z, .next{d:native_slot}
 	cp SCREEN_HEIGHT_PX + OAM_Y_OFS
 	jr nc, .next{d:native_slot}
-	ld hl, wMobileVirtualLines + 14
-	inc [hl]
+	inc c
+	xor d
 	and $f
+	or b
 	ld b, a
-	ld a, [wMobileVirtualLines + 15]
-	cp b
-	jr z, .next{d:native_slot}
-	xor a
-	ld [wMobileVirtualForceFull], a
 .next{d:native_slot}
 endr
-	ld a, [wMobileVirtualLines + 14]
+	ld a, c
+	ld [wMobileVirtualLines + 14], a
 	cp OAM_COUNT / 4 + 1
-	ret nc
-	xor a
+	ret c
+	ld a, b
+	and a
+	ret nz
+	ld a, 1
 	ld [wMobileVirtualForceFull], a
 	ret
 
@@ -142,22 +139,7 @@ MobileVirtualAlignedNativeGroup:
 MobileVirtualAlignedNativeDescriptor:
 ; HL points to the exact descriptor selected above, or to the local prefix.
 	bit 7, [hl]
-	jr z, .template_color
-	inc l
-	ld a, [hl]
-	ld [wMobileVirtualHeaderOAM], a
-	add 8
-	ld l, a
-	ld h, HIGH(wShadowOAM)
-	ld a, [hl]
-	ld c, a
-	inc l
-	inc l
-	inc l
-	ld a, [hl]
-	and OAM_PALETTE
-	jr .source_color
-.template_color
+	jp nz, MobileVirtualAlignedRawRectangle
 	ld a, 255
 	ld [wMobileVirtualHeaderOAM], a
 	ld a, l
@@ -251,6 +233,83 @@ MobileVirtualAlignedNativeDescriptor:
 .busy
 	scf
 	ret
+
+MobileVirtualAlignedRawRectangle::
+; Preserve the descriptor's literal reversed native OAM offset in B. Read its
+; already complete pixels directly, without a second header/pointer transaction.
+; This entry is exclusively for sources proven canonical by AlignedScene.
+	inc l
+	ld b, [hl]
+	ld a, b
+	add 8
+	ld l, a
+	ld h, HIGH(wShadowOAM)
+	ld c, [hl]
+	ld a, c
+	and a
+	ret z
+	cp SCREEN_HEIGHT_PX + OAM_Y_OFS
+	ret nc
+	inc l
+	inc l
+	inc l
+	ld a, [hl]
+	and OAM_PALETTE
+	ld e, a
+	add LOW(wMobileVirtualBindings)
+	ld l, a
+	ld h, HIGH(wMobileVirtualBindings)
+	ld a, [hl]
+	and a
+	ret nz
+	ld a, [wMobileVirtualIndex]
+	and a
+	jr nz, .ordinary
+	ld d, 0
+	ld hl, MobileVirtualPaletteBits
+	add hl, de
+	ld a, [wMobileVirtualPaletteUsed]
+	or [hl]
+	ld [wMobileVirtualPaletteUsed], a
+.ordinary
+	ld a, c
+	swap a
+	and $f
+	add LOW(wMobileVirtualLines + 16)
+	ld l, a
+	ld h, HIGH(wMobileVirtualLines)
+	ld a, [hl]
+	cp 5
+	ret nc
+	ld a, [wMobileVirtualLength]
+	cp OAM_SIZE - 16 + 1
+	ret nc
+	ld e, a
+	ld a, [wMobileVirtualIndex]
+	and a
+	jr z, .admitted
+	ldh a, [rLY]
+	cp 140
+	jr nc, .busy
+.admitted
+	inc [hl]
+	ld l, b
+	ld h, HIGH(wShadowOAM)
+	ld d, HIGH(wMobileVirtualOutput)
+rept 16
+	ld a, [hli]
+	ld [de], a
+	inc e
+endr
+	ld a, e
+	ld [wMobileVirtualLength], a
+	and a
+	ret
+.busy
+	scf
+	ret
+ASSERT LOW(wMobileVirtualBindings) + 7 < $100
+ASSERT LOW(wMobileVirtualLines + 16) + 15 < $100
 
 MobileVirtualAdmitAlignedRectangle:
 ; Exact only under AlignedScene's proof. Check both touched bins before

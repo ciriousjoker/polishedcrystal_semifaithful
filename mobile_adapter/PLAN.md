@@ -130,7 +130,34 @@ The full emitted contract suite passes, including 800 new descriptor vectors.
 These observations justify changing scheduling or composition structure; they
 do not justify increasing deadlines, skipping visibility gates or claiming M2.
 
-Current linked placement: 35,145 feature-owned upper bytes, 224 net lower
+Later emitted checks cover 12,600 direct native OAM copies (768-cycle maximum)
+and 4,096 aligned-source census vectors (1,684-cycle maximum). Both compare
+complete memory writes against independent expected results, including raw
+offset 144, color conflicts, clipped Y coordinates, full rows and CPU deadlines.
+The direct copy preserves the descriptor's literal reversed native offset and
+avoids a second private pointer transaction. The census accumulates visibility
+and alignment in registers rather than repeatedly modifying private RAM. These
+are bounded optimizations of the existing policy, not the final G10/G11 policy.
+In particular, the census still does not prove horizontal visibility.
+
+`independent-direct-raw-20261013` again fails full-pool acceptance, with
+13/0/12/5 publications and client 1 offline at its final barrier. The subsequent
+`independent-register-inventory-20261013` reaches the lobby barrier but fails
+the unchanged visibility gate, with 13/0/13/6 publications. All four retain
+800/800 ordinary world updates, no duplicates and no measured wait crossings.
+Warm stage-1 averages improve from approximately 3,130 to 2,600 cycles; the
+ordinary pass still starts around LY132 and regularly remains incomplete.
+Neither result satisfies native or guest presentation fairness.
+
+A separate normalized avatar-source cache experiment was removed. Its 4,096
+emitted cases passed, but the real dense replay preserved no useful average
+stage-1 saving and increased cold costs. Keeping its RAM state and code would
+add complexity without resolving this blocker. The first two attempts failed
+in the observer's symbol parser before executing the game; the actual replay
+is `independent-color-source-cache-runtime-20261013`. Do not count those harness
+failures as ROM behavior or reuse the abandoned cache's ROM as the current build.
+
+Current linked placement: 35,022 feature-owned upper bytes, 224 net lower
 integration bytes, 13,737 free lower bytes. Disabled counterpart hashes and the
 entire final M2 suite still require fresh verification. The battery-save format
 and original game helpers remain unchanged. No Cloudflare deployment, phone test
