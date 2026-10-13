@@ -50,15 +50,23 @@ Environment overrides:
 | `MOBILE_ACCEPTANCE_PRISTINE_REF` | Explicit corresponding source revision for disabled byte identity; default is merge-base with master |
 | `MOBILE_ACCEPTANCE_OUTPUT` | Artifact directory; choose a fresh path when any source or scenario input changes |
 
-Default artifacts are in the host temporary directory, with a process-specific
-name printed on failure. Each test executable has its own default session.
+Default artifacts are under `MOBILE_TEST_CACHE` (the Storage cache on this host),
+with a process-specific name printed during execution. Each test executable has
+its own default session.
 An explicitly shared output directory lets build and ROM tests reuse the same
 prepared artifacts. Source fingerprints reject reuse across changed inputs.
 ROM/core hashes, controller events, compressed per-frame traces, both complete
 SRAM images, final screenshots and subprocess logs are retained.
 
-Rust serializes expensive scenarios to avoid competing emulator loads and build
-mutations. Every scenario starts fresh guest instances and owns ephemeral ports.
+By default Rust runs up to two functional scenarios concurrently. Set
+`MOBILE_ACCEPTANCE_JOBS` to change that bound (each live scenario runs four cores).
+The four performance cases declared in `assumptions.json` run exclusively,
+including their controls, evidence decoding and assertions. Waiting performance
+cases take priority over starting new functional work. Native controls and seed
+producers run four at a time. All multiplayer cores retain real-time pacing.
+Functional cases use a shorter five-second join warmup; performance cases retain
+their original warmup. The measured window remains 800 frames for every case.
+Shared build/fixture/seed construction is locked separately from live execution. Every scenario starts fresh guest instances and owns ephemeral ports.
 Contracts for one immutable execution can share its evidence; no test depends on
 another test having changed game state. Process deadlines also cover hung cores.
 
@@ -179,3 +187,21 @@ Palette checks require actual complete presentation of every remote figure in
 the measured window. Correct cached colors with no visible peers do not pass.
 `palette_oracle_rejects_unpresented_peers` checks this observation rule without
 starting an emulator.
+
+The suite copies only ROM build inputs. Disposable fixture compiler trees are
+removed after compilation; ROMs, symbols, maps and the generated event header
+remain. The native Rust Bridge build cache is shared between runs, and each run
+freezes its own executable. Raw JSON evidence is retained. Contracts share a
+scenario execution and a bounded two-scene in-memory evidence cache; different
+contract names do not start duplicate emulator sessions.
+
+Before builds/execution and after evidence writes, the suite checks for a 10 GiB
+free-space reserve plus 512 MiB headroom. On low space it removes only identified
+inactive acceptance directories in the test cache, oldest first. Active runs hold
+OS leases for the entire test executable. Toolchains, worktrees and unrelated
+files are excluded. If safe reclamation cannot restore the reserve, tests stop.
+Supporting workspace/storage checks run without an emulator:
+
+```sh
+python3 -m unittest discover -s mobile_adapter/tests/support -p 'test_runtime.py'
+```

@@ -7,6 +7,36 @@ use mobile_protocol::{
     Frame, MAX_PAYLOAD,
 };
 
+#[test]
+fn acceptance_workspaces_and_storage_reserve_preserve_user_data() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let temporary = std::env::var_os("MOBILE_TEST_CACHE")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| "/Volumes/Storage/Cache/mobileadapter".into())
+        .join("acceptance-unit-temp");
+    std::fs::create_dir_all(&temporary).unwrap();
+    let result = std::process::Command::new("python3")
+        .args([
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "mobile_adapter/tests/support",
+            "-p",
+            "test_runtime.py",
+        ])
+        .env("TMPDIR", temporary)
+        .current_dir(root)
+        .output()
+        .expect("Run host-only workspace and cleanup checks");
+    assert!(
+        result.status.success(),
+        "Workspace/storage regression: {}{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
+}
+
 fn hello() -> Hello {
     Hello {
         mechanics: 0,

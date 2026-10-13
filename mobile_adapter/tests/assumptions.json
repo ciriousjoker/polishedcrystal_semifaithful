@@ -1,5 +1,6 @@
 {
   "schema": 2,
+  "performance_cases": ["empty", "pool", "speeds", "npc-movement"],
   "hard_dependencies": [
     {
       "name": "lobby Frame envelope and public wire-kind declarations",

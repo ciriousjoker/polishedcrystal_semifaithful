@@ -1,5 +1,6 @@
 //! Acceptance contracts execute production code; they do not model the renderer.
 pub mod contracts;
+mod scheduler;
 pub fn assumptions() -> &'static serde_json::Value {
     static DECLARED: OnceLock<serde_json::Value> = OnceLock::new();
     DECLARED.get_or_init(|| {
@@ -9,34 +10,127 @@ pub fn assumptions() -> &'static serde_json::Value {
 }
 use serde_json::Value;
 use std::{
-    fs,
+    collections::{BTreeMap, VecDeque},
+    fs::{self, File, OpenOptions},
+    ops::Deref,
     path::PathBuf,
     process::{Command, Stdio},
-    sync::{Mutex, OnceLock},
-    time::{Duration, Instant},
+    sync::{Arc, Mutex, OnceLock},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
-static EXECUTION: Mutex<()> = Mutex::new(());
-static OUTPUT: OnceLock<PathBuf> = OnceLock::new();
+static SCHEDULER: OnceLock<scheduler::Scheduler> = OnceLock::new();
+static CASES: Mutex<BTreeMap<String, Arc<Mutex<bool>>>> = Mutex::new(BTreeMap::new());
+// Keep two parsed scenes rather than reparsing the same large JSON for every
+// contract or retaining every scenario in memory on a 16 GiB developer machine.
+static LOADED: Mutex<VecDeque<(String, Arc<Value>)>> = Mutex::new(VecDeque::new());
 
-pub fn output() -> &'static PathBuf {
-    OUTPUT.get_or_init(|| {
-        let path = std::env::var_os("MOBILE_ACCEPTANCE_OUTPUT")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                std::env::temp_dir().join(format!("mobile-acceptance-{}", std::process::id()))
-            });
-        fs::create_dir_all(&path).expect("Create acceptance artifact directory");
-        path
-    })
+pub fn performance_case(case: &str) -> bool {
+    case == "build"
+        || assumptions()["performance_cases"]
+            .as_array()
+            .expect("Declared exclusive performance cases")
+            .iter()
+            .any(|name| name == case)
 }
 
-/// One process group per scenario; serialized host execution avoids CPU contention.
-/// Results are immutable within one run, so separate contracts can inspect the
-/// same expensive execution without depending on another test's mutation.
-pub fn evidence(case: &str) -> Value {
-    let _guard = EXECUTION.lock().unwrap_or_else(|p| p.into_inner());
-    eprintln!("Acceptance scenario {case}: {}", output().display());
+pub struct Evidence {
+    value: Arc<Value>,
+    _permit: scheduler::Permit<'static>,
+}
+
+impl Deref for Evidence {
+    type Target = Value;
+    fn deref(&self) -> &Value {
+        &self.value
+    }
+}
+
+fn execution_lane() -> &'static scheduler::Scheduler {
+    SCHEDULER.get_or_init(|| {
+        let limit = std::env::var("MOBILE_ACCEPTANCE_JOBS")
+            .map(|s| {
+                s.parse::<usize>()
+                    .expect("MOBILE_ACCEPTANCE_JOBS must be a positive integer")
+            })
+            .unwrap_or(2);
+        scheduler::Scheduler::new(limit)
+    })
+}
+struct RunOutput {
+    path: PathBuf,
+    // Hold a shared OS lock for this entire test executable, including time
+    // between backends. A janitor in another run must not reclaim its evidence.
+    _active: File,
+}
+static OUTPUT: OnceLock<RunOutput> = OnceLock::new();
+
+pub fn output() -> &'static PathBuf {
+    &OUTPUT
+        .get_or_init(|| {
+            let path = std::env::var_os("MOBILE_ACCEPTANCE_OUTPUT")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| {
+                    std::env::var_os("MOBILE_TEST_CACHE")
+                        .map(PathBuf::from)
+                        .unwrap_or_else(|| PathBuf::from("/Volumes/Storage/Cache/mobileadapter"))
+                        .join(format!(
+                            "acceptance-suite-{}-{}",
+                            SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .unwrap()
+                                .as_secs(),
+                            std::process::id()
+                        ))
+                });
+            fs::create_dir_all(&path).expect("Create acceptance artifact directory");
+            let active = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path.join(".active.lock"))
+                .expect("Open active-run lease");
+            #[cfg(unix)]
+            {
+                use std::os::fd::AsRawFd;
+                unsafe extern "C" {
+                    fn flock(fd: i32, operation: i32) -> i32;
+                }
+                // POSIX flock LOCK_SH. The descriptor remains open until process exit.
+                assert_eq!(
+                    unsafe { flock(active.as_raw_fd(), 1) },
+                    0,
+                    "Lock active acceptance run"
+                );
+            }
+            RunOutput {
+                path,
+                _active: active,
+            }
+        })
+        .path
+}
+
+/// Functional cases share bounded capacity; timing cases take the entire lane.
+/// The permit also covers JSON decoding and assertions until Evidence is dropped.
+/// A per-case lock ensures concurrent contracts never execute a scenario twice.
+pub fn evidence(case: &str) -> Evidence {
+    let cell = CASES
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .entry(case.to_owned())
+        .or_insert_with(|| Arc::new(Mutex::new(false)))
+        .clone();
+    let mut complete = cell.lock().unwrap_or_else(|p| p.into_inner());
+    let permit = execution_lane().enter(performance_case(case));
+    eprintln!(
+        "Acceptance scenario {case} [{}]: {}",
+        if performance_case(case) {
+            "exclusive timing"
+        } else {
+            "parallel functional"
+        },
+        output().display()
+    );
     let path = output().join(format!("{case}.json"));
     let error_path = output().join(format!("{case}.error"));
     assert!(
@@ -45,7 +139,7 @@ pub fn evidence(case: &str) -> Value {
         fs::read_to_string(&error_path).unwrap_or_default(),
         output().display()
     );
-    {
+    if !*complete {
         let log = fs::File::create(output().join(format!("{case}.log"))).unwrap();
         let mut cmd = Command::new("python3");
         cmd.arg(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("support/runtime.py"))
@@ -71,6 +165,7 @@ pub fn evidence(case: &str) -> Value {
                     fs::read_to_string(&error_path).unwrap_or_default(),
                     output().display()
                 );
+                *complete = true;
                 break;
             }
             if started.elapsed() > Duration::from_secs(600) {
@@ -87,6 +182,32 @@ pub fn evidence(case: &str) -> Value {
             std::thread::sleep(Duration::from_millis(50));
         }
     }
-    serde_json::from_slice(&fs::read(&path).expect("Scenario evidence missing"))
-        .expect("Invalid scenario evidence")
+    let cached = {
+        let mut loaded = LOADED.lock().unwrap_or_else(|p| p.into_inner());
+        loaded
+            .iter()
+            .position(|(name, _)| name == case)
+            .map(|index| {
+                let item = loaded.remove(index).unwrap();
+                let value = item.1.clone();
+                loaded.push_back(item);
+                value
+            })
+    };
+    let value = cached.unwrap_or_else(|| {
+        let value: Arc<Value> = Arc::new(
+            serde_json::from_slice(&fs::read(&path).expect("Scenario evidence missing"))
+                .expect("Invalid scenario evidence"),
+        );
+        let mut loaded = LOADED.lock().unwrap_or_else(|p| p.into_inner());
+        loaded.push_back((case.to_owned(), value.clone()));
+        while loaded.len() > 2 {
+            loaded.pop_front();
+        }
+        value
+    });
+    Evidence {
+        value,
+        _permit: permit,
+    }
 }

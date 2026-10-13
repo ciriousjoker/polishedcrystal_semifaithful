@@ -6,6 +6,8 @@ No tracked map source, game RAM or historic battery fixture is modified.
 """
 import argparse
 import concurrent.futures
+import contextlib
+import fcntl
 import gzip
 import hashlib
 import json
@@ -20,6 +22,7 @@ import socketserver
 import subprocess
 import threading
 import time
+from storage import active_run, ensure_free_space
 
 ROOT = Path(__file__).resolve().parents[3]
 TESTS = ROOT / "mobile_adapter/tests"
@@ -85,10 +88,52 @@ def refresh_observers(meta, prepared):
 
 
 def copy_sources(source, destination, reuse_objects=False):
-    ignored = [".git", "target", "build", "node_modules", "__pycache__", "*.gbc", "*.sym", "*.map", "*.patch"]
+    # Copy ROM build inputs, not the entire checkout (Flutter, scenario batteries,
+    # historical patches and generated application output are unrelated).
+    roots = {"audio", "constants", "data", "engine", "gfx", "home", "macros",
+             "maps", "ram", "tools", "mobile_adapter"}
+    ignored = [".git", "target", "build", ".dart_tool", "node_modules", "__pycache__",
+               "*.gbc", "*.sym", "*.map", "*.patch", "*.ips", "*.pyc"]
     if not reuse_objects:
         ignored += ["build-*", "build-mobile", "build-faithful-mobile", "*.o"]
-    shutil.copytree(source, destination, ignore=shutil.ignore_patterns(*ignored))
+    basic_ignore = shutil.ignore_patterns(*ignored)
+    def exclude(directory, names):
+        relative = Path(directory).relative_to(source)
+        blocked = set(basic_ignore(directory, names))
+        if relative == Path("."):
+            blocked.update(name for name in names if
+                (Path(directory, name).is_dir() and name not in roots) or
+                (Path(directory, name).is_file() and name not in {"Makefile", "layout.link", ".rgbds-version"}
+                 and not name.endswith(".asm") and not (reuse_objects and name.endswith(".o"))))
+        elif relative == Path("mobile_adapter"):
+            allowed = {"rom", "tools", "tests"}
+            if reuse_objects:
+                allowed.add("build-mobile")
+            blocked.update(set(names) - allowed)
+        elif relative == Path("mobile_adapter/tests"):
+            blocked.update(set(names) - {"support"})
+        elif relative == Path("mobile_adapter/tests/support"):
+            blocked.update(name for name in names if not name.endswith(".hpp"))
+        return blocked
+    shutil.copytree(source, destination, ignore=exclude)
+
+
+def retain_rom_outputs(source):
+    """Keep binaries/symbols required by probes, not disposable compiler trees."""
+    for path in source.iterdir():
+        if path.is_dir():
+            shutil.rmtree(path)
+        elif path.suffix not in (".gbc", ".sym", ".map"):
+            path.unlink()
+
+
+@contextlib.contextmanager
+def preparation_lock(out):
+    # Different cases own independent executions but share one immutable build,
+    # fixture per scene and seed per hour/avatar. Only their construction locks.
+    with (out / ".prepare.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
 
 
 def validate_session(out):
@@ -156,6 +201,8 @@ def prepare(out):
     run(["git", "archive", "-o", archive, pristine_ref], ROOT, prepared / "archive.log")
     run(["tar", "-xf", archive, "-C", pristine], ROOT, prepared / "extract.log")
     run(toolchain + ["crystal"], pristine, prepared / "pristine.log")
+    retain_rom_outputs(pristine)
+    archive.unlink()
     core_source = Path(os.environ.get("MOBILE_ACCEPTANCE_CORE_SOURCE",
         str(CACHE / "mbc30-ef247c6/doublecherryGB-libretro-ef247c6")))
     core = Path(os.environ.get("MOBILE_ACCEPTANCE_CORE",
@@ -177,11 +224,15 @@ def prepare(out):
     runner = prepared / "core-runner"
     run(["c++", "-std=c++17", "-O2", "-I", core_source / "libretro/DoubleCherryEngine",
          source / "mobile_adapter/tools/smoke_libretro.cpp", "-lz", "-o", runner], source, prepared / "runner.log")
-    run(["cargo", "build", "--locked", "--manifest-path", source / "mobile_adapter/server/Cargo.toml"],
-        source, prepared / "server.log")
+    # Cargo already fingerprints inputs and locks its target directory. Reuse
+    # that cache across runs, but freeze the executable used by this run.
+    shared_target = CACHE / "acceptance-build-cache/server"
+    run(["cargo", "build", "--locked", "--manifest-path", ROOT / "mobile_adapter/server/Cargo.toml",
+         "--target-dir", shared_target, "--bin", "mobile-bridge"], ROOT, prepared / "server.log")
+    shutil.copy2(shared_target / "debug/mobile-bridge", prepared / "mobile-bridge")
     manifest = {"source": str(source), "pristine": str(pristine), "pristine_ref": pristine_ref,
         "version": version, "rgbds": str(rgbds), "core": str(core), "runner": str(runner),
-        "bridge": str(source / "mobile_adapter/server/target/debug/mobile-bridge"),
+        "bridge": str(prepared / "mobile-bridge"),
         "baseline_sha256": sha(source / f"polishedcrystal-{version}.gbc"),
         "pristine_sha256": sha(pristine / f"polishedcrystal-{version}.gbc"),
         "mobile_sha256": sha(source / f"polishedcrystal-mobile-{version}.gbc"),
@@ -336,6 +387,7 @@ def fixture(meta, out, scene):
         following = next((label.start() for label in labels if label.start() > header.start()), len(original))
         path.write_text(original[:header.start()] + replacement + "\n" + original[following:])
     replace_events(source / "maps/GoldenrodGameCorner.asm", header)
+    (directory / "events.asm").write_text(header)
     replace_events(source / "maps/PlayersHouse2F.asm", "PlayersHouse2F_MapScriptHeader:\n\tdef_scene_scripts\n\tdef_callbacks\n\tdef_warp_events\n\tdef_coord_events\n\tdef_bg_events\n\tdef_object_events\n")
     if scene in ("night", "dark"):
         maps = source / "data/maps/maps.asm"
@@ -367,6 +419,7 @@ def fixture(meta, out, scene):
     spawn.write_text(text[:match.start()] + f"\tspawn GOLDENROD_GAME_CORNER, {ordered_coordinates[0]}, {ordered_coordinates[1]}" + text[match.end():])
     for variant in ("crystal", "mobile"):
         run(["make", "-j4", variant, f"RGBDS={meta['rgbds']}/"], source, directory / f"{variant}.log")
+    retain_rom_outputs(source)
     manifest = {"source": str(source), "scene": scene, "map": record, "primary": primary,
         "peers": peers, "ordinary_objects": count, "equal_actor_load": equal_load,
         "limitation": None if count <= 9 else "The native pool cannot represent fifteen ordinary objects. Full-pool control preserves all twelve ordinary objects; equal-actor controls run separately.",
@@ -506,8 +559,7 @@ def seed_saves(meta, session, fx, hour):
     source = Path(seed_fx["source"])
     native = source / f"polishedcrystal-{meta['version']}.gbc"
     names = symbols(native.with_suffix(".sym"))
-    result = []
-    for index, position in enumerate([fx["primary"], *fx["peers"]]):
+    def produce(index, position):
         directory = session / f"seed-{hour}-{index}"
         if not (directory / "result.sav").exists():
             directory.mkdir(exist_ok=True)
@@ -528,11 +580,12 @@ def seed_saves(meta, session, fx, hour):
         profile = json.loads((directory / "profile.json").read_text())
         if state["vAcceptanceDialogDone"] != 1 or profile["save_copy_count"] < 4:
             raise RuntimeError("Native seed producer did not reach its post-initialization main/backup save")
-        result.append(directory / "result.sav")
-    return result
+        return directory / "result.sav"
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        return list(pool.map(produce, range(4), [fx["primary"], *fx["peers"]]))
 
 
-def execute(meta, fx, out, action="idle", fault="none", speeds=(1, 1, 1, 1), duplicate=False):
+def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 1), duplicate=False, settle_frames=300):
     if out.exists():
         original = out
         attempt = 2
@@ -540,23 +593,20 @@ def execute(meta, fx, out, action="idle", fault="none", speeds=(1, 1, 1, 1), dup
             out = original.with_name(original.name + f"-attempt-{attempt}")
             attempt += 1
     source = Path(fx["source"])
-    seeds = seed_saves(meta, out.parent, fx, 22 if action == "night" else 12)
     version = meta["version"]
     mobile = source / f"polishedcrystal-mobile-{version}.gbc"
     native = source / f"polishedcrystal-{version}.gbc"
     mobile_symbols, native_symbols = symbols(mobile.with_suffix(".sym")), symbols(native.with_suffix(".sym"))
-    with socket.socket() as reservation:
-        reservation.bind(("127.0.0.1", 0))
-        upstream_port = reservation.getsockname()[1]
-    proxy = Proxy(upstream_port, fault)
-    port = proxy.server_address[1]
-    threading.Thread(target=proxy.serve_forever, daemon=True).start()
     out.mkdir(exist_ok=True)
     log = (out / "bridge.log").open("w")
-    bridge = subprocess.Popen([meta["bridge"], "--bind", f"127.0.0.1:{upstream_port}"], stdout=log, stderr=subprocess.STDOUT)
+    bridge = subprocess.Popen([meta["bridge"], "--bind", "127.0.0.1:0"], stdout=log, stderr=subprocess.STDOUT)
     deadline = time.monotonic() + 8
     try:
-        while f"READY 127.0.0.1:{upstream_port}" not in (out / "bridge.log").read_text():
+        while True:
+            ready = re.search(r"BRIDGE_READY 127\.0\.0\.1:(\d+)", (out / "bridge.log").read_text())
+            if ready:
+                upstream_port = int(ready[1])
+                break
             if bridge.poll() is not None or time.monotonic() >= deadline:
                 raise RuntimeError("Bridge did not become ready")
             time.sleep(.02)
@@ -564,15 +614,19 @@ def execute(meta, fx, out, action="idle", fault="none", speeds=(1, 1, 1, 1), dup
         bridge.terminate()
         bridge.wait(timeout=5)
         log.close()
-        proxy.shutdown()
-        proxy.server_close()
         raise
+    proxy = Proxy(upstream_port, fault)
+    port = proxy.server_address[1]
+    threading.Thread(target=proxy.serve_forever, daemon=True).start()
     proxy.started = time.monotonic()
 
     def client(index, enabled):
         speed = speeds[index]
-        first, profile = 500, 500 + 1300 * speed
-        total = 500 + 2300 * speed
+        # Native initialization is complete before frame 500. The explicit join
+        # starts at 600; retain five real seconds for join/assets before measuring
+        # the unchanged 800-frame window and 200-frame recovery tail.
+        first, profile = 500, 500 + settle_frames * speed
+        total = profile + 1000 * speed
         directory = out / ("mobile" if enabled else "single") / str(index)
         directory.mkdir(parents=True)
         rom = directory / "fixture.gbc"
@@ -602,7 +656,7 @@ def execute(meta, fx, out, action="idle", fault="none", speeds=(1, 1, 1, 1), dup
         if enabled and not (index == 0 and action.startswith("private:")):
             for button in ("SELECT", "B"):
                 text += f"ON 600 vAcceptanceReady=1,wMapStatus=2,wScriptRunning=0 {button} 8\n"
-        at = 500 + 1450 * speed
+        at = profile + 150 * speed
         if index == 0 and (action in ("interaction", "save", "script", "link", "warp", "fault-save-exit", "npc-movement") or action.startswith("private:")):
             text += f"{at} A 8\n{at + 90} A 8\n"
         elif index == 0 and action == "menu":
@@ -680,7 +734,8 @@ def execute(meta, fx, out, action="idle", fault="none", speeds=(1, 1, 1, 1), dup
             finally:
                 capture_barrier.unlink(missing_ok=True)
             online = [future.result() for future in futures]
-        offline = [client(index, False) for index in range(4)]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+            offline = list(pool.map(lambda index: client(index, False), range(4)))
         save_reload = []
         if action == "save":
             for producer, consumer in (("mobile", "single"), ("single", "mobile")):
@@ -736,10 +791,13 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
-    validate_session(args.output)
-    if (args.output / (args.case + ".json")).exists():
-        return
-    meta = prepare(args.output)
+    started = time.monotonic()
+    ensure_free_space(CACHE, args.output)
+    with preparation_lock(args.output):
+        validate_session(args.output)
+        if (args.output / (args.case + ".json")).exists():
+            return
+        meta = prepare(args.output)
     if args.case == "build":
         source = Path(meta["source"])
         import sys
@@ -769,15 +827,32 @@ def main():
         if args.case.startswith("private-"):
             scene, action = "private-save", "private:" + args.case.split("-")[1]
         speeds = (1, 2, 3, 4) if args.case == "speeds" else (1, 1, 1, 1)
-        data = execute(meta, fixture(meta, args.output, scene), args.output / args.case,
-                       action, fault, speeds, args.case == "duplicate-ids")
+        with preparation_lock(args.output):
+            fx = fixture(meta, args.output, scene)
+            seeds = seed_saves(meta, args.output, fx, 22 if action == "night" else 12)
+        ensure_free_space(CACHE, args.output)
+        prepared_at = time.monotonic()
+        execution_wall_start = time.time()
+        data = execute(meta, fx, args.output / args.case, seeds,
+                       action, fault, speeds, args.case == "duplicate-ids",
+                       settle_frames=1300 if args.case in ASSUMPTIONS["performance_cases"] else 300)
+        data["execution_wall_start"] = execution_wall_start
+        data["execution_wall_end"] = time.time()
+        data["execution_seconds"] = time.monotonic() - prepared_at
+        data["preparation_seconds"] = prepared_at - started
     destination = args.output / (args.case + ".json")
-    destination.write_text(json.dumps(data))
+    temporary = destination.with_suffix(".json.partial")
+    temporary.write_text(json.dumps(data))
+    temporary.replace(destination)
+    ensure_free_space(CACHE, args.output)
 
 
 if __name__ == "__main__":
     try:
-        main()
+        import sys
+        output = Path(sys.argv[sys.argv.index("--output") + 1])
+        with active_run(output):
+            main()
     except Exception as error:
         import sys
         if "--output" in sys.argv and "--case" in sys.argv:

@@ -1,5 +1,34 @@
 # Mobile Adapter multiplayer plan
 
+## 2026-10-13: acceptance runtime optimization
+
+The user's 10 GiB Storage reserve is now in root AGENTS.md. The acceptance backend
+checks before preparation/execution and after evidence output, with 512 MiB
+headroom. Only identified inactive runs in the configured cache are reclaimable;
+active OS leases, toolchains, user files and worktrees are protected. Low-space
+behavior and generated-file exclusion have host-only tests.
+
+Functional scenarios have two concurrent slots by default (`MOBILE_ACCEPTANCE_JOBS`),
+with separate kernel-assigned Bridge/proxy ports and isolated run directories.
+The four performance cases are explicit in assumptions.json and take an exclusive
+lane, including construction, native controls, JSON decoding and assertions.
+Pending performance work takes priority. Shared source/fixture/seed initialization
+uses a separate OS lock; duplicate contracts share the same scenario execution.
+Parsed evidence has a bounded two-scene cache rather than accumulating all cases.
+
+ROM copies exclude Flutter, scenario batteries, patches and Rust/application
+build output. Fixture compiler trees are deleted after their ROMs/symbols/maps
+and generated event metadata are produced. Cargo reuses one shared native Bridge
+target cache, but each run owns a frozen executable. Native control and battery
+producer cores run in groups of four. Large JSON evidence remains, as requested.
+
+The two-case night/dark pilot passes with normal real-time pacing. All peers are
+online by frames 619..623, and every remote is complete throughout frames
+800..1599 in that pilot. Functional cases therefore shorten only the premeasurement
+warmup to five seconds; performance cases retain their previous warmup. The
+800-frame measurement window, recovery tail and all contract limits remain.
+A complete optimized run is required before claiming measured aggregate savings.
+
 ## 2026-10-13: acceptance cost and consolidation review
 
 The first full artifact tree uses approximately 9.5 GiB. Measured logical sizes
