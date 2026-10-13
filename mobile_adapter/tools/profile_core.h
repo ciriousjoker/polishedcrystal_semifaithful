@@ -94,6 +94,21 @@ extern "C" uint64_t mobile_profile_plan_metric(unsigned index) {
         default: return span.crossings;
     }
 }
+// Separate complete/published work from bounded early returns. These observers
+// read CPU flags and the ROM's own publication byte without changing emulation.
+// This pinned core internally packs C/Z/H/N into bits0/1/4/5, not hardware F.
+static unsigned mobile_plan_published_address;
+static uint64_t mobile_plan_outcomes[4][4] = {};
+static uint64_t mobile_plan_window_outcomes[4][4] = {};
+extern "C" void mobile_profile_plan_publication(unsigned address) {
+    mobile_plan_published_address = address;
+}
+extern "C" uint64_t mobile_profile_plan_outcome(unsigned index) {
+    if (index >= 32) return 0;
+    const auto& values = index < 16 ? mobile_plan_outcomes : mobile_plan_window_outcomes;
+    index %= 16;
+    return values[index / 4][index % 4];
+}
 static unsigned mobile_scene_stage_address;
 static uint64_t mobile_scene_steps[10][6] = {};
 static uint64_t mobile_scene_window_steps[10][7] = {};
@@ -569,6 +584,21 @@ static void mobile_profile_after_instruction(gb* game, const cpu_regs& regs, int
                     window[5] |= 1u << (next_stage < 10 ? next_stage : 15);
                     if (game->get_cpu()->read(mobile_vblank_address) != span.vblank) window[6]++;
                 }
+            }
+            if (&span == &mobile_render_spans[32] || &span == &mobile_render_spans[33]) {
+                const bool emitted = &span == &mobile_render_spans[32];
+                const bool success = emitted ? mobile_plan_published_address &&
+                    game->get_cpu()->read(mobile_plan_published_address) == 1 : !(regs.AF.b.l & 0x01);
+                const unsigned outcome = (emitted ? 0 : 2) + unsigned(!success);
+                auto record = [&](uint64_t* values) {
+                    values[0]++;
+                    values[1] += elapsed;
+                    values[2] = std::max(values[2], elapsed);
+                    if (game->get_cpu()->read(mobile_vblank_address) != span.vblank) values[3]++;
+                };
+                record(mobile_plan_outcomes[outcome]);
+                if (mobile_observed_frames >= mobile_world_start && mobile_observed_frames < mobile_world_start + 800)
+                    record(mobile_plan_window_outcomes[outcome]);
             }
             span.count++;
             span.total_cycles += elapsed;

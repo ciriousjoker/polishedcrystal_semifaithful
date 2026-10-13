@@ -140,7 +140,8 @@ static void load_bindings(const std::string& path) {
             name.rfind("wAcceptance", 0) != 0) continue;
         auto colon = location.find(':');
         if (colon == std::string::npos) {
-            if (name.rfind("wMobileVirtual", 0) != 0) fail("Invalid symbol location");
+            if (name.rfind("wMobileVirtual", 0) != 0 && name != "wMobileNativeShapeKeys" &&
+                name != "wMobileNativeShapes") fail("Invalid symbol location");
             const unsigned address = std::stoul(location, nullptr, 16);
             const bool resident_pose = (name.rfind("wMobileVirtualQueued", 0) == 0 ||
                                         name == "wMobileVirtualBackgroundFrame") &&
@@ -898,6 +899,8 @@ int main(int argc, char** argv) {
         if (bindings.count("wMobileVirtualActorMode")) {
             if (auto scene = reinterpret_cast<void(*)(unsigned)>(dlsym(core, "mobile_profile_scene")))
                 scene(bindings.at("wMobileVirtualStage").address);
+            if (auto publication = reinterpret_cast<void(*)(unsigned)>(dlsym(core, "mobile_profile_plan_publication")))
+                publication(bindings.at("wMobileVirtualPublished").address);
             auto observer = symbol<void(*)(unsigned, unsigned, unsigned)>(core, "mobile_profile_native_oam");
             observer(native_addresses.at("wShadowOAM").second,
                      bindings.at("wMobileVirtualDescriptors").address,
@@ -1300,6 +1303,15 @@ int main(int argc, char** argv) {
                 for (unsigned i = 0; i < 8; ++i)
                     for (unsigned j = 0; j < 4; ++j)
                         profile << ",\"plan_" << names[i] << '_' << fields[j] << "\":" << plan(i * 4 + j);
+            }
+            if (auto outcome = reinterpret_cast<uint64_t(*)(unsigned)>(dlsym(core, "mobile_profile_plan_outcome"))) {
+                const char* names[] = {"emit_published", "emit_unpublished", "native_view_complete", "native_view_aborted"};
+                const char* fields[] = {"count", "total_cycles", "max_cycles", "crossings"};
+                for (unsigned window = 0; window < 2; ++window)
+                    for (unsigned i = 0; i < 4; ++i)
+                        for (unsigned j = 0; j < 4; ++j)
+                            profile << ",\"plan_" << names[i] << (window ? "_window_" : "_") << fields[j]
+                                    << "\":" << outcome(window * 16 + i * 4 + j);
             }
             const char* stages[] = {"compose", "native_group", "peer_group", "merge_palette"};
             const char* fields[] = {"count", "max_cycles", "total_cycles", "min_entry_ly", "max_entry_ly", "vblank_crossings"};
