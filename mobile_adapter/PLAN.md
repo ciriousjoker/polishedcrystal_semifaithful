@@ -1,5 +1,38 @@
 # Mobile Adapter multiplayer plan
 
+## 2026-10-13: clarified acceptance requirements
+
+- Palette substitution is prohibited for every figure. Private hardware slots
+  may contain exact colors for a temporarily selected figure; changing the slot
+  does not authorize changing its RGB colors. If exact simultaneous presentation
+  exceeds hardware capacity, use fair temporal presentation with exact colors.
+  The current remote color admission rejects missing exact colors/full slots;
+  the known saturated-palette failure is absent presentation, not an accepted
+  fallback palette. Source inspection is not a universal correctness proof.
+- Performance controls must retain ordinary actors and replace each remote with
+  a comparable native actor whenever the native pool permits it. Match visible
+  load, appearance, movement, camera/input and lighting as closely as practical.
+  For example, player + four NPCs + three remotes compares with player + seven
+  NPCs. If the native pool is already full, compare against its maximum native
+  load, retain all existing actors and explicitly record the unmatched load.
+- The current scripted NPC-movement fixture does not add three counterpart
+  actors (`equal_actor_load` is false). Its observed cadence differences remain
+  useful diagnostic evidence, but do not by themselves establish failure of the
+  clarified equal-load performance requirement. Upgrade this comparison before
+  making that acceptance claim; existing equal-load free/scanline controls remain.
+- For now, embed the clean single-player counterpart SHA-256 as the conservative
+  game-content identity. This must be combined with a separate mobile protocol
+  identity/version: the clean hash excludes adapter code, so matching it alone
+  does not establish compatibility between adapter revisions. Future semantic
+  compatibility may hash an explicitly defined canonical content/interface
+  manifest. Hashing all source bytes cannot automatically prove that different
+  versions are semantically compatible.
+- The first full suite took approximately 45 minutes on this Mac Mini, including
+  preparation. Runtime depends on build reuse and scenario deadlines. Current
+  execution uses real headless DoubleCherryGB cores, not emulator windows. Live
+  visual observation is not currently a supported suite option; logs, screenshots
+  and per-frame traces are retained in a fresh Storage artifact directory.
+
 ## 2026-10-13: independent Cargo acceptance suite
 
 The complete first reviewed run at `d4077dad8` is retained in
