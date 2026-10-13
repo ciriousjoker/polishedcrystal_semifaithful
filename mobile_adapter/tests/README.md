@@ -8,8 +8,15 @@ failed tests. No acceptance requirement is marked ignored or expected to fail.
 From the repository root:
 
 ```sh
-cargo test --locked --manifest-path mobile_adapter/tests/Cargo.toml --no-fail-fast
+make test-mobile-suite
 ```
+
+The Make target supplies one fresh Storage output path to all Cargo test
+executables, so build and ROM checks share preparation. `MOBILE_SUITE_ARGS` can
+select Cargo targets, for example `make test-mobile-suite MOBILE_SUITE_ARGS="--test host"`.
+Direct Cargo commands remain supported; specify `MOBILE_ACCEPTANCE_OUTPUT` to
+share a complete run. The test profile optimizes Rust trace decoding/assertion
+work without disabling assertions or changing native-core pacing.
 
 Run the fast production-protocol/lobby tests without a core:
 

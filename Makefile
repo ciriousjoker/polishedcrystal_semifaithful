@@ -137,7 +137,7 @@ endif
 MOBILE_CARGO ?= cargo
 .PHONY: test-mobile-suite
 test-mobile-suite:
-	$(MOBILE_CARGO) test --locked --manifest-path mobile_adapter/tests/Cargo.toml --no-fail-fast
+	MOBILE_ACCEPTANCE_OUTPUT="$(MOBILE_TEST_OUTPUT)" $(MOBILE_CARGO) test --locked --manifest-path mobile_adapter/tests/Cargo.toml --no-fail-fast $(MOBILE_SUITE_ARGS) -- --nocapture
 test-mobile-host:
 	$(MOBILE_CARGO) test --locked --manifest-path mobile_adapter/server/Cargo.toml
 	python3 mobile_adapter/tools/test_asm_contracts.py --rgbds "$(or $(RGBDS),./)"

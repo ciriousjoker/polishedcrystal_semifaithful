@@ -1,5 +1,24 @@
 # Mobile Adapter multiplayer plan
 
+## 2026-10-13: first complete optimized execution
+
+At `29798bb08`, the complete fresh run `acceptance-suite-20261013-optimized`
+takes 1,445.65 seconds (24m06s), versus about 44m45s previously. It executes all
+33 unique cases with no setup errors and no duplicate attempts. Results are
+64/70 pass: scheduler 2/2, build 4/5, host 9/9, ROM 49/54. The missing strict ROM
+identity and five known renderer/NPC contracts remain failing; no limits changed.
+Actual functional execution intervals overlap in ten pairs; none overlaps a
+performance case. The artifact tree is 3.095 GiB rather than 9.5 GiB, with zero
+Flutter copies and zero retained fixture compiler directories. JSON remains
+1,786 MiB, traces 263 MiB, retained ROM inputs/outputs 240 MiB and other probe
+artifacts 881 MiB. Complete logs and separate duration JSON are adjacent.
+
+Host-side Cargo test code now uses opt-level=2 while preserving test checks.
+This targets repeated large JSON decoding and frame assertions; it does not
+change game instructions or emulator pacing. The Make entry supplies one output
+directory across test executables to avoid duplicate default preparation.
+A second fresh complete execution measures these final entry/profile changes.
+
 ## 2026-10-13: acceptance runtime optimization
 
 The user's 10 GiB Storage reserve is now in root AGENTS.md. The acceptance backend
