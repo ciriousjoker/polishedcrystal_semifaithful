@@ -7,9 +7,11 @@ owner without an upstream service. Internet mode multiplexes those same players
 through one WebSocket to a hosted lobby owner. The socket-independent Rust rules
 are shared by the embedded owner, native hosted simulator and WASM Durable Object.
 
-Scope and binding requirements are in [PLAN.md](PLAN.md) and
-[REQUIREMENTS.md](REQUIREMENTS.md). Current measured acceptance, hashes and finite
-coverage boundaries are in [research/MILESTONE_2.md](research/MILESTONE_2.md).
+Project planning, binding requirements and current acceptance status now live in
+an external [agentic project run](/Volumes/Storage/tmp/mobileadapter/README.md).
+Milestone 2 remains open; see that run's STATE and acceptance matrix for the
+current failures and evidence. This repository retains product code, tests,
+protocol specifications and operating instructions.
 Remote avatars use private records and independent rendering, without native
 NPC leases, removal permissions or map edits. The normal mobile target now uses
 this renderer; its final acceptance suite is in progress. `make test-mobile-maps`
@@ -25,8 +27,8 @@ The mobile flag now selects a **4 MiB MBC30** ROM. All banked feature sections
 occupy the upper half, starting at bank 128. The ordinary game stays below 2 MiB;
 only minimal guarded integration remains there. Battery allocation is unchanged
 at 32 KiB. Disabled builds retain their original 2 MiB target and exact hash.
-The previous 10,000-byte cap was explicitly replaced by the user. See
-[research/MBC30_MIGRATION.md](research/MBC30_MIGRATION.md) for current evidence.
+The previous 10,000-byte cap was explicitly replaced by the user. Current
+checkpoint evidence is indexed in the external project run.
 
 Install the supplied `DoubleCherryGB-mbc30-macos-universal.zip` from Downloads
 and build its separate read-only headless observers once:
@@ -93,7 +95,7 @@ See [MANUAL_TESTING.md](MANUAL_TESTING.md) for device prerequisites and shortcut
 ## Build and Bridge app
 
 Use RGBDS 1.0.4, Cargo 1.85 or later and the pinned native ARM64 DoubleCherryGB
-core in [research/MBC30_MIGRATION.md](research/MBC30_MIGRATION.md).
+core prepared by `mobile_adapter/tools/prepare_mbc30_core.py`.
 BGB, Wine and Rosetta are unnecessary. On the configured host:
 
 ```sh
@@ -128,10 +130,10 @@ python3 mobile_adapter/tools/build_bridge_app.py --flutter /path/to/flutter --de
 ```
 
 Add `--run` to open it. App/CLI listeners must use different ports when concurrent.
-See [bridge_app/README.md](bridge_app/README.md) and
-[research/SERVER_ARCHITECTURE.md](research/SERVER_ARCHITECTURE.md).
-The macOS bundle is built and signed; other platform packaging and background
-lifecycle are not yet verified, especially iOS foreground-emulator coexistence.
+See [bridge_app/README.md](bridge_app/README.md) and the
+[household protocol](protocol/lobby-v2.md).
+The macOS bundle has prior build evidence; Linux, Windows and Android packaging
+and background lifecycle still require validation. iOS is outside delivery scope.
 
 ## Autonomous tests
 
@@ -150,37 +152,28 @@ room isolation, multiplexed households and reconnect. Actual local workerd tests
 exercise the Worker/DO adapter and forced hibernation; Flutter tests exercise the
 UI and actual Rust FFI listener. Their commands are in the component READMEs.
 
-The actual headless four-core acceptance suite is separate:
+The current unified acceptance suite is documented in [tests/README.md](tests/README.md):
 
 ```sh
-make test-mobile-rom RGBDS=/Volumes/Storage/Cache/mobileadapter/rgbds-1.0.4/
+make test-mobile-suite
 ```
 
-It requires the normal core, read-only profiling core and native frontend. It
-generates fresh ordinary-NPC controls from the measured four-player cadence run
-as described in MILESTONE_2.md, including real control-specific in-game saves. MOBILE_TEST_CACHE,
-optional MOBILE_TEST_CONTROL, MOBILE_TEST_OUTPUT and MOBILE_TEST_CASES configure these
-explicit runtime dependencies. Fixture builds temporarily change map source and restore its exact baseline;
-do not run concurrent builds. Every run owns isolated test ports and fresh
-artifacts, leaving the human listener on 17423 untouched. Failures retain logs,
-input events, intermediate PNGs, cycle observations and semantic state snapshots.
+It shares a test ROM pair across scenarios, generates normal in-game save
+fixtures, and observes real instructions and hardware-selected graphics using
+matching symbols. Functional scenarios use isolated ports and may run in parallel;
+performance and wall-clock networking checks retain their exclusive timing lanes.
+During development run only affected named contracts, as described in the test
+README. Use the full suite at final milestone acceptance. The older
+`make test-mobile-rom` probes remain available but do not replace the current
+unified acceptance contract. Dedicated local/hosted latency probes and mixed-speed
+recipient-presentation evidence remain additional final checks where the Cargo
+contracts do not yet assert them.
 
-Tests boot ordinary batteries and execute real instructions/controller inputs;
-matching build symbols and video callbacks provide read-only success conditions.
-They do not patch game RAM, battery bytes or frame timing. The compatible-state
-recovery case intentionally captures an actual online emulator state and restores
-it without an adapter. Manual startup snapshots are regenerated for each ROM/core.
-Portable save fixtures and provenance are committed under [tests/scenarios](tests/scenarios/README.md).
+Portable manual save fixtures and provenance remain under
+[tests/scenarios](tests/scenarios/README.md). Existing historical passes do not
+establish current renderer acceptance; consult the external run's evidence index.
 
-Current gates compare four connected cores at 100/200/300/400% against corresponding
-ordinary native NPCs, with no additional world-update gaps. They also verify native
-avatar tiles and actual hardware colors, local and delayed hosted visible latency,
-menu exit, map transitions, rejoin, save-copy isolation and independent native
-palette-save controls. Specialized camera and icon restoration and transport
-fault suites remain separate. Every new ROM change must retain these gates.
-
-The wire currently checks transport 1, lobby schema 4, capacity 4 and
-standard/faithful mechanics. It does not prove arbitrary cross-revision gameplay
-compatibility. Prototype room IDs are nonzero 16-bit IDs, not secure invite codes.
-Generated semantic compatibility metadata and secure room creation remain later
-work. Finite tests do not prove absence of every possible defect or every WAN path.
+The wire currently checks transport 1, lobby schema 4, capacity 4 and mechanics.
+Prototype room IDs are nonzero 16-bit identifiers, not secure invite codes.
+See [the protocol reference](protocol/lobby-v2.md) for current compatibility
+boundaries; finite test evidence does not prove every possible fault or WAN path.

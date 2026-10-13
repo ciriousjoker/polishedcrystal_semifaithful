@@ -62,8 +62,10 @@ Map instance keys hash interior blocks and tileset in bounded idle phases. A
 scripted layout change invalidates the visual key. The 16-bit key can collide and
 is only a visibility hint. It never synchronizes story, items, puzzles or encounters.
 Transport/schema/capacity/mechanics checks are not complete cross-revision game
-compatibility. HELLO carries no semantic game digest. The desired manifest and
-conservative cross-version policy remain future work in SERVER_ARCHITECTURE.md.
+compatibility. The current 15-byte HELLO carries no clean-game build digest.
+The build embeds a clean-counterpart digest, but live digest negotiation and
+Bridge/server enforcement remain open work. Protocol identity must be checked
+separately from game content identity.
 
 ## Household envelope and owner
 

@@ -67,16 +67,17 @@ siblings active. These logs identify transport sessions, not authenticated peopl
 Four players can share one lobby, including three remote avatars on the same map.
 They use each player's actual selected figure, movement sprite and hardware colors.
 Remote players do not block movement or run NPC scripts. World progress, items,
-puzzles and encounters remain local. Free native actor resources are used first;
-only audited replaceable NPCs can be temporarily leased, with their original state
-and graphics restored on departure. Required actors and story flags stay protected.
+puzzles and encounters remain local. Remote players use private records outside
+the native object pool. NPCs remain simulated and interactable; hardware pressure
+can temporarily omit complete figures from drawing, without removing their state.
 
 The Start menu preserves complete static native avatars while other clients keep
 moving independently. Closing it refreshes positions. Protected camera/cutscene
 and resource-critical drawing may temporarily defer avatars; ordinary exploration
 must show all three peers when they share the viewport. Select+A keeps the roster
 and rendering status available in a safe idle scene. Detailed finite coverage
-boundaries are recorded in research/MILESTONE_2.md.
+boundaries and remaining acceptance failures are recorded in the external
+[project run](/Volumes/Storage/tmp/mobileadapter/README.md).
 
 The Mobile Adapter popup describes the emulator peripheral. Its initialization
 log can appear with emulation disabled, so the popup alone does not prove a Rust
@@ -177,64 +178,19 @@ emulators cannot overwrite a newly prepared Mac instance's save.
 wss://your-origin.example` uses an external server. Ctrl+C in those modes ends
 terminal monitoring and leaves the GUI apps running.
 
-The earlier verification records below describe their dated builds. Current
-MBC30 phone validation is still deferred; the updated native Mac workflow is
-validated separately in the plan.
+Historical Mac/Pixel verification logs and build hashes have moved to the
+external project archive. They do not validate the current MBC30 phone build;
+physical-device validation remains deferred.
 
-Verified on 2026-10-10 with native Apple M2 macOS and a real Pixel 9 Pro using
-ARM64 RetroArch 1.19.1. Both platforms booted their regenerated states. Separate
-native Mac and Android game processes completed the actual adapter TCP echo over
-the Mac's LAN address, accepted the reply, released serial ownership without an
-error and completed a subsequent tile step. Repeated complete ADB deployment runs
-also verified updating the same stable paths and backing up the previous save.
-The pinned Android core was built with NDK 29.0.14206865, API 23, static C++ runtime
-and embedded libmobile. It needs only Android's system libc/libm/libdl libraries.
-The logging follow-up verified both actual source IPs in the new server logs,
-successful reply acceptance and movement in both ROMs. The Pixel's one-intent
-start also confirmed adapter initialization and fresh state loading. Host cache
-`dev-session/log-proof` contains the server log and symbol results.
-
-A subsequent real RetroArch GUI check reproduced the Android adapter being Off
-despite the generated options file specifying On. Enforcing the isolated options
-path fixed the direct-intent launch. After one force-stop and one game intent,
-the real Pixel frontend loaded its fresh state and completed TCP connect, the
-`PC` transport-v1 `TEST` request, its matching echo reply and clean session teardown
-against the running Rust Bridge at `192.168.2.25:17423`. This was tested through
-the running GUI's inputs, not the headless runner. The raw frontend trace is in
-`dev-session/gui-proof/android-retroarch.log` in the host cache. Eight host-only
-contracts passed, including inherited per-core options and the single-intent start.
-
-Host-only deployment checks:
+Host-only launcher checks:
 
 ```sh
 python3 -m unittest discover -s mobile_adapter/tools -p test_dev_session.py
 ```
 
-Milestone 2 adds the four-player lobby and live overworld avatars. The native
-three-core acceptance suite checks actual movement, map transitions, reconnects,
-rendering pressure and visible latency. Phone interactions, battles and transfers
-remain milestones 3 to 5. A server ECHO log alone is not gameplay acceptance.
-
-
-On 2026-10-11, the M2 ROM also ran simultaneously in the actual Mac RetroArch
-GUI and physical Pixel GUI. Both joined lobby 1 with distinct server-assigned
-IDs, displayed the other avatar and accepted normal arrows/touch movement.
-The GUI automation used a disposable Mac F2 mapping to send the Select+B chord;
-the shipped launcher profile uses left Shift+Z. GUI observer config was isolated
-from normal launch profiles. The normal Mac profile keeps running when the
-terminal is focused, so switching apps does not expire the presence lease.
-Proof is retained in the host cache as m2-gui-observer-server.log,
-m2-gui-observer-input.json and m2-gui-phone3.png.
-
-The same physical GUI check was repeated with the final 16-byte parser budget
-and final compiler ROM `725d94ee2e8adec0817a9398e9fa3a1056908943e429ccbdaa335384f3a7e3e8`.
-After an unlocked Pixel cold start, both real frontends joined and displayed
-each other. The LAN endpoint copy is
-`73203c64a9bbb6d1f44692c70b61c55947cc6cdab3d556d510ee2887ecd7900f`.
-Final proof: `m2-final16-gui-server.log`, `m2-final16-gui-input.json` and
-`m2-final16-phone-visible.png` in the host cache. The full automatic acceptance,
-including the separate 300% speed test, is recorded in
-[research/MILESTONE_2.md](research/MILESTONE_2.md).
+The current headless four-client acceptance commands and observation boundaries
+are documented in [tests/README.md](tests/README.md). A server ECHO log alone is
+not evidence of four-player overworld acceptance.
 
 ## Shared Bridge and hosted simulation
 
