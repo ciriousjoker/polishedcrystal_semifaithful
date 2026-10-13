@@ -54,6 +54,7 @@ fn feature_assembly_stays_in_its_directory_with_reviewable_integration() {
         "engine/menus/main_menu.asm",
         "engine/overworld/spawn_points.asm",
         "home/palettes.asm",
+        "home/gfx.asm", // Conditional private tile ownership fence for native uploads.
         "home/serial.asm",
         "home/vblank.asm",
         "home/video.asm", // Conditional private OAM DMA entry, reviewed on this branch.

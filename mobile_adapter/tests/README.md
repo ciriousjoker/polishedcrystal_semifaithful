@@ -245,3 +245,28 @@ still failing. Artifacts use 2.957 GiB. Functional scenarios take 6.93..11.07s
 During development, select the affected contract(s) with Cargo's test filter.
 Run a full suite at the end of a substantial work step, rather than after every
 edit. Existing failures remain real failures and do not justify weaker assertions.
+
+## Original NPC simulation and equal-load performance
+
+The NPC movement case retains two distinct native comparisons. The performance
+control uses three additional ordinary avatar stand-ins, as required by the equal
+actor-load benchmark. A separate original-NPC control keeps precisely the same
+NPC population as multiplayer. Both use the current ROM pair and replayed inputs.
+
+A read-only core observer captures simulation hashes on return from the complete
+native `HandleMapObjects` routine. It never patches CPU state or game memory.
+Exact simulation requires equal completed history lengths and identical original
+NPC state at every completed update. This avoids comparing a half-finished native
+routine sampled at a frontend frame boundary.
+
+Performance uses completed-update counts in the unchanged 800-frame window.
+Multiplayer must never fall behind the equal-load control at any prefix, have
+fewer updating frames, or have a longer update gap. Strict cadence and duplicate
+limits additionally compare the original NPC engine path. Closing a dialogue
+reloads the stand-ins' extra graphics, so the equal-load control legitimately has
+a different native busy-VBlank credit at that transition; this does not exempt
+multiplayer from the original engine's duplicate-update contract.
+
+Focused `m2-admission-plans-11-20261013` passes both NPC contracts in 48.96 seconds
+using the shared prepared ROM pair. This is focused evidence only, not completion
+of milestone 2 or the full suite.

@@ -36,7 +36,64 @@ extern "C" void acceptance_profile_native(unsigned bank, unsigned entry, unsigne
     acceptance_native_stride = stride; acceptance_native_object_bank = object_bank;
     acceptance_native_sprite_field = sprite_field; acceptance_native_map_field = map_field;
 }
+// Capture simulation only after the entire native object update returns. Host
+// frame boundaries can intersect that routine and are not a completed state.
+static unsigned acceptance_simulation_bank, acceptance_simulation_entry;
+static unsigned acceptance_simulation_sp, acceptance_simulation_return;
+static unsigned acceptance_simulation_object_bank, acceptance_simulation_objects;
+static unsigned acceptance_simulation_stride, acceptance_simulation_map, acceptance_simulation_original;
+static unsigned acceptance_simulation_fields[64] = {}, acceptance_simulation_field_count;
+static bool acceptance_simulation_active = false;
+static std::vector<std::pair<unsigned, unsigned>> acceptance_simulation_records;
+static unsigned acceptance_simulation_overflow = 0;
+extern "C" void acceptance_profile_simulation(unsigned bank, unsigned pc, unsigned object_bank,
+        unsigned objects, unsigned stride, unsigned map, unsigned original) {
+    acceptance_simulation_bank = bank; acceptance_simulation_entry = pc;
+    acceptance_simulation_object_bank = object_bank; acceptance_simulation_objects = objects;
+    acceptance_simulation_stride = stride; acceptance_simulation_map = map;
+    acceptance_simulation_original = original;
+}
+extern "C" void acceptance_profile_simulation_field(unsigned index, unsigned offset) {
+    if (index < 64) {
+        acceptance_simulation_fields[index] = offset;
+        acceptance_simulation_field_count = std::max(acceptance_simulation_field_count, index + 1);
+    }
+}
+extern "C" unsigned acceptance_profile_simulation_record(unsigned index, unsigned field) {
+    if (field == 2) return acceptance_simulation_records.size();
+    if (field == 3) return acceptance_simulation_overflow;
+    if (index >= acceptance_simulation_records.size()) return 0;
+    return field == 0 ? acceptance_simulation_records[index].first : acceptance_simulation_records[index].second;
+}
 static void acceptance_profile_before(gb* game, const cpu_regs& regs) {
+    if (acceptance_simulation_active && regs.SP == acceptance_simulation_sp + 2 &&
+            regs.PC == acceptance_simulation_return) {
+        acceptance_simulation_active = false;
+        if (acceptance_marker_counts[0]) {
+            const auto* ram = game->get_cpu()->get_ram();
+            unsigned hash = 2166136261u;
+            const unsigned offset = acceptance_simulation_objects < 0xd000 ?
+                acceptance_simulation_objects - 0xc000 :
+                acceptance_simulation_object_bank * 0x1000 + acceptance_simulation_objects - 0xd000;
+            for (unsigned slot = 1; slot < 13; ++slot) {
+                const auto* actor = ram + offset + slot * acceptance_simulation_stride;
+                const unsigned map = actor[acceptance_simulation_map];
+                if (map && map <= acceptance_simulation_original)
+                    for (unsigned i = 0; i < acceptance_simulation_field_count; ++i)
+                        hash = (hash ^ actor[acceptance_simulation_fields[i]]) * 16777619u;
+            }
+            if (acceptance_simulation_records.size() < 16000)
+                acceptance_simulation_records.emplace_back(mobile_observed_frames, hash);
+            else ++acceptance_simulation_overflow;
+        }
+    }
+    if (acceptance_simulation_entry && regs.PC == acceptance_simulation_entry &&
+            game->get_mbc()->get_rom() == game->get_rom()->get_rom() + (acceptance_simulation_bank - 1) * 0x4000) {
+        acceptance_simulation_active = true;
+        acceptance_simulation_sp = regs.SP;
+        acceptance_simulation_return = game->get_cpu()->read(regs.SP) | game->get_cpu()->read(regs.SP + 1) << 8;
+    }
+
     if (acceptance_menu_active && regs.SP == acceptance_menu_sp + 2 && regs.PC == acceptance_menu_return)
         acceptance_menu_active = false;
     if (acceptance_menu_entry && regs.PC == acceptance_menu_entry &&

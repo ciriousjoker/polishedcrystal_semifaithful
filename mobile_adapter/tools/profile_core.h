@@ -85,20 +85,20 @@ struct MobileRenderSpan {
 };
 static MobileRenderSpan mobile_render_spans[26];
 static unsigned mobile_scene_stage_address;
-static uint64_t mobile_scene_steps[9][6] = {};
-static uint64_t mobile_scene_window_steps[9][7] = {};
-static unsigned mobile_scene_entry_lines[9][154] = {};
+static uint64_t mobile_scene_steps[10][6] = {};
+static uint64_t mobile_scene_window_steps[10][7] = {};
+static unsigned mobile_scene_entry_lines[10][154] = {};
 extern "C" void mobile_profile_scene(unsigned stage_address) {
     mobile_scene_stage_address = stage_address;
 }
 extern "C" uint64_t mobile_profile_scene_metric(unsigned index) {
-    return index < 54 ? mobile_scene_steps[index / 6][index % 6] : 0;
+    return index < 60 ? mobile_scene_steps[index / 6][index % 6] : 0;
 }
 extern "C" uint64_t mobile_profile_scene_window_metric(unsigned index) {
-    return index < 63 ? mobile_scene_window_steps[index / 7][index % 7] : 0;
+    return index < 70 ? mobile_scene_window_steps[index / 7][index % 7] : 0;
 }
 extern "C" uint64_t mobile_profile_scene_entry(unsigned index) {
-    if (index >= 18) return 154;
+    if (index >= 20) return 154;
     const auto& lines = mobile_scene_entry_lines[index / 2];
     uint64_t total = 0, seen = 0;
     for (unsigned count : lines) total += count;
@@ -409,7 +409,7 @@ static void mobile_profile_before_instruction(gb* game, const cpu_regs& regs, in
             if (index == 16 && mobile_scene_stage_address) {
                 span.stage = game->get_cpu()->read(mobile_scene_stage_address);
                 span.ly = ly;
-                if (span.stage < 9 && ly < 154 && mobile_observed_frames >= mobile_world_start &&
+                if (span.stage < 10 && ly < 154 && mobile_observed_frames >= mobile_world_start &&
                         mobile_observed_frames < mobile_world_start + 800)
                     mobile_scene_entry_lines[span.stage][ly]++;
             }
@@ -540,7 +540,7 @@ static void mobile_profile_after_instruction(gb* game, const cpu_regs& regs, int
                     mobile_native_figure_counts[i] = byte(count);
                 }
             }
-            if (&span == &mobile_render_spans[14] && mobile_scene_stage_address && span.stage < 9) {
+            if (&span == &mobile_render_spans[14] && mobile_scene_stage_address && span.stage < 10) {
                 auto& step = mobile_scene_steps[span.stage];
                 step[0]++;
                 step[1] = std::max(step[1], elapsed);
@@ -548,7 +548,7 @@ static void mobile_profile_after_instruction(gb* game, const cpu_regs& regs, int
                 step[3] = std::max(step[3], uint64_t(span.ly));
                 step[4] = std::max(step[4], uint64_t(game->get_cpu()->read(0xff44)));
                 const unsigned next_stage = game->get_cpu()->read(mobile_scene_stage_address);
-                step[5] |= 1u << (next_stage < 9 ? next_stage : 15);
+                step[5] |= 1u << (next_stage < 10 ? next_stage : 15);
                 if (mobile_observed_frames >= mobile_world_start && mobile_observed_frames < mobile_world_start + 800) {
                     auto& window = mobile_scene_window_steps[span.stage];
                     window[0]++;
@@ -556,7 +556,7 @@ static void mobile_profile_after_instruction(gb* game, const cpu_regs& regs, int
                     window[2] += elapsed;
                     window[3] = std::max(window[3], uint64_t(span.ly));
                     window[4] = std::max(window[4], uint64_t(game->get_cpu()->read(0xff44)));
-                    window[5] |= 1u << (next_stage < 9 ? next_stage : 15);
+                    window[5] |= 1u << (next_stage < 10 ? next_stage : 15);
                     if (game->get_cpu()->read(mobile_vblank_address) != span.vblank) window[6]++;
                 }
             }

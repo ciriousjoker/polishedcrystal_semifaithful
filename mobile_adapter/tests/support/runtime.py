@@ -506,7 +506,7 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
     threading.Thread(target=proxy.serve_forever, daemon=True).start()
     proxy.started = time.monotonic()
 
-    def client(index, enabled):
+    def client(index, enabled, original_actors=False):
         speed = speeds[index]
         replay = None
         # Native initialization is complete before frame 500. The explicit join
@@ -522,7 +522,7 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
                 replay = json.loads((out / f"mobile/{index}/profile.json").read_text())
                 profile = replay["world_window_start"]
                 total = json.loads((out / f"mobile/{index}/state.json").read_text())["frame_calls"]
-        directory = out / ("mobile" if enabled else "single") / str(index)
+        directory = out / ("mobile" if enabled else "single-original" if original_actors else "single") / str(index)
         directory.mkdir(parents=True)
         rom = directory / "fixture.gbc"
         current, bindings = (mobile, mobile_symbols) if enabled else (native, native_symbols)
@@ -540,7 +540,7 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
         # SPAWN_HOME's entry is current-build data; only map position differs per player.
         values = {"wMapGroup": fx["map"]["group"], "wMapNumber": fx["map"]["number"], "wXCoord": position[0], "wYCoord": position[1]}
         changes["AcceptanceSpawn"] = bytes(values[name] for name in fx["map"]["spawn_fields"])
-        if not enabled and fx["equal_actor_load"]:
+        if not enabled and fx["equal_actor_load"] and not original_actors:
             figure_at = rom_offset(bindings["AcceptanceFigures"])
             figures = original_rom[figure_at:figure_at + 4]
             positions = [fx["primary"], *fx["peers"]]
@@ -678,6 +678,10 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
             online = [future.result() for future in futures]
         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
             offline = list(pool.map(lambda index: client(index, False), range(4)))
+        # Keep equal actor load for performance. Separately replay the same
+        # original NPCs for exact simulation: additional native avatars cause
+        # legitimate extra sprite reloads when a dialogue closes.
+        original_npc_control = client(0, False, original_actors=True) if action == "npc-movement" else None
         save_reload = []
         if action == "save":
             for producer, consumer in (("mobile", "single"), ("single", "mobile")):
@@ -714,6 +718,7 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
             "fault": fault, "injected": proxy.injected, "recovered": proxy.recovered, "speeds": speeds, "action": action,
             "execution_mode": "functional-400-percent" if functional else "controlled-real-time",
             "recovery": recovery,
+            "original_npc_control": original_npc_control,
             "save_reload": save_reload,
             "initial_save_sha256": [sha(seed) for seed in seeds],
             "artifact_directory": str(out),

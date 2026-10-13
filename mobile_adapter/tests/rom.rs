@@ -737,24 +737,114 @@ fn npc_conversation_and_native_event_execute_with_remote_players() {
     );
 }
 #[test]
-fn scripted_native_npc_simulation_matches_singleplayer_frame_by_frame() {
+fn scripted_native_npc_performance_matches_equal_native_actor_load() {
     let e = evidence("npc-movement");
     connected(&e);
-    cadence(&e);
-    let c = &clients(&e)[0];
-    let mobile: Vec<_> = steady(&c["mobile"])
-        .map(|s| n(s, "vAcceptanceNativeHash"))
-        .collect();
-    let native: Vec<_> = steady(&c["single"])
-        .map(|s| n(s, "vAcceptanceNativeHash"))
-        .collect();
+    assert_eq!(e["fixture"]["equal_actor_load"], true);
+    let completed_counts = |run: &Value| -> Vec<u64> {
+        let first = n(&run["profile"], "world_window_start");
+        let mut counts = vec![0; limit("profile_frames") as usize];
+        assert_eq!(n(&run["profile"], "completed_native_update_overflow"), 0);
+        for row in run["profile"]["completed_native_updates"]
+            .as_array()
+            .expect("Missing completed world-update evidence")
+        {
+            let frame = row[0].as_u64().unwrap();
+            if frame >= first && frame < first + counts.len() as u64 {
+                counts[(frame - first) as usize] += 1;
+            }
+        }
+        counts
+    };
+    // Compare completed updates, rather than entries into a routine that can
+    // straddle a frontend frame boundary. Keep equal actor load for performance.
+    for (i, c) in clients(&e).iter().enumerate() {
+        let mobile = completed_counts(&c["mobile"]);
+        let native = completed_counts(&c["single"]);
+        let (mut m, mut s) = (0, 0);
+        for (frame, (&a, &b)) in mobile.iter().zip(&native).enumerate() {
+            m += a;
+            s += b;
+            assert!(
+                m >= s,
+                "Client {i}: additional equal-load delay at frame {frame}"
+            );
+        }
+        let occupied = |rows: &[u64]| rows.iter().filter(|&&count| count > 0).count();
+        let max_gap = |rows: &[u64]| {
+            let positions: Vec<_> = rows
+                .iter()
+                .enumerate()
+                .filter(|(_, count)| **count > 0)
+                .map(|(frame, _)| frame)
+                .collect();
+            positions
+                .windows(2)
+                .map(|pair| pair[1] - pair[0])
+                .max()
+                .unwrap_or(rows.len())
+        };
+        assert!(
+            occupied(&mobile) >= occupied(&native),
+            "Client {i}: additional dropped frames"
+        );
+        assert!(
+            max_gap(&mobile) <= max_gap(&native),
+            "Client {i}: longer native update gap"
+        );
+        // Dialogue closure in the equal-load control reloads three extra native
+        // avatars and changes the engine's normal busy-VBlank credit. Preserve
+        // the strict duplicate/cadence gate against the original NPC path.
+        let reference = if i == 0 {
+            &e["original_npc_control"]
+        } else {
+            &c["single"]
+        };
+        if let Some(error) =
+            mobile_acceptance::contracts::cadence_regression(&completed_counts(reference), &mobile)
+        {
+            panic!("Client {i}: {error}");
+        }
+    }
+}
+#[test]
+fn scripted_native_npc_simulation_matches_after_completed_world_updates() {
+    let e = evidence("npc-movement");
+    connected(&e);
+    let original = &e["original_npc_control"];
+    assert!(
+        original.is_object(),
+        "Missing independent original-NPC control"
+    );
+    let completed = |run: &Value| -> Vec<u64> {
+        assert_eq!(n(&run["profile"], "completed_native_update_overflow"), 0);
+        run["profile"]["completed_native_updates"]
+            .as_array()
+            .expect("Completed native object updates")
+            .iter()
+            .map(|row| row[1].as_u64().expect("Native simulation hash"))
+            .collect()
+    };
+    let mobile = completed(&clients(&e)[0]["mobile"]);
+    let native = completed(original);
     assert!(
         native.iter().collect::<BTreeSet<_>>().len() > 8,
-        "The native movement scenario did not actually move an NPC"
+        "The original native movement scenario did not actually move an NPC"
     );
     assert_eq!(
-        mobile, native,
-        "Remote presentation changed native scripted NPC simulation"
+        mobile.len(),
+        native.len(),
+        "Original NPC update count changed"
+    );
+    let common = native.len();
+    assert!(
+        common as u64 >= limit("profile_frames"),
+        "Insufficient completed simulation history"
+    );
+    assert_eq!(
+        &mobile[..common],
+        &native[..common],
+        "Remote presentation changed original NPC simulation after a completed world update"
     );
 }
 #[test]

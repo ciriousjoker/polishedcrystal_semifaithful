@@ -866,6 +866,18 @@ int main(int argc, char** argv) {
                 native_addresses.at("hCurSpriteYPixel").second, native_addresses.at("hCurSpriteTile").second,
                 native_addresses.at("hCurSpriteOAMFlags").second, acceptance_word("AcceptanceObjectStride"),
                 native_addresses.at("wObjectStructs").first, acceptance_word("AcceptanceObjectSprite"), acceptance_word("AcceptanceObjectMap"));
+            auto object_update = native_addresses.at("HandleMapObjects");
+            symbol<void(*)(unsigned,unsigned,unsigned,unsigned,unsigned,unsigned,unsigned)>(core, "acceptance_profile_simulation")(
+                object_update.first, object_update.second, native_addresses.at("wObjectStructs").first,
+                native_addresses.at("wObjectStructs").second, acceptance_word("AcceptanceObjectStride"),
+                acceptance_word("AcceptanceObjectMap"),
+                acceptance_data("AcceptanceScenarioCounts", acceptance_data("AcceptanceScenarioID")));
+            auto simulation_field = symbol<void(*)(unsigned,unsigned)>(core, "acceptance_profile_simulation_field");
+            const unsigned simulation_fields = acceptance_symbols.at("AcceptanceSimulationFieldsEnd").address -
+                                               acceptance_symbols.at("AcceptanceSimulationFields").address;
+            if (simulation_fields > 64) fail("Simulation field observer capacity exceeded");
+            for (unsigned i = 0; i < simulation_fields; ++i)
+                simulation_field(i, acceptance_data("AcceptanceSimulationFields", i));
             auto save_start = native_addresses.at("wPlayerData");
             auto save_routine = native_addresses.at("SaveGameData");
             symbol<void(*)(unsigned,unsigned)>(core,"acceptance_profile_save_routine")(save_routine.first,save_routine.second);
@@ -1307,18 +1319,18 @@ int main(int argc, char** argv) {
         }
         if (auto scene = reinterpret_cast<Metric>(dlsym(core, "mobile_profile_scene_metric"))) {
             const char* fields[] = {"count", "max_cycles", "total_cycles", "max_entry_ly", "max_exit_ly", "return_stage_mask"};
-            for (unsigned stage = 0; stage < 9; ++stage)
+            for (unsigned stage = 0; stage < 10; ++stage)
                 for (unsigned field = 0; field < 6; ++field)
                     profile << ",\"scene_stage" << stage << '_' << fields[field] << "\":" << scene(stage * 6 + field);
         }
         if (auto scene = reinterpret_cast<Metric>(dlsym(core, "mobile_profile_scene_window_metric"))) {
             const char* fields[] = {"count", "max_cycles", "total_cycles", "max_entry_ly", "max_exit_ly", "return_stage_mask", "vblank_crossings"};
-            for (unsigned stage = 0; stage < 9; ++stage)
+            for (unsigned stage = 0; stage < 10; ++stage)
                 for (unsigned field = 0; field < 7; ++field)
                     profile << ",\"scene_stage" << stage << "_window_" << fields[field] << "\":" << scene(stage * 7 + field);
         }
         if (auto entry = reinterpret_cast<Metric>(dlsym(core, "mobile_profile_scene_entry"))) {
-            for (unsigned stage = 0; stage < 9; ++stage)
+            for (unsigned stage = 0; stage < 10; ++stage)
                 profile << ",\"scene_stage" << stage << "_window_entry_ly_p50\":" << entry(stage * 2)
                         << ",\"scene_stage" << stage << "_window_entry_ly_p95\":" << entry(stage * 2 + 1);
         }
@@ -1342,6 +1354,15 @@ int main(int argc, char** argv) {
                 profile << ']';
             }
             profile << ']';
+        }
+        if (acceptance_enabled) {
+            auto record = symbol<unsigned(*)(unsigned,unsigned)>(core, "acceptance_profile_simulation_record");
+            profile << ",\"completed_native_updates\":[";
+            for (unsigned i = 0; i < record(0, 2); ++i) {
+                if (i) profile << ',';
+                profile << '[' << record(i, 0) << ',' << record(i, 1) << ']';
+            }
+            profile << "],\"completed_native_update_overflow\":" << record(0, 3);
         }
         profile << ",\"raster_alignment_lines\":" << raster_alignment_lines
                 << ",\"raster_alignment_frame\":" << raster_alignment_frame
