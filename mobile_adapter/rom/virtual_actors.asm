@@ -118,20 +118,10 @@ MobileNativeIdle::
 	ld a, [wMobileLastFrame]
 	cp b
 	jr z, .sample
-; Replenish serial/frame credit before presentation, but do not spend the
-; same small idle window parsing a packet and rebuilding a complete scene.
-; One quarter of late frames retains the normal transport/asset slot.
-	ld a, [wMobileVirtualStage]
-	and a
-	jr z, .first_transport
-	ldh a, [rLY]
-	cp 116
-	jr c, .first_transport
-	ldh a, [hVBlankCounter]
-	and 3
-	jr z, .first_transport
-	call MobileTickCredit
-	jp .compose
+; Every frame must advance the bounded transport state, including response
+; parsing and command deadlines. A scene that cannot finish must not repeatedly
+; reserve its first idle slice and starve a live connection. Rendering uses the
+; remaining slices under its unchanged admission deadlines.
 .first_transport
 	call MobileTick
 	jp .done
