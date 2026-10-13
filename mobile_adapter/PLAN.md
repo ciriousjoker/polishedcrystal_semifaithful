@@ -1,5 +1,41 @@
 # Mobile Adapter multiplayer plan
 
+## 2026-10-13: acceptance cost and consolidation review
+
+The first full artifact tree uses approximately 9.5 GiB. Measured logical sizes
+include 4,922 MiB of copied source/build content (including generated Flutter
+files, patch outputs and Rust artifacts), 2,530 MiB of projected scenario JSON,
+385 MiB of compressed traces and only 18 MiB of native-resolution final images.
+This is excessive test infrastructure overhead, not enlarged frame screenshots.
+The copy allowlist currently admits unnecessary ignored/generated content.
+
+Five ROM test functions measure cadence/deadlines across four shared executions:
+`empty`, `pool`, `speeds`, and `npc-movement`. The latter's equal-load comparison
+still needs correction. Frame-based fairness assertions are functional renderer
+contracts, not host wall-clock benchmarks. Function-only scenarios can execute
+with bounded concurrency and isolated output/ports after shared preparation and
+fixture creation are made race-safe. Keep performance scenarios exclusive across
+execution lanes. Do not remove the global lock without replacing its build/cache
+and duplicate-case coordination responsibilities. Maximal host oversubscription
+can cause genuine transport timeouts even in function-only scenarios.
+
+Different assertions for one case already reuse the expensive emulator result.
+Merging test names will not eliminate another emulator execution. In particular,
+free-scene appearance/presence/deadline checks share `empty`; full-pool checks
+share `pool`; save equality/reload share `save`; safety/save/escape assertions
+share each transport-fault execution. Some safety assertions are repeated and
+can be consolidated without deleting unique state-preservation assertions.
+Retain different injected faults, lighting conditions, input-lock contexts and
+native-vs-private error states; these exercise different execution paths.
+
+Optimization work should first exclude generated unrelated files from source
+copies, share immutable build inputs, compact/compress scenario evidence, cache
+loaded evidence and parallelize native controls/seed producers. Then add bounded
+functional-scenario scheduling with an exclusive performance lane. Retain
+independent named contract results and all current acceptance limits. Combining
+coherent setup/workflows can help, but one large sequential test that stops at
+its first failure weakens diagnosis and can hide later conditions.
+
 ## 2026-10-13: clarified acceptance requirements
 
 - Palette substitution is prohibited for every figure. Private hardware slots
