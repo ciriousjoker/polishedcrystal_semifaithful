@@ -135,6 +135,8 @@ with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
     verify_peer_invalidation(rom, symbols, require)
     from asm_raw_rectangle_tests import verify_raw_rectangles
     verify_raw_rectangles(rom, symbols, require)
+    from asm_graphics_ownership_tests import verify_graphics_ownership
+    verify_graphics_ownership(rom, symbols, require)
     # Execute each emitted suffix store sequence from the compiled jump table.
     # Verify every prefix byte survives, including tile/attribute bytes of hidden
     # quads, and all forty possible suffix lengths stay within the DMA page.

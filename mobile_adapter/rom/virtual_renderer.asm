@@ -38,6 +38,9 @@ MobileVirtualBeginSprites::
 	ld bc, 8
 	xor a
 	rst ByteFill
+	ld a, [wMobileNativeGraphicsFence]
+	and a
+	jr nz, .done
 	ldh a, [hInMenu]
 	and a
 	jr nz, .done
@@ -684,6 +687,9 @@ MobileVirtualAdvanceNativeClass:
 	ret
 
 MobileVirtualFrameValid:
+	ld a, [wMobileNativeGraphicsFence]
+	and a
+	jr nz, .invalid
 ; A private frame is valid only for the immediately following world VBlank.
 	ld a, [wMobileVirtualPreviousOAM]
 	and a

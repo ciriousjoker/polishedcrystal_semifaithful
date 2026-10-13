@@ -390,6 +390,13 @@ MobileNativePrepareSpritesWork:
 	ret
 
 MobileVirtualUploadJob:
+	ld a, [wMobileNativeGraphicsFence]
+	and a
+	jr z, .ownership_ready
+	farcall MobileNativeGraphicsRelease
+	and a
+	ret nz
+.ownership_ready
 	ld a, [wMobileVirtualQueuedPeer]
 	and a
 	ret nz ; source and identity remain immutable until the hardware commit
@@ -1034,6 +1041,7 @@ MobileNativeResetLeases:
 	rst ByteFill
 	ld [wMobileVirtualQueuedPeer], a
 	ld [wMobileVirtualForceFull], a
+	ld [wMobileNativeGraphicsFence], a
 	ld [wMobileVirtualBaseReady], a
 	ld a, $80
 	ld [wMobileVirtualNeedColorAudit], a

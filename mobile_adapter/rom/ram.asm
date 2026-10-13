@@ -80,6 +80,7 @@ wMobileColdFrame:: db
 wMobileEmergencyLatch:: db
 wMobileEmergencyPending:: db
 wMobileNativePrepareFrame:: db
+wMobileNativeGraphicsFence:: db
 wMobileResidentEnd::
 ASSERT wMobileResidentEnd - wMobileResidentStart <= 128
 

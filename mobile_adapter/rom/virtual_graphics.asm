@@ -4,6 +4,9 @@ SECTION "Mobile Virtual Graphics", ROMX, BANK[MOBILE_ROM_BANK]
 MobileVirtualGraphicsStart::
 
 MobileVirtualCommitPose::
+	ld a, [wMobileNativeGraphicsFence]
+	and a
+	ret nz
 	ld a, [wMobileVirtualQueuedPeer]
 	and a
 	ret z

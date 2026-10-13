@@ -347,6 +347,9 @@ DoneHBlankCopy:
 	reti
 
 WriteVCopyRegistersToHRAM:
+if DEF(MOBILE_ADAPTER)
+	farcall MobileNativeGraphicsRequest
+endc
 	ld a, e
 	ldh [hRequestedVTileSource], a
 	ld a, d

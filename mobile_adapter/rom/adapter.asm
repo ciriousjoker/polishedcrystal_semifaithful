@@ -1187,11 +1187,12 @@ MobileCodeEnd::
 ASSERT MobileCodeEnd - MobileCodeStart <= 8192
 INCLUDE "mobile_adapter/rom/native_instance.asm"
 INCLUDE "mobile_adapter/rom/native_palettes.asm"
+INCLUDE "mobile_adapter/rom/graphics_ownership.asm"
 
 INCLUDE "mobile_adapter/rom/virtual_renderer.asm"
 mobile_virtual_assets
 
-SECTION "Mobile Compatibility", ROMX, BANK[MOBILE_ROM_BANK]
+SECTION "Mobile Compatibility", ROMX, BANK[MOBILE_ROM_BANK + 5]
 MobileCompatibilityHash::
 if DEF(MOBILE_TEST_SCENARIOS)
 	INCBIN "mobile_adapter/build-mobile-test/compatibility.sha256"

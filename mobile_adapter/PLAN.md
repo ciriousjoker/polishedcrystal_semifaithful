@@ -69,6 +69,50 @@ starved scene cannot seed any entries. Dynamic-geometry fairness must remain
 an acceptance requirement; stationary-cache passes alone do not prove completion.
 Milestone 2 remains open; do not run the complete suite yet.
 
+## 2026-10-13: native graphics ownership fence in progress
+
+New conditional integration at `WriteVCopyRegistersToHRAM` preserves every native
+register and observes both LCD-on and LCD-off 1bpp/2bpp requests. A request which
+actually overlaps private VRAM invalidates only private OAM tokens, queued poses
+and window owners. Native scripts, menus, panning and active native animation
+structs retain ownership; the upload job releases the fence only after these
+native lifetimes end. Cleared window owners force immutable avatar pose reload.
+No timeout, NPC mutation or palette substitution is used.
+
+Production build passes: 45,236 upper feature bytes, 13,947 bytes free downstairs
+(net fourteen integration bytes versus pristine). The compatibility identity's
+32-byte data moved to upper bank 133 to leave room in bank 128. Clean counterpart
+SHA remains the pristine baseline. Host production contracts pass: 14,496 emitted
+VRAM interval/register/lifetime vectors, including exact boundaries, weather's
+unowned bank-0 $6d/$6e, every native animation slot, menus, scripts and panning.
+Focused `m2-graphics-ownership-20261013` map-transition/stale-record acceptance
+passes with four actual emulators. This fence is not yet emulator-verified with
+actual Headbutt/Fly lifetimes; do not
+claim the temporary graphics problem complete.
+
+Remaining renderer architecture: prefer a separate canonical resource selector
+and fresh-emission batch before an exact admission-plan cache. An aligned scene
+has one urgent peer, so store one private binding and current successor scheduler
+state, not old RGB/OAM. Full scheduler key includes NPC/ground rotations, peer
+phase and palette rotation (period eight). A presumed six-frame period is wrong.
+Exact native resource signature must read current raw top/palette from ShadowOAM;
+raw descriptor coordinate bytes are stale by design. Include every eligible or
+omitted source's count/class/row/color, and selected-peer current row/appearance.
+Always validate current map/instance/status, draw validity, loaded appearance,
+window owner and current lighting. On a cache miss, build selection without raw
+copy/template transforms so a saturated scene can seed a plan even if emission
+cannot finish that frame. A hit must bypass local/peer/native admission too,
+rather than collecting a signature and then repeating the entire PeerGroup.
+
+Unused private legacy bank-5 tile reservation: output occupies $d700..$d79f,
+row planes end near $d830, leaving $d840..$da5f before the real private colors at
+$da60. Up to 24 compact 22-byte plans fit $d840..$da4f. Geometry signatures can
+use unused order-tail memory $dc40..$dcff. These are candidates, not allocations.
+Native raw output comes from current ShadowOAM; overflow facing mirrors currently
+live in bank 128, while generated descriptor programs are in bank 130. Renderer
+is 5,985 bytes and fast scene about 1,175 bytes; all remain in bank 128. Moving
+whole code banks has call/return overhead and should not be the first optimization.
+
 ## 2026-10-13: dense renderer optimization in progress
 
 Milestone 2 is not complete. Focused saturated-pool run
