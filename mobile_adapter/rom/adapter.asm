@@ -148,7 +148,7 @@ MobileTick::
 	ld [wMobileAvailability], a
 	call MobileFrozenOverworld
 	jr z, .available
-	call MobileNativeInvalidateHash
+	farcall MobileNativeInvalidateHash
 	xor a
 	ld [wMobileAvailability], a
 	ld [wMobileLocalValid], a

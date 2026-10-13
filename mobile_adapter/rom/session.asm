@@ -800,7 +800,7 @@ MobileValidatePeer:
 	ret
 
 MobileMapEntered::
-	call MobileNativeInvalidateHash
+	farcall MobileNativeInvalidateHash
 	call MobileNativeResetLeases
 	xor a
 	ld [wMobileBudgetCursor], a
@@ -854,7 +854,7 @@ MobileCapture::
 .paused
 	call MobileFrozenOverworld
 	jr z, .frozen ; ordinary Start menu retains its stationary world graphics
-	call MobileNativeInvalidateHash
+	farcall MobileNativeInvalidateHash
 	xor a
 	ld [wMobileLocalValid], a
 ; Native menu/map graphics may overwrite private pose windows. Force a complete
@@ -870,7 +870,7 @@ MobileCapture::
 	ld a, [wMobileLocalValid]
 	and a
 	jr nz, .epoch
-	call MobileNativeInstanceSlice
+	farcall MobileNativeInstanceSlice
 	jr c, .fingerprint_ready
 	pop af
 	ldh [rWBK], a

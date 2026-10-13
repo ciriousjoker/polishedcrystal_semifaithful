@@ -1,5 +1,5 @@
 ; Map fingerprints are derived in bounded idle jobs, never in the game frame.
-SECTION "Mobile Native Map Fingerprint", ROMX, BANK[MOBILE_ROM_BANK]
+SECTION "Mobile Native Map Fingerprint", ROMX, BANK[MOBILE_ROM_BANK + 5]
 MobileNativeInstanceStart::
 MobileNativeInstanceSlice:
 ; Enter/leave WBK=1. Carry means the complete coherent fingerprint is ready.

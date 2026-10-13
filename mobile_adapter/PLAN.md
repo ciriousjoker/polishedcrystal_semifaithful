@@ -113,6 +113,36 @@ live in bank 128, while generated descriptor programs are in bank 130. Renderer
 is 5,985 bytes and fast scene about 1,175 bytes; all remain in bank 128. Moving
 whole code banks has call/return overhead and should not be the first optimization.
 
+## 2026-10-13: NPC comparison attribution and renderer bank space
+
+`m2-native-reload-attribution-20261013` is diagnostic evidence, not replacement
+acceptance. A copied read-only diagnostic core logs GetUsedSprite and native
+DelayFrame callsites around dialogue closure. The equal-load control makes six
+sprite reload calls; clearing only the declared test-ROM stand-in configuration
+makes three, matching the original actor population. No instruction, CPU state,
+RAM or save was patched. Existing physical inputs and raster alignment replay.
+
+Equal-load control: 704 update frames, zero duplicates, maximum gap 97. Original
+actors control: 706 update frames, one duplicate, maximum gap 95, exactly matching
+the mobile run's cadence. Original actors and mobile NPC snapshot hashes differ
+in one frame (2045), versus 555 frames with equal-load stand-ins. This suggests a
+snapshot during partially completed native work rather than a changed simulation
+trajectory, but a completed-world-update observer is still needed to prove that.
+The current acceptance gate is unchanged and still failed. A clarification is
+pending: retain equal-load performance controls and compare completed NPC updates
+against the identical original actor population, or require exact dialogue-end
+lockstep even though stand-ins add three native decompression/transfer waits.
+Do not silently replace the failed acceptance evidence with this diagnostic.
+
+The additional first-class advancement micro-optimization was removed after
+`m2-first-class-20261013`: only 152 clocks improved in the largest stage-4 slice,
+with no publications or fairness improvement. Its complexity is not justified.
+Cold map-fingerprint routines move from full bank 128 to bank 133; five callsites
+now use explicit farcalls. This frees 170 bytes for renderer entry glue without
+moving upstream game code. Host contracts and focused four-core map-transition
+acceptance pass. Lower net integration stays fourteen bytes. New renderer logic
+should live in an additional upper bank rather than fill bank 128 again.
+
 ## 2026-10-13: dense renderer optimization in progress
 
 Milestone 2 is not complete. Focused saturated-pool run
