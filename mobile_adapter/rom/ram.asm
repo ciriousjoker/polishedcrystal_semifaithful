@@ -71,7 +71,7 @@ wMobileBudgetPriority:: db
 wMobileBudgetIndex:: db
 wMobileBudgetOptional:: db
 wMobileBudgetCursor:: db
-wMobileIRQTrampoline:: ds MOBILE_IRQ_TRAMPOLINE_SIZE
+wMobileIRQInstallOffset:: dw
 wMobilePumpCount:: db
 wMobileVirtualActorMode::
 wMobileNativeActorMode::
@@ -184,12 +184,13 @@ ASSERT wMobileBufferEnd - wMobileBufferStart <= 1536
 ASSERT wMobileBufferStart >= $d4eb && wMobileBufferEnd <= $e000
 
 ; Independent persistent graphics cache in the audited bank-2 tail.
-SECTION "Mobile Avatar Cache", WRAMX[$da40], BANK[MOBILE_WRAM_BANK]
+SECTION "Mobile Avatar Cache", WRAMX[$db00], BANK[MOBILE_WRAM_BANK]
 for peer, 1, MOBILE_PEERS + 1
 wMobileAvatarCache{d:peer}:: ds 24 tiles
 endr
 wMobileAvatarCacheEnd::
-ASSERT wMobileBufferEnd <= wMobileAvatarCache1
+ASSERT wMobileBufferEnd <= MobileIRQRuntimeStart
+ASSERT MobileIRQRuntimeEnd <= wMobileAvatarCache1
 ASSERT wMobileAvatarCacheEnd <= $e000
 
 SECTION "Mobile Actor Backups", WRAMX[$d562], BANK[MOBILE_BACKUP_BANK]
@@ -315,8 +316,8 @@ wMobileVirtualRectangleCount:: db
 wMobileVirtualRectangleTop:: db
 wMobileVirtualRemoteLimit:: db
 wMobileVirtualGroupOwner:: db
-wMobileVirtualKeepSlots:: ds OAM_COUNT / 4
-wMobileVirtualExtraOwners:: ds OAM_COUNT / 4
+wMobileIRQTrampoline:: ds MOBILE_IRQ_TRAMPOLINE_SIZE
+ds OAM_COUNT / 2 - MOBILE_IRQ_TRAMPOLINE_SIZE
 wMobileVirtualMapGroup:: db
 wMobileVirtualMapNumber:: db
 wMobileVirtualHasPrivateColors:: db
@@ -332,3 +333,26 @@ wMobileVirtualNativeColors:: ds NUM_PLAYER_GENDERS / 2
 wMobileVirtualNeedColorAudit:: db
 ASSERT NUM_PLAYER_GENDERS == 4
 ASSERT @ <= $cff0
+
+; Capture and composition are mutually exclusive phases of one world frame.
+DEF wMobileVirtualCaptureClass EQU wMobileVirtualMirror
+EXPORT wMobileVirtualCaptureClass
+
+SECTION "Mobile Virtual Order", WRAMX[$dc00], BANK[MOBILE_BACKUP_BANK]
+wMobileVirtualGroundRotation:: db
+wMobileVirtualNativeNext:: db
+wMobileVirtualGroundNext:: db
+wMobileVirtualPeerMask:: db
+wMobileVirtualPaletteRotation:: db
+wMobileVirtualClass:: db
+wMobileVirtualOrderCount:: db
+wMobileVirtualNPCCount:: db
+wMobileVirtualOrderValid:: db
+wMobileVirtualSelectedOrdinal:: db
+wMobileVirtualSelectedClass:: db
+wMobileVirtualMembership:: ds NUM_OBJECT_STRUCTS - 1
+wMobileVirtualOrder:: ds NUM_OBJECT_STRUCTS - 1
+wMobileVirtualOrderBase:: ds NUM_OBJECT_STRUCTS - 1
+wMobileVirtualOrderNativeRotation:: db
+wMobileVirtualOrderGroundRotation:: db
+ASSERT @ <= $dd00

@@ -1,5 +1,106 @@
 # Mobile Adapter multiplayer plan
 
+## 2026-10-13: physical raster diagnostics and palette transactions
+
+Focused palette-pressure acceptance passes with the weather-safe third-window
+mapping: bank-0 $6c and bank-1 $3f/$7f/$ff. The normal first two windows remain
+bank-0 $64..$6b. Host-only production instruction contracts pass, including a
+compiled reachable-call audit of the 336-byte protected RAM IRQ. The direct
+third-window upload now uses four independent tile transfers; maximum measured
+pose commit is 3,952 clocks. Native temporary graphics ownership still needs a
+fence and weather-pixel/field-move verification before final acceptance.
+
+Reusing unchanged class order lowers saturated warm stage 1 from 4,480 to 3,504
+clocks, but `m2-order-reuse-20261013` still has zero publications. Its first setup
+failed because the manually built diagnostic core lacked the acceptance observer;
+that failure is retained separately. Adding the existing read-only acceptance
+observer allowed the actual 50.8-second pool replay. No product assertion changed.
+
+Physical diagnostics exposed a real harness phase problem: retro_run advances
+154 scanlines without restoring its boundary after LCD-off startup. Eleven NPC
+0/2 host-bin pairs belong to distinct raster epochs. The test-only frontend now
+can advance the existing gb::run scanline path to a real LCD-on 153->0 wrap before
+measurement. It never writes RAM, registers, ROM or timing configuration, and
+never realigns during measurement. Inputs then use the same physical boundary.
+The second alignment pilot waits for actual idle overworld/LCD readiness rather
+than the earlier fixture marker. In `m2-raster-aligned-2-20261013`, all measured
+boundaries are correct; native has 704 update frames/zero duplicates and mobile
+706/one duplicate. That actual duplicate occurs at dialogue completion and still
+fails the unchanged acceptance gate, including native NPC frame-state equality.
+
+The palette-signature experiment was rejected and removed: native palette
+updates can be requested after the initial snapshot, so clearing their dirty flag
+could suppress legitimate game colors. It did not improve the dialogue cadence
+failure. The remaining dialogue difference may result from the counterpart's
+three extra native sprite reloads, rather than additional multiplayer frame work;
+this attribution still needs narrow callsite evidence. Acceptance stays failed.
+
+The LY134 partial-publication experiment was rejected. It produced private
+frames but starved native object 10 and crossed VBlank during publication,
+introducing four duplicate world updates. Evidence remains in
+`m2-aligned-subset-20261013`; the experimental traversal change is removed.
+
+A confirmed publication bound defect is being fixed: hiding the unused OAM
+suffix cost 48 clocks per omitted quad, but admission assumed a near-full page.
+The new compiled jump table emits sixteen-clock Y stores (640 clocks maximum),
+validates length/alignment before any commit-visible changes, and has an explicit
+LY141 complete-return guard. Host contracts execute all 41 suffix sequences.
+Focused `m2-bounded-publication-20261013` verifies zero compositor/publication
+VBlank crossings, 800 native update frames and zero duplicates on all four
+clients. Publication now takes at most 1,540 measured clocks. Continuous remote
+presentation still fails: the last hundred frames show all three peers together
+in 89/88/88/97 frames, so this is a bounded publication fix, not renderer completion.
+Host production contracts pass, including the new suffix instruction cases.
+
+Next structural optimization: batch aligned native copies with register-resident
+output/list cursors and advance class rotation once per class. This avoids
+per-actor bookkeeping without caching stale pixels or moving admission into game
+work. Consider duplicated class lists only if the measured remaining cost
+justifies them. Milestone 2 remains open; do not run the complete suite yet.
+
+## 2026-10-13: dense renderer optimization in progress
+
+Milestone 2 is not complete. Focused saturated-pool run
+`m2-wram-irq-20261013` still produces no private OAM publications and fails
+native-object fairness. It preserves 800 native world updates in 800 frames,
+zero duplicates and zero compositor VBlank crossings. The compositor reaches
+stage 4 but cannot finish the native selection before its unchanged deadline.
+Do not run the complete suite until the renderer failures are resolved.
+
+The generated upper-bank native emission batch preserves the original priority
+traversal and general-facing fallback, emits canonical rectangles directly, and
+captures immutable descriptors without leasing native objects. Lower-half net
+integration is now ten bytes. The original emission body remains intact when
+multiplayer is disabled. Current mobile build occupies 44,481 feature bytes in
+upper MBC30 banks. Disabled production SHA remains the pristine baseline.
+
+A protected, executable bank-2 WRAM serial island at $d980..$dad0 avoids per-byte
+ROM-bank switching. Its only unbanked trampoline restores WBK after returning;
+all helper calls remain inside the island. Installation rewrites at most sixteen
+bytes per early idle invocation before claiming serial. Avatar cache moved to
+$db00..$df80. Exact placement/source-size assertions and the layout call audit
+protect these allocations. Measured worst-case whole serial IRQ decreased from
+1,580 to 1,372 CPU clocks, with zero register/bank failures. This improvement alone
+does not resolve dense presentation starvation.
+
+Rejected experiments were removed: projected-peer caching, per-frame native
+palette metadata caching and pre-rendered overflow pixels. The last increases
+foreground cost by 2,772 clocks while saving only 2,216 idle clocks. No post-DMA
+VBlank compositor or reduced transport quota has been adopted. Architectural
+advice is being sought before another structural renderer change.
+
+Host-only emitted-instruction contracts pass after teaching their runners the
+new exact-row preflight CALL/RET and palette-loan metadata. Added raw-copy cases
+exercise both sides of the current LY 141 deadline. All existing bounds, fairness
+thresholds and independent native-pixel/color oracles remain unchanged.
+
+Additional confirmed graphics work remains: third private pose window currently
+collides with weather tiles $6d/$6e. Candidate replacement is bank-0 $6c plus
+bank-1 $3f/$7f/$ff, contingent on loader/asset/facing ownership checks. Headbutt
+and Fly also temporarily write overlapping bank-0 tiles and require a native
+ownership fence and subsequent private reload. Do not call the graphics problem
+solved until weather and native-effect tests prove these lifetimes.
+
 ## 2026-10-13: verified unified-suite results and focused-test policy
 
 The corrected complete run is `acceptance-suite-20261013-unified-verified`.

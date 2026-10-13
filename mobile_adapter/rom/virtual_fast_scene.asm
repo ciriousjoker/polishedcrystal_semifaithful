@@ -2,6 +2,63 @@
 SECTION "Mobile Virtual Fast Scene", ROMX, BANK[MOBILE_ROM_BANK]
 MobileVirtualFastSceneStart::
 
+MACRO mobile_virtual_select_raw_native
+; Canonical ordinary rectangle, HL=descriptor+6. Admission and output are
+; identical to the local helper, without its general call/return protocol.
+	inc l
+	ld b, [hl]
+	ld a, b
+	add 8
+	ld l, a
+	ld h, HIGH(wShadowOAM)
+	ld c, [hl]
+	ld a, c
+	and a
+	jp z, \1
+	cp SCREEN_HEIGHT_PX + OAM_Y_OFS
+	jp nc, \1
+	inc l
+	inc l
+	inc l
+	ld a, [hl]
+	and OAM_PALETTE
+	ld e, a
+	ld a, [wMobileVirtualPlannedPrivateColors]
+	and a
+	jr z, .color_available\@
+	ld a, [wMobileVirtualDroppedSlot]
+	cp e
+	jp z, \1
+.color_available\@
+	ld a, c
+	swap a
+	and $f
+	add LOW(wMobileVirtualLines + 16)
+	ld l, a
+	ld h, HIGH(wMobileVirtualLines)
+	ld a, [hl]
+	cp 5
+	jp nc, \1
+	ldh a, [rLY]
+	cp 141
+	jp nc, \2
+	inc [hl]
+	ld a, [wMobileVirtualLength]
+	ld e, a
+	ld l, b
+	ld h, HIGH(wShadowOAM)
+	ld d, HIGH(wMobileVirtualOutput)
+rept 16
+	ld a, [hli]
+	ld [de], a
+	inc e
+endr
+	ld a, e
+	ld [wMobileVirtualLength], a
+	call MobileVirtualAdvanceNativeClass
+	jp \1
+ENDM
+
 MobileVirtualAlignedScene:
 ; Gather one compact, immutable view of every canonical native source. The
 ; accelerated selector is used only when more than ten visible native figures
@@ -80,22 +137,21 @@ MobileVirtualAlignedNativePass:
 ; Irregular scenes continue through the general selector with its larger bound.
 	ld a, [wMobileVirtualLength]
 	cp OAM_SIZE
-	jr nc, .done
+	jp nc, .done
 	ld a, [wMobileVirtualCursor]
-	cp NUM_OBJECT_STRUCTS - 1
-	jr nc, .done
 	ld b, a
+	ld a, [wMobileVirtualOrderCount]
+	cp b
+	jp z, .done
 	ldh a, [rLY]
-	cp 141
-	jr nc, .busy
-	ld a, [wMobileVirtualNativeRotation]
-	inc a
-	add b
-	cp NUM_OBJECT_STRUCTS - 1
-	jr c, .index_ready
-	sub NUM_OBJECT_STRUCTS - 1
-.index_ready
-	inc a
+	cp 142
+	jp nc, .busy
+	ld a, b ; the cursor was already loaded for the end-of-list check
+	ld [wMobileVirtualSelectedOrdinal], a
+	add LOW(wMobileVirtualOrder)
+	ld l, a
+	ld h, HIGH(wMobileVirtualOrder)
+	ld a, [hl]
 	ld [wMobileVirtualIndex], a
 	add a
 	add a
@@ -103,15 +159,27 @@ MobileVirtualAlignedNativePass:
 	add LOW(wMobileVirtualDescriptors + 6)
 	ld l, a
 	ld h, HIGH(wMobileVirtualDescriptors)
+	bit 7, [hl]
+	jp z, .template
+	mobile_virtual_select_raw_native .advance, .busy
+.template
 	ld a, [hl]
 	and $1f
 	jr z, .advance
+	ld a, [wMobileVirtualLength]
+	push af
 	call MobileVirtualAlignedNativeDescriptor
+	pop bc
+	ret c
+	ld a, [wMobileVirtualLength]
+	cp b
+	call nz, MobileVirtualAdvanceNativeClass
+	and a
 	ret c ; only an otherwise admissible copy can require another idle slice
 .advance
 	ld hl, wMobileVirtualCursor
 	inc [hl]
-	jr MobileVirtualAlignedNativePass
+	jp MobileVirtualAlignedNativePass
 .done
 	xor a
 	ld [wMobileVirtualCursor], a
@@ -159,15 +227,18 @@ MobileVirtualAlignedNativeDescriptor:
 	ret z
 	cp SCREEN_HEIGHT_PX + OAM_Y_OFS
 	ret nc
-	ld hl, wMobileVirtualBindings
-	add hl, de
-	ld a, [hl]
+	ld a, [wMobileVirtualPlannedPrivateColors]
 	and a
-	ret nz
+	jr z, .color_available
+	ld a, [wMobileVirtualDroppedSlot]
+	cp e
+	ret z
+.color_available
 	ld a, [wMobileVirtualIndex]
 	and a
 	jr nz, .ordinary_color
-; Only the local prefix precedes guest color allocation. Protect its exact color.
+; No later guest follows aligned native admission. Only the local prefix
+; needs to reserve a native color before the one urgent private loan.
 	ld hl, MobileVirtualPaletteBits
 	add hl, de
 	ld a, [wMobileVirtualPaletteUsed]
@@ -189,7 +260,7 @@ MobileVirtualAlignedNativeDescriptor:
 ; Reject full rows and occupied colors before applying the copy deadline.
 ; Such candidates require no pixel work and must not strand a complete scene
 ; merely because their hypothetical template would have been expensive.
-	ld b, 139
+	ld b, 140 ; bounded descriptor program plus publication fits before VBlank
 	ld a, [wMobileVirtualHeaderOAM]
 	cp 255
 	jr z, .deadline
@@ -256,12 +327,13 @@ MobileVirtualAlignedRawRectangle::
 	ld a, [hl]
 	and OAM_PALETTE
 	ld e, a
-	add LOW(wMobileVirtualBindings)
-	ld l, a
-	ld h, HIGH(wMobileVirtualBindings)
-	ld a, [hl]
+	ld a, [wMobileVirtualPlannedPrivateColors]
 	and a
-	ret nz
+	jr z, .color_available
+	ld a, [wMobileVirtualDroppedSlot]
+	cp e
+	ret z
+.color_available
 	ld a, [wMobileVirtualIndex]
 	and a
 	jr nz, .ordinary
@@ -289,7 +361,7 @@ MobileVirtualAlignedRawRectangle::
 	and a
 	jr z, .admitted
 	ldh a, [rLY]
-	cp 140
+	cp 141 ; raw copy has the smaller measured bound
 	jr nc, .busy
 .admitted
 	inc [hl]

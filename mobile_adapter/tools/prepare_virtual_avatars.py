@@ -71,7 +71,10 @@ def source(rows):
         if name != 'Facings':
             lines += [f'\tASSERT {aliases[name]} - MobileCopiedFacingStepDown0 == {name} - FacingStepDown0']
     from prepare_native_rectangles import rectangle_programs
-    lines += [rectangle_programs(native)]
+    rectangles = rectangle_programs(native)
+    lines += [rectangles]
+    from prepare_native_batch import batch_source
+    lines += [batch_source((REPO / 'engine/overworld/map_objects.asm').read_text(), native, rectangles)]
     return '\n'.join(lines)
 
 

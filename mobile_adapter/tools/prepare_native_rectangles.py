@@ -99,11 +99,13 @@ def rectangle_programs(native):
                     if low_tile:
                         lines += [f'\tadd ${low_tile:02x}']
                     lines += ['\tld [bc], a', '\tinc c', f'if ({flags}) & RELATIVE_ATTRIBUTES',
-                              '\tldh a, [hCurSpriteOAMFlags]', f'\tor {flags}',
+                              '\tldh a, [hCurSpriteOAMFlags]', f'if ({flags}) & (OAM_XFLIP | OAM_YFLIP | OAM_PRIO)',
+                              f'\tor ({flags}) & (OAM_XFLIP | OAM_YFLIP | OAM_PRIO)', 'endc',
                               '\tand OAM_XFLIP | OAM_YFLIP | OAM_PRIO', '\tor d',
                               'else', '\tld a, d',
+                              f'if ({flags}) & (OAM_XFLIP | OAM_YFLIP | OAM_PRIO)',
                               f'\tor ({flags}) & (OAM_XFLIP | OAM_YFLIP | OAM_PRIO)',
-                              'endc', '\tld [bc], a', '\tld a, c', '\tsub 7', '\tld c, a']
+                              'endc', 'endc', '\tld [bc], a', '\tld a, c', '\tsub 7', '\tld c, a']
                 lines += ['\tjp .finish', '.unusual_base']
             if not ordinary:
                 # The alternate entry reads the immutable unbanked descriptor

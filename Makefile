@@ -100,7 +100,7 @@ MOBILE_MKDIR = @mkdir -p $(dir $@)
 endif
 ifeq ($(filter mobile,$(MAKECMDGOALS)),mobile)
 MOBILE_AVATAR_RAW := $(shell python3 mobile_adapter/tools/prepare_virtual_avatars.py --dependencies)
-$(MOBILE_OBJ_DIR)/virtual-avatars.asm: mobile_adapter/tools/prepare_virtual_avatars.py mobile_adapter/tools/prepare_native_rectangles.py data/sprites/facings.asm data/player/state_sprites.asm constants/sprite_constants.asm data/sprites/sprites.asm gfx/sprites.asm $(MOBILE_AVATAR_RAW)
+$(MOBILE_OBJ_DIR)/virtual-avatars.asm: mobile_adapter/tools/prepare_virtual_avatars.py mobile_adapter/tools/prepare_native_rectangles.py mobile_adapter/tools/prepare_native_batch.py engine/overworld/map_objects.asm data/sprites/facings.asm data/player/state_sprites.asm constants/sprite_constants.asm data/sprites/sprites.asm gfx/sprites.asm $(MOBILE_AVATAR_RAW)
 	python3 mobile_adapter/tools/prepare_virtual_avatars.py --output "$@"
 $(MOBILE_OBJ_DIR)/main.o: $(MOBILE_OBJ_DIR)/virtual-avatars.asm $(MOBILE_OBJ_DIR)/compatibility.sha256
 MOBILE_COUNTERPART_GOAL := $(if $(filter faithful,$(MAKECMDGOALS)),faithful,crystal)

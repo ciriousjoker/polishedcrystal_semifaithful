@@ -250,6 +250,8 @@ MobileVirtualCanCompose:
 	jr z, .publication
 	cp 3
 	jr z, .small
+	cp 5
+	jr z, .native_deadline ; late calls only close optional peer admission
 	cp 6
 	jr z, .weather_deadline
 	cp 4
@@ -265,7 +267,7 @@ MobileVirtualCanCompose:
 .native_deadline
 ; Each native group applies its own shape deadline before doing expensive
 ; admission. Empty descriptors must not inherit the sixteen-quad deadline.
-	ld b, 140
+	ld b, 142 ; late calls may only drain cheap rejections and publish bookkeeping
 	jr .deadline
 .start_deadline
 	ld a, [wMobileVirtualStage]
@@ -287,7 +289,7 @@ MobileVirtualCanCompose:
 	ld b, 140
 	jr .deadline
 .publication
-	ld b, 142 ; frozen private RGB and native VBlank upload need no palette merge
+	ld b, 141 ; bounded suffix stores, bindings, commit and complete caller return
 	jr .deadline
 .small
 	ld b, 138 ; one peer has a measured bound below six double-speed scanlines

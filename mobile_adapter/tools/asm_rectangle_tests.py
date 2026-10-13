@@ -158,14 +158,27 @@ def verify_rectangles(rom, symbols, require):
             elif opcode == 0x37:
                 carry = True
                 cycles += 4
-            elif opcode == 0xc9:
+            elif opcode == 0xcd:
+                target = fetch() | fetch() << 8
+                stack.append(("call", pc))
+                pc = target
+                cycles += 24
+            elif opcode in (0xc9, 0xd8):
+                taken = opcode == 0xc9 or carry
+                if not taken:
+                    cycles += 8
+                    continue
+                cycles += 16 if opcode == 0xc9 else 20
+                if stack and isinstance(stack[-1], tuple):
+                    pc = stack.pop()[1]
+                    continue
                 require(not stack, 'Rectangle admission left an unbalanced stack')
                 if carry:
                     require(bytes(memory[lines + 64:lines + 127]) == before_planes,
                             'Rejected rectangle changed admitted hardware row counters')
                     require(bytes(memory[lines + 16:lines + 27]) == before_bins,
                             'Rejected aligned rectangle changed admitted hardware bins')
-                return not carry, memory, cycles + 16
+                return not carry, memory, cycles
             else:
                 raise ValueError(f'Unexpected emitted rectangle opcode {opcode:02x}')
         raise ValueError('Rectangle admission failed to terminate')

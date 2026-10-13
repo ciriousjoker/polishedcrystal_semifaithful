@@ -117,28 +117,33 @@ endr
 	add hl, bc
 	xor a
 	ldh [rVBK], a
-	ld a, 3
-	ld b, a
+	ld b, 3
 	ld a, [wMobileVirtualQueuedWindow]
 	cp 2
 	jr nz, .copy
-	ld b, 2 ; the first three source quadrants occupy bank 0 tiles $6c..$6e
+; Preserve bank-0 weather tiles. Each third-window quadrant has its own
+; audited slot; the native fifteen-tile atlases leave $3f/$7f unused.
+	ld b, 0
 .copy
 	call .dma
 	ld a, [wMobileVirtualQueuedWindow]
 	cp 2
 	jr nz, .copied
-	ld a, e
-	add 3 tiles
-	ld e, a
-	jr nc, .last_source
-	inc d
-.last_source
-	ld hl, vTiles0 tile $3f
 	ld a, 1
 	ldh [rVBK], a
+for quadrant, 3
+	DEF tile_id = ($40 << quadrant) - 1
+	ld a, e
+	add 1 tiles
+	ld e, a
+	jr nc, .next_source{d:tile_id}
+	inc d
+.next_source{d:tile_id}
+	ld hl, vTiles0 tile tile_id
 	ld b, 0
 	call .dma
+	PURGE tile_id
+endr
 .copied
 	ld a, [wMobileVirtualQueuedWindow]
 	ld e, a
@@ -221,12 +226,28 @@ endr
 	ld b, a
 	inc hl
 	inc hl
+	ld a, [wMobileVirtualQueuedWindow]
+	cp 2
 	ld a, [hli]
+	jr z, .third_window
 	sub b
 	cp 2
 	jr nc, .not_present
 	bit 3, [hl]
 	jr nz, .not_present
+	jr .pose_present
+.third_window
+	cp $6c
+	jr nz, .third_mirror
+	bit 3, [hl]
+	jr nz, .not_present
+	jr .pose_present
+.third_mirror
+	cp $3f
+	jr nz, .not_present
+	bit 3, [hl]
+	jr z, .not_present
+.pose_present
 	ld a, [hl]
 	and ~(OAM_XFLIP | OAM_BANK1)
 	ld c, a

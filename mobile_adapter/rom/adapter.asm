@@ -1,5 +1,6 @@
 SECTION "Mobile Adapter", ROMX, BANK[MOBILE_ROM_BANK]
 MobileCodeStart::
+INCLUDE "mobile_adapter/rom/irq_helpers.asm"
 
 MobileTickCredit::
 ; Dense presentation may replenish frame credit without parsing a packet first.
@@ -341,6 +342,9 @@ MobileBegin:
 	ldh a, [rSC]
 	bit 7, a
 	ret nz
+	call MobileInstallIRQSlice
+	ret nc ; serial remains unclaimed until the protected image is complete
+	ldh a, [rSC]
 	ld [wMobileSavedSC], a
 	ldh a, [rSB]
 	ld [wMobileSavedSB], a
@@ -411,14 +415,82 @@ MobileBegin:
 	ei
 	ret
 
+; Install at most 16 bytes per early idle call, before acquiring serial.
+; Fresh joins rewrite the complete image, including after a restored savestate.
+MobileInstallIRQSlice:
+	ldh a, [rLY]
+	cp 132
+	ret nc
+	ld a, MOBILE_WRAM_BANK
+	ldh [rWBK], a
+	ld a, [wMobileIRQInstallOffset]
+	ld c, a
+	ld a, [wMobileIRQInstallOffset + 1]
+	ld b, a
+	ld hl, MobileIRQImageSource
+	add hl, bc
+	push hl
+	ld hl, MobileIRQRuntimeStart
+	add hl, bc
+	ld d, h
+	ld e, l
+	ld hl, MobileIRQImageEnd - MobileIRQImageSource
+	ld a, l
+	sub c
+	ld l, a
+	ld a, h
+	sbc b
+	ld h, a
+	jr c, .restart
+	or l
+	jr z, .restart
+	ld a, h
+	and a
+	ld a, 16
+	jr nz, .chunk
+	ld a, l
+	cp 16
+	jr c, .chunk
+	ld a, 16
+.chunk
+	ld c, a
+	ld b, 0
+	ld hl, wMobileIRQInstallOffset
+	add [hl]
+	ld [hli], a
+	jr nc, .offset
+	inc [hl]
+.offset
+	pop hl
+	rst CopyBytes
+	ld a, [wMobileIRQInstallOffset]
+	cp LOW(MobileIRQImageEnd - MobileIRQImageSource)
+	jr nz, .pending
+	ld a, [wMobileIRQInstallOffset + 1]
+	cp HIGH(MobileIRQImageEnd - MobileIRQImageSource)
+	jr nz, .pending
+	xor a
+	ld [wMobileIRQInstallOffset], a
+	ld [wMobileIRQInstallOffset + 1], a
+	scf
+	ret
+.restart
+	pop hl
+	xor a
+	ld [wMobileIRQInstallOffset], a
+	ld [wMobileIRQInstallOffset + 1], a
+.pending
+	and a
+	ret
+
 MobileIRQTrampolineSource:
-	ldh a, [hROMBank]
+	ldh a, [rWBK]
 	push af
-	ld a, MOBILE_ROM_BANK
-	rst Bankswitch
+	ld a, MOBILE_WRAM_BANK
+	ldh [rWBK], a
 	call MobileSerialIRQ
 	pop af
-	rst Bankswitch
+	ldh [rWBK], a
 	jp Serial.end
 MobileIRQTrampolineEnd:
 ASSERT MobileIRQTrampolineEnd - MobileIRQTrampolineSource == MOBILE_IRQ_TRAMPOLINE_SIZE
@@ -474,14 +546,7 @@ MobileCheckGuards:
 
 ; Decrement a little-endian resident word at HL. Z iff it becomes zero.
 MobileDecrement:
-	ld a, [hl]
-	sub 1
-	ld [hli], a
-	ld a, [hl]
-	sbc 0
-	ld [hld], a
-	or [hl]
-	ret
+	mobile_serial_decrement
 
 ; HL bytes, BC length -> DE unsigned 16-bit sum. Foreground only.
 MobileChecksum:
@@ -682,13 +747,12 @@ MobileSetRxPointer:
 	ld [wMobileRxPointer + 1], a
 	ret
 
-; Bounded banked byte handler. Native Serial saves all registers; this
-; routine restores WBK, never enables interrupts and never waits.
+; The native ISR saves registers. Its unbanked trampoline selects WRAM 2.
+; All callees remain in this immutable island until RET to that trampoline.
+MobileIRQImageSource::
+LOAD "Mobile Serial IRQ", WRAMX[$d980], BANK[MOBILE_WRAM_BANK]
+MobileIRQRuntimeStart::
 MobileSerialIRQ::
-	ldh a, [rWBK]
-	push af
-	ld a, MOBILE_WRAM_BANK
-	ldh [rWBK], a
 	xor a
 	ld [wMobileTransferActive], a
 	ld hl, wMobileIRQCount
@@ -715,7 +779,7 @@ MobileSerialIRQ::
 	ld a, d
 	cp $99
 	jp nz, .return
-	call MobileStoreRx
+	call MobileIRQStoreRx
 	jp c, .bad
 	ld a, MOBILE_WIRE_RX
 	ld [wMobileWire], a
@@ -723,10 +787,10 @@ MobileSerialIRQ::
 	ld [wMobileHeaderLeft], a
 	jr .next
 .tx
-	call MobileStoreRx
+	call MobileIRQStoreRx
 	jr c, .bad
 	ld hl, wMobileRemaining
-	call MobileDecrement
+	call MobileIRQDecrement
 	jr nz, .next
 	ld a, MOBILE_WIRE_TX_DONE
 	ld [wMobileWire], a
@@ -741,7 +805,7 @@ MobileSerialIRQ::
 	cp $66
 	jr nz, .bad
 .header
-	call MobileStoreRx
+	call MobileIRQStoreRx
 	jr c, .bad
 	ld hl, wMobileHeaderLeft
 	dec [hl]
@@ -757,10 +821,10 @@ MobileSerialIRQ::
 	ld [wMobileRemaining + 1], a
 	jr .next
 .body
-	call MobileStoreRx
+	call MobileIRQStoreRx
 	jr c, .bad
 	ld hl, wMobileRemaining
-	call MobileDecrement
+	call MobileIRQDecrement
 	jr nz, .next
 	ld a, MOBILE_WIRE_DONE
 	ld [wMobileWire], a
@@ -778,18 +842,15 @@ MobileSerialIRQ::
 	ld a, [wMobileBurst]
 	and a
 	jr z, .return
-	call MobileClock
+	call MobileIRQClock
 	jr .return
 .bad
 	ld a, MOBILE_WIRE_BAD
 	ld [wMobileWire], a
 .return
-	pop af
-	ldh [rWBK], a
 	ret
 
-; D -> RX[ptr++], with both physical buffer bounds checked.
-MobileStoreRx:
+MobileIRQStoreRx:
 	ld a, [wMobileRxPointer + 1]
 	ld h, a
 	ld a, [wMobileRxPointer]
@@ -812,66 +873,29 @@ MobileStoreRx:
 .store
 	ld a, d
 	ld [hli], a
-	call MobileSetRxPointer
+	ld a, l
+	ld [wMobileRxPointer], a
+	ld a, h
+	ld [wMobileRxPointer + 1], a
 	and a
 	ret
 .overflow
 	scf
 	ret
 
-; Start exactly one byte with WBK=2. IRQ chaining stays within its budget.
+MobileIRQDecrement:
+	mobile_serial_decrement
+MobileIRQClock:
+	mobile_serial_clock
+MobileIRQRuntimeEnd::
+ASSERT MobileIRQRuntimeEnd <= $db00
+ENDL
+MobileIRQImageEnd::
+ASSERT MobileIRQImageEnd - MobileIRQImageSource == MobileIRQRuntimeEnd - MobileIRQRuntimeStart
+ASSERT MobileIRQImageEnd - MobileIRQImageSource <= $180
+
 MobileClock:
-	ldh a, [rLY]
-	cp 136
-	ret nc ; leave a guard window for the final byte ISR before VBlank
-	ldh a, [hVBlankCounter]
-	ld hl, wMobileLastFrame
-	cp [hl]
-	ret nz ; foreground must replenish the new frame before IRQ chaining resumes
-	ld a, [wMobileBurst]
-	and a
-	ret z
-	ld a, [wMobileWire]
-	cp MOBILE_WIRE_TX
-	jr z, .tx
-	ld b, $4b
-	cp MOBILE_WIRE_RX
-	jr nz, .send
-	ld a, [wMobileHeaderLeft]
-	and a
-	jr nz, .send
-	ld a, [wMobileRemaining + 1]
-	and a
-	jr nz, .send
-	ld a, [wMobileRemaining]
-	cp 2
-	jr nz, .ack_end
-	ld b, $80
-	jr .send
-.ack_end
-	cp 1
-	jr nz, .send
-	ld b, 0
-	jr .send
-.tx
-	ld a, [wMobileTxPointer + 1]
-	ld h, a
-	ld a, [wMobileTxPointer]
-	ld l, a
-	ld b, [hl]
-	inc hl
-	ld a, l
-	ld [wMobileTxPointer], a
-	ld a, h
-	ld [wMobileTxPointer + 1], a
-.send
-	ld a, 1
-	ld [wMobileTransferActive], a
-	ld a, b
-	ldh [rSB], a
-	ld a, SC_START | SC_INTERNAL | SC_FAST
-	ldh [rSC], a
-	ret
+	mobile_serial_clock
 
 MobileValidateResponseSlice:
 ; A maximum-length response must not monopolize the native frame wait. The

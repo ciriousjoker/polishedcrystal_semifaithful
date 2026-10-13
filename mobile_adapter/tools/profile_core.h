@@ -83,7 +83,7 @@ struct MobileRenderSpan {
     uint64_t crossings = 0;
     uint64_t maximum_cycles = 0, count = 0, total_cycles = 0;
 };
-static MobileRenderSpan mobile_render_spans[23];
+static MobileRenderSpan mobile_render_spans[26];
 static unsigned mobile_scene_stage_address;
 static uint64_t mobile_scene_steps[9][6] = {};
 static uint64_t mobile_scene_window_steps[9][7] = {};
@@ -137,7 +137,7 @@ extern "C" unsigned mobile_profile_native_oam_byte(unsigned index) {
     if (index < 290) return mobile_native_identities[index - 264];
     return 0;
 }
-static unsigned mobile_overworld_points[25][2] = {};
+static unsigned mobile_overworld_points[28][2] = {};
 static bool mobile_native_graphics_frame = false, mobile_native_graphics_last_frame = false;
 static unsigned mobile_native_wait_frame_ly = 255, mobile_native_wait_last_frame_ly = 255;
 extern "C" uint64_t mobile_profile_native_wait_ly() {
@@ -162,6 +162,13 @@ extern "C" uint64_t mobile_profile_composition_metric(unsigned index) {
 extern "C" uint64_t mobile_profile_transport_metric(unsigned index) {
     if (index >= 18) return 0;
     const auto& span = mobile_render_spans[20 + index / 6];
+    const uint64_t values[] = {span.count, span.maximum_cycles, span.total_cycles,
+        span.minimum_ly, span.maximum_ly, span.crossings};
+    return values[index % 6];
+}
+extern "C" uint64_t mobile_profile_aligned_metric(unsigned index) {
+    if (index >= 18) return 0;
+    const auto& span = mobile_render_spans[23 + index / 6];
     const uint64_t values[] = {span.count, span.maximum_cycles, span.total_cycles,
         span.minimum_ly, span.maximum_ly, span.crossings};
     return values[index % 6];
@@ -208,8 +215,24 @@ extern "C" uint64_t mobile_profile_idle_metric(unsigned index) {
 }
 static uint64_t mobile_prepare_waits = 0, mobile_world_updates = 0, mobile_world_max_gap = 0;
 
+// Diagnostics retain both host bins and independently observed raster epochs.
+// They do not replace or relax existing cadence counters.
+static unsigned mobile_phase_delay, mobile_phase_occurred, mobile_phase_skip;
+static unsigned mobile_phase_last_ly = 0, mobile_phase_generation = 0;
+static bool mobile_phase_lcd_enabled = false;
+static uint64_t mobile_phase_epoch = 0;
+static uint64_t mobile_world_phases[4096][8] = {};
+static unsigned mobile_world_phase_count = 0;
+extern "C" void mobile_profile_world_phase_configure(unsigned delay, unsigned occurred, unsigned skip) {
+    mobile_phase_delay = delay; mobile_phase_occurred = occurred; mobile_phase_skip = skip;
+}
+extern "C" uint64_t mobile_profile_world_phase(unsigned row, unsigned field) {
+    if (field == 8) return mobile_world_phase_count;
+    return row < mobile_world_phase_count && field < 8 ? mobile_world_phases[row][field] : 0;
+}
+
 extern "C" void mobile_profile_overworld(unsigned index, unsigned bank, unsigned pc) {
-    if (index < 25) {
+    if (index < 28) {
         mobile_overworld_points[index][0] = bank;
         mobile_overworld_points[index][1] = pc;
     }
@@ -321,6 +344,13 @@ static void mobile_profile_exit(MobileProfileSpan& span, gb* game, const cpu_reg
     span.active = false;
 }
 static void mobile_profile_before_instruction(gb* game, const cpu_regs& regs, int clock) {
+    const unsigned raster_ly = game->get_regs()->LY;
+    const bool raster_enabled = (game->get_regs()->LCDC & 0x80) != 0;
+    if (raster_enabled && !mobile_phase_lcd_enabled) mobile_phase_generation++;
+    if (raster_enabled && mobile_phase_lcd_enabled && raster_ly < mobile_phase_last_ly &&
+            mobile_phase_last_ly >= 144) mobile_phase_epoch++;
+    mobile_phase_last_ly = raster_ly;
+    mobile_phase_lcd_enabled = raster_enabled;
     const bool native_save_copy = mobile_save_bank == 0 && mobile_save_pc == 0x20;
     if (mobile_save_pc && regs.PC == mobile_save_pc && mobile_save_size <= sizeof(mobile_save_expected) &&
         (native_save_copy ? regs.HL.w == mobile_save_backups && regs.BC.w == mobile_save_size &&
@@ -348,7 +378,7 @@ static void mobile_profile_before_instruction(gb* game, const cpu_regs& regs, in
             mobile_save_projected++;
         }
     }
-    for (unsigned index = 0; index < 25; ++index) {
+    for (unsigned index = 0; index < 28; ++index) {
         auto* point = mobile_overworld_points[index];
         // Bank accessors are unnecessary for virtually every instruction. The
         // PC comparison is sufficient to reject an inactive watchpoint first.
@@ -390,6 +420,15 @@ static void mobile_profile_before_instruction(gb* game, const cpu_regs& regs, in
         } else if (index == 2 && mobile_render_spans[0].active) {
             mobile_prepare_waits++;
         } else if (index == 3 && mobile_observed_frames >= mobile_world_start && mobile_observed_frames < mobile_world_start + 800) {
+            if (mobile_phase_delay && mobile_world_phase_count < 4096) {
+                auto* row = mobile_world_phases[mobile_world_phase_count++];
+                row[0] = mobile_observed_frames; row[1] = mobile_phase_epoch;
+                row[2] = mobile_phase_generation; row[3] = raster_ly;
+                row[4] = game->get_cpu()->read(mobile_vblank_address);
+                row[5] = game->get_cpu()->read(mobile_phase_occurred);
+                row[6] = game->get_cpu()->read(mobile_phase_delay);
+                row[7] = game->get_cpu()->read(mobile_phase_skip);
+            }
             if (mobile_world_updates) {
                 auto gap = mobile_observed_frames - mobile_last_world_frame;
                 mobile_world_max_gap = std::max(mobile_world_max_gap, uint64_t(gap));

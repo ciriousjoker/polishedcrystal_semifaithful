@@ -29,8 +29,11 @@ buffers = new["wMobileBufferEnd"][1] - new["wMobileBufferStart"][1]
 code = new["MobileCodeEnd"][1] - new["MobileCodeStart"][1]
 require(resident <= 128 and buffers <= 1536 and code <= 8192, "Mobile allocation exceeds caps")
 avatar_bytes = new["wMobileAvatarCacheEnd"][1] - new["wMobileAvatarCache1"][1]
-require(new["wMobileAvatarCache1"] == (2, 0xda40) and avatar_bytes == 1152, "Avatar cache placement changed")
-require(new["wMobileBufferEnd"][1] <= 0xda40 and new["wMobileAvatarCacheEnd"][1] <= 0xe000, "Avatar cache overlaps retained data")
+require(new["wMobileAvatarCache1"] == (2, 0xdb00) and avatar_bytes == 1152, "Avatar cache placement changed")
+require(new["wMobileBufferEnd"][1] <= 0xd980 and new["wMobileAvatarCacheEnd"][1] <= 0xe000, "Avatar cache overlaps retained data")
+
+require(new["MobileIRQRuntimeStart"] == (2, 0xd980), "Serial IRQ placement changed")
+require(new["MobileIRQRuntimeEnd"][1] <= 0xdb00, "Serial IRQ overlaps avatar cache")
 legacy_allocations = ('wMobileRenderMapMask', 'wMobileScanlineDelta',
                       'wMobileOAMOutput', 'wMobileNPCOptional', 'wMobileOAMSnapshot')
 require(not any(name in new for name in legacy_allocations), 'Unused legacy renderer memory returned')
@@ -81,6 +84,9 @@ for source in sorted((REPO / 'mobile_adapter/rom').rglob('*.asm')):
         if not call or owner not in new or call[1] not in new:
             continue
         origin, target = new[owner], new[call[1]]
+        if 0xd980 <= origin[1] < 0xdb00:
+            require(target[0] == 2 and 0xd980 <= target[1] < 0xdb00,
+                    f'{source.relative_to(REPO)}:{number}: RAM IRQ escaped its protected island')
         if not (0x4000 <= origin[1] < 0x8000 and 0x4000 <= target[1] < 0x8000):
             continue
         near_calls += 1

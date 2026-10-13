@@ -231,8 +231,9 @@ static std::map<std::string, unsigned> capture(const unsigned char* sram, size_t
                     for (unsigned q = 0; q < 4; ++q) {
                         unsigned tile = video_oam[i + q * 4 + 2];
                         const unsigned bank = (video_oam[i + q * 4 + 3] & 8) / 8;
-                        const unsigned ordinal = window == 2 && bank == 1 && tile == 63 ? 3 :
-                            bank == 0 && tile >= base && tile < base + (window == 2 ? 3 : 4) ? tile - base : 4;
+                        const unsigned ordinal = window == 2 && bank == 1 ?
+                            (tile == 63 ? 1 : tile == 127 ? 2 : tile == 255 ? 3 : 4) :
+                            bank == 0 && tile >= base && tile < base + (window == 2 ? 1 : 4) ? tile - base : 4;
                         if (ordinal >= 4) {
                             complete = false; break;
                         }
@@ -245,7 +246,9 @@ static std::map<std::string, unsigned> capture(const unsigned char* sram, size_t
                 }
                 unsigned hash = 2166136261u;
                 for (unsigned i = 0; i < 64; ++i) {
-                    const unsigned address = window == 2 && i >= 48 ? 0x2000 + 63 * 16 + i - 48 : base * 16 + i;
+                    const unsigned third_slots[] = {108 * 16, 0x2000 + 63 * 16,
+                        0x2000 + 127 * 16, 0x2000 + 255 * 16};
+                    const unsigned address = window == 2 ? third_slots[i / 16] + i % 16 : base * 16 + i;
                     hash = (hash ^ video_native_tiles[address]) * 16777619u;
                 }
                 values[std::string("vMobilePeer") + peer + "TileHash"] = hash;
@@ -838,7 +841,9 @@ int main(int argc, char** argv) {
                 "MobileCheckNPCScanlines", "MobileCanSuppress", "MobileBudgetWeather",
                 "MobileCountObjectOAM", "MobilePreparePeerGraphics", "MobileProjectPeer", "MobileCapture", "_UpdateSprites", "MobileNativeUpload", "MobileNativeIdle", "MobileNativePrepareSpritesWork",
                 "MobileVirtualComposeStep", "MobileVirtualNativeGroup", "MobileVirtualPeerGroup", "MobileVirtualMergePalettes", "MobileVirtualCommitPose", "GetUsedSprite",
-                "MobilePrepareCommand", "MobileAppendPending", "MobileValidateResponseSlice"};
+                "MobilePrepareCommand", "MobileAppendPending", "MobileValidateResponseSlice",
+                "MobileVirtualAlignedRawRectangle", "MobileVirtualAlignedNativeDescriptor",
+                "MobileVirtualAdvanceNativeClass"};
             for (unsigned i = 0; i < sizeof(points) / sizeof(points[0]); ++i) {
                 if (native_addresses.count(points[i])) {
                     auto point = native_addresses.at(points[i]);
@@ -852,8 +857,10 @@ int main(int argc, char** argv) {
                 auto mark = native_addresses.at(markers[i]);
                 symbol<void(*)(unsigned,unsigned,unsigned)>(core,"acceptance_profile_marker")(i,mark.first,mark.second);
             }
-            auto point = native_addresses.at("InitSprites.InitSprite");
-            auto facing = native_addresses.at("InitSprites.AcceptanceFacing");
+            const std::string native_emitter = native_addresses.count("MobileNativeBatch.InitSprite") ?
+                "MobileNativeBatch" : "InitSprites";
+            auto point = native_addresses.at(native_emitter + ".InitSprite");
+            auto facing = native_addresses.at(native_emitter + ".AcceptanceFacing");
             symbol<void(*)(unsigned,unsigned,unsigned,unsigned,unsigned,unsigned,unsigned,unsigned,unsigned,unsigned,unsigned)>(core, "acceptance_profile_native")(
                 point.first, point.second, facing.second, native_addresses.at("hCurSpriteXPixel").second,
                 native_addresses.at("hCurSpriteYPixel").second, native_addresses.at("hCurSpriteTile").second,
@@ -891,6 +898,12 @@ int main(int argc, char** argv) {
                 }
                 native_figure_byte = symbol<unsigned(*)(unsigned)>(core, "mobile_profile_native_figure_byte");
             }
+        }
+        if (auto configure = reinterpret_cast<void(*)(unsigned,unsigned,unsigned)>(
+                dlsym(core, "mobile_profile_world_phase_configure"))) {
+            configure(native_addresses.at("hDelayFrameLY").second,
+                      native_addresses.at("hVBlankOccurred").second,
+                      native_addresses.at("wOverworldDelaySkip").second);
         }
         const std::pair<const char*, const char*> cursor_ranges[] = {
             {"HBlankCopy1bpp", "ClearBGPalettes"},
@@ -995,6 +1008,13 @@ int main(int argc, char** argv) {
     unsigned measurement_start = arguments.count("--profile-window-start") ? std::stoul(arguments.at("--profile-window-start")) : 3600;
     const bool measurement_gate = arguments.count("--measurement-gate");
     bool measurement_released = !measurement_gate, measurement_ready = false;
+    auto align_raster = reinterpret_cast<unsigned(*)()>(dlsym(core, "mobile_frontend_align_raster"));
+    auto raster_state = reinterpret_cast<unsigned(*)()>(dlsym(core, "mobile_frontend_raster_state"));
+    unsigned raster_alignment_lines = 0, raster_alignment_frame = 0;
+    unsigned raster_boundary_failures = 0;
+    bool raster_aligned = false;
+    if (acceptance_enabled && profile_frame && (!align_raster || !raster_state))
+        fail("Acceptance core is missing ordinary raster alignment support");
     const unsigned measurement_warmup = arguments.count("--measurement-warmup") ? std::stoul(arguments.at("--measurement-warmup")) : 300;
     if (measurement_gate && (!acceptance_enabled || !profile_frame || measurement_warmup > 3000)) fail("Invalid measurement gate configuration");
     std::chrono::steady_clock::time_point paced_start;
@@ -1026,7 +1046,11 @@ int main(int argc, char** argv) {
             auto offset = std::chrono::duration<double>((input_frame - pace_from) / (av_info.timing.fps * pace_multiplier));
             std::this_thread::sleep_until(paced_start + std::chrono::duration_cast<std::chrono::steady_clock::duration>(offset));
         }
+        const auto raster_before = raster_state ? raster_state() : 0;
         run();
+        const auto raster_after = raster_state ? raster_state() : 0;
+        if (raster_aligned && input_frame >= measurement_start && input_frame < measurement_start + 800 &&
+                (raster_before != 0x100 || raster_after != 0x100)) raster_boundary_failures++;
         if (profile_frame) profile_frame();
         if (!trace_enabled && conditional_actions.empty() && walk_waypoints.empty()) continue;
         auto values = capture(sram, sram_size);
@@ -1038,6 +1062,20 @@ int main(int argc, char** argv) {
             const char* marker_names[] = {"vAcceptanceReady", "vAcceptanceDialogDone", "vAcceptanceLoaded", "vAcceptanceLoadFailed", "vAcceptanceLinkEntered"};
             for (unsigned i = 0; i < 5; ++i) values[marker_names[i]] = acceptance_marker_count ? acceptance_marker_count(i) : 0;
             values["vProfileWorldUpdates"] = metric ? metric(21) : 0;
+        }
+        if (acceptance_enabled && profile_frame && !raster_aligned && values.at("vAcceptanceReady") &&
+                values.at("wMapStatus") == 2 && values.at("wScriptRunning") == 0 &&
+                (raster_state() & 0x100) &&
+                (!bindings.count("wMobileOwner") ||
+                 (values.at("wMobileOnline") == (arguments.count("--expected-online") ? std::stoul(arguments.at("--expected-online")) : 1) &&
+                  values.at("wMobilePeerCount") == (arguments.count("--expected-peers") ? std::stoul(arguments.at("--expected-peers")) : 3)))) {
+            // Advance the existing core scanline path to one real LCD-on wrap.
+            // No CPU/RAM/ROM state is injected and no in-window realignment occurs.
+            raster_alignment_lines = align_raster();
+            if (!raster_alignment_lines || raster_state() != 0x100)
+                fail("Ready fixture did not reach a real raster boundary");
+            raster_alignment_frame = input_frame;
+            raster_aligned = true;
         }
         if (measurement_gate) {
             // These files coordinate host processes only. Never alter game RAM,
@@ -1260,6 +1298,13 @@ int main(int argc, char** argv) {
                 for (unsigned field = 0; field < 6; ++field)
                     profile << ",\"" << stages[stage] << '_' << fields[field] << "\":" << transport(stage * 6 + field);
         }
+        if (auto aligned = reinterpret_cast<Metric>(dlsym(core, "mobile_profile_aligned_metric"))) {
+            const char* stages[] = {"aligned_raw", "aligned_descriptor", "native_class_advance"};
+            const char* fields[] = {"count", "max_cycles", "total_cycles", "min_entry_ly", "max_entry_ly", "vblank_crossings"};
+            for (unsigned stage = 0; stage < 3; ++stage)
+                for (unsigned field = 0; field < 6; ++field)
+                    profile << ",\"" << stages[stage] << '_' << fields[field] << "\":" << aligned(stage * 6 + field);
+        }
         if (auto scene = reinterpret_cast<Metric>(dlsym(core, "mobile_profile_scene_metric"))) {
             const char* fields[] = {"count", "max_cycles", "total_cycles", "max_entry_ly", "max_exit_ly", "return_stage_mask"};
             for (unsigned stage = 0; stage < 9; ++stage)
@@ -1283,6 +1328,24 @@ int main(int argc, char** argv) {
                 profile << ",\"" << stages[stage] << "_window_entry_ly_p50\":" << entry(stage * 2)
                         << ",\"" << stages[stage] << "_window_entry_ly_p95\":" << entry(stage * 2 + 1);
         }
+        if (auto phase = reinterpret_cast<uint64_t(*)(unsigned,unsigned)>(
+                dlsym(core, "mobile_profile_world_phase"))) {
+            profile << ",\"world_update_phases\":[";
+            const auto count = phase(0, 8);
+            for (unsigned row = 0; row < count; ++row) {
+                if (row) profile << ',';
+                profile << '[';
+                for (unsigned field = 0; field < 8; ++field) {
+                    if (field) profile << ',';
+                    profile << phase(row, field);
+                }
+                profile << ']';
+            }
+            profile << ']';
+        }
+        profile << ",\"raster_alignment_lines\":" << raster_alignment_lines
+                << ",\"raster_alignment_frame\":" << raster_alignment_frame
+                << ",\"raster_boundary_failures\":" << raster_boundary_failures;
         profile << ",\"world_window_start\":" << measurement_start;
         profile << ",\"video_frames\":" << video_frames << ",\"audio_batches\":" << audio_batches
                 << ",\"audio_samples\":" << audio_samples << "}\n";

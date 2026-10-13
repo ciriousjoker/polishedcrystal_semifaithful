@@ -1,3 +1,24 @@
+MACRO mobile_virtual_capture_kind
+; Classify physical world-object sprites without changing their simulation.
+; Character and unknown sprites retain NPC priority. The renderer, not maps,
+; owns this built-in distinction.
+	ld a, [bc]
+	cp SPRITE_BALL_CUT_TREE
+	jr z, .ground\@
+	cp SPRITE_BOULDER_ROCK
+	jr z, .ground\@
+	cp SPRITE_BLANK_FRUIT
+	jr z, .ground\@
+	xor a
+	jr .kind\@
+.ground\@
+	ld a, $20
+.kind\@
+	ld [wMobileVirtualCaptureClass], a
+ENDM
+
+ASSERT LOW(wMobileVirtualDescriptors) + NUM_OBJECT_STRUCTS * 8 <= $100
+
 MACRO mobile_virtual_capture
 ; Immutable render metadata only. Reuse the native ShadowOAM group whenever
 ; it fits; a ROM template is retained for actors beyond vanilla OAM capacity.
@@ -12,9 +33,17 @@ MACRO mobile_virtual_capture
 	jr nz, .general\@
 	ld a, c
 	cp OAM_SIZE - OBJ_SIZE + 1
+	if _NARG >= 3
+	jr nc, .rectangle_template\@
+	else
 	jr nc, .general\@
+	endc
 	cp 3 * OBJ_SIZE
+	if _NARG >= 3
+	jr c, .rectangle_template\@
+	else
 	jr c, .general\@
+	endc
 	push hl
 	ld a, [wMobileVirtualIndex]
 	add a
@@ -22,16 +51,65 @@ MACRO mobile_virtual_capture
 	add a
 	add LOW(wMobileVirtualDescriptors + 6)
 	ld l, a
-	adc HIGH(wMobileVirtualDescriptors + 6)
-	sub l
-	ld h, a
-	ld [hl], $c4 ; current native OAM, canonical rectangle, four quads
+	ld h, HIGH(wMobileVirtualDescriptors)
+	ld a, [wMobileVirtualCaptureClass]
+	or $c4 ; current native OAM, canonical rectangle, four quads
+	ld [hl], a
 	inc hl
 	ld a, c
 	sub 3 * OBJ_SIZE
 	ld [hl], a
 	pop hl
+	if _NARG >= 2
+	jp \2 ; the captured four-quad bounds are already proved
+	else
 	jr .capture_done\@
+	endc
+	if _NARG >= 3
+.rectangle_template\@
+; Four quads cannot fit the native page. Capture their immutable header once
+; and return directly to native overflow handling, without testing it again.
+	push hl
+	push bc
+	ld a, [wMobileVirtualIndex]
+	add a
+	add a
+	add a
+	add LOW(wMobileVirtualDescriptors)
+	ld l, a
+	ld h, HIGH(wMobileVirtualDescriptors)
+	ldh a, [hCurSpriteXPixel]
+	ld [hli], a
+	ldh a, [hCurSpriteYPixel]
+	ld [hli], a
+	ldh a, [hCurSpriteTile]
+	ld [hli], a
+	ld a, d
+	ld [hli], a
+	ld d, h
+	ld e, l
+	ld hl, sp + 2
+	ld a, [hli]
+	ld h, [hl]
+	ld l, a
+	ld bc, MobileCopiedFacingStepDown0 - \1
+	add hl, bc
+	ld a, l
+	ld [de], a
+	inc e
+	ld a, h
+	ld [de], a
+	inc e
+	ld a, [wMobileVirtualCaptureClass]
+	or $44
+	ld [de], a
+	inc e
+	ldh a, [hCurSpriteOAMFlags]
+	ld [de], a
+	pop bc
+	pop hl
+	jp \3
+	endc
 .general\@
 	push bc
 	push de
@@ -44,9 +122,7 @@ MACRO mobile_virtual_capture
 	add a
 	add LOW(wMobileVirtualDescriptors + 6)
 	ld l, a
-	adc HIGH(wMobileVirtualDescriptors + 6)
-	sub l
-	ld h, a
+	ld h, HIGH(wMobileVirtualDescriptors)
 	ldh a, [hUsedSpriteTile]
 	ld b, a
 ; All native four-quad facings are canonical two-column rectangles. The host
@@ -60,6 +136,9 @@ MACRO mobile_virtual_capture
 .rectangle\@
 	set 6, b
 .shape_ready\@
+	ld a, [wMobileVirtualCaptureClass]
+	or b
+	ld b, a
 
 	ld a, b
 	and $1f
@@ -104,7 +183,11 @@ MACRO mobile_virtual_capture
 	ld a, [hli]
 	ld h, [hl]
 	ld l, a
+	if _NARG
+	ld bc, MobileCopiedFacingStepDown0 - \1
+	else
 	ld bc, MobileCopiedFacingStepDown0 - FacingStepDown0
+	endc
 	add hl, bc
 	ld a, l
 	ld [de], a

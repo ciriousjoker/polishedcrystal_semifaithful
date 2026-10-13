@@ -14,7 +14,7 @@ def verify_raw_rectangles(rom, symbols, require):
     rng = random.Random(0x726177)
     cases = maximum = 0
     vectors = itertools.product(range(0, 160, 16), (0, 1, 8, 16, 159, 160, 255),
-                                (0, 1), (0, 128, 144, 145, 160), (0, 1), (0, 4, 5), (129, 139, 140))
+                                (0, 1), (0, 128, 144, 145, 160), (0, 1), (0, 4, 5), (129, 139, 140, 141, 142))
     for raw, top, local, size, occupied, row_count, ly in vectors:
         memory = bytearray(65536)
         memory[output:output + 160] = b'\xa5' * 160
@@ -28,6 +28,8 @@ def verify_raw_rectangles(rom, symbols, require):
         memory[origin] = 0xc4
         memory[origin + 1] = raw
         memory[index], memory[length], memory[bindings + palette] = slot, size, occupied
+        memory[symbols["wMobileVirtualPlannedPrivateColors"][1]] = occupied
+        memory[symbols["wMobileVirtualDroppedSlot"][1]] = palette
         row = lines + 16 + (top >> 4)
         memory[row] = row_count
         memory[0xff44] = ly
@@ -35,8 +37,8 @@ def verify_raw_rectangles(rom, symbols, require):
         eligible = 0 < top < 160 and not occupied
         if eligible and local:
             expected[used] |= 1 << palette
-        admitted = eligible and row_count < 5 and size <= 144 and (local or ly < 140)
-        busy = eligible and row_count < 5 and size <= 144 and not local and ly >= 140
+        admitted = eligible and row_count < 5 and size <= 144 and (local or ly < 141)
+        busy = eligible and row_count < 5 and size <= 144 and not local and ly >= 141
         if admitted:
             expected[row] += 1
             expected[output + size:output + size + 16] = memory[source:source + 16]
@@ -111,15 +113,15 @@ def verify_raw_rectangles(rom, symbols, require):
                 registers['a'] = (a >> 4) | ((a & 15) << 4)
                 zero, carry = not registers['a'], False
                 cycles += 8
-            elif op in (0xe6, 0xc6, 0xfe, 0xa7, 0xb6):
+            elif op in (0xe6, 0xc6, 0xfe, 0xa7, 0xb6) or 0xb8 <= op <= 0xbf:
                 a = registers['a']
-                value = fetch() if op in (0xe6, 0xc6, 0xfe) else a if op == 0xa7 else read(pair('hl'))
+                value = fetch() if op in (0xe6, 0xc6, 0xfe) else a if op == 0xa7 else (read(pair('hl')) if op == 0xb6 or op == 0xbe else registers['bcdehl?a'[op & 7]])
                 result = a & value if op in (0xe6, 0xa7) else (a + value) & 255 if op == 0xc6 else a | value if op == 0xb6 else (a - value) & 255
-                carry = a + value > 255 if op == 0xc6 else a < value if op == 0xfe else False
+                carry = a + value > 255 if op == 0xc6 else a < value if op == 0xfe or 0xb8 <= op <= 0xbf else False
                 zero = not result
-                if op != 0xfe:
+                if op != 0xfe and not 0xb8 <= op <= 0xbf:
                     registers['a'] = result
-                cycles += 4 if op == 0xa7 else 8
+                cycles += 4 if op == 0xa7 or 0xb8 <= op <= 0xbf and op != 0xbe else 8
             elif op in (0x18, 0x28, 0x30, 0x20):
                 delta = fetch()
                 taken = op == 0x18 or (zero if op == 0x28 else not carry if op == 0x30 else not zero)

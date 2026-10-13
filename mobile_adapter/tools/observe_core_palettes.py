@@ -16,6 +16,7 @@ def prepare(source):
         if b'get_lcd()->get_pal(8),' not in data:
             raise ValueError('Hardware observer must begin at object palette 8')
         prepare_frontend_clock(source)
+        prepare_frontend_raster(source)
         return
     text = data.decode('utf-8-sig')
     newline = '\r\n' if '\r\n' in text else '\n'
@@ -30,6 +31,7 @@ def prepare(source):
     mmaps.descriptors = descs;''')
     path.write_bytes(text.replace('\n', newline).encode('utf-8'))
     prepare_frontend_clock(source)
+    prepare_frontend_raster(source)
 
 
 def prepare_frontend_clock(source):
@@ -67,6 +69,42 @@ def prepare_frontend_clock(source):
         if data.count(anchor) != 1:
             raise ValueError('Pinned frontend RTC anchor changed: ' + name)
         path.write_text(data.replace(anchor, replacement))
+
+
+def prepare_frontend_raster(source):
+    """Align test frontend calls through ordinary scanline execution only."""
+    path = source / "libretro/libretro.cpp"
+    text = path.read_text(encoding="utf-8-sig")
+    if "mobile_frontend_align_raster" in text:
+        return
+    anchor = "void retro_run(void)"
+    if text.count(anchor) != 1:
+        raise ValueError("Pinned scanline frontend anchor changed")
+    hook = r'''extern "C" unsigned mobile_frontend_raster_state() {
+    if (emulated_gbs != 1 || !v_gb[0]) return 0xffff;
+    const auto* regs = v_gb[0]->get_regs();
+    return regs->LY | ((regs->LCDC & 0x80) ? 0x100 : 0);
+}
+extern "C" unsigned mobile_frontend_align_raster() {
+    if (emulated_gbs != 1 || !v_gb[0] || infrared_lockstep) return 0;
+#ifndef DISABLE_SOCKETS
+    if (mobile_adapter_enabled && mobile_adapter) mobile_adapter->update();
+#endif
+    for (unsigned lines = 1; lines <= 155; ++lines) {
+        const auto before = mobile_frontend_raster_state();
+        if (!(before & 0x100)) return 0;
+        if (extra_inputpolling_enabled) performExtraInputPoll();
+        v_gb[0]->run();
+        if (master_link) master_link->process();
+        const auto after = mobile_frontend_raster_state();
+        if (!(after & 0x100)) return 0;
+        if ((before & 255) == 153 && (after & 255) == 0) return lines;
+    }
+    return 0;
+}
+
+'''
+    path.write_text(text.replace(anchor, hook + anchor))
 
 
 if __name__ == '__main__':

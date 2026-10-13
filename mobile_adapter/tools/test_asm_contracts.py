@@ -26,6 +26,12 @@ with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
     out = Path(temporary)
     fixture = (REPO / "mobile_adapter/tests/driver.asm").read_text()
     fixture += '\nDEF CopyBytes EQU $20\nDEF ByteFill EQU $28\nDEF AddNTimes EQU $18\nDEF FarCall EQU $10\nDEF DoNothing EQU $0150\n'
+    native = (REPO / "engine/overworld/map_objects.asm").read_text()
+    import re
+    for name in ("PRIORITY_LOW", "PRIORITY_NORM", "PRIORITY_HIGH"):
+        definition = re.search(r"^DEF " + name + r"\s+EQU .*", native, re.M)
+        require(definition is not None, "Native emission priority definition missing")
+        fixture += definition[0] + "\n"
     fixture += 'SECTION "OAM bounds execution fixture", ROM0[$220]\nBoundsFixture::\n mobile_native_oam_bounds\n ld a, 1\n ret\n.full: xor a\n ret\n'
     fixture += 'SECTION "Serial return stub", ROM0[$200]\nSerial:\n.end: ret\n'
     fixture += 'SECTION "Native bank return fixture", ROM0[$8]\nBankswitch::\n ldh [hROMBank], a\n ld [rROMB0], a\n ret\n'
@@ -129,6 +135,32 @@ with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
     verify_peer_invalidation(rom, symbols, require)
     from asm_raw_rectangle_tests import verify_raw_rectangles
     verify_raw_rectangles(rom, symbols, require)
+    # Execute each emitted suffix store sequence from the compiled jump table.
+    # Verify every prefix byte survives, including tile/attribute bytes of hidden
+    # quads, and all forty possible suffix lengths stay within the DMA page.
+    bank, table = symbols["MobileVirtualComposeStep.suffix_table"]
+    stop = symbols["MobileVirtualComposeStep.suffix40"][1]
+    output = (symbols["wMobileActorTiles1"][1] + 13 * 4 + 255) & 0xff00
+    def suffix_byte(address):
+        return rom[bank * 0x4000 + address - 0x4000]
+    for first in range(41):
+        entry = table + first * 2
+        pc = suffix_byte(entry) | suffix_byte(entry + 1) << 8
+        require(pc == symbols[f"MobileVirtualComposeStep.suffix{first}"][1],
+                "Compiled suffix dispatch changed")
+        memory = bytearray([0xa5] * 65536)
+        expected = bytearray(memory)
+        expected[output + first * 4:output + 160:4] = bytes([160]) * (40 - first)
+        clocks = 0
+        while pc != stop:
+            require(suffix_byte(pc) == 0xea, "Unexpected suffix store instruction")
+            address = suffix_byte(pc + 1) | suffix_byte(pc + 2) << 8
+            memory[address] = 160
+            pc += 3
+            clocks += 16
+            require(clocks <= 640, "Suffix exceeds its complete forty-quad bound")
+        require(memory == expected, "Suffix changed an admitted prefix or non-Y byte")
+    print("Emitted OAM suffix stores: 41 cases, maximum 640 cycles")
     from asm_aligned_inventory_tests import verify_aligned_inventory
     verify_aligned_inventory(rom, symbols, require)
     if args.renderer == "native":
@@ -141,6 +173,47 @@ with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
                 "Virtual renderer must exclude the retired active-scanout tile copier")
     require(symbols["wMobileAvatarBank"] == symbols["wMobileNativeOriginalsEnd"] and
             symbols["wMobileAvatarBank"][1] < 0xd000, "Private VRAM bank latch escaped unbanked feature RAM")
+    # Walk the compiled WRAM IRQ, not just source labels/macros. No reachable
+    # branch can depend on the interrupted ROM bank or switch away its code.
+    image_bank, image_start = symbols["MobileIRQImageSource"]
+    _, image_end = symbols["MobileIRQImageEnd"]
+    runtime_bank, runtime_start = symbols["MobileIRQRuntimeStart"]
+    _, runtime_end = symbols["MobileIRQRuntimeEnd"]
+    require(runtime_bank == 2 and runtime_start == 0xd980 and runtime_end <= 0xdb00,
+            "Executable IRQ escaped its protected WRAM island")
+    require(image_end - image_start == runtime_end - runtime_start,
+            "IRQ source/runtime image sizes differ")
+    image_offset = image_bank * 0x4000 + image_start - 0x4000
+    irq = rom[image_offset:image_offset + runtime_end - runtime_start]
+    pending, visited = [symbols["MobileSerialIRQ"][1]], set()
+    two_byte = {0x06, 0x0e, 0x16, 0x1e, 0x26, 0x2e, 0x36, 0x3e, 0x18,
+                0x20, 0x28, 0x30, 0x38, 0xc6, 0xce, 0xd6, 0xde, 0xe0, 0xe6,
+                0xe8, 0xee, 0xf0, 0xf6, 0xf8, 0xfe, 0xcb}
+    three_byte = {0x01, 0x08, 0x11, 0x21, 0x31, 0xc2, 0xc3, 0xc4, 0xca,
+                  0xcc, 0xcd, 0xd2, 0xd4, 0xda, 0xdc, 0xea, 0xfa}
+    while pending:
+        pc = pending.pop()
+        if pc in visited:
+            continue
+        require(runtime_start <= pc < runtime_end, "IRQ reached outside its image")
+        visited.add(pc)
+        at = pc - runtime_start
+        op = irq[at]
+        width = 3 if op in three_byte else 2 if op in two_byte else 1
+        require(at + width <= len(irq), "IRQ instruction exceeds image")
+        require(op not in (0xfb, 0xd9, 0xe9) and op & 0xc7 != 0xc7,
+                "IRQ enables interrupts or makes an unaudited indirect transfer")
+        require(not (op == 0xe0 and irq[at + 1] == 0x70) and
+                not (op == 0xea and int.from_bytes(irq[at + 1:at + 3], "little") == 0xff70),
+                "RAM IRQ switches away its executing bank")
+        if op in (0xc2, 0xc3, 0xca, 0xcd, 0xd2, 0xda):
+            pending.append(int.from_bytes(irq[at + 1:at + 3], "little"))
+        elif op in (0x18, 0x20, 0x28, 0x30, 0x38):
+            delta = irq[at + 1]
+            pending.append(pc + 2 + (delta if delta < 128 else delta - 256))
+        if op not in (0xc9, 0xc3, 0x18):
+            pending.append(pc + width)
+    print(f"Protected RAM serial IRQ: {len(irq)} bytes, {len(visited)} instructions checked")
     def facing(table, index):
         bank, address = symbols[table]
         offset = bank * 0x4000 + address - 0x4000 + index * 2

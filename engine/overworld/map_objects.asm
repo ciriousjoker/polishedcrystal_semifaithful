@@ -2824,12 +2824,17 @@ DEF PRIORITY_HIGH EQU $30
 InitSprites:
 	; Since OAM's are loaded in reverse order, we need to load the sprite priorities in reverse order.
 	call .DeterminePriorities
+if DEF(MOBILE_ADAPTER)
+	farcall MobileNativeBatch
+	ret
+else
 	ld c, PRIORITY_LOW
 	call .InitSpritesByPriority
 	ld c, PRIORITY_NORM
 	call .InitSpritesByPriority
 	ld c, PRIORITY_HIGH
 	jr .InitSpritesByPriority
+endc
 
 .DeterminePriorities:
 	xor a
@@ -2906,13 +2911,7 @@ InitSprites:
 	ld a, [hli]
 	ld b, [hl]
 	ld c, a
-if DEF(MOBILE_ADAPTER)
-	ld a, d
-	and $f
-	ld [wMobileVirtualIndex], a
-endc
 	call .InitSprite
-
 	pop hl
 	pop bc
 	jr .next_sprite
@@ -2997,17 +2996,9 @@ endc
 	add hl, bc
 	ld a, [hl]
 	cp STANDING
-if DEF(MOBILE_ADAPTER)
-	jp z, .done
-else
 	jr z, .done
-endc
 	cp NUM_FACINGS
-if DEF(MOBILE_ADAPTER)
-	jp nc, .done
-else
 	jr nc, .done
-endc
 	ld l, a
 	ld h, 0
 	add hl, hl
@@ -3027,27 +3018,9 @@ endc
 if DEF(MOBILE_TEST_SCENARIOS)
 .AcceptanceFacing:
 endc
-if DEF(MOBILE_ADAPTER)
-	mobile_virtual_capture
-endc
-if DEF(MOBILE_ADAPTER)
-	mobile_native_oam_bounds
-else
 	sub c
 	cp LOW(wShadowOAM)
 	jr c, .full
-endc
-if DEF(MOBILE_ADAPTER)
-	ldh a, [hUsedSpriteTile]
-	cp 4
-	jr nz, .addsprite
-	ld a, [wMobileVirtualStage]
-	and a
-	jr z, .addsprite
-	call MobileNativeRectangleTrampoline
-	jr .sprite_done
-endc
-
 .addsprite
 	ldh a, [hCurSpriteYPixel]
 	add [hl]
@@ -3101,9 +3074,6 @@ endc
 	dec a
 	ldh [hUsedSpriteTile], a
 	jr nz, .addsprite
-if DEF(MOBILE_ADAPTER)
-.sprite_done
-endc
 	ld a, OBJ_SIZE * (OAM_COUNT - 1)
 	sub c
 	ld c, a
