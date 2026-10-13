@@ -1,5 +1,15 @@
 # Mobile Adapter multiplayer plan
 
+## 2026-10-13: static private tile ownership guard
+
+Host contracts now inspect all 53 bank-aware tileset attribute/metatile pairs
+and the native bank-1 loader destination/count. Bank-1 signed BG tile $ff must
+remain unused and unloaded, protecting the private OBJ tile at the same physical
+address. Future authored asset conflicts fail the contract rather than silently
+corrupting a background. Existing native facing bounds protect $3f/$7f. The
+focused host suite passes; actual weather and field-move lifetime tests remain
+pending.
+
 ## 2026-10-13: physical raster diagnostics and palette transactions
 
 Focused palette-pressure acceptance passes with the weather-safe third-window

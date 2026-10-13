@@ -216,6 +216,26 @@ with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
         if op not in (0xc9, 0xc3, 0x18):
             pending.append(pc + width)
     print(f"Protected RAM serial IRQ: {len(irq)} bytes, {len(visited)} instructions checked")
+    # OBJ bank-1 $ff shares physical VRAM with signed BG tile $ff. Guard
+    # every authored tileset, including future maps, rather than a map whitelist.
+    pairs = 0
+    for attributes in sorted((REPO / "data/tilesets").glob("*_attributes.bin")):
+        metatiles = attributes.with_name(attributes.name.replace("_attributes.bin", "_metatiles.bin"))
+        require(metatiles.exists(), f"Tileset attribute data has no metatile counterpart: {attributes.name}")
+        attrs, tiles = attributes.read_bytes(), metatiles.read_bytes()
+        require(len(attrs) == len(tiles), f"Tileset ownership data length mismatch: {attributes.name}")
+        require(not any(tile == 255 and attr & 8 for tile, attr in zip(tiles, attrs)),
+                f"Native bank-1 BG tile $ff overlaps the private avatar window: {attributes.name}")
+        pairs += 1
+    require(pairs > 0, "No native tileset ownership inventory was checked")
+    native_loaders = (REPO / "home/map.asm").read_text()
+    bank_one_loader = native_loaders.split("_LoadTilesetGFX2:\n", 1)[1].split("_LoadTilesetGFX0:", 1)[0]
+    require("ld de, vTiles4" in bank_one_loader and "jr _DoLoadTilesetGFX" in bank_one_loader,
+            "Native bank-1 tileset destination changed; re-audit private tile ownership")
+    count_loader = native_loaders.split("_DoLoadTilesetGFX:\n", 1)[1].split("_DoLoadTilesetGFX0:", 1)[0]
+    require(re.search(r"ld c, \$7f\b", count_loader) is not None,
+            "Native bank-1 tileset loader no longer leaves its final tile unused")
+    print(f"Native tileset ownership: {pairs} bank-aware asset pairs and loader bounds passed")
     def facing(table, index):
         bank, address = symbols[table]
         offset = bank * 0x4000 + address - 0x4000 + index * 2
