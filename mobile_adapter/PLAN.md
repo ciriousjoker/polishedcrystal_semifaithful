@@ -1,5 +1,92 @@
 # Mobile Adapter multiplayer plan
 
+## 2026-10-13: verified unified-suite results and focused-test policy
+
+The corrected complete run is `acceptance-suite-20261013-unified-verified`.
+It takes 526.71 seconds (8m47s), compared with 24m06s for the first optimized
+suite and about 44m45s before optimization. All 33 unique cases execute once,
+with zero setup errors, duplicate attempts or ignored contracts. Results are
+65/71 passing: scheduler 2/2, build 5/6, host 9/9, ROM 49/54. The additional
+passing build guard verifies the all-scenario pair, shared save/event addresses
+and absence of test entries in release ROMs. Disabled/pristine SHA-256 remains
+`314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e`.
+
+Twenty-six functional cases use 400% pacing, with execution times 6.93..11.07s
+and median 8.13s, including four live clients and four native controls. Thirteen
+pairs of actual functional execution intervals overlap. None overlaps a controlled
+case. Four performance cases and two wall-clock reconnect cases run exclusively.
+One immutable test-ROM pair contains all thirteen scenarios; no scenario-specific
+compilation occurs. Artifacts total 2.957 GiB, retaining the requested JSON evidence.
+About 46.6 GiB remains free. Adjacent `.log` and `-duration.json` preserve details.
+
+Known failures remain the strict compatibility hash, scanline presentation
+fairness, full-pool presentation fairness, restoring continuous rendering after
+conflicts, palette-pressure presentation, and native NPC cadence. No acceptance
+threshold was relaxed. For NPC-movement client 0, the equal-load native control
+has 697 frames with a world update and eight duplicate updates in the 800-frame
+window; multiplayer has 694 and thirteen. Both maximum gaps are 96 because the
+ordinary dialogue deliberately pauses world processing. This is still a product
+performance failure. Milestone 2 remains incomplete.
+
+The user clarified the verification policy: focused relevant tests/checks after
+each change, demonstrating improvement or no regression; do not default to a full
+suite or rerun unrelated cases. Use one full suite after a substantial completed
+work step or before closing a milestone. This is now in root AGENTS.md. During
+this infrastructure change, narrow fault/private-state/lighting pilots preceded
+the complete verification; future small renderer changes should use their
+relevant contract cases until the larger step is finished. Markdown updates are
+made after the run because the current broad provenance guard includes them.
+
+## 2026-10-13: unified test-ROM pair and accelerated functional execution
+
+The latest user request replaces per-scene fixture compilation with optional
+`MOBILE_TEST_SCENARIOS`. A single standard test ROM and mobile test ROM contain
+all thirteen synthetic event tables in upper MBC30 banks. Small conditional hooks
+select native initialization, spawn, event table and lighting. Test bootstrap and
+assembly are centralized in `mobile_adapter/rom`. Without the flag, neither the
+entry nor the scenario code exists. The separate release-disabled build remains
+2 MiB and must equal the pristine baseline SHA-256.
+
+The launcher patches only declared ROM configuration fields, the six-byte
+MobileEndpoint and checksum before boot. It rejects opcode patches and fields
+outside the declared span. Current collision, palette and structure data still
+come from the game's own build. Normal map/object/save initialization executes
+inside the guest. No emulator entrypoint or live memory mutation is involved.
+
+Functional cases use four paced 400% cores with isolated ports. Their common host
+measurement gate requires observed lobby readiness on all clients; private fault
+cases explicitly have three connected clients and one offline client. Actual
+readiness is followed by 300 emulated asset-warmup frames and the unchanged
+800-frame observation window. Actions are relative to observed phases, and native
+controls replay observed physical input times/durations. Malformed-message cases
+arm after actual lobby readiness and require delivered fault bytes before the
+measurement is released. A read-only host fault-phase signal prompts one
+physical peer movement when stationary Bridge caches would otherwise produce
+no new response. The fault counter counts only changed, partially sent or dropped
+messages, not unmodified welcomes. Both ROMs give each synthetic scenario the
+same ROM address block because ordinary save data includes event/script pointers.
+This preserves exact SRAM comparisons without masking or normalizing any bytes.
+The four performance cases and two real-time reconnect
+cases run exclusively with controlled pacing. Mixed speeds remain 100..400%.
+
+The NPC-movement comparison now adds three native avatar counterparts when pool
+space permits; its simulation oracle compares original map actors rather than
+hashing those deliberate extra controls. This implements the user's equal-load
+baseline rule without weakening cadence checks.
+
+Build-only pilot: both optional ROMs build as 4 MiB MBC30. The ordinary disabled
+ROM and pristine build both hash to
+`314001ec5a2dde0211d65211b7c3311c3f9d0e430a3d7de3a1b567b6db754b1e`.
+A four-core 400% scanline pilot reaches actual online readiness and completes
+with native controls sharing each client's observed measurement start. Length/roster fault pilots deliver actual malformed bytes at 400%. With aligned
+scenario blocks, the length-fault pilot also produces byte-identical native and
+mobile SRAM. The first complete unified run takes about 8m45s but identifies a test-only warp
+loader error: the configurable spawn intercepted SPAWN_N_A. Restrict the hook to
+explicit HOME initialization, preserve native HL/DE, and use carry to fall through
+to the original loader otherwise. Recheck the complete suite after this correction.
+The pre-correction run is retained as `acceptance-suite-20261013-unified-400-final`;
+it is not final acceptance for the corrected loader.
+
 ## 2026-10-13: first complete optimized execution
 
 At `29798bb08`, the complete fresh run `acceptance-suite-20261013-optimized`
@@ -17,7 +104,8 @@ Host-side Cargo test code now uses opt-level=2 while preserving test checks.
 This targets repeated large JSON decoding and frame assertions; it does not
 change game instructions or emulator pacing. The Make entry supplies one output
 directory across test executables to avoid duplicate default preparation.
-A second fresh complete execution measures these final entry/profile changes.
+The second execution was interrupted when the user requested the unified test-ROM
+pair and 400% functional execution; it is not a completed benchmark.
 
 ## 2026-10-13: acceptance runtime optimization
 

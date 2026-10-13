@@ -3024,6 +3024,9 @@ endc
 	ld b, HIGH(wShadowOAM)
 	ld a, [hli]
 	ldh [hUsedSpriteTile], a
+if DEF(MOBILE_TEST_SCENARIOS)
+.AcceptanceFacing:
+endc
 if DEF(MOBILE_ADAPTER)
 	mobile_virtual_capture
 endc

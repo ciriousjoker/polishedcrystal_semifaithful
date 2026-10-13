@@ -745,3 +745,6 @@ INCLUDE "engine/menus/lure_menu.asm"
 if DEF(MOBILE_ADAPTER)
 INCLUDE "mobile_adapter/rom/adapter.asm"
 endc
+if DEF(MOBILE_TEST_SCENARIOS)
+INCLUDE "mobile_adapter/rom/test_scenarios.asm"
+endc

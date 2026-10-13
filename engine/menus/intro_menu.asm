@@ -1085,6 +1085,9 @@ Intro_PlacePlayerSprite:
 	db 10 * 8 + 4, 10 * 8, 3
 
 CrystalIntroSequence:
+if DEF(MOBILE_TEST_SCENARIOS)
+	jmp AcceptanceBoot
+endc
 	farcall SplashScreen
 	jr c, StartTitleScreen
 	farcall CrystalIntro
@@ -1383,3 +1386,6 @@ Copyright:
 
 CopyrightString:
 INCLUDE "data/copyright.asm"
+if DEF(MOBILE_TEST_SCENARIOS)
+INCLUDE "mobile_adapter/rom/test_bootstrap.asm"
+endc

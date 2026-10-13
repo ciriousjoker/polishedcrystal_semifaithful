@@ -11,7 +11,6 @@ import fcntl
 import gzip
 import hashlib
 import json
-import math
 import os
 from pathlib import Path
 import re
@@ -169,8 +168,18 @@ def rom_offset(binding):
 
 def patch_data(rom, names, values, destination):
     data = bytearray(rom.read_bytes())
+    sizes = {"AcceptanceScenarioID": 1, "AcceptanceAvatar": 1, "AcceptanceTrainerID": 2,
+             "AcceptanceHour": 1, "AcceptanceInitialFault": 1, "AcceptanceScenarioLoad": 1,
+             "AcceptanceInteractionFault": 1, "AcceptanceLighting": 1, "AcceptanceNPCOverride": 1,
+             "AcceptanceNPCPosition": 2, "AcceptanceSpawn": 4, "AcceptanceControlPeers": 9,
+             "MobileEndpoint": 6}
+    first, last = rom_offset(names["AcceptanceConfig"]), rom_offset(names["AcceptanceConfigEnd"])
     for name, value in values.items():
+        if name not in sizes or len(value) != sizes[name]:
+            raise ValueError("Only declared test configuration fields may be patched: " + name)
         start = rom_offset(names[name])
+        if start + len(value) > len(data) or (name != "MobileEndpoint" and not first <= start < start + len(value) <= last):
+            raise ValueError("Test configuration field exceeds its declared ROM span: " + name)
         data[start:start + len(value)] = value
     data[0x14e:0x150] = ((sum(data[:0x14e]) + sum(data[0x150:])) & 65535).to_bytes(2, "big")
     destination.write_bytes(data)
@@ -240,7 +249,7 @@ def prepare(out):
         "source_fingerprint": (out / "source-fingerprint.txt").read_text().strip()}
     adapter_bindings = {}
     for relative in ("mobile_adapter/tools/smoke_libretro.cpp", "mobile_adapter/tests/support/observer.hpp",
-                     "mobile_adapter/tests/support/bootstrap.asm.in"):
+                     "mobile_adapter/rom/test_bootstrap.asm"):
         text = (ROOT / relative).read_text()
         names = set(re.findall(r'"([whs][A-Z]\w*)"', text))
         names.update(re.findall(r'(?:call|farcall|jmp|farjp)\s+([A-Z]\w*)', text))
@@ -251,195 +260,67 @@ def prepare(out):
     return manifest
 
 
-def floor_area(source, name):
-    # Current map order and collision source are queried, not frozen numeric IDs.
-    import sys
-    sys.path.insert(0, str(source / "mobile_adapter/tools"))
-    from audit_independent_maps import map_inventory
-    record = next(row for row in map_inventory(source) if row["map"] == name)
-    tileset = re.search(rf"^\s*map {name}, TILESET_(\w+),", (source / "data/maps/maps.asm").read_text(), re.M)[1].lower()
-    collision_rows = re.findall(r"^\s*tilecoll\s+([^;\n]+)",
-        (source / f"data/tilesets/{tileset}_collision.asm").read_text(), re.M)
-    collisions = [[token.strip() for token in row.split(",")] for row in collision_rows]
-    if not collisions or len({len(row) for row in collisions}) != 1:
-        raise RuntimeError("Native collision entry format cannot be derived")
-    cells = math.isqrt(len(collisions[0]))
-    if cells * cells != len(collisions[0]):
-        raise RuntimeError("Native collision entries no longer describe a square block")
-    blocks = (source / f"maps/{name}.ablk").read_bytes()
-    width, height = record["width"] * cells, record["height"] * cells
-    record["collision_cells_per_block_axis"] = cells
-    def floor(x, y):
-        block = blocks[(y // cells) * record["width"] + x // cells]
-        return collisions[block][(y % cells) * cells + x % cells] == "FLOOR"
-    candidates = []
-    for row in range(2, height - 2):
-        for x in range(1, width - 7):
-            if not all(floor(x + dx, row) for dx in range(8)):
-                continue
-            if not floor(x + 3, row + 1) or not all(floor(x + dx, row - 1) for dx in (4, 5, 6)):
-                continue
-            points = [(px, py) for py in range(row - 1, row + 3) for px in range(x, x + 8) if floor(px, py)]
-            if len(points) >= 16:
-                candidates.append((x, row - 1, points))
-    if not candidates:
-        raise RuntimeError(f"Declared assumption failed: {name} lacks an eight-cell floor row and sixteen visible floor positions")
-    record["origin"] = list(candidates[0][:2])
-    record["floor_points"] = candidates[0][2]
-    spawn_source = (source / "engine/overworld/spawn_points.asm").read_text().split("EnterMapSpawnPoint:", 1)[1]
-    record["spawn_fields"] = re.findall(r"ld \[(wMapGroup|wMapNumber|wXCoord|wYCoord)\], a", spawn_source)[:4]
-    if set(record["spawn_fields"]) != {"wMapGroup", "wMapNumber", "wXCoord", "wYCoord"}:
-        raise RuntimeError("Native spawn data order cannot be derived from its current loader")
-    return record
-
-
-def palette_choices(meta):
-    source = Path(meta["source"])
-    declarations = (source / "constants/sprite_data_constants.asm").read_text().split("; MapObjectPals indexes", 1)[1].split("DEF NUM_OW_TIME_OF_DAY_PALS", 1)[0]
-    names = re.findall(r"^\s*ow_npc_pal_const\s+(\w+)", declarations, re.M)
-    times = (source / "constants/ram_constants.asm").read_text().split("\tconst MORN", 1)[1].split("DEF NUM_DAYTIMES", 1)[0]
-    daytime = ["MORN", *re.findall(r"^\s*const\s+(\w+)", times, re.M)].index("DAY")
-    rom = source / f"polishedcrystal-{meta['version']}.gbc"
-    start = rom_offset(symbols(rom.with_suffix(".sym"))["MapObjectPals"]) + daytime * len(names) * 8
-    data = rom.read_bytes()
-    player_source = (source / "engine/overworld/player_object.asm").read_text()
-    player_palettes = re.findall(r"assert PLAYER_\w+\s*\+\s*1\s*==\s*PAL_NPC_(\w+)", player_source)
-    if len(player_palettes) != 4 or not all(name in names for name in player_palettes):
-        raise RuntimeError("Declared native avatar palette mapping interface changed")
-    avatar_colors = {data[start + names.index(name) * 8:start + (names.index(name) + 1) * 8]
-                     for name in player_palettes}
-    unique = {}
-    for index, name in enumerate(names):
-        encoded = bytes(data[start + index * 8:start + (index + 1) * 8])
-        # Avoid the four avatar defaults so the crowded scene adds seven colors.
-        if encoded in avatar_colors:
-            continue
-        unique.setdefault(encoded, name)
-    if len(unique) < 7:
-        raise RuntimeError("Declared palette-table prerequisite failed: fewer than seven distinct non-avatar day palettes")
-    return [{"name": name, "encoded_day_colors": list(encoded)} for encoded, name in list(unique.items())[:7]]
-
-
 def fixture(meta, out, scene):
-    directory = out / ("fixture-" + scene)
-    if (directory / "manifest.json").exists():
-        return json.loads((directory / "manifest.json").read_text())
-    directory.mkdir(exist_ok=True)
-    source = directory / "source"
-    if source.exists():
-        shutil.rmtree(source)
-    copy_sources(Path(meta["source"]), source, reuse_objects=True)
-    record = floor_area(source, "GoldenrodGameCorner")
-    x, y = record["origin"]
-    primary = (x + 3, y + 1)
-    peers = [(x + 4, y + 1), (x + 5, y + 1), (x + 6, y + 1)]
-    count = 12 if scene == "pool" else 7 if scene == "palettes" else 4 if scene == "scanline" else 1 if scene in ("interaction", "script", "link", "save", "private-save", "warp", "npc-movement") else 0
-    points = [tuple(point) for point in record["floor_points"] if tuple(point) not in [primary, *peers]]
-    if scene == "scanline":
-        points = [(x, y + 1), (x + 1, y + 1), (x + 2, y + 1), (x + 7, y + 1)]
-    if count == 1:
-        points = [(primary[0], primary[1] + 1)]
-    palette_data = palette_choices(meta)
-    colors = [palette["name"] for palette in palette_data]
-    header = "GoldenrodGameCorner_MapScriptHeader:\n\tdef_scene_scripts\n\tdef_callbacks\n\tcallback MAPCALLBACK_OBJECTS, AcceptanceSceneReady\n\tdef_warp_events\n\tdef_coord_events\n\tdef_bg_events\n\tdef_object_events\n"
-    for i, (px, py) in enumerate(points[:count]):
-        if count == 1:
-            header += "AcceptanceSeedNPC::\n"
-        if scene == "pool" and i >= 6:
-            header += f"\titemball_event {px}, {py}, POTION, 1, -1\n"
-        else:
-            header += f"\tobject_event {px}, {py}, SPRITE_POKEFAN_M, SPRITEMOVEDATA_STANDING_DOWN, 0, 0, -1, PAL_NPC_{colors[i % 7]}, OBJECTTYPE_SCRIPT, 0, AcceptanceNPC, -1\n"
-    # Equal-load native controls where the normal object pool can represent them.
-    equal_load = scene in ("empty", "scanline", "night", "dark")
-    if equal_load:
-        header += "if !DEF(MOBILE_ADAPTER)\n"
-        for i, ((px, py), figure) in enumerate(zip(peers, ("KRIS", "CRYS", "BETA"))):
-            header += f"AcceptanceControlPeer{i}::\n\tobject_event {px}, {py}, SPRITE_{figure}, SPRITEMOVEDATA_STANDING_DOWN, 0, 0, -1, 0, OBJECTTYPE_SCRIPT, 0, AcceptanceNPC, -1\n"
-        header += "endc\n"
-    header += "\nAcceptanceSceneReady:\n\tcallasm AcceptanceReadyMark\n"
-    if scene in ("save", "private-save"):
-        header += "\tcallasm AcceptancePauseGameTimer\n"
-    header += "\tcallasm AcceptanceSave\n\tendcallback\n\nAcceptanceNPC:\n\topentext\n\twritetext AcceptanceText\n\twaitbutton\n\tclosetext\n"
-    if scene == "private-save":
-        header += "\tcallasm AcceptanceApplyInteractionFault\n\tcallasm AcceptanceSave\n"
-    elif scene == "save":
-        header += "\tcallasm AcceptanceSave\n"
-    elif scene == "link":
-        header += "\tcallasm AcceptanceLink\n"
-    elif scene == "script":
-        header += "\tloadmem wInputFlags, 255\n\tpause 120\n\tloadmem wInputFlags, 0\n"
-    elif scene == "warp":
-        header += "\twarp PLAYERS_HOUSE_2F, 3, 3\n"
-    elif scene == "npc-movement":
-        header += "\tapplymovement 1, AcceptanceMovement\n"
-    header += "\tsetevent EVENT_TEMPORARY_UNTIL_MAP_RELOAD_1\n\tcallasm AcceptanceDialogMark\n\tend\n\nAcceptanceText:\n\ttext \"TEST\"\n\tdone\n"
-    if scene == "npc-movement":
-        header += "\nAcceptanceMovement:\nrept 64\n\tstep_right\n\tstep_left\nendr\n\tstep_end\n"
-    def replace_events(path, replacement):
-        original = path.read_text()
-        labels = list(re.finditer(r"(?m)^[A-Za-z_]\w*:(?::)?", original))
-        header_name = path.stem + "_MapScriptHeader"
-        header = next((label for label in labels if label[0].rstrip(":") == header_name), None)
-        if header is None:
-            raise RuntimeError("Declared map header/script interface changed: " + str(path))
-        # Other maps may reference scripts defined in this map's source file.
-        # Preserve their definitions while replacing only this map's event table.
-        following = next((label.start() for label in labels if label.start() > header.start()), len(original))
-        path.write_text(original[:header.start()] + replacement + "\n" + original[following:])
-    replace_events(source / "maps/GoldenrodGameCorner.asm", header)
-    (directory / "events.asm").write_text(header)
-    replace_events(source / "maps/PlayersHouse2F.asm", "PlayersHouse2F_MapScriptHeader:\n\tdef_scene_scripts\n\tdef_callbacks\n\tdef_warp_events\n\tdef_coord_events\n\tdef_bg_events\n\tdef_object_events\n")
-    if scene in ("night", "dark"):
-        maps = source / "data/maps/maps.asm"
-        text = maps.read_text()
-        pattern = r"(?m)^(\s*map GoldenrodGameCorner,.*,)\s*PALETTE_\w+\s*$"
-        replacement = "PALETTE_AUTO" if scene == "night" else "PALETTE_NITE | IN_DARKNESS"
-        text, changed = re.subn(pattern, lambda m: m[1] + " " + replacement, text)
-        if changed != 1:
-            raise RuntimeError("Declared native lighting header interface changed")
-        maps.write_text(text)
-    intro = source / "engine/menus/intro_menu.asm"
-    intro.write_text(intro.read_text().replace("CrystalIntroSequence:\n", "CrystalIntroSequence:\n\tjmp AcceptanceBoot\n", 1)
-                    + "\n" + (TESTS / "support/bootstrap.asm.in").read_text())
-    menu = source / "engine/menus/main_menu.asm"
-    menu.write_text(menu.read_text().replace("MainMenu:\n", "MainMenu:\n\tfarjp AcceptanceBoot\n", 1))
-    objects = source / "engine/overworld/map_objects.asm"
-    text = objects.read_text()
-    needle = "\tldh [hUsedSpriteTile], a\nif DEF(MOBILE_ADAPTER)"
-    if text.count(needle) != 1:
-        raise RuntimeError("Declared native-facing observation point changed")
-    objects.write_text(text.replace(needle, "\tldh [hUsedSpriteTile], a\n.AcceptanceFacing:\nif DEF(MOBILE_ADAPTER)"))
-    spawn = source / "data/maps/spawn_points.asm"
-    text = spawn.read_text()
-    match = re.search(r"(?m)^\s*spawn\s+PLAYERS_HOUSE_2F,\s*\d+,\s*\d+", text)
-    if not match:
-        raise RuntimeError("Declared native spawn-table interface changed")
-    coordinate_values = {"wXCoord": primary[0], "wYCoord": primary[1]}
-    ordered_coordinates = [coordinate_values[name] for name in record["spawn_fields"] if name in coordinate_values]
-    spawn.write_text(text[:match.start()] + f"\tspawn GOLDENROD_GAME_CORNER, {ordered_coordinates[0]}, {ordered_coordinates[1]}" + text[match.end():])
-    for variant in ("crystal", "mobile"):
-        run(["make", "-j4", variant, f"RGBDS={meta['rgbds']}/"], source, directory / f"{variant}.log")
-    retain_rom_outputs(source)
-    manifest = {"source": str(source), "scene": scene, "map": record, "primary": primary,
-        "peers": peers, "ordinary_objects": count, "equal_actor_load": equal_load,
-        "limitation": None if count <= 9 else "The native pool cannot represent fifteen ordinary objects. Full-pool control preserves all twelve ordinary objects; equal-actor controls run separately.",
-        "native_object_positions": points[:count], "palettes": palette_data,
-        "clock_input": "fixed game-time/software-RTC input; ordinary world/network remain live" if scene in ("save", "private-save") else "normal native game-time counter",
-        "recipe_inputs": "Current native save produced once, then shared by both counterparts; no named daily/NPC field is pinned."}
-    (directory / "manifest.json").write_text(json.dumps(manifest, indent=2))
-    return manifest
+    """One all-scenario ROM pair; a case is a ROM-data configuration, not a build."""
+    directory = out / "fixture-pair"
+    manifest_path = directory / "manifest.json"
+    if manifest_path.exists():
+        shared = json.loads(manifest_path.read_text())
+    else:
+        directory.mkdir(exist_ok=True)
+        source = directory / "source"
+        if source.exists():
+            shutil.rmtree(source)
+        copy_sources(Path(meta["source"]), source, reuse_objects=True)
+        version = meta["version"]
+        # Generation derives current palette bytes from the clean 2 MiB ROM.
+        baseline = Path(meta["source"]) / f"polishedcrystal-{version}.gbc"
+        for path in (baseline, baseline.with_suffix(".sym")):
+            shutil.copy2(path, source / path.name)
+        for variant in ("crystal", "mobile"):
+            run(["make", "-j4", variant, "MOBILE_TEST_SCENARIOS=1", f"RGBDS={meta['rgbds']}/"],
+                source, directory / f"{variant}.log")
+        scenarios = json.loads((source / "mobile_adapter/build-test/acceptance-scenarios.json").read_text())
+        (directory / "scenarios.json").write_text(json.dumps(scenarios, indent=2))
+        shutil.copy2(source / "mobile_adapter/build-test/acceptance-scenarios.asm", directory / "events.asm")
+        shared = {"source": str(source), "scenarios": scenarios,
+            "single_rom": str(source / f"polishedcrystal-test-{version}.gbc"),
+            "mobile_rom": str(source / f"polishedcrystal-mobile-test-{version}.gbc"),
+            "build_flag": "MOBILE_TEST_SCENARIOS", "test_rom_bytes": 4 * 1024 * 1024}
+        for key in ("single_rom", "mobile_rom"):
+            rom = Path(shared[key]).read_bytes()
+            if len(rom) != shared["test_rom_bytes"] or rom[0x147:0x14a] != bytes((0x10, 7, 3)):
+                raise RuntimeError("Both optional test ROMs must use 4 MiB MBC30 and normal 32 KiB SRAM")
+        single_names = symbols(Path(shared["single_rom"]).with_suffix(".sym"))
+        mobile_names = symbols(Path(shared["mobile_rom"]).with_suffix(".sym"))
+        shared["scenario_headers_match"] = all(
+            single_names["Acceptance_" + name.replace("-", "_") + "_Header"] ==
+            mobile_names["Acceptance_" + name.replace("-", "_") + "_Header"]
+            for name in scenarios)
+        shared["save_event_addresses_match"] = all(
+            single_names[f"Acceptance_{name}_{suffix}"] == mobile_names[f"Acceptance_{name}_{suffix}"]
+            for name in ("save", "private_save") for suffix in ("NPC", "Ready", "Text"))
+        if not shared["scenario_headers_match"] or not shared["save_event_addresses_match"]:
+            raise RuntimeError("Paired native save/event addresses must match before testing")
+        retain_rom_outputs(source)
+        manifest_path.write_text(json.dumps(shared, indent=2))
+    fx = dict(shared["scenarios"][scene])
+    fx.update({key: shared[key] for key in ("source", "single_rom", "mobile_rom", "build_flag")})
+    return fx
 
 
 class Proxy(socketserver.ThreadingTCPServer):
     daemon_threads = True
     allow_reuse_address = True
-    def __init__(self, upstream, fault):
+    def __init__(self, upstream, fault, wait_for_arm=False):
         self.upstream, self.fault = upstream, fault
         self.started = time.monotonic()
         self.injected = 0
         self.recovered = 0
         self.connection_lock = threading.Lock()
         self.single_reset = False
+        self.armed = False
+        self.wait_for_arm = wait_for_arm
         super().__init__(("127.0.0.1", 0), ProxyHandler)
 
 
@@ -479,16 +360,17 @@ class ProxyHandler(socketserver.BaseRequestHandler):
                             if len(pending) < size:
                                 break
                             frame = bytes(pending[:size])
+                            original_frame = frame
                             del pending[:size]
                             elapsed = time.monotonic() - self.server.started
                             fault = self.server.fault
-                            if elapsed >= 4 and fault != "none":
-                                if fault not in ("reconnect", "reconnect-one"):
-                                    self.server.injected += 1
+                            if (self.server.armed or (not self.server.wait_for_arm and elapsed >= 4)) and fault != "none":
                                 if fault == "silence":
+                                    self.server.injected += 1
                                     continue
                                 if fault == "partial":
                                     self.request.sendall(frame[:4])
+                                    self.server.injected += 1
                                     continue
                                 if fault == "magic":
                                     frame = b"!" + frame[1:]
@@ -503,6 +385,8 @@ class ProxyHandler(socketserver.BaseRequestHandler):
                                 elif fault == "roster" and frame[3] in (WIRE_KINDS["ROSTER"], WIRE_KINDS["DELTA"]):
                                     frame = frame[:8] + b"\xff" * (len(frame) - 8)
                             self.request.sendall(frame)
+                            if frame != original_frame:
+                                self.server.injected += 1
                             valid_response = frame[3] in (WIRE_KINDS["WELCOME"], WIRE_KINDS["ROSTER"], WIRE_KINDS["DELTA"])
                             if valid_response and ((fault == "reconnect" and elapsed >= 6) or
                                                    (fault == "reconnect-one" and opened_after_reset)):
@@ -545,7 +429,7 @@ def projected(directory):
                     if key in state:
                         values[key] = state[key]
             frames.append({"frame": row["frame"], "state": values})
-    return {"frames": frames,
+    return {"frame_calls": json.loads((directory / "state.json").read_text())["frame_calls"], "frames": frames,
         "profile": json.loads((directory / "profile.json").read_text()),
         "state": json.loads((directory / "state.json").read_text())["symbols"],
         "save": list((directory / "result.sav").read_bytes()),
@@ -557,7 +441,7 @@ def seed_saves(meta, session, fx, hour):
     """One current native producer per avatar; never reuse historic battery data."""
     seed_fx = fixture(meta, session, "save")
     source = Path(seed_fx["source"])
-    native = source / f"polishedcrystal-{meta['version']}.gbc"
+    native = Path(seed_fx["single_rom"])
     names = symbols(native.with_suffix(".sym"))
     def produce(index, position):
         directory = session / f"seed-{hour}-{index}"
@@ -567,9 +451,11 @@ def seed_saves(meta, session, fx, hour):
                       "wXCoord": position[0], "wYCoord": position[1]}
             patch_data(native, names, {"AcceptanceAvatar": bytes([index]),
                 "AcceptanceTrainerID": (10001 + index).to_bytes(2,"big"), "AcceptanceHour": bytes([hour]),
-                "SpawnPoints": bytes(values[name] for name in fx["map"]["spawn_fields"]),
-                "AcceptanceSeedNPC": bytes([native.read_bytes()[rom_offset(names["AcceptanceSeedNPC"])],position[1]+5,position[0]+4])}, directory / "fixture.gbc")
-            (directory / "input.txt").write_text("1200 A 8\n1290 A 8\n")
+                "AcceptanceScenarioID": bytes([seed_fx["scene_id"]]),
+                "AcceptanceSpawn": bytes(values[name] for name in fx["map"]["spawn_fields"]),
+                "AcceptanceNPCOverride": bytes([1]),
+                "AcceptanceNPCPosition": bytes([position[1]+5,position[0]+4])}, directory / "fixture.gbc")
+            (directory / "input.txt").write_text("AFTER 0 vAcceptanceReady=1,wMapStatus=2,wScriptRunning=0 A 8\nAFTER 90 vAcceptanceReady=1,wMapStatus=2,wScriptRunning=0 A 8\n")
             run([meta["runner"], meta["core"], directory / "fixture.gbc", directory / "screen.ppm", directory,
                 "--frames", "1800", "--symbols", native.with_suffix(".sym"), "--input", directory / "input.txt",
                 "--state-out", directory / "state.json", "--save-out", directory / "result.sav",
@@ -585,7 +471,7 @@ def seed_saves(meta, session, fx, hour):
         return list(pool.map(produce, range(4), [fx["primary"], *fx["peers"]]))
 
 
-def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 1), duplicate=False, settle_frames=300):
+def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 1), duplicate=False, settle_frames=300, functional=False):
     if out.exists():
         original = out
         attempt = 2
@@ -594,8 +480,8 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
             attempt += 1
     source = Path(fx["source"])
     version = meta["version"]
-    mobile = source / f"polishedcrystal-mobile-{version}.gbc"
-    native = source / f"polishedcrystal-{version}.gbc"
+    mobile = Path(fx["mobile_rom"])
+    native = Path(fx["single_rom"])
     mobile_symbols, native_symbols = symbols(mobile.with_suffix(".sym")), symbols(native.with_suffix(".sym"))
     out.mkdir(exist_ok=True)
     log = (out / "bridge.log").open("w")
@@ -615,55 +501,71 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
         bridge.wait(timeout=5)
         log.close()
         raise
-    proxy = Proxy(upstream_port, fault)
+    proxy = Proxy(upstream_port, fault, wait_for_arm=functional)
     port = proxy.server_address[1]
     threading.Thread(target=proxy.serve_forever, daemon=True).start()
     proxy.started = time.monotonic()
 
     def client(index, enabled):
         speed = speeds[index]
+        replay = None
         # Native initialization is complete before frame 500. The explicit join
         # starts at 600; retain five real seconds for join/assets before measuring
         # the unchanged 800-frame window and 200-frame recovery tail.
         first, profile = 500, 500 + settle_frames * speed
         total = profile + 1000 * speed
+        if functional:
+            # One normal measurement window in emulated frames, regardless of
+            # wall-clock acceleration. The actual lobby releases the start gate.
+            profile, total = 800, 12000
+            if not enabled:
+                replay = json.loads((out / f"mobile/{index}/profile.json").read_text())
+                profile = replay["world_window_start"]
+                total = json.loads((out / f"mobile/{index}/state.json").read_text())["frame_calls"]
         directory = out / ("mobile" if enabled else "single") / str(index)
         directory.mkdir(parents=True)
         rom = directory / "fixture.gbc"
         current, bindings = (mobile, mobile_symbols) if enabled else (native, native_symbols)
+        original_rom = current.read_bytes()
         position = fx["primary"] if index == 0 else fx["peers"][index - 1]
-        changes = {"AcceptanceAvatar": bytes([index]), "AcceptanceScenarioLoad": bytes([1]), "AcceptanceTrainerID": (12345 if duplicate else 10001 + index).to_bytes(2, "big"),
+        changes = {"AcceptanceScenarioID": bytes([fx["scene_id"]]), "AcceptanceAvatar": bytes([index]), "AcceptanceScenarioLoad": bytes([1]), "AcceptanceTrainerID": (12345 if duplicate else 10001 + index).to_bytes(2, "big"),
                    "AcceptanceHour": bytes([22 if action == "night" else 12]),
-                   "AcceptanceInitialFault": bytes([0]),
+                   "AcceptanceInitialFault": bytes([0]), "AcceptanceNPCOverride": bytes([0]),
+                   "AcceptanceLighting": bytes([original_rom[rom_offset(bindings["AcceptanceDarkLighting" if action == "dark" else "AcceptanceAutoLighting"])]] ) if action in ("dark", "night") else bytes([255]),
                    "AcceptanceInteractionFault": bytes([int(action.split(":")[1]) if action.startswith("private:") and enabled and index == 0 else 0])}
         if enabled:
             bank, addr = bindings["MobileEndpoint"]
             # Endpoint is declarative ROM data, not an opcode or RAM mutation.
-            changes["MobileEndpoint"] = current.read_bytes()[rom_offset((bank, addr)):rom_offset((bank, addr)) + 4] + port.to_bytes(2, "big")
+            changes["MobileEndpoint"] = original_rom[rom_offset((bank, addr)):rom_offset((bank, addr)) + 4] + port.to_bytes(2, "big")
         # SPAWN_HOME's entry is current-build data; only map position differs per player.
-        start = rom_offset(bindings["SpawnPoints"])
         values = {"wMapGroup": fx["map"]["group"], "wMapNumber": fx["map"]["number"], "wXCoord": position[0], "wYCoord": position[1]}
-        changes["SpawnPoints"] = bytes(values[name] for name in fx["map"]["spawn_fields"])
+        changes["AcceptanceSpawn"] = bytes(values[name] for name in fx["map"]["spawn_fields"])
         if not enabled and fx["equal_actor_load"]:
             figure_at = rom_offset(bindings["AcceptanceFigures"])
-            figures = current.read_bytes()[figure_at:figure_at + 4]
+            figures = original_rom[figure_at:figure_at + 4]
             positions = [fx["primary"], *fx["peers"]]
-            for slot, avatar in enumerate(i for i in range(4) if i != index):
+            controls = bytearray()
+            for avatar in (i for i in range(4) if i != index):
                 px, py = positions[avatar]
-                changes[f"AcceptanceControlPeer{slot}"] = bytes([figures[avatar], py + 4, px + 4])
+                controls.extend((figures[avatar], py + 4, px + 4))
+            changes["AcceptanceControlPeers"] = bytes(controls)
         patch_data(current, bindings, changes, rom)
         text = "# Native initialization enters the fixture without title/dialog input.\n"
         if enabled and not (index == 0 and action.startswith("private:")):
             for button in ("SELECT", "B"):
-                text += f"ON 600 vAcceptanceReady=1,wMapStatus=2,wScriptRunning=0 {button} 8\n"
-        at = profile + 150 * speed
+                text += f"ON 0 vAcceptanceReady=1,wMapStatus=2,wScriptRunning=0 {button} 8\n"
+        if functional and enabled and index == 1 and fault not in ("none", "reconnect", "reconnect-one"):
+            # Demand a genuine response after arming the proxy. Standing clients
+            # can be served by the Bridge cache without any upstream bytes.
+            text += "ON 0 vAcceptanceFaultArmed=1 RIGHT 8\n"
+        at = profile + 150 * (1 if functional else speed)
         if index == 0 and (action in ("interaction", "save", "script", "link", "warp", "fault-save-exit", "npc-movement") or action.startswith("private:")):
             text += f"{at} A 8\n{at + 90} A 8\n"
         elif index == 0 and action == "menu":
             text += f"{at} START 8\n"
         if index > 0 and action == "clear-conflict":
             text += f"{at} UP 12\n"
-        if index > 0 and speeds != (1, 1, 1, 1):
+        if index > 0 and len(set(speeds)) > 1:
             for cycle in range(8):
                 step = profile + 30 + cycle * 72
                 text += f"{step} UP 12\n{step + 36} DOWN 12\n"
@@ -694,6 +596,28 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
             else:
                 text += f"{at} SELECT 8\n{at} B 8\n"
             text += f"{at + 180} B 8\n{at + 250} LEFT 12\n"
+        if functional and enabled:
+            transformed = []
+            for line in text.splitlines():
+                fields = line.split()
+                if fields and fields[0].isdigit():
+                    offset = max(0, int(fields[0]) - profile)
+                    transformed.append(f"AFTER {offset} vAcceptanceMeasuring=1 {fields[1]} {fields[2]}")
+                elif fields and fields[0] == "ON" and int(fields[1]) > 0:
+                    transformed.append(f"ON 0 vAcceptanceMeasuring=1,{fields[2]} {fields[3]} {fields[4]}")
+                else:
+                    transformed.append(line)
+            text = "\n".join(transformed) + "\n"
+        elif functional and not enabled:
+            # Reproduce actual observed inputs, not guessed timings. The initial
+            # connect chord is feature-specific and absent from the native run.
+            observed = [json.loads(line) for line in (out / f"mobile/{index}/input-events.jsonl").read_text().splitlines()]
+            text = "# Observed mobile actions replayed in the native control.\n"
+            for event in observed:
+                if event["frame"] < profile and event["button"] in (0, 2):
+                    continue
+                button_name = {0: "B", 2: "SELECT", 3: "START", 4: "UP", 5: "DOWN", 6: "LEFT", 7: "RIGHT", 8: "A"}[event["button"]]
+                text += f"{event['frame']} {button_name} {event['duration']}\n"
         script = directory / "input.txt"
         script.write_text(text)
         command = [meta["runner"], meta["core"], rom, directory / "screen.ppm", directory,
@@ -701,8 +625,12 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
             "--state-out", directory / "state.json", "--save-out", directory / "result.sav",
             "--save-in", seeds[index],
             "--trace-out", directory / "trace.jsonl.gz", "--input-events", directory / "input-events.jsonl",
-            "--profile-out", directory / "profile.json", "--profile-window-start", profile,
+            "--profile-out", directory / "profile.json", "--profile-window-start", total - 1000 if functional and enabled else profile,
             "--pace-from", first if enabled else total, "--pace-multiplier", speed, "--adapter", int(enabled), "--acceptance", "1"]
+        if functional and enabled:
+            command += ["--measurement-gate", out / "measure", "--measurement-warmup", "300"]
+            if action.startswith("private:"):
+                command += ["--expected-online", 0 if index == 0 else 1, "--expected-peers", 0 if index == 0 else 2]
         if enabled and index == 0 and action == "resume":
             command += ["--test-snapshot-out", directory / "online.state"]
         if enabled:
@@ -717,6 +645,20 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
             futures = [pool.submit(client,index,True) for index in range(4)]
             deadline = time.monotonic() + 90
             try:
+                if functional:
+                    while not all((out / f"mobile/{index}/state.json.measurement-ready").exists() for index in range(4)):
+                        for future in futures:
+                            if future.done(): future.result()
+                        if time.monotonic() >= deadline:
+                            raise TimeoutError("Four actual clients did not reach lobby readiness")
+                        time.sleep(.01)
+                    proxy.armed = True
+                    (out / "measure.fault").touch()
+                    if fault not in ("none", "reconnect", "reconnect-one"):
+                        while not proxy.injected:
+                            if time.monotonic() >= deadline: raise TimeoutError("No malformed server bytes were delivered")
+                            time.sleep(.01)
+                    (out / "measure").touch()
                 while True:
                     if any(future.done() for future in futures):
                         for future in futures:
@@ -741,10 +683,13 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
             for producer, consumer in (("mobile", "single"), ("single", "mobile")):
                 directory = out / f"reload-{producer}-into-{consumer}"
                 directory.mkdir()
-                target = native if consumer == "single" else mobile
+                base_target = native if consumer == "single" else mobile
+                target = directory / "fixture.gbc"
+                patch_data(base_target, symbols(base_target.with_suffix(".sym")),
+                    {"AcceptanceScenarioID": bytes([fx["scene_id"]]), "AcceptanceScenarioLoad": bytes([0])}, target)
                 (directory / "input.txt").write_text("# The normal save loader enters the generated scene.\n")
                 run([meta["runner"], meta["core"], target, directory / "screen.ppm", directory,
-                    "--frames", "1400", "--symbols", target.with_suffix(".sym"),
+                    "--frames", "1400", "--symbols", base_target.with_suffix(".sym"),
                     "--save-in", out / producer / "0/result.sav", "--save-out", directory / "result.sav",
                     "--input", directory / "input.txt", "--state-out", directory / "state.json",
                     "--trace-out", directory / "trace.jsonl.gz", "--input-events", directory / "input-events.jsonl",
@@ -767,6 +712,7 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
             recovery = projected(recovery_dir)
         return {"fixture": fx, "clients": [{"mobile": m, "single": s} for m, s in zip(online, offline)],
             "fault": fault, "injected": proxy.injected, "recovered": proxy.recovered, "speeds": speeds, "action": action,
+            "execution_mode": "functional-400-percent" if functional else "controlled-real-time",
             "recovery": recovery,
             "save_reload": save_reload,
             "initial_save_sha256": [sha(seed) for seed in seeds],
@@ -806,7 +752,10 @@ def main():
         from audit_rom_budget import measure
         base = source / f"polishedcrystal-{meta['version']}.gbc"
         mobile = source / f"polishedcrystal-mobile-{meta['version']}.gbc"
-        data = {"manifest": meta, "maps": audit(base, mobile, source), "budget": measure(base, mobile),
+        fixture(meta, args.output, "empty")
+        test_pair = json.loads((args.output / "fixture-pair/manifest.json").read_text())
+        test_pair["production_has_test_entry"] = "AcceptanceBoot" in symbols(base.with_suffix(".sym")) or "AcceptanceBoot" in symbols(mobile.with_suffix(".sym"))
+        data = {"test_pair": test_pair, "manifest": meta, "maps": audit(base, mobile, source), "budget": measure(base, mobile),
                 "symbols": sorted(symbols(mobile.with_suffix(".sym")))}
         names = symbols(mobile.with_suffix(".sym"))
         if "MobileCompatibilityHash" in names:
@@ -826,7 +775,8 @@ def main():
             scene = "save"
         if args.case.startswith("private-"):
             scene, action = "private-save", "private:" + args.case.split("-")[1]
-        speeds = (1, 2, 3, 4) if args.case == "speeds" else (1, 1, 1, 1)
+        functional = args.case not in ASSUMPTIONS["performance_cases"] and fault not in ("reconnect", "reconnect-one")
+        speeds = (1, 2, 3, 4) if args.case == "speeds" else (4, 4, 4, 4) if functional else (1, 1, 1, 1)
         with preparation_lock(args.output):
             fx = fixture(meta, args.output, scene)
             seeds = seed_saves(meta, args.output, fx, 22 if action == "night" else 12)
@@ -835,7 +785,7 @@ def main():
         execution_wall_start = time.time()
         data = execute(meta, fx, args.output / args.case, seeds,
                        action, fault, speeds, args.case == "duplicate-ids",
-                       settle_frames=1300 if args.case in ASSUMPTIONS["performance_cases"] else 300)
+                       settle_frames=1300 if args.case in ASSUMPTIONS["performance_cases"] else 300, functional=functional)
         data["execution_wall_start"] = execution_wall_start
         data["execution_wall_end"] = time.time()
         data["execution_seconds"] = time.monotonic() - prepared_at

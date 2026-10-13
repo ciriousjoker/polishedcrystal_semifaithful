@@ -49,6 +49,10 @@ fn feature_assembly_stays_in_its_directory_with_reviewable_integration() {
         "ram/wram0.asm",
         "ram/wramx.asm",
         "home/delay.asm",
+        "home/map.asm", // Optional declarative test scenario selection.
+        "engine/menus/intro_menu.asm",
+        "engine/menus/main_menu.asm",
+        "engine/overworld/spawn_points.asm",
         "home/palettes.asm",
         "home/serial.asm",
         "home/vblank.asm",
@@ -83,4 +87,30 @@ fn build_emits_rom_compatibility_identity() {
         "No build-generated compatibility identity is present in the ROM. Schema/mechanics/capacity alone cannot establish cross-revision compatibility.");
     assert_eq!(e["compatibility_hash"], e["manifest"]["baseline_sha256"],
         "ROM compatibility identity must contain the SHA-256 of its current clean counterpart, not just a constant label");
+}
+
+#[test]
+fn optional_test_pair_contains_all_scenarios_without_changing_release_roms() {
+    let e = evidence("build");
+    let pair = &e["test_pair"];
+    assert_eq!(pair["build_flag"], "MOBILE_TEST_SCENARIOS");
+    assert_eq!(pair["production_has_test_entry"], false);
+    assert_eq!(pair["scenario_headers_match"], true);
+    assert_eq!(pair["save_event_addresses_match"], true);
+    let scenarios = pair["scenarios"].as_object().unwrap();
+    assert_eq!(scenarios.len(), 13);
+    let ids: std::collections::BTreeSet<_> = scenarios
+        .values()
+        .map(|s| s["scene_id"].as_u64().unwrap())
+        .collect();
+    assert_eq!(ids, (0..13).collect());
+    for key in ["single_rom", "mobile_rom"] {
+        let bytes = fs::read(pair[key].as_str().unwrap()).unwrap();
+        assert_eq!(bytes.len(), 4 * 1024 * 1024);
+        assert_eq!(&bytes[0x147..0x14a], &[0x10, 7, 3]);
+    }
+    assert_eq!(
+        e["manifest"]["baseline_sha256"],
+        e["manifest"]["pristine_sha256"]
+    );
 }

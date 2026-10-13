@@ -1,4 +1,7 @@
 MainMenu:
+if DEF(MOBILE_TEST_SCENARIOS)
+	farjp AcceptanceBoot
+endc
 	call DeleteSavedMusic
 	farcall NewGame_ClearTileMapEtc
 	ld a, CGB_PLAIN

@@ -27,11 +27,15 @@ static LOADED: Mutex<VecDeque<(String, Arc<Value>)>> = Mutex::new(VecDeque::new(
 
 pub fn performance_case(case: &str) -> bool {
     case == "build"
-        || assumptions()["performance_cases"]
-            .as_array()
-            .expect("Declared exclusive performance cases")
+        || ["performance_cases", "controlled_wall_clock_cases"]
             .iter()
-            .any(|name| name == case)
+            .any(|key| {
+                assumptions()[key]
+                    .as_array()
+                    .expect("Declared exclusive cases")
+                    .iter()
+                    .any(|name| name == case)
+            })
 }
 
 pub struct Evidence {

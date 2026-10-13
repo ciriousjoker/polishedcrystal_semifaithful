@@ -324,6 +324,9 @@ LoadMapAttributes_SkipObjects::
 _LoadMapAttributes_ReadEvents:
 	ld [wOldTileset], a
 	call CopyMapPartialAndAttributes
+if DEF(MOBILE_TEST_SCENARIOS)
+	farcall AcceptanceSelectMap
+endc
 	call SwitchToMapScriptsBank
 	ld hl, wMapScriptsPointer
 	ld a, [hli]
@@ -1864,6 +1867,11 @@ GetMapMusic::
 	ret
 
 GetMapTimeOfDay::
+if DEF(MOBILE_TEST_SCENARIOS)
+	ldh a, [hAcceptanceLighting]
+	cp -1
+	ret nz
+endc
 	call GetPhoneServiceTimeOfDayByte
 	and $f
 	ret

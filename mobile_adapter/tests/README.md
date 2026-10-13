@@ -33,8 +33,9 @@ cargo test --locked --manifest-path mobile_adapter/tests/Cargo.toml --test rom \
 
 All new test definitions and support code live here. `Cargo.toml` is an independent
 test package, using the production Rust crates as dependencies. The existing C++
-frontend has one opt-in `--acceptance 1` observation mode and includes this folder's
-observer header. It does not change production ROM code. Python is build/process
+frontend has an opt-in `--acceptance 1` read-only observation mode and includes
+this folder's observer header. Optional test initialization lives in
+`mobile_adapter/rom`, behind `MOBILE_TEST_SCENARIOS`. Python is build/process
 tooling, not another test framework.
 
 ## Prerequisites and artifacts
@@ -70,9 +71,16 @@ By default Rust runs up to two functional scenarios concurrently. Set
 The four performance cases declared in `assumptions.json` run exclusively,
 including their controls, evidence decoding and assertions. Waiting performance
 cases take priority over starting new functional work. Native controls and seed
-producers run four at a time. All multiplayer cores retain real-time pacing.
-Functional cases use a shorter five-second join warmup; performance cases retain
-their original warmup. The measured window remains 800 frames for every case.
+producers run four at a time. Functional multiplayer cores run at 400%.
+The two wall-clock reconnect cases also take an exclusive lane and retain 100%
+pacing. Performance cases retain their controlled pacing and warmup, including
+mixed 100/200/300/400% speeds. The measured window remains 800 emulated frames.
+Functional measurement starts only after all actual clients report lobby readiness;
+private-state cases explicitly require one offline client and three connected peers.
+A 300-frame asset warmup follows this shared gate. Input phases are relative to the
+observed measurement start or actual menu/save/script conditions, rather than a
+wall-clock sleep. Native controls replay the observed physical input durations and
+use the exact mobile measurement start. No host writes game RAM or CPU state.
 Shared build/fixture/seed construction is locked separately from live execution. Every scenario starts fresh guest instances and owns ephemeral ports.
 Contracts for one immutable execution can share its evidence; no test depends on
 another test having changed game state. Process deadlines also cover hung cores.
@@ -87,10 +95,23 @@ historic save versions, ordinary NPC counts/positions and story dialogue are not
 frozen expectations. Hardware limits and chosen acceptance ceilings are separate
 from source-stability assumptions.
 
-Disposable source trees reuse existing maps and their current background and
-collision assets. Only synthetic event headers are substituted there. Original
-script definitions and constants remain available for references from other maps.
-The tracked checkout is never temporarily edited for fixture construction.
+One immutable ROM pair contains all thirteen scenarios. Build it explicitly with:
+
+```sh
+make crystal MOBILE_TEST_SCENARIOS=1 RGBDS=/path/to/rgbds/
+make mobile MOBILE_TEST_SCENARIOS=1 RGBDS=/path/to/rgbds/
+```
+
+Both optional test builds use 4 MiB MBC30. Scenario ID, avatar, trainer ID,
+lighting, spawn and native counterpart positions are declared in
+`AcceptanceConfig..AcceptanceConfigEnd`. The launcher patches only those fields,
+the declarative MobileEndpoint, and the ROM checksum before boot. Opcodes, native
+spawn tables and event pointers are never host-patched. The common bootstrap
+uses normal initialization, save and map loaders; a conditional loader hook picks
+the selected synthetic event table. Current map background/collision assets remain
+native. Test code/events are absent without the flag, and release-disabled identity
+is separately checked against a pristine normal 2 MiB build.
+Disposable compiler trees are never used to mutate tracked maps or other sources.
 Positions come from the current collision data; native spawn field order comes
 from the current loader. Setup errors identify missing prerequisites and fail
 acceptance instead of silently skipping a contract.
@@ -212,3 +233,15 @@ Supporting workspace/storage checks run without an emulator:
 ```sh
 python3 -m unittest discover -s mobile_adapter/tests/support -p 'test_runtime.py'
 ```
+
+## Verified runtime and development policy
+
+The complete 2026-10-13 unified run takes **8m47s**, versus 24m06s for the
+previous optimized suite. It executes 33 unique cases with no setup errors;
+65/71 tests pass, with the six pre-existing compatibility/rendering/cadence gates
+still failing. Artifacts use 2.957 GiB. Functional scenarios take 6.93..11.07s
+(median 8.13s); performance and real-time reconnect cases remain isolated.
+
+During development, select the affected contract(s) with Cargo's test filter.
+Run a full suite at the end of a substantial work step, rather than after every
+edit. Existing failures remain real failures and do not justify weaker assertions.

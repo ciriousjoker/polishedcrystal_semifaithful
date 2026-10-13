@@ -52,6 +52,13 @@ ifdef MOBILE_RENDERER
 $(error MOBILE_RENDERER was a temporary prototype switch; use make mobile)
 endif
 endif
+ifeq ($(MOBILE_TEST_SCENARIOS),1)
+ifneq ($(filter faithful vc pocket debug monochrome noir hgss huffman,$(MAKECMDGOALS)),)
+$(error MOBILE_TEST_SCENARIOS currently supports standard crystal/mobile builds)
+endif
+MODIFIERS := $(MODIFIERS)-test
+RGBASMFLAGS += -DMOBILE_TEST_SCENARIOS
+endif
 ifeq ($(filter monochrome,$(MAKECMDGOALS)),monochrome)
 MODIFIERS := $(MODIFIERS)-monochrome
 RGBASMFLAGS += -DMONOCHROME
@@ -85,11 +92,26 @@ endif
 
 ifeq ($(filter mobile,$(MAKECMDGOALS)),mobile)
 MOBILE_OBJ_DIR := mobile_adapter/build$(MODIFIERS)
+else ifeq ($(MOBILE_TEST_SCENARIOS),1)
+MOBILE_OBJ_DIR := mobile_adapter/build$(MODIFIERS)
+endif
+ifdef MOBILE_OBJ_DIR
 MOBILE_MKDIR = @mkdir -p $(dir $@)
+endif
+ifeq ($(filter mobile,$(MAKECMDGOALS)),mobile)
 MOBILE_AVATAR_RAW := $(shell python3 mobile_adapter/tools/prepare_virtual_avatars.py --dependencies)
 $(MOBILE_OBJ_DIR)/virtual-avatars.asm: mobile_adapter/tools/prepare_virtual_avatars.py mobile_adapter/tools/prepare_native_rectangles.py data/sprites/facings.asm data/player/state_sprites.asm constants/sprite_constants.asm data/sprites/sprites.asm gfx/sprites.asm $(MOBILE_AVATAR_RAW)
 	python3 mobile_adapter/tools/prepare_virtual_avatars.py --output "$@"
 $(MOBILE_OBJ_DIR)/main.o: $(MOBILE_OBJ_DIR)/virtual-avatars.asm
+endif
+
+ifeq ($(MOBILE_TEST_SCENARIOS),1)
+TEST_BASELINE := $(NAME)-$(VERSION).gbc
+$(TEST_BASELINE):
+	$(MAKE) crystal MOBILE_TEST_SCENARIOS= RGBDS="$(RGBDS)"
+$(MOBILE_OBJ_DIR)/acceptance-scenarios.asm: mobile_adapter/tools/test_scenarios.py mobile_adapter/rom/test_bootstrap.asm $(TEST_BASELINE)
+	python3 mobile_adapter/tools/test_scenarios.py --baseline "$(TEST_BASELINE)" --output "$@"
+$(MOBILE_OBJ_DIR)/main.o: $(MOBILE_OBJ_DIR)/acceptance-scenarios.asm
 endif
 
 rom_obj := \
@@ -232,13 +254,13 @@ endif
 preinclude_deps := includes.asm $(shell tools/scan_includes includes.asm)
 
 define DEP
-$1: $2 $$(shell tools/scan_includes $2) $(preinclude_deps) | rgbdscheck.o
+$1: $2 $$(filter-out mobile_adapter/build-test/acceptance-scenarios.asm mobile_adapter/build-mobile-test/acceptance-scenarios.asm,$$(shell tools/scan_includes $2)) $(preinclude_deps) | rgbdscheck.o
 	$$(MOBILE_MKDIR)
 	$Q$$(RGBASM) $$(RGBASMFLAGS) -o $$@ $$<
 endef
 
 define VCDEP
-$1: $2 $$(shell tools/scan_includes $2) $(preinclude_deps) | rgbdscheck.o
+$1: $2 $$(filter-out mobile_adapter/build-test/acceptance-scenarios.asm mobile_adapter/build-mobile-test/acceptance-scenarios.asm,$$(shell tools/scan_includes $2)) $(preinclude_deps) | rgbdscheck.o
 	$Q$$(RGBASM) $$(RGBASMVCFLAGS) -o $$@ $$<
 endef
 

@@ -1,6 +1,10 @@
 INCLUDE "data/maps/spawn_points.asm"
 
 EnterMapSpawnPoint:
+if DEF(MOBILE_TEST_SCENARIOS)
+	farcall AcceptanceLoadSpawn
+	ret c
+endc
 	push hl
 	push de
 	ld a, [wDefaultSpawnpoint]

@@ -14,8 +14,17 @@
   identified generated test runs in the configured test cache. If no safe
   deletion can restore the reserve, report the condition and stop generating
   large artifacts.
-- Acceptance tests must retain real-time multiplayer execution. Independent
-  functional scenarios may run concurrently on isolated ports/workspaces.
+- Functional acceptance scenarios may run at 400% concurrently on isolated
+  ports/workspaces, using observed states to trigger actions. Retain real-time
+  execution for wall-clock networking and performance measurements.
   Performance comparisons must run exclusively, with no other acceptance
   scenarios competing for CPU. Keep individual contract results and do not
   relax acceptance thresholds to accelerate tests.
+
+- Verify each change with the relevant tests or focused checks, demonstrating
+  improvement or no regression against the applicable baseline. During iteration,
+  run only the affected test cases; do not run the entire suite by default or
+  assume unrelated cases need repeating. Run the complete suite once at the end
+  of a substantial work step, especially before declaring a milestone complete.
+  Keep existing failures visible and do not weaken assertions to obtain a pass.
+  Documentation-only changes need a content review, not unrelated game tests.

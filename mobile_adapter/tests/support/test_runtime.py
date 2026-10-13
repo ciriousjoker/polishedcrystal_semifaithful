@@ -1,6 +1,9 @@
 from pathlib import Path
 import tempfile
 import unittest
+import socket
+import threading
+import time
 
 import runtime
 from storage import active_run, ensure_free_space
@@ -48,6 +51,65 @@ class Workspaces(unittest.TestCase):
             runtime.retain_rom_outputs(source)
             self.assertEqual(sorted(p.name for p in source.iterdir()),
                              ["fixture.gbc", "fixture.map", "fixture.sym"])
+
+
+class DeclarativeConfiguration(unittest.TestCase):
+    def test_opcode_or_out_of_span_patch_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rom, destination = Path(tmp) / "test.gbc", Path(tmp) / "patched.gbc"
+            rom.write_bytes(bytes(0x4000))
+            names = {"AcceptanceConfig": (0, 0x200), "AcceptanceConfigEnd": (0, 0x219),
+                     "AcceptanceAvatar": (0, 0x201), "AcceptanceBoot": (0, 0x220)}
+            runtime.patch_data(rom, names, {"AcceptanceAvatar": bytes([3])}, destination)
+            self.assertEqual(destination.read_bytes()[0x201], 3)
+            with self.assertRaisesRegex(ValueError, "declared test configuration"):
+                runtime.patch_data(rom, names, {"AcceptanceBoot": bytes([0])}, destination)
+            with self.assertRaises(ValueError):
+                runtime.patch_data(rom, names, {"AcceptanceAvatar": bytes([1, 2])}, destination)
+            names["AcceptanceAvatar"] = (0, 0x220)
+            with self.assertRaisesRegex(ValueError, "ROM span"):
+                runtime.patch_data(rom, names, {"AcceptanceAvatar": bytes([1])}, destination)
+
+
+class FaultDelivery(unittest.TestCase):
+    def test_unmodified_welcome_is_not_counted_as_a_roster_fault(self):
+        welcome = b"PC\x01" + bytes([runtime.WIRE_KINDS["WELCOME"]]) + b"\x00\x01\x00\x01\x01"
+        roster = b"PC\x01" + bytes([runtime.WIRE_KINDS["ROSTER"]]) + b"\x00\x02\x00\x02\x01\x02"
+        with socket.create_server(("127.0.0.1", 0)) as upstream:
+            def serve():
+                connection, _ = upstream.accept()
+                with connection:
+                    connection.sendall(welcome)
+                    self.assertEqual(connection.recv(1), b"P")
+                    connection.sendall(roster)
+            worker = threading.Thread(target=serve)
+            worker.start()
+            proxy = runtime.Proxy(upstream.getsockname()[1], "roster", wait_for_arm=True)
+            host = threading.Thread(target=proxy.serve_forever)
+            host.start()
+            try:
+                with socket.create_connection(proxy.server_address, timeout=2) as client:
+                    def receive(size):
+                        data = bytearray()
+                        while len(data) < size:
+                            chunk = client.recv(size - len(data))
+                            if not chunk: self.fail("Proxy closed before the requested fault")
+                            data.extend(chunk)
+                        return bytes(data)
+                    self.assertEqual(receive(len(welcome)), welcome)
+                    self.assertEqual(proxy.injected, 0)
+                    proxy.armed = True
+                    client.sendall(b"P")
+                    self.assertEqual(receive(len(roster)), roster[:8] + bytes([255, 255]))
+                    deadline = time.monotonic() + 2
+                    while not proxy.injected and time.monotonic() < deadline:
+                        time.sleep(.001)
+                    self.assertEqual(proxy.injected, 1)
+            finally:
+                proxy.shutdown()
+                proxy.server_close()
+                host.join(timeout=2)
+                worker.join(timeout=2)
 
 
 class StorageReserve(unittest.TestCase):

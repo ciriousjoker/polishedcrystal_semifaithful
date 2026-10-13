@@ -48,6 +48,9 @@ static void acceptance_capture(std::map<std::string, unsigned>& values,
     const unsigned stride = acceptance_word("AcceptanceObjectStride");
     const unsigned count = acceptance_word("AcceptanceObjectCount");
     if (count < 13 || end.address - objects.address != count * stride) fail("Native pool cannot represent the required twelve ordinary objects plus player");
+    const unsigned scenario = acceptance_data("AcceptanceScenarioID");
+    if (scenario >= acceptance_data("AcceptanceScenarioTotal")) fail("Unknown scenario in launcher configuration");
+    const unsigned original = acceptance_data("AcceptanceScenarioCounts", scenario);
     unsigned hash = 2166136261u, occupied = 0;
     for (unsigned slot = 0; slot < 13; ++slot) {
         const unsigned start = objects.address + slot * stride;
@@ -57,7 +60,8 @@ static void acceptance_capture(std::map<std::string, unsigned>& values,
         values["vNativeObject" + std::to_string(slot) + "Map"] = observe(objects.bank, start + acceptance_word("AcceptanceObjectMap"), sram, sram_size);
         // Compare simulation fields, excluding graphics allocation and palette slots.
         const unsigned fields = acceptance_symbols.at("AcceptanceSimulationFieldsEnd").address - acceptance_symbols.at("AcceptanceSimulationFields").address;
-        if (slot) for (unsigned i = 0; i < fields; ++i)
+        const unsigned map = values["vNativeObject" + std::to_string(slot) + "Map"];
+        if (slot && map > 0 && map <= original) for (unsigned i = 0; i < fields; ++i)
             hash = (hash ^ observe(objects.bank, start + acceptance_data("AcceptanceSimulationFields", i), sram, sram_size)) * 16777619u;
     }
     values["vNPCOccupiedMask"] = occupied;

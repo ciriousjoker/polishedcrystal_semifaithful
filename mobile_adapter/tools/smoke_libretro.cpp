@@ -58,6 +58,9 @@ struct ConditionalAction {
     unsigned earliest, button, duration;
     std::map<std::string, unsigned> conditions;
     bool fired = false;
+    bool relative = false;
+    unsigned anchor = 0;
+    bool anchored = false;
 };
 static std::vector<ConditionalAction> conditional_actions;
 struct WalkWaypoint { unsigned earliest, x, y, timeout, started = 0; };
@@ -661,6 +664,7 @@ static int16_t input_state(unsigned port, unsigned device, unsigned, unsigned id
                 auto timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
                     std::chrono::steady_clock::now().time_since_epoch()).count();
                 input_events << "{\"frame\":" << input_frame << ",\"button\":" << id
+                             << ",\"duration\":" << action.end - input_frame
                              << ",\"wall_us\":" << timestamp << "}\n";
             }
             return 1;
@@ -697,7 +701,7 @@ int main(int argc, char** argv) {
             key != "--checkpoint-dir" && key != "--profile-out" && key != "--profile-window-start" &&
             key != "--snapshot-out" && key != "--test-snapshot-out" && key != "--snapshot-in" && key != "--input-events" &&
             key != "--finish-barrier" && key != "--pace-multiplier" && key != "--expected-peers" && key != "--expected-online" &&
-            key != "--acceptance") fail("Unknown option: " + key);
+            key != "--measurement-gate" && key != "--measurement-warmup" && key != "--acceptance") fail("Unknown option: " + key);
         arguments[key] = argv[i + 1];
     }
     if (arguments.count("--frames")) {
@@ -736,13 +740,14 @@ int main(int argc, char** argv) {
                 walk_waypoints.push_back(waypoint);
                 continue;
             }
-            if (line.substr(0, 3) == "ON ") {
+            if (line.substr(0, 3) == "ON " || line.substr(0, 6) == "AFTER ") {
                 std::string on, conditions, button;
                 unsigned earliest, duration;
                 if (!(row >> on >> earliest >> conditions >> button >> duration) ||
                     !buttons.count(button) || !duration || earliest >= frame_limit)
                     fail("Invalid conditional input action");
                 ConditionalAction action = {earliest, buttons.at(button), duration, {}, false};
+                action.relative = on == "AFTER";
                 std::istringstream list(conditions);
                 std::string condition;
                 while (std::getline(list, condition, ',')) {
@@ -987,6 +992,11 @@ int main(int argc, char** argv) {
         pace_multiplier = std::stoul(value);
     }
     if (av_info.timing.fps <= 0) fail("Invalid emulator frame rate");
+    unsigned measurement_start = arguments.count("--profile-window-start") ? std::stoul(arguments.at("--profile-window-start")) : 3600;
+    const bool measurement_gate = arguments.count("--measurement-gate");
+    bool measurement_released = !measurement_gate, measurement_ready = false;
+    const unsigned measurement_warmup = arguments.count("--measurement-warmup") ? std::stoul(arguments.at("--measurement-warmup")) : 300;
+    if (measurement_gate && (!acceptance_enabled || !profile_frame || measurement_warmup > 3000)) fail("Invalid measurement gate configuration");
     std::chrono::steady_clock::time_point paced_start;
     std::map<std::string, unsigned> previous;
     std::map<std::string, unsigned> checkpoint_previous;
@@ -1029,6 +1039,25 @@ int main(int argc, char** argv) {
             for (unsigned i = 0; i < 5; ++i) values[marker_names[i]] = acceptance_marker_count ? acceptance_marker_count(i) : 0;
             values["vProfileWorldUpdates"] = metric ? metric(21) : 0;
         }
+        if (measurement_gate) {
+            // These files coordinate host processes only. Never alter game RAM,
+            // CPU registers or the game's normal initialization/connection path.
+            if (!measurement_ready && values.at("vAcceptanceReady") &&
+                values.at("wMobileOnline") == (arguments.count("--expected-online") ? std::stoul(arguments.at("--expected-online")) : 1) &&
+                values.at("wMobilePeerCount") == (arguments.count("--expected-peers") ? std::stoul(arguments.at("--expected-peers")) : 3)) {
+                std::ofstream(arguments.at("--state-out") + ".measurement-ready") << input_frame << '\n';
+                measurement_ready = true;
+            }
+            if (!measurement_released && std::ifstream(arguments.at("--measurement-gate")).good()) {
+                if (!measurement_ready) fail("Measurement released before actual lobby readiness");
+                measurement_start = input_frame + 1 + measurement_warmup;
+                frame_limit = measurement_start + 1000;
+                symbol<void(*)(unsigned)>(core, "mobile_profile_window")(measurement_start);
+                measurement_released = true;
+            }
+        }
+        values["vAcceptanceFaultArmed"] = measurement_gate && std::ifstream(arguments.at("--measurement-gate") + ".fault").good();
+        values["vAcceptanceMeasuring"] = measurement_released && input_frame >= measurement_start;
         if (profile_frame && native_graphics_wait)
             values["vNativeGraphicsWait"] = native_graphics_wait();
         if (profile_frame && native_wait_ly)
@@ -1073,10 +1102,14 @@ int main(int argc, char** argv) {
         }
         values["vWalkReachedWaypoints"] = unsigned(walk_index);
         for (auto& action : conditional_actions) {
-            if (action.fired || input_frame < action.earliest) continue;
+            if (action.fired || (!action.relative && input_frame < action.earliest)) continue;
             bool matches = true;
             for (const auto& condition : action.conditions)
                 if (!values.count(condition.first) || values.at(condition.first) != condition.second) matches = false;
+            if (action.relative) {
+                if (!action.anchored && matches) { action.anchor = input_frame; action.anchored = true; }
+                matches = action.anchored && input_frame - action.anchor >= action.earliest;
+            }
             if (matches) {
                 if (action.duration >= frame_limit - input_frame) fail("Conditional action exceeds frame limit");
                 action.fired = true;
@@ -1160,6 +1193,7 @@ int main(int argc, char** argv) {
                   << adapter_option_requested << '\n';
         return 1;
     }
+    if (measurement_gate && !measurement_released) fail("Actual four-client lobby did not become ready");
     write_image(argv[3]);
     if (metric) {
         const char* names[] = {"serial_count", "serial_max_cycles", "serial_total_cycles", "serial_failures",
@@ -1249,7 +1283,7 @@ int main(int argc, char** argv) {
                 profile << ",\"" << stages[stage] << "_window_entry_ly_p50\":" << entry(stage * 2)
                         << ",\"" << stages[stage] << "_window_entry_ly_p95\":" << entry(stage * 2 + 1);
         }
-        profile << ",\"world_window_start\":" << (arguments.count("--profile-window-start") ? std::stoul(arguments.at("--profile-window-start")) : 3600);
+        profile << ",\"world_window_start\":" << measurement_start;
         profile << ",\"video_frames\":" << video_frames << ",\"audio_batches\":" << audio_batches
                 << ",\"audio_samples\":" << audio_samples << "}\n";
         if (!profile) fail("Cannot write profiling result");
