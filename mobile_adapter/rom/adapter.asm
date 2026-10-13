@@ -1166,3 +1166,15 @@ INCLUDE "mobile_adapter/rom/native_palettes.asm"
 
 INCLUDE "mobile_adapter/rom/virtual_renderer.asm"
 mobile_virtual_assets
+
+SECTION "Mobile Compatibility", ROMX, BANK[MOBILE_ROM_BANK]
+MobileCompatibilityHash::
+if DEF(MOBILE_TEST_SCENARIOS)
+	INCBIN "mobile_adapter/build-mobile-test/compatibility.sha256"
+elif DEF(FAITHFUL)
+	INCBIN "mobile_adapter/build-faithful-mobile/compatibility.sha256"
+else
+	INCBIN "mobile_adapter/build-mobile/compatibility.sha256"
+endc
+MobileCompatibilityHashEnd::
+ASSERT MobileCompatibilityHashEnd - MobileCompatibilityHash == 32

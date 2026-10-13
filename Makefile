@@ -102,7 +102,14 @@ ifeq ($(filter mobile,$(MAKECMDGOALS)),mobile)
 MOBILE_AVATAR_RAW := $(shell python3 mobile_adapter/tools/prepare_virtual_avatars.py --dependencies)
 $(MOBILE_OBJ_DIR)/virtual-avatars.asm: mobile_adapter/tools/prepare_virtual_avatars.py mobile_adapter/tools/prepare_native_rectangles.py data/sprites/facings.asm data/player/state_sprites.asm constants/sprite_constants.asm data/sprites/sprites.asm gfx/sprites.asm $(MOBILE_AVATAR_RAW)
 	python3 mobile_adapter/tools/prepare_virtual_avatars.py --output "$@"
-$(MOBILE_OBJ_DIR)/main.o: $(MOBILE_OBJ_DIR)/virtual-avatars.asm
+$(MOBILE_OBJ_DIR)/main.o: $(MOBILE_OBJ_DIR)/virtual-avatars.asm $(MOBILE_OBJ_DIR)/compatibility.sha256
+MOBILE_COUNTERPART_GOAL := $(if $(filter faithful,$(MAKECMDGOALS)),faithful,crystal)
+MOBILE_COUNTERPART_ROM := $(NAME)$(if $(filter faithful,$(MAKECMDGOALS)),-faithful)-$(VERSION).gbc
+.PHONY: mobile-counterpart
+mobile-counterpart:
+	$(MAKE) $(MOBILE_COUNTERPART_GOAL) MOBILE_TEST_SCENARIOS= RGBDS="$(RGBDS)"
+$(MOBILE_OBJ_DIR)/compatibility.sha256: mobile_adapter/tools/prepare_compatibility.py mobile-counterpart
+	python3 mobile_adapter/tools/prepare_compatibility.py --baseline "$(MOBILE_COUNTERPART_ROM)" --output "$@"
 endif
 
 ifeq ($(MOBILE_TEST_SCENARIOS),1)
@@ -254,13 +261,13 @@ endif
 preinclude_deps := includes.asm $(shell tools/scan_includes includes.asm)
 
 define DEP
-$1: $2 $$(filter-out mobile_adapter/build-test/acceptance-scenarios.asm mobile_adapter/build-mobile-test/acceptance-scenarios.asm,$$(shell tools/scan_includes $2)) $(preinclude_deps) | rgbdscheck.o
+$1: $2 $$(filter-out mobile_adapter/build-test/acceptance-scenarios.asm mobile_adapter/build-mobile-test/acceptance-scenarios.asm mobile_adapter/build-mobile/compatibility.sha256 mobile_adapter/build-mobile-test/compatibility.sha256 mobile_adapter/build-faithful-mobile/compatibility.sha256,$$(shell tools/scan_includes $2)) $(preinclude_deps) | rgbdscheck.o
 	$$(MOBILE_MKDIR)
 	$Q$$(RGBASM) $$(RGBASMFLAGS) -o $$@ $$<
 endef
 
 define VCDEP
-$1: $2 $$(filter-out mobile_adapter/build-test/acceptance-scenarios.asm mobile_adapter/build-mobile-test/acceptance-scenarios.asm,$$(shell tools/scan_includes $2)) $(preinclude_deps) | rgbdscheck.o
+$1: $2 $$(filter-out mobile_adapter/build-test/acceptance-scenarios.asm mobile_adapter/build-mobile-test/acceptance-scenarios.asm mobile_adapter/build-mobile/compatibility.sha256 mobile_adapter/build-mobile-test/compatibility.sha256 mobile_adapter/build-faithful-mobile/compatibility.sha256,$$(shell tools/scan_includes $2)) $(preinclude_deps) | rgbdscheck.o
 	$Q$$(RGBASM) $$(RGBASMVCFLAGS) -o $$@ $$<
 endef
 
