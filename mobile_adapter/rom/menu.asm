@@ -1,9 +1,11 @@
+PUSHS
+SECTION "Mobile Adapter Menu", ROMX, BANK[MOBILE_ROM_BANK + 6]
 ; Explicit prototype lobby controls. Select+A opens this outside MobileTick.
 MobileMenuInput::
 	ldh a, [hJoypadDown]
 	and PAD_SELECT | PAD_B
 	cp PAD_SELECT | PAD_B
-	call z, MobileConsumeKey
+	call z, MobileMenuConsumeKey
 	ldh a, [hJoypadDown]
 	and PAD_SELECT | PAD_A | PAD_B
 	cp PAD_SELECT | PAD_A
@@ -167,3 +169,8 @@ endr
 	text "Avatars paused by"
 	line "this game scene."
 	done
+
+MobileMenuConsumeKey:
+	farcall MobileConsumeKey
+	ret
+POPS

@@ -552,16 +552,42 @@ MobileDecrement:
 MobileChecksum:
 	ld de, 0
 .loop
+; Sum eight bytes per counted iteration. Keep the full16-bit length and exact
+; carry arithmetic, including resumed response chunks. Wire budgets are unchanged.
+	ld a, b
+	and a
+	jr nz, .eight
+	ld a, c
+	cp 8
+	jr c, .tail
+.eight
+rept 8
 	ld a, [hli]
 	add e
 	ld e, a
 	adc d
 	sub e
 	ld d, a
-	dec bc
-	ld a, b
-	or c
-	jr nz, .loop
+endr
+	ld a, c
+	sub 8
+	ld c, a
+	jr nc, .loop
+	dec b
+	jr .loop
+.tail
+	ld a, c
+	and a
+	ret z
+.tail_loop
+	ld a, [hli]
+	add e
+	ld e, a
+	adc d
+	sub e
+	ld d, a
+	dec c
+	jr nz, .tail_loop
 	ret
 
 MobilePrepareCommand:

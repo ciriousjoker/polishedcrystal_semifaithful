@@ -1,5 +1,478 @@
 # Mobile Adapter multiplayer plan
 
+## 2026-10-13: full-plan measured checkpoint
+
+Pool27 remains an explicit failure: native11 has a nine-frame eligible gap.
+The full two-way cache improves private publications to304/299/307/676 over
+800 frames, compared with275/275/276/661 for compact pool26. All original world
+updates remain800, with no additional duplicates or measured VBlank crossings.
+The first three clients now select only nine cold plans; client3 selects six.
+Thus the representation change improves real throughput and removes compact
+packing/decoding without solving the remaining admission scheduling problem.
+
+Client0 has505 composition attempts,362 completed native views and304 published
+pages. Stage1 entry isLY125 at median andLY128 at95th percentile. Published
+emission averages10,548 clocks; complete native views average7,633, max8,436.
+A quarter of late frames advances optional capture/projection/upload jobs;
+projection reaches6,408 clocks and upload7,624. Mandatory transport remains
+bounded and is advanced every frame. This budget and actual native fallback
+must be included in a sound fairness design. Merely choosing a least-served
+cyclic starting actor cannot skip an overserved intervening actor.
+
+The complete compiled-assembly contract command passes after this checkpoint,
+including geometry transforms,53 native tileset ownership pairs,14,496 native
+VRAM fence lifecycle vectors and the new admission family. This is a local
+renderer/tooling checkpoint, not completion of Milestone2. Remaining work:
+actual-presentation fairness and scheduling, continuous restoration after
+contention, native temporary-graphics emulator coverage, Mobile menu upper-bank
+runtime coverage, then the unchanged full acceptance suite and edition checks.
+
+## 2026-10-13: full-payload two-way cache prototype
+
+Pool26 fixes sparse packing but still fails native11's nine-frame gap. All
+clients retain800 native world updates with no additional duplicates or
+crossings. Private publications are275/275/276/661. Its retained physical RAM
+shows only8..9 occupied key families on clients0..2 and six on client3; the
+original sixteen-entry full cache lost reuse through direct-hash collisions,
+not excessive working-set size. Compact decoding costs approximately2..4k
+clocks per lookup and also reorders admitted native figures.
+
+Replace the compact representation with sixteen complete28-byte plans in eight
+two-way buckets. The generic odd ground multiplier5 preserves the observed
+families without map-specific policy. Prefer invalid ways, otherwise alternate
+victims independently per bucket; compare complete relevant keys and commit
+valid-last. Canonical-first lookup resolves its native successor from the live
+class rotation. Native-color hits retain the live palette successor. Unchanged
+failed-publication retries still use the exact expanded front entry. Positions,
+RGB, poses and native OAM remain live and uncached. All storage remains inside
+the existing private bank5 allocation, with no resident or save-file additions.
+
+Focused full-plan host3 passes832 lookup/retry,255 invalid-marker,128 replacement,
+312 sparse full-payload,480 signature and800 independent selection vectors.
+Selection's8,148-clock conservative maximum plus700 caller clocks still fits
+its beforeLY134 admission; no acceptance threshold has changed. Pool27 must
+verify real publication throughput and fairness. Actual-service fairness under
+native fallback remains separate from cache acceleration. Milestone2 is open.
+
+## 2026-10-13: sparse compact packing correction
+
+Pool25 still fails native11 gap9. Clients0..2 select only nine plans and publish
+271/275/276 pages; client3 regresses to331 publications and1,080 selections. The
+compact packer inspected all twelve class ordinals, including unused entries
+when only ten native actors existed. Zero/stale unused IDs could therefore be
+packed as the local player or duplicate live actors, causing compact expansion
+to reject otherwise reusable plans. Do not treat the compact cache as accepted
+based on its dense twelve-object host vectors.
+
+Packing now bounds every ordinal by the actual order count and rejects invalid
+class/count metadata before installation. Host4 passes312 independent sparse
+lists with both zero and stale valid unused IDs, plus832 lookup/retry and255
+invalid compact payload vectors. The selector's8,224-clock conservative maximum
+plus700 return clocks still fits its beforeLY134 ten-scanline admission. Seven
+runtime-tool unit tests pass. Each acceptance replay now retains one32-KiB
+read-only `wram.bin` for final cache/ownership inspection; no frame images or
+whole build directories are added. Pool26 must verify restored cache behavior,
+actual throughput, fairness and unchanged native cadence. Milestone2 stays open.
+
+## 2026-10-13: compact64-entry plans and expanded retry reuse
+
+Pool24 still fails native10 gap9. Publications242/255/261/687 retain all800
+world updates and zero crossings. Corrected NativeView outcomes now agree with
+publication: successful full views283/274/289/694, with complete-work means
+around7.5k clocks on clients0..2. Clients1/2 unexpectedly seed234/237 plans after
+small timing changes, confirming that sixteen direct slots are not robust for
+the pool's recurring resource family. NativeView is near its representation's
+copy/validation floor; the next change addresses eviction rather than removing
+live proof checks.
+
+The cache now contains64 eight-byte entries: five exact key fields, a chosen
+hardware palette and a13-bit class-ordinal selection mask. Palette255 marks an
+invalid entry; the real0..7 value commits last. Masks require local bit0, clear
+unused high bits and at most nine native figures including the local player.
+Expansion follows the stable NPC-before-ground order, preserving class overlap
+priority. First-selected successors are derived from each live rotated class;
+private loans advance the chosen palette, exact native sources retain live loan
+rotation. Native-source keys ignore redundant palette rotation only. The pool's
+fixed six-ground/seven-loan family has distinct base hash slots, but other
+families may still collide: this is acceleration, not a starvation proof.
+
+A separate five-byte live key retains the expanded Pending payload after failed
+publication, so unchanged retries do not repeatedly decode the compact mask.
+All reuse still requires the unchanged complete fresh native proof. Signature
+invalidation clears64 palette markers and expanded validity. Shape keys move
+fromDA00 to the obsolete CurrentSignature gapD630..D678, allowing compact entries
+D840..DA40. Native palette temporary buffers, scratch, game RAM and save layouts
+remain unchanged; there is no additional resident allocation. Explicit boundary
+assertions cover these private regions.
+
+Focused host3 passes832 compact exact/canonical/empty-class/native-color/retry
+vectors,255 invalid marker/mask/count rejections,480 signature vectors and800
+independent selector vectors. Unchanged retries are bounded at400 clocks. Cold
+selection plus cache packing now admits only beforeLY134; its7,820-clock bound
+plus700 return clocks fits the full remaining ten double-speed scanlines. No
+acceptance threshold changed. The focused `--only admission` command avoids
+unrelated assembly families while iterating. Fresh pool25 is the real gate.
+
+## 2026-10-13: preserve transport work while shortening its checksum loop
+
+Pool23 is failed fairness evidence, not completion. It confirms the new published
+Emit metrics are readable, but its NativeView outcome split used the hardware
+carry bit rather than the pinned core's compressed internal flag format. That
+NativeView classification is invalid; the observer now reads internal carry bit0
+and leaves the CPU untouched. Published Emit work averages about10.8k clocks on
+clients0..2, with a successful maximum11,860. Its own publication classification
+and existing cadence/crossing metrics remain valid. Never report the incorrect
+NativeView complete/abort means as performance evidence.
+
+The next production changes keep the same transport packets, chunk sizes and
+first real frame pump. MobileChecksum groups eight additions per counted loop,
+retaining unsigned16-bit carry, arbitrary tails, full length and resumed sums.
+Host51 passes368 independent zero/tail/word/carry/resume vectors;32-byte work is
+bounded at1,232 clocks versus the previous approximately1,808. Diagnostic-only
+per-actor cursor stores have no ROM reader and are removed, saving312 clocks per
+full pass. Guard-tail tests prove the complete remaining validation plus700
+return clocks; selected raw/cold/warm admissions use only demonstrated safe
+later checkpoints, with late rejection still writing no output.
+
+The plan gather shares ordinary eligibility/pose policy but omits only the
+ordinary row-preflight dispatch, since the aligned plan already requires a fresh
+NativeView proof. Compiled comparison vectors cover all three peers, every
+eligibility rejection, dialog clipping, exact native palette sources and current
+poses. A separately banked owned menu in upper bank134 frees bank128 capacity;
+its only adapter-local call uses an explicit far-call wrapper. This changes no
+upstream integration or lower-half native function placement. Fresh pool24 must
+measure the combined improvement and remain cadence-safe before full acceptance.
+
+## 2026-10-13: measure complete output separately from early aborts
+
+Pool22 fails remote2 gap9. The bank-local path increases successful publications
+to205/298/291/671 per800 frames, while all native cadence and crossing gates
+remain clean. Client1 and2 each select only nine plans in the full recording.
+Host49 passes728 canonical vectors,256 invalid-count/rotation rejections,
+800 independent selection vectors with maximum7,248 clocks, and equivalent
+bank-local/ordinary publication states with a reduced864-clock bound.
+
+The read-only observer now separates NativeView carry-clear completion from
+aborted traversals, and Emit's own publication flag from unpublished returns.
+Both whole-recording and fixed800-frame-window count/total/max/crossing metrics
+are exported. Previously reported means mixed cheap partial aborts with complete
+work and must not be used as successful-path estimates. CPU flags and the ROM's
+publication byte are only read; no game state, timing or branch is changed.
+The extended core retains the acceptance observer and raster hooks. Fresh
+pool23 uses this instrumentation to identify the successful warm critical path.
+No full suite is scheduled before the remaining focused fairness and continuous
+presentation gates are resolved.
+
+## 2026-10-13: bank-local admitted guest and publication
+
+Pool21 still fails native11 gap9, despite reducing client1's resource selections
+to nine in the full recording. Publications are200/203/203/657 per800 frames;
+all clients retain800 world updates, no duplicates and zero compositor crossings.
+This establishes a warm-output deadline bottleneck beyond cache misses. Native
+rotation canonicalization alone does not satisfy fairness and is not completion
+evidence. The unchanged native fallback still disproportionately presents early
+ground actors; improving publication count alone cannot substitute for the
+within-class fairness gate.
+
+The next prototype emits the already-admitted guest directly in bank133,
+using the same shared quad policy as ordinary rendering. It removes redundant
+admission bookkeeping and the bank128 round trip, while retaining exact private
+RGB, native color provenance, per-quadrant third-window bank ownership and
+committed peer metadata. Its public entry rejects invalid peer/window/color/
+provenance before any RAM writes. The identical one-shot publication policy is
+also shared as a macro and compiled locally in bank133, avoiding a second bank
+round trip. Its fixed eight-byte binding copy is unrolled; no native game code
+or actor structures are changed. NativeView still validates every current native
+resource field before either output or color ownership becomes visible.
+
+Host48 passes768 direct guest vectors and1,008 invalid-input/no-write vectors;
+worst guest work is1,820 clocks. Fifty-four bank-local and ordinary publication
+states produce identical RAM and DMA/color/rotation tokens. Follow-up host49
+also covers bounded rejection of malformed native class counts/rotations and
+the shorter binding copy. Fresh pool22 is the actual performance/fairness gate.
+Transport keeps its first real tick every frame; an earlier credit-only change
+lost connections and must not be repeated. The full suite remains deferred.
+
+## 2026-10-13: canonical admission keys under a complete NPC-prefix proof
+
+Pool20 completes but fails remote presentation gap9. Publications are179/185/189/
+659 per800 frames, with800 native world updates, no duplicates and zero
+compositor crossings on all four clients. Normalized shapes reduce warm native
+expansion cost, but repeated resource selection remains the dominant difference:
+clients0..2 seed roughly510 plans, versus five for client3. The observer alias
+correction is validated by this actual replay; pool19 remains setup-failed.
+
+The next prototype shares native rotation only when every visible, non-loaned
+NPC was admitted. Row rejection or stopping before the NPC prefix finishes
+invalidates this proof. Invisible, empty and loaned-color figures are ineligible.
+A canonical255 key still retains ground rotation, loan rotation, exact/native
+color provenance and guestY. On reuse, the first selected NPC's successor is
+reconstructed from the live native rotation and bounded original class order;
+empty classes retain255. Geometry is still revalidated before private output
+can publish. Ordinary conflicting scenes retain exact keys. Canonical lookup
+is attempted first, followed by the exact key, with valid-last replacement.
+
+Recorded sampled keys suggest useful reuse, but they include intermediate
+values and are not a substitute for measured lookup/publication behavior.
+The sixteen-slot cache can still collide or exceed its working set. Focused
+compiled tests cover canonical successors and independent selection proofs;
+host45 passes632 canonical successor vectors and800 independently proved
+selection vectors; its conservative selector maximum remains below7,500
+clocks. Fresh pool21 must demonstrate actual benefit without crossing a frame boundary
+or weakening the fairness thresholds. Milestone2 remains open.
+
+## 2026-10-13: shape-cache observer setup correction
+
+Pool19 is setup-failed evidence, not a renderer result. The headless observer
+rejected the two newly exported absolute native-shape aliases before emulation.
+Its explicit allowlist now accepts exactly those two names within the existing
+audited bank-5 range; no generalized alias acceptance was added. The production
+ROM and cache logic were unchanged by this tooling correction. Fresh pool20
+must run to completion before any performance or correctness claim.
+
+## 2026-10-13: normalized native shape cache prototype
+
+Pool18 remains failed evidence. Four clients retain800/800 world updates, zero
+duplicates and zero compositor crossings. Publications rise to181/180/195/658,
+with only one cold signature walk each. The remaining native view difference
+(9,612 versus8,100 clocks) identifies overflow-template expansion as worthwhile
+work to avoid. Entry times differ too; matching work cost does not guarantee
+matching publication rate or fairness.
+
+The prototype now caches normalized four-quad native OAM shapes in twelve fixed
+actor slots. Keys cover tile base, complete attributes, the immutable facing
+pointer and relative attributes; liveX/Y are always added afresh modulo256.
+Neither RGB nor VRAM pixels are cached. This remains restricted to validated
+canonical template actors; local actor0 remains on its native raw path. Cached
+shapes survive geometry-plan invalidation or aborted publication, and twelve
+valid bytes clear on map/recovery reset. Key/data rangesDA00..DA48 andDC40..DD00
+reuse audited bank-5 gaps, with explicit non-overlap assertions.
+
+Host41 passes384 cold fills and1,152 moving/wrapping warm replays, preserving
+native RAM. Conservative maxima are2,172 clocks cold and752 clocks warm. It also
+executes38 raw/cold/warm validation-tail guards, including700 caller-return
+clocks and rejection without output writes. Bounds begin at the actual LY
+admission checkpoint after key probing; all remaining fields and global checks
+are included. Existing production assembly contracts remain green. Fresh pool19
+must establish actual improvement and zero crossings. Frequent changing facings
+can make fills more expensive, so moving-native coverage remains required.
+Milestone2 is still open and the full suite remains deferred.
+
+## 2026-10-13: remove redundant admission work and key inputs
+
+Pool17 still fails native11 presentation. Counts79/73/135/412 publications per800
+frames remain insufficient, while all native cadence and crossing checks remain
+clean. The fused native view reaches9,612 clocks; the complete emission reaches
+14,140. Safe later-tail deadlines alone do not satisfy the presentation contract.
+
+Host37 passes after removing phase and appearance from admission hash/equality.
+Those fields stay live in Pending and continue to select the real peer, window,
+pose, RGB and owner. Only the cached resource decision is shared. Current guestY,
+exact/native source slot or private sentinel, scheduler rotations and the complete
+native signature still determine admission. Independent lookup vectors deliberately
+vary cached phase/appearance and verify live inputs remain unchanged.
+
+A miss now also uses the retained resource view tentatively, rather than walking
+all41 fields a second time before selection. As with a hit, the complete fused
+live validation is required before publication. A changed view invalidates the
+proof and cannot publish. Fresh pool18 is required; milestone2 remains open.
+Astra notes that fair counts need actual fallback accounting if publication is
+not effectively continuous; simply advancing round-robin on failure is unsound.
+The current tests and fairness thresholds remain unchanged.
+
+## 2026-10-13: complete validation-tail deadlines
+
+Pool16 remains failed evidence (native11 absence). It preserves800 native world
+updates/zero duplicates/zero compositor crossings on every client, but measured
+private publication counts57/64/99/406 do not satisfy presentation fairness.
+Fusion alone did not meet the warm budget. It left a conservative uniformLY139
+shape deadline despite much shorter validation tails for later actors.
+
+Host36 now executes26 independently bounded raw/template tails at their actual
+compiled entry labels. Every bound includes all remaining native/global checks,
+a1,300-clock descriptor-transform ABI bound and700 clocks for caller return.
+It also verifies rejection at each deadline without output writes. Early shapes
+receive stricter boundaries where their longer remaining tail requires them;
+late shapes receive only the proved additional room. Publication deadlines are
+unchanged. Full production contracts pass. Fresh pool17 is required, and the
+read-only component observer now measures the complete fused native pass.
+
+## 2026-10-13: fused native validation and fresh emission prototype
+
+Pool15 remains failed evidence. Component timing shows exactly one cold color
+audit per client (800..872 clocks); it was not the warm bottleneck. Native
+signature comparison costs2,964 clocks, gathering up to1,448, lookup1,140 and
+fresh emission up to12,312. Seed counts alone undercount cache misses because
+late misses can defer before seeding. No capacity increase is justified yet.
+
+The next prototype keeps16 plans, expands each from24 to28 bytes, and replaces
+ordered IDs with13 actor-indexed OAM offsets. It tentatively emits the live guest
+into private offset16, then validates every native resource field while writing
+fresh selected raw groups or transforming current descriptors. Native presentation
+order, positions, attributes and palette provenance remain authoritative. The
+complete native signature, used-palette byte and exact-avatar reservation mask
+must match before publication. Any mismatch invalidates the proof and aborts
+private output; no tentative palette successor or DMA token commits. Moving
+geometry still needs dedicated coverage, including the cost of rebuilding.
+
+Host31 passes192 independently modeled exact/mismatched fresh raw-output cases,
+updated132 slot/key/validity lookup vectors, actor-offset selection tests and all
+existing assembly contracts. The actor map fits the same private bank-5 tile
+reservation; no native RAM or save structure changes. Guest-first emission was
+then reordered to preserve its larger deadline. Fresh actual pool16 is required,
+and milestone2 remains open. Astra advice explicitly warns that validation
+comparisons are still required: approximately2k savings is a hypothesis, not a
+measured result or a fairness proof.
+
+## 2026-10-13: live palette audit simplification and component timing
+
+Astra's advisory review rejected suppressing palette audits on presumed private
+update provenance: native palette requests and special VBlank modes must remain
+observable. Instead the audit rejects non-avatar IDs before irrelevant type/glow
+reads, and emits eight direct-address cases. It recomputes identical exact
+appearance slot nibbles and weather reservations from current native metadata.
+Host28 passes384 independently modeled type/glow/weather/source cases, alongside
+all existing assembly contracts. No native palette metadata is written.
+
+Eight read-only emulator spans expose color-audit, signature, gathering, lookup,
+seed, selection, emission and initialization costs. They never change emulated
+CPU registers or memory. Fresh pool15 will quantify where warm time is spent and
+verify whether the audit simplification changes actual presentation. Milestone2
+remains open until hardware fairness, cadence and other outstanding gates pass.
+
+## 2026-10-13: full-page publication evidence and remaining warm cost
+
+Host26 passes the production assembly contracts, including 54 compiled full-page
+publication vectors with a conservative 1,116-clock maximum. Full pages omit
+suffix hiding and use an LY142 publication boundary; short pages retain LY141.
+Completed plan emission calls publication directly, avoiding a redundant general
+dispatch. No normalized native pixel cache has been introduced.
+
+Actual pool run14 still fails native10's nine-frame absence. Four clients retain
+800/800 world updates, zero duplicate updates and zero compositor crossings.
+Their measured publication counts improve to21/41/56/405 of800 frames. All seed
+plans successfully, but clients0..2 usually stop at cursor9/length144, before the
+last native figure. Stage1's measured steady maximum is19,668 clocks on client0;
+late stage9 retries cannot finish before their shape deadline. This remains failed
+evidence, not milestone acceptance. The next task is reducing the warm fresh
+emission cost without weakening hardware bounds or presentation fairness.
+
+## 2026-10-13: direct resource prefix and bounded cache lookup
+
+Pool run12 is failed evidence despite zero crossings/duplicate world updates.
+Client3 publishes515 of800 measured frames, but clients1/2 never reach the
+whole-selection entry guard in time. Their repeated stage4 calls only reject
+late work. This isolates plan seeding from the already demonstrated warm output.
+
+The next prototype constructs local/guest resource metadata directly in bank133
+before selection. Class ordering, exact private palette selection and two-bin
+aligned admission are shared source macros with the ordinary renderer. It reserves
+the local palette first, preserves gathered peer inputs and Pending[0..6], and
+never writes RGB, pixels or peer OAM offsets while collecting. Ordering is a
+separately retained prerequisite with its own deadline boundary.
+
+Host24 passes432 independent prefix vectors, including unaligned guest rows,
+exact/native versus private colors, local-first palette ownership and input
+preservation. Conservative prefix maximum is2,480 clocks, after separately
+constructed ordering. The800 resource-selection vectors pass with a7,452-clock
+bound. Existing host contracts remain green.
+
+The16-entry cache now uses a bounded direct-mapped key hash and validates all
+seven exact key bytes. Collisions never imply compatibility; complete replacement
+plans are committed valid last. EntriesUsed counts occupied physical slots, not
+insertions. This removes the measured occupancy-dependent hit cost. It is not a
+fairness proof: seed-only frames show vanilla's fixed prefix, so real gap/count
+spread checks must still pass under collisions and eviction. Actual run13 and
+final suite remain pending; milestone2 is open.
+
+## 2026-10-13: completed NPC gates and bounded selection iteration
+
+Commit dbbcbc914 passes both original-NPC completed simulation and equal-load
+performance in focused run11. No native game instructions or memory are changed
+by the observer. The full suite is still deferred until renderer blockers pass.
+
+Pool run11 removes all compositor VBlank crossings and retains800 native world
+updates/zero duplicates on every client, but its whole-selection LY133 guard is
+too conservative to seed plans on clients0..2. It remains failed evidence.
+The selector now avoids repeated fairness-helper calls after a class successor
+has already been chosen, keeps actor IDs in registers, and encodes no palette
+loan with a sentinel outside0..7. The independent800 compiled selection vectors
+still pass, with a conservative maximum7,296 clocks including native-helper
+bounds. A7,500-clock host ceiling protects the LY135 guard and caller-return
+margin; a fresh actual-emulator run must still verify publication and fairness.
+
+## 2026-10-13: aligned admission-plan prototype, milestone still open
+
+Uncommitted renderer work separates resource selection from fresh emission for
+proved saturated canonical scenes only. Sixteen bounded 24-byte entries in
+previously unused private bank-5 tile reservation store ordered native IDs,
+full scheduler tags, a peer row/appearance/source-color key, palette ownership
+and successor rotations. They never store pixels or RGB values. A shared live
+signature reads all native candidates, ignoring raw/template storage differences
+which do not affect canonical resource demand. Hits revalidate live peer
+identity/map/window/color provenance before emitting current descriptor pixels.
+Ordinary scenes still use the existing exact renderer.
+
+Focused host evidence `m2-admission-plan-host-11-20261013.log`: 480 bank-aware
+changed/unchanged signature vectors, 800 independently modeled resource-selection
+vectors, 156 bounded ID records, sixteen slot addresses and twelve bank-preserving
+resets pass, together with the existing production contracts. No native game RAM
+or pixel output is changed by resource selection. The scheduler arithmetic and
+peer eligibility source are shared macros to avoid diverging implementations.
+
+Prototype runs 2/3 exposed setup symbol-export issues and bank/provenance defects,
+which were corrected. Run 3 was stopped as superseded. Runs 4/5/6/7 are retained
+failed evidence, not acceptance. Run 4 introduced two duplicate world updates on
+clients 0/2. Runs 5/6/7 restore 800 world update frames and zero duplicates on all
+four clients, but fair presentation still fails. Run 7 finally seeds plans, then
+strands fresh emission at its late deadline; zero private publications remain.
+Run 7 has one or two compositor crossings outside the steady window on clients
+0/1/2. These are not acceptable and must be removed before milestone completion.
+The latest prototype batches register-resident emission and uses bank-local live
+peer gathering from the same source macro. Its actual-emulator retest is pending.
+
+All authored implementation remains under mobile_adapter/rom. Production run 9 verifies fourteen free ROM0 bytes, nineteen net lower-half
+integration bytes and the pristine disabled-ROM hash. The extra five resident
+bytes snapshot the actual rectangle caller bank; no new RAM byte is allocated. No original game helper was relocated. The full
+suite is deferred until focused blockers pass. Actual field-move/temporary tile lifecycle and weather-pixel tests remain pending.
+
+The user approved separate NPC comparisons. The new read-only core observer
+captures original NPC simulation only on return from HandleMapObjects, never
+while that routine is half complete at a frontend boundary. A separate native
+replay omits the three performance stand-ins. Focused completed-update evidence
+passes exact simulation. Equal-load dialogue closure reloads three extra native
+avatar graphics, so its busy-VBlank credit differs legitimately: mobile and the
+original native replay both have 706 update frames, one duplicate and max gap95;
+the equal-load replay has 704 update frames, zero duplicates and max gap97.
+The performance gate retains full-window prefix progress/count/gap against equal
+actor load and strict duplicates/cadence against the original native engine path.
+Neither original simulation nor native duplicate timing is exempted.
+
+Run 9 remains failed evidence: almost every cache hit costs 7,792 clocks and fresh
+emission is stranded before its last native figure. The next version copies only
+the matched entry payload bytes7..21 directly and shares one bank entry for color
+audit and plan preparation. Stage9 instrumentation was added without changing
+emulated execution. Run10 still fails fair presentation. Stage9 reaches about10,044 clocks, while
+client3's full table walk makes every warm stage1 cost11,672 clocks. The next
+revision walks the table once, retains validity/bounds checks, enters fresh
+emission directly, and uses the existing native FarCall_hl where input A/HL are
+not needed. Changed resource signatures stop at the first mismatch and rebuild
+directly into the retained signature after invalidation. Cold prerequisites have
+separate deadline fences so a completed audit/proof can survive an abandoned
+frame without delaying the native game. These fences apply to saturated scenes.
+The sixteen-entry working-set limit remains a risk: eviction must not starve
+presentation, and only a sustained actual-ROM run can establish acceptance.
+
+Completed NPC update evidence also fixes the performance observation boundary.
+Run10's original and mobile completed updates have identical707 updates, with
+the same two-update frontend bin at relative246. The older entry counter samples
+half-finished world routines and falsely reports a one-update prefix deficit at
+relative245. Equal-load completed update progress is never ahead of multiplayer.
+The focused gate therefore observes completed updates for both comparisons; it
+retains equal-load prefix/count/gap bounds and the original-path strict cadence
+and duplicate bounds. Exact simulation now also requires equal history lengths.
+Tests and final acceptance are pending.
+
 ## 2026-10-13: static private tile ownership guard
 
 Host contracts now inspect all 53 bank-aware tileset attribute/metatile pairs

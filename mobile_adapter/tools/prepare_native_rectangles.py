@@ -183,7 +183,7 @@ def rectangle_programs(native):
                       '\tjr nc, .source_ready', '\tinc h', '.source_ready']
             if ordinary:
                 lines += [f'\tld e, {rows[-1][2]}', '\txor a', '\tldh [hUsedSpriteTile], a']
-            lines += ['\tld a, BANK(Facings)' if ordinary else '\tld a, MOBILE_ROM_BANK', '\tjp Bankswitch']
+            lines += ['\tld a, BANK(Facings)' if ordinary else '\tld a, [wMobileVirtualRectangleReturnBank]', '\tjp Bankswitch']
     lines += ['MobileNativeRectangleProgramsEnd::',
               '\tASSERT @ - MobileNativeRectangleProgramsStart <= $4000']
     return '\n'.join(lines)

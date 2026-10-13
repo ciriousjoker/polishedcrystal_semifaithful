@@ -329,6 +329,8 @@ wMobileVirtualDroppedSlot:: db
 wMobileVirtualForceFull:: db
 wMobileVirtualCoarseTrial:: db
 wMobileVirtualDroppedSlot2:: db
+DEF wMobileVirtualRectangleReturnBank EQU wMobileVirtualDroppedSlot2
+EXPORT wMobileVirtualRectangleReturnBank
 wMobileVirtualDropRemaining:: db
 wMobileVirtualNativeColors:: ds NUM_PLAYER_GENDERS / 2
 wMobileVirtualNeedColorAudit:: db
@@ -357,3 +359,45 @@ wMobileVirtualOrderBase:: ds NUM_OBJECT_STRUCTS - 1
 wMobileVirtualOrderNativeRotation:: db
 wMobileVirtualOrderGroundRotation:: db
 ASSERT @ <= $dd00
+
+; Admission plans reuse only the obsolete private tile reservation. No native
+; game RAM, actor structure, save field or additional resident byte is allocated.
+DEF wMobileVirtualPlanMode EQU $d620 ; 0=ordinary, 1=resource collection, 2=fresh emission
+DEF wMobileVirtualPlanGatherValid EQU $d621
+DEF wMobileVirtualPlanCount EQU $d622
+DEF wMobileVirtualPlanEmitCursor EQU $d623
+DEF wMobileVirtualPlanAllNPC EQU $d627
+DEF wMobileVirtualPlanLiveRotation EQU $d628
+EXPORT wMobileVirtualPlanAllNPC, wMobileVirtualPlanLiveRotation
+DEF wMobileVirtualPlanSlot EQU $d624
+DEF wMobileVirtualPlanEntriesUsed EQU $d626
+EXPORT wMobileVirtualPlanEntriesUsed
+DEF wMobileVirtualPlanSignatureValid EQU $d625
+DEF wMobileVirtualPlanPreviousSignature EQU $d680
+DEF wMobileVirtualPlanExpandedValid EQU $d629
+DEF wMobileVirtualPlanExpandedKey EQU $d62b
+DEF wMobileVirtualPlanVictims EQU $d6d0 ; one bounded replacement toggle per bucket
+EXPORT wMobileVirtualPlanExpandedValid, wMobileVirtualPlanExpandedKey, wMobileVirtualPlanVictims
+DEF wMobileVirtualPlanPending EQU $d6b0
+DEF wMobileVirtualPlanEntries EQU $d840
+EXPORT wMobileVirtualPlanMode, wMobileVirtualPlanGatherValid, wMobileVirtualPlanCount
+EXPORT wMobileVirtualPlanEmitCursor, wMobileVirtualPlanSlot, wMobileVirtualPlanSignatureValid
+EXPORT wMobileVirtualPlanPreviousSignature
+EXPORT wMobileVirtualPlanPending, wMobileVirtualPlanEntries
+ASSERT wMobileVirtualNativeRaw + NUM_OBJECT_STRUCTS * 4 <= wMobileVirtualPlanMode
+ASSERT wMobileVirtualPlanPreviousSignature + MOBILE_PLAN_SIGNATURE_SIZE <= wMobileVirtualPlanPending
+ASSERT wMobileVirtualPlanPending + MOBILE_PLAN_SIZE <= wMobileVirtualOutput
+ASSERT wMobileVirtualLines + SCREEN_HEIGHT_PX <= wMobileVirtualPlanEntries
+ASSERT wMobileVirtualPlanEntries + MOBILE_PLAN_COUNT * MOBILE_PLAN_CACHE_SIZE <= wMobilePrivatePalTemporary
+
+; Normalized native OAM shapes contain only offsets, tiles and attributes.
+; Live coordinates and native palette RGB are never cached here.
+DEF wMobileNativeShapeKeys EQU $d630 ; twelve five-field keys plus valid-last byte
+DEF wMobileNativeShapes EQU $dc40 ; twelve complete canonical four-quad shapes
+EXPORT wMobileNativeShapeKeys, wMobileNativeShapes
+ASSERT wMobileVirtualPlanExpandedKey + 5 <= wMobileNativeShapeKeys
+ASSERT wMobileVirtualPlanVictims + MOBILE_PLAN_COUNT / 2 <= wMobileVirtualOutput
+ASSERT LOW(wMobileVirtualPlanEntries) & 7 == 0
+ASSERT wMobileNativeShapeKeys + (NUM_OBJECT_STRUCTS - 1) * 6 <= wMobileVirtualPlanPreviousSignature
+ASSERT wMobileVirtualOrderGroundRotation + 1 <= wMobileNativeShapes
+ASSERT wMobileNativeShapes + (NUM_OBJECT_STRUCTS - 1) * 16 <= $dd00

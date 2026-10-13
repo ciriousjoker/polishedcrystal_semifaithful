@@ -128,6 +128,12 @@ def verify_raw_rectangles(rom, symbols, require):
                 if taken:
                     pc += delta if delta < 128 else delta - 256
                 cycles += 12 if taken else 8
+            elif op in (0xc3, 0xc2, 0xca, 0xd2, 0xda):
+                target = fetch() | fetch() << 8
+                taken = op == 0xc3 or (not zero, zero, not carry, carry)[(op - 0xc2) // 8]
+                if taken:
+                    pc = target
+                cycles += 16 if taken else 12
             elif op == 0x37:
                 carry = True
                 cycles += 4

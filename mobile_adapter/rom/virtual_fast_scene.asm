@@ -202,6 +202,9 @@ MobileVirtualAlignedNativePass:
 	cp 5
 	jr nc, .advance
 	inc [hl]
+	ld a, [wMobileVirtualPlanMode]
+	and a
+	jr nz, .collect_raw
 	ld l, b
 	ld h, HIGH(wShadowOAM)
 rept 16
@@ -209,6 +212,17 @@ rept 16
 	ld [de], a
 	inc e
 endr
+	jr .raw_recorded
+.collect_raw
+	push bc
+	push de
+	call MobilePlanRecordNative
+	pop de
+	pop bc
+	ld a, e
+	add 16
+	ld e, a
+.raw_recorded
 	ld a, c
 	ld [wMobileVirtualSelectedOrdinal], a
 	push bc
@@ -240,6 +254,12 @@ endr
 	ld [wMobileVirtualLength], a
 	xor a
 	ld [wMobileVirtualCursor], a
+	ld a, [wMobileVirtualPlanMode]
+	and a
+	jr z, .publish
+	farcall MobilePlanComplete
+	ret
+.publish
 	ld a, 7
 	ld [wMobileVirtualStage], a
 	ret
@@ -332,6 +352,9 @@ MobileVirtualAlignedNativeDescriptor:
 	jr nc, .busy
 .admitted
 	inc [hl]
+	ld a, [wMobileVirtualPlanMode]
+	and a
+	jp nz, MobileVirtualCollectNative
 	ld a, [wMobileVirtualHeaderOAM]
 	cp 255
 	jr z, .template
@@ -426,6 +449,9 @@ MobileVirtualAlignedRawRectangle::
 	jr nc, .busy
 .admitted
 	inc [hl]
+	ld a, [wMobileVirtualPlanMode]
+	and a
+	jp nz, MobileVirtualCollectNative
 	ld l, b
 	ld h, HIGH(wShadowOAM)
 	ld d, HIGH(wMobileVirtualOutput)
@@ -441,66 +467,37 @@ endr
 .busy
 	scf
 	ret
+MobilePlanRecordNative::
+; Called after exact admission; record the actor's current private destination.
+	ld a, [wMobileVirtualPlanCount]
+	cp OAM_COUNT / 4 - 1
+	ret nc
+	ld a, [wMobileVirtualIndex]
+	cp NUM_OBJECT_STRUCTS
+	ret nc
+	add LOW(wMobileVirtualPlanPending + 13)
+	ld l, a
+	ld h, HIGH(wMobileVirtualPlanPending)
+	ld a, [wMobileVirtualLength]
+	ld [hl], a
+	ld hl, wMobileVirtualPlanCount
+	inc [hl]
+	ret
+
+MobileVirtualCollectNative:
+	call MobilePlanRecordNative
+	ld hl, wMobileVirtualLength
+	ld a, [hl]
+	add 16
+	ld [hl], a
+	and a
+	ret
+
 ASSERT LOW(wMobileVirtualBindings) + 7 < $100
 ASSERT LOW(wMobileVirtualLines + 16) + 15 < $100
 
 MobileVirtualAdmitAlignedRectangle:
-; Exact only under AlignedScene's proof. Check both touched bins before
-; changing either. The clipped bottom bin never consumes invisible scanlines.
-	ld a, [wMobileVirtualRectangleCount]
-	cp OAM_COUNT / 4
-	jr nc, .rejected
-	ld a, [wMobileVirtualRectangleTop]
-	ld c, a
-	and a
-	jr z, .record
-	cp SCREEN_HEIGHT_PX + OAM_Y_OFS
-	jr nc, .record
-	ld a, [wMobileVirtualLines + 15]
-	ld b, a
-	ld a, c
-	sub b
-	jr nc, .coordinate
-	xor a
-.coordinate
-	ld b, a
-	swap a
-	and $f
-	ld e, a
-	ld d, 0
-	ld hl, wMobileVirtualLines + 16
-	add hl, de
-	ld a, [hl]
-	cp 5
-	jr nc, .rejected
-	ld a, e
-	cp 9
-	jr nc, .one_bin
-	ld a, b
-	and $f
-	jr z, .one_bin
-	inc hl
-	ld a, [hl]
-	cp 5
-	jr nc, .rejected
-	inc [hl]
-	dec hl
-.one_bin
-	inc [hl]
-.record
-	ld a, [wMobileVirtualRectangleCount]
-	ld e, a
-	ld d, 0
-	ld hl, wMobileVirtualLines
-	add hl, de
-	ld [hl], c
-	ld hl, wMobileVirtualRectangleCount
-	inc [hl]
-	and a
-	ret
-.rejected
-	scf
-	ret
+	mobile_virtual_admit_aligned_rectangle
 
 MobileVirtualFastSceneEnd::
 ASSERT MobileVirtualFastSceneEnd - MobileVirtualFastSceneStart <= 4096

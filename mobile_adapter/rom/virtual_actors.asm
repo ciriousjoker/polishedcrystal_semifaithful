@@ -246,6 +246,8 @@ MobileVirtualCanCompose:
 ; arbitrary sixteen-quad shapes. Publication uses bounded four-byte copies.
 	ld b, 110 ; sixteen irregular quads plus exact rollback need a larger window
 	ld a, [wMobileVirtualStage]
+	cp 9
+	jr z, .native_deadline
 	cp 7
 	jr z, .publication
 	cp 3
@@ -273,7 +275,7 @@ MobileVirtualCanCompose:
 	ld a, [wMobileVirtualStage]
 	cp 1
 	jr nz, .shape_deadline
-	ld b, 133
+	ld b, 128
 .shape_deadline
 	ld a, [wMobileVirtualFastAdmission]
 	cp 2
@@ -283,13 +285,17 @@ MobileVirtualCanCompose:
 	jr z, .small ; peer preparation has a larger bound than a raw native group
 	cp 1
 	jr nz, .canonical_group_deadline
-	ld b, 133 ; full metadata audit and aligned proof also need caller-return time
+	ld b, 128 ; full metadata audit and aligned proof also need caller-return time
 	jr .deadline
 .canonical_group_deadline
 	ld b, 140
 	jr .deadline
 .publication
-	ld b, 141 ; bounded suffix stores, bindings, commit and complete caller return
+	ld b, 141 ; suffix stores need the general complete-return window
+	ld a, [wMobileVirtualLength]
+	cp OAM_SIZE
+	jr nz, .deadline
+	ld b, 142 ; full pages have no suffix work; separately bounded publication
 	jr .deadline
 .small
 	ld b, 138 ; one peer has a measured bound below six double-speed scanlines
@@ -1041,6 +1047,19 @@ MobileNativeResetLeases:
 	rst ByteFill
 	ld [wMobileVirtualQueuedPeer], a
 	ld [wMobileVirtualForceFull], a
+	ldh a, [rWBK]
+	push af
+	ld a, MOBILE_BACKUP_BANK
+	ldh [rWBK], a
+	xor a
+	ld [wMobileVirtualPlanSignatureValid], a
+for actor, 1, NUM_OBJECT_STRUCTS
+	ld [wMobileNativeShapeKeys + (actor - 1) * 6 + 5], a
+endr
+	ld [wMobileVirtualPlanMode], a
+	pop af
+	ldh [rWBK], a
+	xor a
 	ld [wMobileNativeGraphicsFence], a
 	ld [wMobileVirtualBaseReady], a
 	ld a, $80

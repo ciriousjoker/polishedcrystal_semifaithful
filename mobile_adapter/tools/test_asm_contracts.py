@@ -10,6 +10,7 @@ REPO = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--rgbds", type=Path, required=True, help="Pinned RGBDS directory")
 parser.add_argument("--renderer", choices=("virtual",), default="virtual", help="Independent renderer; retained for existing test commands")
+parser.add_argument("--only", choices=("all", "admission"), default="all", help="Run a focused compiled family during renderer iteration")
 args = parser.parse_args()
 if args.renderer == "virtual":
     from prepare_virtual_avatars import inventory, source
@@ -37,7 +38,7 @@ with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
     fixture += 'SECTION "Native bank return fixture", ROM0[$8]\nBankswitch::\n ldh [hROMBank], a\n ld [rROMB0], a\n ret\n'
     fixture += 'SECTION "Resident rectangle fixture", ROM0[$250]\n mobile_native_rectangle_trampoline\n'
     fixture += 'SECTION "Render link stubs", ROM0[$3000]\n'
-    fixture += 'GetFarByte:: ret\nGetFarWord:: ret\nFarCopyBytes:: ret\nSwapHLDE:: ret\nFarDecompressWRA6InB:: ret\nGet2bpp:: ret\nCopy2bpp:: ret\nFarDecompressToDE:: ret\nGetMapConnections:: ret\nGetMapAttributes:: ret\nClearJoypad:: ret\nOpenText:: ret\nCloseText:: ret\nPrintText:: ret\nLoadMenuHeader:: ret\nVerticalMenu:: ret\nExitMenu:: ret\nWaitButton:: ret\n'
+    fixture += 'FarCall_hl:: ret\nGetFarByte:: ret\nGetFarWord:: ret\nFarCopyBytes:: ret\nSwapHLDE:: ret\nFarDecompressWRA6InB:: ret\nGet2bpp:: ret\nCopy2bpp:: ret\nFarDecompressToDE:: ret\nGetMapConnections:: ret\nGetMapAttributes:: ret\nClearJoypad:: ret\nOpenText:: ret\nCloseText:: ret\nPrintText:: ret\nLoadMenuHeader:: ret\nVerticalMenu:: ret\nExitMenu:: ret\nWaitButton:: ret\n'
     fixture += 'SECTION "Native facing data", ROMX, BANK[2]\nINCLUDE "data/sprites/facings.asm"\n'
     fixture += 'SECTION "Sprite link stub", ROMX, BANK[1]\nSpriteHeaders:: ds SPRITE_VARS * SPRITEDATA_LENGTH\nGetSprite:: ret\nMarkUsedPal:: ret\nCopyObjectSpritePalHandler:: ret\nLookupOBPalette:: ret\n\nINCLUDE "data/player/state_sprites.asm"\n'
     fixture += 'SECTION "LCD layout contracts", ROMX, BANK[$12]\n'
@@ -131,10 +132,29 @@ with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
     require(symbols["wMobileResidentStart"] == (0, 0xcec4), "Resident placement changed")
     require(symbols["wMobileBufferStart"] == (2, 0xd4eb), "Buffer placement changed")
     require(symbols["wMobileBufferEnd"][1] <= 0xe000, "Buffer overflow")
+    if args.only == "admission":
+        for line in (out / "driver.sym").read_text().splitlines():
+            alias = re.match(r"^([0-9a-fA-F]+)\s+(wMobile(?:Virtual|NativeShape)\S+)$", line)
+            if alias:
+                address, name = alias.groups()
+                symbols[name] = (0 if int(address, 16) < 0xd000 else 5, int(address, 16))
+        from asm_admission_plan_tests import verify_admission_plans
+        verify_admission_plans(rom, symbols, require)
+        print("Focused compiled admission contracts passed")
+        raise SystemExit(0)
     from asm_peer_invalidation_tests import verify_peer_invalidation
     verify_peer_invalidation(rom, symbols, require)
     from asm_raw_rectangle_tests import verify_raw_rectangles
     verify_raw_rectangles(rom, symbols, require)
+    for line in (out / "driver.sym").read_text().splitlines():
+        alias = re.match(r"^([0-9a-fA-F]+)\s+(wMobile(?:Virtual|NativeShape)\S+)$", line)
+        if alias:
+            address, name = alias.groups()
+            if name.startswith("wMobileVirtualPlan"):
+                require(0xd000 <= int(address, 16) < 0xdd00, "Plan alias escaped audited private bank 5")
+            symbols[name] = (0 if int(address, 16) < 0xd000 else 5, int(address, 16))
+    from asm_admission_plan_tests import verify_admission_plans
+    verify_admission_plans(rom, symbols, require)
     from asm_graphics_ownership_tests import verify_graphics_ownership
     verify_graphics_ownership(rom, symbols, require)
     # Execute each emitted suffix store sequence from the compiled jump table.

@@ -43,6 +43,8 @@ def verify_native_templates(rom, symbols, require, mode="generic"):
             if mode == "ordinary":
                 expected = b"".join(expected[index:index + 4] for index in range(12, -1, -4))
             memory = bytearray(65536)
+            return_bank = native_bank if mode == 'ordinary' else rng.choice((copy_bank, copy_bank + 5))
+            memory[symbols['wMobileVirtualRectangleReturnBank'][1]] = return_bank
             memory[template:template + 4] = bytes((origin_x, origin_y, tile_base, attributes))
             memory[template + 7] = relative
             memory[group_length] = quads * 4
@@ -149,7 +151,7 @@ def verify_native_templates(rom, symbols, require, mode="generic"):
                     if taken:
                         pc = target
                         if target == symbols['Bankswitch'][1]:
-                            require(registers['a'] == (native_bank if mode == 'ordinary' else copy_bank),
+                            require(registers['a'] == return_bank,
                                     'Rectangle did not restore its source ROM bank')
                         else:
                             require(0x4000 <= target < 0x8000, 'Rectangle jump escaped its upper program bank')
