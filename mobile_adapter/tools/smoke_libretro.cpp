@@ -843,7 +843,9 @@ int main(int argc, char** argv) {
                 "MobileVirtualComposeStep", "MobileVirtualNativeGroup", "MobileVirtualPeerGroup", "MobileVirtualMergePalettes", "MobileVirtualCommitPose", "GetUsedSprite",
                 "MobilePrepareCommand", "MobileAppendPending", "MobileValidateResponseSlice",
                 "MobileVirtualAlignedRawRectangle", "MobileVirtualAlignedNativeDescriptor",
-                "MobileVirtualAdvanceNativeClass"};
+                "MobileVirtualAdvanceNativeClass", "MobileVirtualCurrentColors", "MobilePlanSignature",
+                "MobilePlanGatherPeer", "MobilePlanLookup", "MobilePlanSeedResources",
+                "MobilePlanSelectNatives", "MobilePlanEmit", "MobilePlanEmitNativeView"};
             for (unsigned i = 0; i < sizeof(points) / sizeof(points[0]); ++i) {
                 if (native_addresses.count(points[i])) {
                     auto point = native_addresses.at(points[i]);
@@ -1292,6 +1294,13 @@ int main(int argc, char** argv) {
             for (unsigned i = 0; i < 6; ++i) profile << ",\"" << save_names[i] << "\":" << saved(i);
         }
         if (auto composition = reinterpret_cast<Metric>(dlsym(core, "mobile_profile_composition_metric"))) {
+            if (auto plan = reinterpret_cast<uint64_t(*)(unsigned)>(dlsym(core, "mobile_profile_plan_metric"))) {
+                const char* names[] = {"color_audit", "signature", "gather", "lookup", "seed", "select", "emit", "native_view"};
+                const char* fields[] = {"count", "total_cycles", "max_cycles", "crossings"};
+                for (unsigned i = 0; i < 8; ++i)
+                    for (unsigned j = 0; j < 4; ++j)
+                        profile << ",\"plan_" << names[i] << '_' << fields[j] << "\":" << plan(i * 4 + j);
+            }
             const char* stages[] = {"compose", "native_group", "peer_group", "merge_palette"};
             const char* fields[] = {"count", "max_cycles", "total_cycles", "min_entry_ly", "max_entry_ly", "vblank_crossings"};
             for (unsigned stage = 0; stage < 4; ++stage)

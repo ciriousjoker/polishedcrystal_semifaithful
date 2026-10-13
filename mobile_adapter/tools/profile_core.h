@@ -83,7 +83,17 @@ struct MobileRenderSpan {
     uint64_t crossings = 0;
     uint64_t maximum_cycles = 0, count = 0, total_cycles = 0;
 };
-static MobileRenderSpan mobile_render_spans[26];
+static MobileRenderSpan mobile_render_spans[34];
+extern "C" uint64_t mobile_profile_plan_metric(unsigned index) {
+    if (index >= 32) return 0;
+    const auto& span = mobile_render_spans[26 + index / 4];
+    switch (index % 4) {
+        case 0: return span.count;
+        case 1: return span.total_cycles;
+        case 2: return span.maximum_cycles;
+        default: return span.crossings;
+    }
+}
 static unsigned mobile_scene_stage_address;
 static uint64_t mobile_scene_steps[10][6] = {};
 static uint64_t mobile_scene_window_steps[10][7] = {};
@@ -137,7 +147,7 @@ extern "C" unsigned mobile_profile_native_oam_byte(unsigned index) {
     if (index < 290) return mobile_native_identities[index - 264];
     return 0;
 }
-static unsigned mobile_overworld_points[28][2] = {};
+static unsigned mobile_overworld_points[36][2] = {};
 static bool mobile_native_graphics_frame = false, mobile_native_graphics_last_frame = false;
 static unsigned mobile_native_wait_frame_ly = 255, mobile_native_wait_last_frame_ly = 255;
 extern "C" uint64_t mobile_profile_native_wait_ly() {
@@ -232,7 +242,7 @@ extern "C" uint64_t mobile_profile_world_phase(unsigned row, unsigned field) {
 }
 
 extern "C" void mobile_profile_overworld(unsigned index, unsigned bank, unsigned pc) {
-    if (index < 28) {
+    if (index < 36) {
         mobile_overworld_points[index][0] = bank;
         mobile_overworld_points[index][1] = pc;
     }
@@ -378,7 +388,7 @@ static void mobile_profile_before_instruction(gb* game, const cpu_regs& regs, in
             mobile_save_projected++;
         }
     }
-    for (unsigned index = 0; index < 28; ++index) {
+    for (unsigned index = 0; index < 36; ++index) {
         auto* point = mobile_overworld_points[index];
         // Bank accessors are unnecessary for virtually every instruction. The
         // PC comparison is sufficient to reject an inactive watchpoint first.
