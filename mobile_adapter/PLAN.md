@@ -52,11 +52,22 @@ presentation still fails: the last hundred frames show all three peers together
 in 89/88/88/97 frames, so this is a bounded publication fix, not renderer completion.
 Host production contracts pass, including the new suffix instruction cases.
 
-Next structural optimization: batch aligned native copies with register-resident
-output/list cursors and advance class rotation once per class. This avoids
-per-actor bookkeeping without caching stale pixels or moving admission into game
-work. Consider duplicated class lists only if the measured remaining cost
-justifies them. Milestone 2 remains open; do not run the complete suite yet.
+Register-resident aligned batch is now implemented. Focused
+`m2-register-batch-20261013` lowers the largest measured stage-4 slice from
+9,808 to 7,864 clocks, with 800 native update frames, zero duplicates and zero
+compositor crossings. It still produces zero private publications in the full
+pool, so native object 10/remote fairness remains failed. Production build and
+host instruction contracts pass; lower net integration remains ten bytes.
+
+Architectural review recommends separating resource selection from fresh pixel
+emission, then memoizing bounded admission plans with exact geometry/color and
+full scheduler-state keys. Cache pixels or a presumed six-frame period must not
+be used. A cache hit must bypass repeated local/peer/native admission, use current
+poses/colors and still revalidate peer identity/map/window eligibility. Cache
+misses need a bounded selection path independent of pixel copying, or this
+starved scene cannot seed any entries. Dynamic-geometry fairness must remain
+an acceptance requirement; stationary-cache passes alone do not prove completion.
+Milestone 2 remains open; do not run the complete suite yet.
 
 ## 2026-10-13: dense renderer optimization in progress
 

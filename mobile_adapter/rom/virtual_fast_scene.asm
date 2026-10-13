@@ -132,22 +132,25 @@ endr
 	ret
 
 MobileVirtualAlignedNativePass:
-; AlignedScene proves every source is a canonical rectangle. Reuse the same
-; immutable descriptor pointer for eligibility, its deadline and admission.
-; Irregular scenes continue through the general selector with its larger bound.
+; Keep the output and class-list cursors live across raw native groups. Every
+; source is still this frame's immutable native OAM; admission never reuses
+; coordinates, palettes or pixels from an earlier frame.
 	ld a, [wMobileVirtualLength]
+	ld e, a
+	ld d, HIGH(wMobileVirtualOutput)
+	ld a, [wMobileVirtualCursor]
+	ld c, a
+.loop
+	ld a, e
 	cp OAM_SIZE
 	jp nc, .done
-	ld a, [wMobileVirtualCursor]
-	ld b, a
 	ld a, [wMobileVirtualOrderCount]
-	cp b
+	cp c
 	jp z, .done
 	ldh a, [rLY]
-	cp 142
+	cp 140
 	jp nc, .busy
-	ld a, b ; the cursor was already loaded for the end-of-list check
-	ld [wMobileVirtualSelectedOrdinal], a
+	ld a, c
 	add LOW(wMobileVirtualOrder)
 	ld l, a
 	ld h, HIGH(wMobileVirtualOrder)
@@ -161,32 +164,90 @@ MobileVirtualAlignedNativePass:
 	ld h, HIGH(wMobileVirtualDescriptors)
 	bit 7, [hl]
 	jp z, .template
-	mobile_virtual_select_raw_native .advance, .busy
-.template
+	inc l
+	ld b, [hl]
+	ld a, b
+	add 8
+	ld l, a
+	ld h, HIGH(wShadowOAM)
 	ld a, [hl]
-	and $1f
+	and a
 	jr z, .advance
-	ld a, [wMobileVirtualLength]
+	cp SCREEN_HEIGHT_PX + OAM_Y_OFS
+	jr nc, .advance
+	inc l
+	inc l
+	inc l
+	ld a, [hl]
+	and OAM_PALETTE
+	ld h, a
+	ld a, [wMobileVirtualPlannedPrivateColors]
+	and a
+	jr z, .color_available
+	ld a, [wMobileVirtualDroppedSlot]
+	cp h
+	jr z, .advance
+.color_available
+	ld a, b
+	add 8
+	ld l, a
+	ld h, HIGH(wShadowOAM)
+	ld a, [hl]
+	swap a
+	and $f
+	add LOW(wMobileVirtualLines + 16)
+	ld l, a
+	ld h, HIGH(wMobileVirtualLines)
+	ld a, [hl]
+	cp 5
+	jr nc, .advance
+	inc [hl]
+	ld l, b
+	ld h, HIGH(wShadowOAM)
+rept 16
+	ld a, [hli]
+	ld [de], a
+	inc e
+endr
+	ld a, c
+	ld [wMobileVirtualSelectedOrdinal], a
+	push bc
+	call MobileVirtualAdvanceNativeClass
+	pop bc
+.advance
+	inc c
+	jp .loop
+.template
+; Unusual/overflow materialization retains the existing bounded helper. Flush
+; live cursors before it and restart the register batch from authoritative state.
+	ld a, e
+	ld [wMobileVirtualLength], a
 	push af
+	ld a, c
+	ld [wMobileVirtualCursor], a
+	ld [wMobileVirtualSelectedOrdinal], a
 	call MobileVirtualAlignedNativeDescriptor
 	pop bc
 	ret c
 	ld a, [wMobileVirtualLength]
 	cp b
 	call nz, MobileVirtualAdvanceNativeClass
-	and a
-	ret c ; only an otherwise admissible copy can require another idle slice
-.advance
 	ld hl, wMobileVirtualCursor
 	inc [hl]
 	jp MobileVirtualAlignedNativePass
 .done
+	ld a, e
+	ld [wMobileVirtualLength], a
 	xor a
 	ld [wMobileVirtualCursor], a
 	ld a, 7
 	ld [wMobileVirtualStage], a
 	ret
 .busy
+	ld a, e
+	ld [wMobileVirtualLength], a
+	ld a, c
+	ld [wMobileVirtualCursor], a
 	scf
 	ret
 
