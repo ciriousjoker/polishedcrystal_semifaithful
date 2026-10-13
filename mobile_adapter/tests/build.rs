@@ -52,6 +52,7 @@ fn feature_assembly_stays_in_its_directory_with_reviewable_integration() {
         "home/palettes.asm",
         "home/serial.asm",
         "home/vblank.asm",
+        "home/video.asm", // Conditional private OAM DMA entry, reviewed on this branch.
         "engine/link/link.asm",
         "engine/movie/title.asm",
         "engine/overworld/events.asm",

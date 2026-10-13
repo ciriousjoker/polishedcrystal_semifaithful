@@ -76,8 +76,11 @@ static void acceptance_capture(std::map<std::string, unsigned>& values,
     unsigned oam_hash = 2166136261u;
     for (auto byte : video_oam) oam_hash = (oam_hash ^ byte) * 16777619u;
     values["vAcceptanceOAMHash"] = oam_hash;
-    const auto local = acceptance_symbols.at("wPlayerCurrentOAMSlot");
-    const unsigned start = observe(local.bank, local.address, sram, sram_size);
+    // Locate the local figure in the actual hardware page. The private renderer
+    // may reorder OAM without changing the native engine's shadow-page index.
+    // Native source matching preserves the complete tuple multiset and current
+    // positions; absence must not be inferred from an unrelated hardware group.
+    const unsigned start = video_native_start[0];
     const unsigned facing = observe(objects.bank, objects.address + acceptance_word("AcceptanceObjectFacing"), sram, sram_size);
     auto facing_quads = [&](unsigned index) {
         const unsigned pointer = acceptance_data("Facings", index * 2) | acceptance_data("Facings", index * 2 + 1) << 8;
@@ -86,7 +89,8 @@ static void acceptance_capture(std::map<std::string, unsigned>& values,
         return pointer >= 0x4000 && offset < acceptance_rom.size() ? unsigned(acceptance_rom[offset]) : 0;
     };
     const unsigned quad_count = facing_quads(facing);
-    bool complete = quad_count > 0 && quad_count <= 16 && start + quad_count * 4 <= 160;
+    bool complete = video_native_complete[0] && quad_count > 0 &&
+                    quad_count <= 16 && start + quad_count * 4 <= 160;
     auto figure_tiles = [&](unsigned at, unsigned quads) {
         std::vector<std::vector<unsigned char>> tiles;
         for (unsigned q = 0; q < quads && at + q * 4 + 3 < 160; ++q) {

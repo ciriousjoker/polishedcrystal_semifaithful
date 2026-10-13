@@ -81,12 +81,17 @@ fn cadence(e: &Value) {
             "Client {i}: duplicate world updates"
         );
         let updates = |run: &Value| {
-            let cumulative: Vec<_> = steady(run).map(|s| n(s, "vProfileWorldUpdates")).collect();
-            cumulative
+            let start = n(&run["profile"], "world_window_start");
+            let previous = frames(run)
                 .iter()
-                .enumerate()
-                .map(|(i, v)| if i == 0 { *v } else { v - cumulative[i - 1] })
-                .collect::<Vec<_>>()
+                .find(|row| n(row, "frame") + 1 == start)
+                .expect("Missing world counter immediately before measurement");
+            let cumulative: Vec<_> = steady(run).map(|s| n(s, "vProfileWorldUpdates")).collect();
+            assert_eq!(cumulative.len() as u64, limit("profile_frames"));
+            mobile_acceptance::contracts::cumulative_deltas(
+                n(&previous["state"], "vProfileWorldUpdates"),
+                &cumulative,
+            )
         };
         if let Some(error) = mobile_acceptance::contracts::cadence_regression(
             &updates(&client["single"]),

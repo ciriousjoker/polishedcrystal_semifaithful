@@ -1,5 +1,36 @@
 # Mobile Adapter multiplayer plan
 
+## 2026-10-13: independent Cargo acceptance suite
+
+Cherry-picked `6a3d69b7d8d25f8f6678936fffbfc6d077b0abef` as `84fd3a966`.
+The suite compares real current ROM execution with fresh native controls and
+derives fixtures, colors and save spans from current sources. No product
+threshold was relaxed. Preserve the existing emitted-assembly and integration
+gates alongside this suite; finite acceptance scenarios do not prove all maps,
+all packet streams or universal correctness.
+
+The frontend merge preserves both the earlier vanilla visibility observer and
+the new acceptance observer. Review corrections add the existing ten-byte
+conditional `home/video.asm` integration to the structural list, and normalize
+cadence against the observation immediately before its measured window. An
+independent host regression prevents earlier accumulated work from hiding a
+later delayed world update.
+
+Local appearance/color observations use the complete source-matched group in
+the actual hardware OAM page. Native `wPlayerCurrentOAMSlot` describes the native
+shadow page and cannot locate a group reordered into a private DMA page. The
+initial preparatory run was stopped for this observer correction; retain it as
+incomplete evidence rather than treating it as an acceptance result.
+
+The compatibility test currently requires the clean counterpart's full SHA-256.
+That is a conservative same-revision identity, not proof of semantic equivalence
+between different revisions. It cannot by itself fulfill the planned semantic
+compatibility hash or establish negotiation by the Bridge. Keep those product
+requirements explicit rather than calling this test complete compatibility.
+
+Run with a fresh `MOBILE_ACCEPTANCE_OUTPUT` directory on Storage. Source
+fingerprints prohibit reusing evidence after any tracked input changes.
+
 ## 2026-10-13: private DMA and emitted rectangle programs
 
 M2 remains open. The earlier 3 to 6 hour estimate was revised to roughly one to

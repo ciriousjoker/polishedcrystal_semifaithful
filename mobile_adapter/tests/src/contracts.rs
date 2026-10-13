@@ -18,3 +18,16 @@ pub fn cadence_regression(native: &[u64], multiplayer: &[u64]) -> Option<String>
     }
     None
 }
+/// Convert cumulative observations into frame counts using the observation
+/// immediately before the measured window. Earlier work cannot hide a delay.
+pub fn cumulative_deltas(previous: u64, cumulative: &[u64]) -> Vec<u64> {
+    let mut prior = previous;
+    cumulative
+        .iter()
+        .map(|&current| {
+            let delta = current.checked_sub(prior).expect("Counter moved backwards");
+            prior = current;
+            delta
+        })
+        .collect()
+}

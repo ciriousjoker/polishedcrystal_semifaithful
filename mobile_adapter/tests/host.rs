@@ -202,3 +202,12 @@ fn deterministic_hostile_event_sequences_preserve_room_invariants() {
         owner.tick(tick);
     }
 }
+#[test]
+fn work_before_measurement_cannot_mask_a_later_dropped_frame() {
+    use mobile_acceptance::contracts::{cadence_regression, cumulative_deltas};
+    let native = cumulative_deltas(100, &[101, 102, 103]);
+    let mobile = cumulative_deltas(500, &[501, 501, 502]);
+    assert_eq!(native, vec![1, 1, 1]);
+    assert_eq!(mobile, vec![1, 0, 1]);
+    assert!(cadence_regression(&native, &mobile).is_some());
+}
