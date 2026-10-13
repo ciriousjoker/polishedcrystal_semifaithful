@@ -1,5 +1,47 @@
 # Mobile Adapter multiplayer plan
 
+## 2026-10-13: projection quantum experiment rejected
+
+Pool28 regresses publications to216/219/225/659 and fails native10's nine-frame
+gap. All800 native updates and zero VBlank crossings remain intact. Coherent
+camera projection still costs up to6,008 clocks; the completion-age policy
+invokes the quantum about731 times versus195 full projection jobs previously.
+Thus total optional work increases substantially despite the smaller unit.
+Restore the committed full-batch scheduler and projection code. Retain this
+failed experiment only in the plan and its focused artifacts; do not keep a
+known renderer regression or claim quanta alone improve the system.
+
+A truly isolated peer projection also needs coherent rebasing of the other
+peers when the local camera scrolls. That additional complexity is not justified
+by the measured result. The next architectural decision must target the
+mandatory-transport/composer gap or redundant resource validation while keeping
+exact provenance, bounded serial progress and the native performance baseline.
+
+## 2026-10-13: bounded coherent projection prototype
+
+A projection quantum advances interpolation for one peer. All three peers still
+receive their cheap affine projection from the same camera snapshot; splitting
+that step naively would mix screen coordinates while the local player scrolls.
+Cold draw coordinates initialize through the original path. The complete-cycle
+age advances only after the third interpolation unit, and visibility is
+recounted coherently with departed roster entries removed. The cursor occupies
+one byte in the existing bank5 cache gap; two bounded scratch bytes use the
+existing private bank2 gap before IRQ RAM. No native or serialized data changes.
+
+A late cycle older than eight frames receives a projection opportunity under
+the original early guard. Optional work proceeds straight to the composer,
+without an extra serial-interrupt gap; each routine retains its own admission.
+Unused fallback frames can project beforeLY134. Published frames cannot use
+this extra opportunity because their already prepared OAM owns the old projected
+pose and position. Transport still receives its real first tick every frame.
+
+Focused host5 passes640 cursor/age/visibility vectors and512 cold/settled/moving
+projection cases across slow/walk/bike/run cameras and signed interpolation.
+Their conservative maximum5,964 clocks plus700 caller clocks fits the late
+admission's9,120-clock remaining bound. All existing focused admission contracts
+also pass. Pool28 is required to verify throughput, completion age, unchanged
+native cadence and real presentation. Fairness remains an open gate.
+
 ## 2026-10-13: full-plan measured checkpoint
 
 Pool27 remains an explicit failure: native11 has a nine-frame eligible gap.
