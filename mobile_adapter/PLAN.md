@@ -2,6 +2,52 @@
 
 ## 2026-10-13: independent Cargo acceptance suite
 
+The complete first reviewed run at `d4077dad8` is retained in
+`/Volumes/Storage/Cache/mobileadapter/acceptance-suite-20261013-reviewed`, with
+its adjacent `.log`. Build tests: 4/5; host tests: 8/8; ROM tests: 45/53.
+Total: 57/66 pass, nine fail, zero ignored and no backend setup errors.
+M2 remains open. The full run takes approximately 45 minutes on this host.
+
+Failures include the absent conservative ROM compatibility identity, full-pool
+connection loss, excessive native scanline presentation gaps, incomplete
+conflict removal and additional world-update delays/duplicates in the moving
+NPC scenario. Several pool tests stop at lost peers before their later rendering
+assertions; do not describe those later assertions as independently verified.
+All four full-pool controls and clients have 800/800 ordinary update frames, but
+only two clients remain online with one peer each at capture. In the scripted
+NPC case the primary's simulation hashes match throughout, while its cadence is
+702 update frames versus 705 in the native control, and five duplicates versus
+two. Other clients show larger additional cadence differences.
+
+The original palette stress test passed vacuously: all three remote figures have
+zero presentations on every receiver. Actual native colors, night/darkness and
+free-scene avatars are checked, but this does not establish saturated palette
+acceptance. The color oracle now requires actual presentation of each remote,
+with an oracle regression that rejects a scene hiding every peer and accepts
+the equivalent presented scene. No product limit or threshold was relaxed.
+
+A small transport-priority experiment restores a regular bounded first
+`MobileTick` every frame. The old late-scene credit-only path could repeatedly
+defer parsing and command deadlines for three of four frames while composition
+failed to publish. Rendering uses the remaining slices and its unchanged
+deadlines. Fresh evidence in `acceptance-suite-20261013-transport-priority` accepts this
+limited transport correction: crowded cadence, twelve native objects remaining
+simulated, equal-actor ordinary cadence and observed background deadlines pass.
+All four full-pool clients stay online with three peers and 800/800 world updates.
+The scripted NPC cadence, saturated palettes and full-pool fair presentation
+still fail. The latter now reaches its rendering assertion instead of stopping
+at lost connections. Build checks remain 4/5, with disabled byte identity and
+minimal integration passing; emitted-assembly contracts also pass. These are
+targeted reruns, not a new aggregate full-suite result.
+
+Next M2 work must address scene-wide expensive admission for mixed NPC/item
+shapes, actual-conflict priority and fair presentation, and the missing remote
+presentation under palette saturation. Diagnose the NPC cadence against paired
+instruction traces. Retain the existing Bridge/hosted-path and emitted-assembly
+gates, then repeat the complete Cargo suite with fresh immutable inputs.
+Conservative ROM identity remains unfinished alongside the separate semantic
+compatibility design.
+
 Cherry-picked `6a3d69b7d8d25f8f6678936fffbfc6d077b0abef` as `84fd3a966`.
 The suite compares real current ROM execution with fresh native controls and
 derives fixtures, colors and save spans from current sources. No product

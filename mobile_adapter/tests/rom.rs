@@ -629,11 +629,13 @@ fn colors(e: &Value) {
         })
         .collect();
     for c in clients(e) {
+        let mut presented = BTreeSet::new();
         for state in steady(&c["mobile"]) {
             for p in 1..=3 {
                 if n(state, &format!("vAcceptancePeer{p}Complete")) == 0 {
                     continue;
                 }
+                presented.insert(p);
                 let avatar = n(state, &format!("wMobilePeer{p}Avatar"));
                 let color = n(state, &format!("vMobilePeer{p}PaletteHash"));
                 assert!(
@@ -643,7 +645,47 @@ fn colors(e: &Value) {
                 );
             }
         }
+        assert_eq!(
+            presented,
+            BTreeSet::from([1, 2, 3]),
+            "Palette correctness requires actual presentation of every remote figure"
+        );
     }
+}
+#[test]
+fn palette_oracle_rejects_unpresented_peers() {
+    let mut e = serde_json::json!({"clients": []});
+    for avatar in 0..4 {
+        let mut state = serde_json::json!({});
+        for peer in 1..=3 {
+            let other = (avatar + peer) % 4;
+            state[format!("vAcceptancePeer{peer}Complete")] = serde_json::json!(0);
+            state[format!("wMobilePeer{peer}Avatar")] = serde_json::json!(other);
+            state[format!("vMobilePeer{peer}PaletteHash")] = serde_json::json!(100 + other);
+        }
+        e["clients"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!({
+                "single": {"profile": {"world_window_start": 0}, "frames": [
+                    {"frame": 0, "state": {"vAcceptanceLocalPaletteHash": 100 + avatar}}
+                ]},
+                "mobile": {"profile": {"world_window_start": 0}, "frames": [
+                    {"frame": 0, "state": state}
+                ]}
+            }));
+    }
+    assert!(
+        std::panic::catch_unwind(|| colors(&e)).is_err(),
+        "Zero presentation must not establish correct colors"
+    );
+    for client in e["clients"].as_array_mut().unwrap() {
+        for peer in 1..=3 {
+            client["mobile"]["frames"][0]["state"][format!("vAcceptancePeer{peer}Complete")] =
+                serde_json::json!(1);
+        }
+    }
+    colors(&e);
 }
 #[test]
 fn remote_sprite_pixels_match_current_native_appearance() {

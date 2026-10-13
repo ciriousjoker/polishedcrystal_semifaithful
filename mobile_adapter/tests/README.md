@@ -174,3 +174,8 @@ by original map-object identity. Avatar doubles used to equalize workload are
 excluded, and multiplayer cannot waive visible NPCs by hiding its own demand.
 Reconnect scenarios cover both a two-second server blackout and one isolated
 client connection reset; successful responses must cross the restored connection.
+
+Palette checks require actual complete presentation of every remote figure in
+the measured window. Correct cached colors with no visible peers do not pass.
+`palette_oracle_rejects_unpresented_peers` checks this observation rule without
+starting an emulator.
