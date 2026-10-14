@@ -61,6 +61,7 @@ static unsigned (*ordinary_effect_video_change)(unsigned,unsigned) = nullptr;
 static unsigned (*ordinary_status)(unsigned) = nullptr;
 static unsigned (*ordinary_failure)(unsigned) = nullptr;
 static unsigned (*ordinary_callback)(const void*) = nullptr;
+static uint64_t (*native_reference_value)(unsigned,unsigned) = nullptr;
 static int ordinary_fd = -1;
 static unsigned ordinary_start = 0, ordinary_count = 0;
 static void ordinary_capture(const void*, unsigned, unsigned, size_t);
@@ -186,6 +187,19 @@ static void ordinary_capture(const void* data, unsigned w, unsigned h, size_t pi
         ordinary_u32(header, value);
     // Header and payload share one absolute record completion budget.
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    if (native_reference_value) {
+        if (native_reference_value(0, 1) || !native_reference_value(0, 2)) fail("Disabled native reference failed or lacks actual DMA source");
+        std::vector<unsigned char> reference;
+        for (unsigned v : {ordinary_count, d[1], d[2]}) ordinary_u32(reference, v);
+        for (unsigned f = 2; f < 6; ++f) {
+            const auto v = native_reference_value(0, f);
+            ordinary_u32(reference, unsigned(v)); ordinary_u32(reference, unsigned(v >> 32));
+        }
+        for (unsigned i = 0; i < 972; ++i) reference.push_back(native_reference_value(1, i));
+        std::vector<unsigned char> rh;
+        for (unsigned v : {0x3146524eu, 2u, ordinary_count, unsigned(reference.size()), unsigned(crc32(0, reference.data(), reference.size()))}) ordinary_u32(rh, v);
+        ordinary_write(rh, deadline); ordinary_write(reference, deadline);
+    }
     ordinary_write(header, deadline); ordinary_write(payload, deadline);
     if (ordinary_status(1) == 2) {
         header.clear(); ordinary_u32(header, 0x31444e45u); ordinary_u32(header, ordinary_count);
@@ -927,7 +941,7 @@ int main(int argc, char** argv) {
             fail("Effect/native-scene observation does not support snapshot restore");
     for (int i = 5; i < argc; i += 2) {
         std::string key = argv[i];
-        if (key != "--static-intent-sources" && key != "--ordinary-gate" && key != "--ordinary-stream" && key != "--ordinary-count" && key != "--ordinary-start" && key != "--frames" && key != "--input" && key != "--symbols" &&
+        if (key != "--disabled-native-reference" && key != "--static-intent-sources" && key != "--ordinary-gate" && key != "--ordinary-stream" && key != "--ordinary-count" && key != "--ordinary-start" && key != "--frames" && key != "--input" && key != "--symbols" &&
             key != "--rtc-in" && key != "--rtc-out" && key != "--ram-out" && key != "--state-out" && key != "--save-in" && key != "--save-out" &&
             key != "--adapter" && key != "--pace-from" && key != "--trace-out" &&
             key != "--checkpoint-dir" && key != "--profile-out" && key != "--profile-window-start" &&
@@ -936,6 +950,13 @@ int main(int argc, char** argv) {
             key != "--native-headbutt-control" && key != "--effect-video" && key != "--native-object-count" && key != "--effect-span" && key != "--effect-watch" && key != "--native-scene-field" && key != "--acceptance-menu-routine" && key != "--measurement-gate" && key != "--measurement-warmup" && key != "--functional-horizon" && key != "--acceptance") fail("Unknown option: " + key);
         arguments[key] = argv[i + 1];
     }
+    const bool disabled_reference = arguments.count("--disabled-native-reference");
+    if (disabled_reference && (arguments.at("--disabled-native-reference") != "1" ||
+            !arguments.count("--static-intent-sources") || !arguments.count("--ordinary-stream") ||
+            arguments.count("--ordinary-gate") || arguments.count("--ordinary-start") ||
+            !arguments.count("--adapter") || arguments.at("--adapter") != "0" ||
+            !arguments.count("--acceptance") || arguments.at("--acceptance") != "1"))
+        fail("Disabled reference requires its own acceptance/source/physical stream mode and adapter0");
     if (arguments.count("--static-intent-sources") && (!arguments.count("--profile-out") ||
             !arguments.count("--symbols") || arguments.count("--snapshot-in")))
         fail("Static intent source extraction requires acceptance/profile/symbols and no restore");
@@ -1190,6 +1211,38 @@ int main(int argc, char** argv) {
             static_release = symbol<void(*)(uint64_t)>(core, "acceptance_profile_static_release");
             static_enable = symbol<unsigned(*)()>(core, "acceptance_profile_static_enable");
             if (static_status(0) != 1) fail("Static source ABI mismatch");
+            if (disabled_reference) {
+                if (native_addresses.count("MobileNativeBatch") || acceptance_data("AcceptanceScenarioID") != 0 ||
+                        acceptance_data("AcceptanceLighting") != 255 || acceptance_data("AcceptanceHour") != 12 ||
+                        acceptance_data("AcceptanceNPCOverride") != 0 || acceptance_data("AcceptanceAvatar") > 3 ||
+                        acceptance_data("AcceptanceSpawn", 0) != 11 || acceptance_data("AcceptanceSpawn", 1) != 23)
+                    fail("Disabled reference requires original EMPTY four-avatar hour12 fixture");
+                const unsigned role = acceptance_data("AcceptanceAvatar");
+                auto actor_config = symbol<void(*)(unsigned,unsigned,unsigned,unsigned,unsigned)>(core, "acceptance_profile_reference_actor");
+                unsigned control = 0;
+                for (unsigned a = 0; a < 4; ++a) {
+                    const unsigned avatar = a == 0 ? role : (control >= role ? control + 1 : control);
+                    const unsigned sprite = acceptance_data("PlayerStateSprites", avatar * 6);
+                    if (sprite != acceptance_data("AcceptanceFigures", avatar)) fail("Avatar fixture differs from original PlayerStateSprites");
+                    const unsigned palette = acceptance_data("SpriteHeaders", (sprite - 1) * 4 + 3);
+                    if (palette & 0xc0) fail("Reference avatar is not native walking sprite");
+                    if (a && acceptance_data("AcceptanceControlPeers", (a - 1) * 3) != sprite)
+                        fail("Declared control actor is missing or wrong");
+                    actor_config(a, sprite, palette & 63,
+                        a ? acceptance_data("AcceptanceControlPeers", (a - 1) * 3 + 2) : acceptance_data("AcceptanceSpawn", 2) + 4,
+                        a ? acceptance_data("AcceptanceControlPeers", (a - 1) * 3 + 1) : acceptance_data("AcceptanceSpawn", 3) + 4);
+                    if (a) ++control;
+                }
+                const char* fields[] = {"wShadowOAM", "hUsedOAMIndex", "wLoadedObjPal0", "wLoadedObjPalType",
+                    "wLoadedObjPalGlows", "wLoadedObjPalPrevGlows", "wObjectGlowTypes", "wObjectPrevGlowTypes",
+                    "wObjectGlowFadeActive", "wTimeOfDay", "wTimeOfDayPal", "wPalState", "hHours", "wPalFadeDelayFrames",
+                    "wPalFlags", "wCurPalStates", "wCurWeather", "wMapTimeOfDay", "wTimeOfDayPalset",
+                    "wMapGroup", "wMapNumber", "wEnvironment", "hAcceptanceLighting", "wNeededObjPalGlow"};
+                auto configure = symbol<void(*)(unsigned,unsigned,unsigned)>(core, "acceptance_profile_reference_field");
+                for (unsigned i = 0; i < sizeof(fields) / sizeof(fields[0]); ++i) { const auto p = native_addresses.at(fields[i]); configure(i, p.first, p.second); }
+                native_reference_value = symbol<uint64_t(*)(unsigned,unsigned)>(core, "acceptance_profile_reference");
+                if (!symbol<unsigned(*)()>(core, "acceptance_profile_reference_enable")()) fail("Disabled reference configuration failed");
+            }
             static_log.open(arguments.at("--static-intent-sources"));
             if (!static_log) fail("Cannot open static source evidence");
             static_status_log.open(arguments.at("--static-intent-sources") + ".status.jsonl");
@@ -1433,6 +1486,7 @@ int main(int argc, char** argv) {
         if (requested_start >= frame_limit) fail("Invalid ordinary capture start");
         ordinary_start = requested_start;
         if (!ordinary_count || ordinary_count > 800 || ordinary_start >= frame_limit) fail("Invalid ordinary capture bounds");
+        if (disabled_reference) ordinary_start = ~0u; // Its first source observation arms capture.
         std::signal(SIGPIPE, SIG_IGN);
         ordinary_fd = open(arguments.at("--ordinary-stream").c_str(), O_WRONLY | O_NONBLOCK);
         struct stat info;
@@ -1542,6 +1596,11 @@ int main(int argc, char** argv) {
             if (scene && static_status(6) && live.at("wMapStatus") == 2 && live.at("wScriptRunning") == 0) {
                 if (!static_enable()) { static_snapshot("enable_failed"); fail("Static source enable failed; see static status snapshot"); }
                 static_started = true;
+                if (disabled_reference) {
+                    const unsigned count = arguments.count("--ordinary-count") ? std::stoul(arguments.at("--ordinary-count")) : 16;
+                    if (!symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_ordinary_arm")(count)) fail("Disabled reference arm failed");
+                    ordinary_requested = true; ordinary_request_frame = input_frame;
+                }
                 static_snapshot("activated");
             }
         }
@@ -1582,6 +1641,7 @@ int main(int argc, char** argv) {
                      " overflow=" + std::to_string(event_record(0, 33)));
         }
         if (static_started) {
+            if (native_reference_value && native_reference_value(0, 1)) fail("Disabled reference observer failed: " + std::to_string(native_reference_value(0, 1)));
             if (static_status(1)) {
                 static_snapshot("observer_failed");
                 fail("Independent static source observation failed: reason=" + std::to_string(static_status(1)) +

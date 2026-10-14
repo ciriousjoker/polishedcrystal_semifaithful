@@ -179,6 +179,8 @@ static void acceptance_effect_emit(gb* game, const cpu_regs& regs, unsigned id, 
 }
 // Opt-in independent source observer. Existing physical and Head paths do not enable it.
 #include "static_ordinary_intent.hpp"
+#include "native_reference.hpp"
+static native_reference::Observer acceptance_native_reference;
 static static_ordinary_intent::Observer acceptance_static_intent;
 // Static diagnostics have their own unwindowed completed-world provenance.
 // No profiling metric or rendering permission participates in this latch.
@@ -282,6 +284,32 @@ extern "C" uint64_t acceptance_profile_static_source(uint64_t id, unsigned secti
         section == 3 ? source->at_close[field] : ~uint64_t(0);
 }
 extern "C" void acceptance_profile_static_release(uint64_t id) { acceptance_static_intent.release(id); }
+extern "C" void acceptance_profile_reference_field(unsigned i, unsigned bank, unsigned address) {
+    if (i >= acceptance_native_reference.fields.size() || bank > 7 || !address) { acceptance_native_reference.fail(13); return; }
+    acceptance_native_reference.fields[i] = {bank, address};
+}
+extern "C" void acceptance_profile_reference_actor(unsigned i, unsigned sprite, unsigned palette, unsigned x, unsigned y) {
+    if (i >= 4 || !sprite || palette >= 64) { acceptance_native_reference.fail(13); return; }
+    acceptance_native_reference.sprites[i] = sprite; acceptance_native_reference.palettes[i] = palette;
+    acceptance_native_reference.map_x[i] = x; acceptance_native_reference.map_y[i] = y;
+}
+extern "C" unsigned acceptance_profile_reference_enable() {
+    for (const auto p : acceptance_native_reference.fields) if (!p.address) acceptance_native_reference.fail(13);
+    for (unsigned s : acceptance_native_reference.sprites) if (!s) acceptance_native_reference.fail(13);
+    acceptance_native_reference.enabled = !acceptance_native_reference.failure;
+    return acceptance_native_reference.enabled;
+}
+extern "C" uint64_t acceptance_profile_reference(unsigned section, unsigned field) {
+    const auto& r = acceptance_native_reference;
+    if (!section) { const uint64_t v[] = {1, r.failure, r.raster.id, r.raster.entry, r.raster.returned, r.raster.closed};
+        return field < 6 ? v[field] : ~uint64_t(0); }
+    return section == 1 && field < native_reference::bytes ? r.raster.data[field] : ~uint64_t(0);
+}
+static unsigned acceptance_reference_read(gb* game, unsigned bank, unsigned address) {
+    if (bank == 9) return game->get_cpu()->get_vram()[address];
+    if (bank == 10) return game->get_lcd()->get_pal(address / 8)[address % 8];
+    return bank == 8 ? game->get_cpu()->read(address) : acceptance_effect_read(game, bank, address);
+}
 static unsigned acceptance_oam_dma_page = ~0u, acceptance_oam_dma_sequence = 0, acceptance_oam_dma_frame = 0, acceptance_oam_dma_count = 0;
 static unsigned acceptance_oam_dma_producer = 0;
 static unsigned acceptance_oam_dma_wbk = 0, acceptance_oam_dma_bank = 0;
@@ -295,6 +323,7 @@ static void acceptance_profile_effect_io_write(gb* game, unsigned address, unsig
             ((acceptance_oam_dma_wbk & 7) ? acceptance_oam_dma_wbk & 7 : 1) : 0;
         for (unsigned i = 0; i < 160; ++i)
             acceptance_oam_dma_source[i] = acceptance_effect_read(game, acceptance_oam_dma_bank, value * 256 + i);
+        acceptance_native_reference.on_dma(value, acceptance_oam_dma_bank);
         acceptance_oam_dma_sequence = acceptance_effect_sequence;
         // Freeze the completed native producer at the actual DMA instruction.
         // Unrelated Clear calls do not publish ordinary native OAM.
@@ -567,6 +596,7 @@ extern "C" void acceptance_profile_render_line(gb* game, unsigned line, int wind
         acceptance_video_meta[4] = acceptance_oam_dma_producer;
     }
     if (!acceptance_video_meta[0]) return;
+    acceptance_native_reference.row(line);
     if (acceptance_video_meta[5] != line) acceptance_video_meta[6] |= 1;
     unsigned char actual[acceptance_video_size];
     acceptance_video_hardware(game, actual);
@@ -598,6 +628,8 @@ static void acceptance_profile_after(gb* game, const cpu_regs& regs, unsigned op
     if (acceptance_observation_invalid) return;
     const bool returned = opcode == 0xc9 || opcode == 0xd9 ||
         ((opcode & 0xe7) == 0xc0 && cycles == 20);
+    acceptance_native_reference.after(acceptance_effect_bank(game, regs.PC), regs.PC, regs.SP,
+        acceptance_instruction_sp, returned, [game](unsigned b, unsigned a) { return acceptance_reference_read(game, b, a); });
     acceptance_static_intent.after(acceptance_effect_bank(game, regs.PC), regs.PC, regs.SP, returned,
         [game](unsigned bank, unsigned address) { return bank == 8 ? game->get_cpu()->read(address) : acceptance_effect_read(game, bank, address); });
     if (returned && acceptance_static_world_active && acceptance_instruction_sp == acceptance_static_world_sp &&
@@ -665,6 +697,13 @@ static void acceptance_profile_before(gb* game, const cpu_regs& regs) {
     acceptance_static_world_before(game, regs);
     acceptance_static_intent.before(acceptance_effect_bank(game, regs.PC), regs.PC, regs.SP, regs.BC.w,
         [game](unsigned bank, unsigned address) { return bank == 8 ? game->get_cpu()->read(address) : acceptance_effect_read(game, bank, address); });
+    if (acceptance_static_intent.enabled && acceptance_static_intent.started) {
+        const unsigned b = acceptance_effect_bank(game, regs.PC);
+        acceptance_native_reference.before(acceptance_static_intent,
+            acceptance_static_intent.matches(0, b, regs.PC), acceptance_static_intent.matches(1, b, regs.PC),
+            acceptance_static_intent.matches(2, b, regs.PC), regs.BC.w, regs.SP, b,
+            [game](unsigned rb, unsigned a) { return acceptance_reference_read(game, rb, a); });
+    }
     acceptance_effect_before(game, regs);
     acceptance_native_scene_ready = acceptance_native_scene_is_ready(game);
     if (acceptance_simulation_active && regs.SP == acceptance_simulation_sp + 2 &&
@@ -740,6 +779,7 @@ static void acceptance_profile_before(gb* game, const cpu_regs& regs) {
 
 extern "C" void acceptance_profile_effect_reset() {
     acceptance_static_intent.reset();
+    acceptance_native_reference = native_reference::Observer{};
     acceptance_static_world_active = acceptance_static_world_ready = false;
     acceptance_static_world_returns = 0;
     std::fill_n(acceptance_static_world_map, 2, 0);

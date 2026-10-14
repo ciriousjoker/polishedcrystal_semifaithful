@@ -176,6 +176,7 @@ def observer_fingerprint():
     paths = [ROOT / "mobile_adapter/tools/smoke_libretro.cpp", ROOT / "mobile_adapter/tools/profile_core.h",
              ROOT / "mobile_adapter/tools/conditional_input.hpp",
              TESTS / "support/profile_native.hpp", TESTS / "support/static_ordinary_intent.hpp",
+             TESTS / "support/native_reference.hpp",
              TESTS / "support/observer.hpp", Path(__file__)]
     return hashlib.sha256("".join(sha(path) for path in paths).encode()).hexdigest()
 
@@ -331,6 +332,7 @@ def extend_profile(profile_source):
     libretro.write_text(libretro_text)
     shutil.copyfile(TESTS / "support/profile_native.hpp", profile_source / "gb_core/acceptance_profile.hpp")
     shutil.copyfile(TESTS / "support/static_ordinary_intent.hpp", profile_source / "gb_core/static_ordinary_intent.hpp")
+    shutil.copyfile(TESTS / "support/native_reference.hpp", profile_source / "gb_core/native_reference.hpp")
 
 
 def refresh_observers(meta, prepared):
