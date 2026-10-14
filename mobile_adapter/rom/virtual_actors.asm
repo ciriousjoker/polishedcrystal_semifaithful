@@ -1060,7 +1060,7 @@ endr
 	pop af
 	ldh [rWBK], a
 	xor a
-	ld [wMobileNativeGraphicsFence], a
+; Native ownership survives map reloads until Release verifies its lifetime.
 	ld [wMobileVirtualBaseReady], a
 	ld a, $80
 	ld [wMobileVirtualNeedColorAudit], a
