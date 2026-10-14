@@ -16,6 +16,7 @@ pub struct Figure {
     pub lifetime: u64,
     pub id: u16,
     pub generation: u16,
+    // Sealed geometric constituent order, independent of physical OAM placement.
     pub parts: [Part; 4],
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -80,7 +81,6 @@ pub fn check_row(h: &[u8], figures: &[Figure], row: usize) -> Result<(), Failure
     }).take(10).collect();
     let mut used = [false; 40];
     for (fi, f) in figures.iter().enumerate() {
-        let mut previous = None;
         for (pi, part) in f.parts.iter().enumerate() {
             if !(0..=255).contains(&part.y) || !(0..=255).contains(&part.x) || part.flags & 0x0f != 0 {
                 return Err(Failure::Format);
@@ -96,8 +96,18 @@ pub fn check_row(h: &[u8], figures: &[Figure], row: usize) -> Result<(), Failure
                     h[rgb..rgb + 8] == part.rgb
             }).ok_or(Failure::MissingPart { figure: fi, part: pi, row })?;
             if !selected.contains(&q) { return Err(Failure::RowLimit { figure: fi, part: pi, row }); }
-            if previous.is_some_and(|v| v >= q) { return Err(Failure::Order { figure: fi, row }); }
-            previous = Some(q); used[q] = true;
+            // Sealed114 parts are disjoint 8x8 quadrants. Native InitSprite
+            // emits them at descending indices, while the private peer emitter
+            // increments its output pointer. Either placement has the same
+            // intra-figure pixels once every constituent survives the first ten.
+            // The finite intent has no priority input for overlapping parts:
+            // reject that unsupported case rather than infer it from actual OAM.
+            if f.parts[..pi].iter().any(|other| {
+                (i32::from(other.y) - 16..i32::from(other.y) - 8).contains(&(row as i32)) &&
+                    i32::from(other.x) < i32::from(part.x) + 8 &&
+                    i32::from(part.x) < i32::from(other.x) + 8
+            }) { return Err(Failure::Order { figure: fi, row }); }
+            used[q] = true;
         }
     }
     // Static EMPTY allows exactly the declared avatars. An unknown active tuple
@@ -117,7 +127,8 @@ mod tests {
         let parts = std::array::from_fn(|p| {
             let y = 40 + (p / 2) as i16 * 8;
             let x = 40 + (p % 2) as i16 * 8;
-            h[p * 4] = y as u8; h[p * 4 + 1] = x as u8; h[p * 4 + 2] = p as u8;
+            let q = 39 - p;
+            h[q * 4] = y as u8; h[q * 4 + 1] = x as u8; h[q * 4 + 2] = p as u8;
             let tile = [p as u8; 16]; h[160 + p * 16..176 + p * 16].copy_from_slice(&tile);
             Part { y, x, flags: 0, tile, rgb: [0; 8] }
         });
@@ -129,22 +140,48 @@ mod tests {
     }
     #[test] fn wrong_tile_rgb_flip_and_transparent_omission() {
         let (h, f) = fixture();
-        for (at, value) in [(160, 1), (16608, 1), (3, 32), (0, 0)] {
+        for (at, value) in [(160, 1), (16608, 1), (159, 32), (156, 0)] {
             let mut bad = h.clone(); bad[at] = value;
             assert!(matches!(check_row(&bad, &f, 24), Err(Failure::MissingPart { .. })));
         }
     }
     #[test] fn relocation_with_exact_bytes_passes() {
         let (mut h, f) = fixture();
-        h[2] = 20; h[3] = 11;
+        h[158] = 20; h[159] = 11;
         h[160 + 0x2000 + 20 * 16..176 + 0x2000 + 20 * 16].copy_from_slice(&f[0].parts[0].tile);
         assert_eq!(check_row(&h, &f, 24), Ok(()));
     }
     #[test] fn hidden_x_blockers_fail_survival() {
         let (mut h, f) = fixture();
-        h.copy_within(0..16, 40);
         for q in 0..10 { h[q * 4] = 40; h[q * 4 + 1] = 0; }
         assert!(matches!(check_row(&h, &f, 24), Err(Failure::RowLimit { .. })));
+    }
+    #[test] fn disjoint_parts_allow_native_and_private_oam_placement() {
+        let (h, f) = fixture();
+        let mut ascending = h.clone();
+        ascending[..160].fill(0);
+        for p in 0..4 { ascending[p * 4..p * 4 + 4].copy_from_slice(&h[(39 - p) * 4..(40 - p) * 4]); }
+        for row in 24..40 { assert_eq!(check_row(&ascending, &f, row), Ok(())); }
+        for (a, b, row) in [(39, 38, 24), (37, 36, 32)] {
+            let mut swapped = h.clone();
+            for n in 0..4 { swapped.swap(a * 4 + n, b * 4 + n); }
+            assert_eq!(check_row(&swapped, &f, row), Ok(()));
+        }
+    }
+    #[test] fn overlapping_parts_require_independent_priority_intent() {
+        let (mut h, mut f) = fixture();
+        f[0].parts[1].x = 44; h[38 * 4 + 1] = 44;
+        assert_eq!(check_row(&h, &f, 24), Err(Failure::Order { figure: 0, row: 24 }));
+    }
+    #[test] fn unknown_object_and_each_partial_figure_fail() {
+        let (h, f) = fixture();
+        let mut unknown = h.clone(); unknown[0] = 40; unknown[1] = 80;
+        assert_eq!(check_row(&unknown, &f, 24), Err(Failure::UnknownObject { object: 0, row: 24 }));
+        for part in 0..4 {
+            let mut partial = h.clone(); partial[(39 - part) * 4] = 0;
+            let row = 24 + (part / 2) * 8;
+            assert_eq!(check_row(&partial, &f, row), Err(Failure::MissingPart { figure: 0, part, row }));
+        }
     }
     #[test] fn duplicate_identity_fails_even_with_distinct_positions() {
         let (_, mut f) = fixture(); f.push(f[0].clone()); assert_eq!(identities(&f), Err(Failure::Identity));
