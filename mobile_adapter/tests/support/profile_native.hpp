@@ -472,6 +472,7 @@ extern "C" uint64_t acceptance_profile_static_map_preimage(uint64_t id, unsigned
 }
 static void acceptance_cold_record(unsigned kind, unsigned phase, gb* game = nullptr,
     uint64_t raster = ~uint64_t(0), uint64_t display = ~uint64_t(0));
+static void acceptance_initializer_activation();
 extern "C" unsigned acceptance_profile_static_enable() {
     for (const auto& point : acceptance_static_intent.points)
         if (!point.pc) acceptance_static_intent.fail(10);
@@ -484,6 +485,7 @@ extern "C" unsigned acceptance_profile_static_enable() {
     acceptance_static_intent.enabled = !acceptance_static_intent.failure;
     if (acceptance_static_intent.enabled && acceptance_native_reference.configured)
         acceptance_native_reference.enabled = !acceptance_native_reference.failure;
+    if(acceptance_static_intent.enabled) acceptance_initializer_activation();
     if (acceptance_static_intent.enabled) acceptance_cold_record(1, 0);
     return acceptance_static_intent.enabled;
 }
@@ -540,6 +542,50 @@ struct AcceptanceInputEvent {
 };
 static AcceptanceInputEvent acceptance_input_events[32];
 static unsigned acceptance_input_event_count = 0;
+#include "native_initializer.hpp"
+static native_initializer::Probe acceptance_initializer;
+static void acceptance_initializer_activation() {
+ if(acceptance_initializer.configured && !acceptance_initializer.activation)acceptance_initializer.activation=acceptance_initializer.order;
+}
+extern "C" unsigned acceptance_profile_initializer_config(unsigned bank,unsigned pc,unsigned group,unsigned number) {
+ if(acceptance_initializer.configured || acceptance_static_intent.enabled || !acceptance_input_configured || !pc || bank>255 || !group || !number) return 0;
+ auto& p=acceptance_initializer;p.configured=true;p.bank=bank;p.pc=pc;p.group=group;p.number=number;return 1;
+}
+extern "C" unsigned acceptance_profile_initializer_field(unsigned i,unsigned bank,unsigned address) {
+ if(acceptance_initializer.configured || i>=24 || bank>8 || !address)return 0;
+ acceptance_initializer.lighting_fields[i][0]=bank;acceptance_initializer.lighting_fields[i][1]=address;return 1;
+}
+extern "C" uint64_t acceptance_profile_initializer_value(unsigned s,unsigned i,unsigned f) {
+ return acceptance_initializer.value(s,i,f);
+}
+static native_initializer::Sample acceptance_initializer_sample(gb* game) {
+ native_initializer::Sample s;
+ auto read=[game](unsigned b,unsigned a){return b==8?game->get_cpu()->read(a):acceptance_effect_read(game,b,a);};
+ s.original=acceptance_static_intent.capture(read);
+ s.operands=acceptance_static_intent.capture_operands(read);
+ s.map=acceptance_static_intent.capture_map(read);
+ for(unsigned i=0;i<13;++i) s.scene[i]=acceptance_effect_read(game,acceptance_input_fields[i+5][0],acceptance_input_fields[i+5][1]);
+ for(unsigned i=0;i<4;++i) s.world[i]=acceptance_static_world_value(game,i);
+ for(unsigned i=0;i<24;++i) s.lighting[i]=read(acceptance_initializer.lighting_fields[i][0],acceptance_initializer.lighting_fields[i][1]);
+ for(unsigned i=1;i<4;++i) s.lighting[23+i]=read(acceptance_initializer.lighting_fields[15][0],acceptance_initializer.lighting_fields[15][1]+i);
+ return s;
+}
+static void acceptance_initializer_outer(gb* game) {
+ auto& p=acceptance_initializer; if(!p.configured || !p.initialized)return;
+ const auto& a=acceptance_input;const auto& l=a.latched;
+ if(!l.opportunity || l.source==0 || l.source>acceptance_static_intent.next_id) {p.fail(3);return;}
+ const auto& source=acceptance_static_intent.sources[(l.source-1)%static_ordinary_intent::source_capacity];
+ if(source.id!=l.source || source.closed!=l.source_closed){p.fail(3);return;}
+ native_initializer::Authority next;next.latch=l;next.source=source;next.order=p.order;
+ next.lifetime=a.lifetime;next.receiver=a.receiver_id;next.generation=a.receiver_generation;
+ next.scene=acceptance_initializer_sample(game).scene;
+ if(l.input) {
+  bool found=false;
+  for(const auto& d:a.definitions)if(d.id==l.input){next.definition=d;found=true;break;}
+  if(!found){p.fail(4);return;}
+ }
+ p.pending=next;
+}
 #include "cold_intent_boundaries.hpp"
 static cold_intent_boundaries::Ledger acceptance_cold;
 extern "C" unsigned acceptance_profile_cold_config() {
@@ -957,6 +1003,20 @@ extern "C" void acceptance_profile_ordinary_unsupported_output() {
     if (acceptance_ordinary_state == 1) acceptance_ordinary_fail(1);
 }
 extern "C" void acceptance_profile_render_buffer(const void* buffer, unsigned line) {
+    if(line==0 && acceptance_initializer.configured && acceptance_initializer.anchored && acceptance_ordinary_count<64) {
+        auto& p=acceptance_initializer;
+        if(p.count==64)p.fail(6);
+        else {
+            auto& r=p.rows[p.count++];r.order=p.order;r.host=mobile_observed_frames;
+            r.ly=acceptance_game_context?acceptance_game_context->get_cpu()->read(0xff44):~0u;
+            r.phase=acceptance_cold.cpu;r.buffer=buffer;
+            r.source_at_row0=acceptance_static_intent.latest;r.input_at_row0=acceptance_input.current.id;
+            r.receiver=acceptance_input.receiver_id;r.generation=acceptance_input.receiver_generation;r.lifetime=acceptance_input.lifetime;
+            r.sample=acceptance_initializer_sample(acceptance_game_context);
+            r.provenance=p.pending.order?native_initializer::Ordinary:p.initialized?native_initializer::Initializer:native_initializer::UnprovenSetup;
+            if(r.provenance==native_initializer::Ordinary)r.ordinary=p.pending;
+        }
+    }
     if (line == 0) acceptance_cold_record(cold_intent_boundaries::row0,cold_intent_boundaries::render_begin);
     acceptance_native_reference.context(mobile_observed_frames, acceptance_static_intent.instruction,
         acceptance_game_context ? acceptance_game_context->get_cpu()->read(0xff44) : ~0u);
@@ -1031,6 +1091,11 @@ extern "C" void acceptance_profile_display_begin(const void* buffer, unsigned wi
         acceptance_palette_config[3], acceptance_palette_config[4], acceptance_video_meta[6], 24};
     std::copy_n(snapshot, 24, acceptance_display_metadata);
     acceptance_display_buffer = buffer;
+    if(acceptance_initializer.configured && acceptance_initializer.count && acceptance_ordinary_state==1) {
+        auto& p=acceptance_initializer;auto& r=p.rows[p.count-1];
+        if(r.buffer!=buffer || r.raster!=acceptance_video_meta[1] || r.display!=native_initializer::absent)p.fail(5);
+        else r.display=acceptance_display_output;
+    }
     if (acceptance_cold.active) {
         acceptance_cold.display_raster=acceptance_video_meta[1];
         acceptance_cold.display_token=acceptance_display_output;
@@ -1053,6 +1118,11 @@ extern "C" unsigned acceptance_profile_ordinary_callback(const void* buffer) {
         acceptance_ordinary_fail(18, ~0u, 0, buffer); return 0;
     }
     acceptance_ordinary_pending = 0;
+    if(acceptance_initializer.configured) {
+        auto& p=acceptance_initializer;
+        if(!p.count || p.rows[p.count-1].buffer!=buffer || p.rows[p.count-1].display!=acceptance_display_output || p.rows[p.count-1].callback) {p.fail(5);return 0;}
+        p.rows[p.count-1].callback=p.order; ++p.acknowledged;
+    }
     if (++acceptance_ordinary_count == acceptance_ordinary_limit) acceptance_ordinary_state = 2;
     return 1;
 }
@@ -1112,6 +1182,10 @@ extern "C" void acceptance_profile_render_line(gb* game, unsigned line, int wind
         for (unsigned layer = 0; layer < 3; ++layer)
             if (game->get_lcd()->get_enable(layer)) acceptance_video_meta[13] |= 1u << layer;
         acceptance_video_meta[4] = acceptance_oam_dma_producer;
+        if(acceptance_initializer.configured && acceptance_initializer.count) {
+            auto& r=acceptance_initializer.rows[acceptance_initializer.count-1];
+            if(r.raster==native_initializer::absent)r.raster=acceptance_video_meta[1];
+        }
         acceptance_cold_record(cold_intent_boundaries::raster,cold_intent_boundaries::render_line,game,acceptance_video_meta[1]);
     }
     if (!acceptance_video_meta[0]) return;
@@ -1167,6 +1241,12 @@ static void acceptance_profile_after(gb* game, const cpu_regs& regs, unsigned op
             std::copy_n(acceptance_static_world_call_map, 2, acceptance_static_world_map);
             acceptance_static_world_ready = true;
             ++acceptance_static_world_returns;
+            auto& p=acceptance_initializer;
+            if(p.configured && !p.initialized) {
+                p.initialized=true;p.returned=p.order;p.return_host=mobile_observed_frames;p.return_ly=game->get_cpu()->read(0xff44);
+                p.return_bank=acceptance_effect_bank(game,regs.PC);p.return_pc=regs.PC;p.return_sp=regs.SP;
+                p.initializer=acceptance_initializer_sample(game);
+            }
         }
     }
     if (!returned) return;
@@ -1252,10 +1332,28 @@ static void acceptance_profile_before(gb* game, const cpu_regs& regs) {
         acceptance_scene_pre_pc = regs.PC;
         acceptance_scene_pre_bank = acceptance_effect_bank(game,regs.PC);
     }
+    if(acceptance_initializer.configured) {
+        auto& p=acceptance_initializer;++p.order;
+        const unsigned b=acceptance_effect_bank(game,regs.PC);
+        if(!p.anchored && b==p.bank && regs.PC==p.pc && acceptance_static_world_value(game,0)==p.group && acceptance_static_world_value(game,1)==p.number) {
+            p.anchored=true;p.anchor=p.order;
+            if(!acceptance_profile_ordinary_arm(64))p.fail(1);
+        }
+        if(!p.first_source && acceptance_static_intent.matches(0,b,regs.PC))p.first_source=p.order;
+        if(!p.first_outer && acceptance_static_intent.matches(3,b,regs.PC))p.first_outer=p.order;
+        for(unsigned i=0;i<4;++i)if((i==0 || i==2) && acceptance_input_points[i].pc==regs.PC && acceptance_input_points[i].bank==b && !p.pending.order)p.fail(2);
+    }
+    const bool initializer_world_was_active=acceptance_static_world_active;
     acceptance_static_world_before(game, regs);
+    if(acceptance_initializer.configured && !acceptance_initializer.entry && !initializer_world_was_active && acceptance_static_world_active) {
+        auto& p=acceptance_initializer;p.entry=p.order;p.entry_bank=acceptance_effect_bank(game,regs.PC);p.entry_pc=regs.PC;p.entry_sp=regs.SP;
+        p.entry_host=mobile_observed_frames;p.entry_ly=game->get_cpu()->read(0xff44);
+        p.expected_return_bank=acceptance_static_world_bank;p.expected_return_pc=acceptance_static_world_pc;
+    }
     acceptance_static_intent.before(acceptance_effect_bank(game, regs.PC), regs.PC, regs.SP, regs.BC.w,
         [game](unsigned bank, unsigned address) { return bank == 8 ? game->get_cpu()->read(address) : acceptance_effect_read(game, bank, address); });
     acceptance_input_before(game, regs);
+    if(acceptance_input.next_opportunity!=cold_outer_before)acceptance_initializer_outer(game);
     if (acceptance_static_intent.pending.entry != cold_entry_before && !cold_close_before)
         acceptance_cold_record(cold_intent_boundaries::source_entry,cold_intent_boundaries::before_cpu,game);
     if (acceptance_static_intent.next_id != cold_close_before && !cold_close_before)
@@ -1372,6 +1470,7 @@ extern "C" void acceptance_profile_effect_reset() {
     acceptance_input_active = acceptance_input_pair = acceptance_input_welcome_path = false;
     acceptance_input_previous = acceptance_input_event_count = 0;
     acceptance_cold.reset();
+    acceptance_initializer.reset();
     acceptance_static_intent.reset();
     acceptance_native_reference.reset();
     acceptance_static_world_active = acceptance_static_world_ready = false;
@@ -1409,6 +1508,7 @@ extern "C" void acceptance_profile_effect_reset() {
 
 // Host observation is not serialized. Restored CPU state cannot prove missed entries.
 extern "C" void acceptance_profile_restore_boundary() {
+    if(acceptance_initializer.configured) {acceptance_initializer.reset();acceptance_initializer.fail(7);}
     if (acceptance_input_configured) {
         AcceptanceInputFailureContext context(nullptr,~0u,~0u,12,6);
         acceptance_input.retire_membership(accepted_ordinary_input::Failure::retired);

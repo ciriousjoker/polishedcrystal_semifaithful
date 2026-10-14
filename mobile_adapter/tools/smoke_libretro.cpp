@@ -995,7 +995,7 @@ int main(int argc, char** argv) {
             fail("Effect/native-scene observation does not support snapshot restore");
     for (int i = 5; i < argc; i += 2) {
         std::string key = argv[i];
-        if (key != "--cold-intent-boundaries" && key != "--accepted-ordinary-inputs" && key != "--native-vblank-timing" && key != "--disabled-native-reference" && key != "--static-intent-sources" && key != "--ordinary-gate" && key != "--ordinary-stream" && key != "--ordinary-count" && key != "--ordinary-start" && key != "--frames" && key != "--input" && key != "--symbols" &&
+        if (key != "--native-initializer-probe" && key != "--cold-intent-boundaries" && key != "--accepted-ordinary-inputs" && key != "--native-vblank-timing" && key != "--disabled-native-reference" && key != "--static-intent-sources" && key != "--ordinary-gate" && key != "--ordinary-stream" && key != "--ordinary-count" && key != "--ordinary-start" && key != "--frames" && key != "--input" && key != "--symbols" &&
             key != "--rtc-in" && key != "--rtc-out" && key != "--ram-out" && key != "--state-out" && key != "--save-in" && key != "--save-out" &&
             key != "--adapter" && key != "--pace-from" && key != "--trace-out" &&
             key != "--checkpoint-dir" && key != "--profile-out" && key != "--profile-window-start" &&
@@ -1003,6 +1003,13 @@ int main(int argc, char** argv) {
             key != "--finish-barrier" && key != "--pace-multiplier" && key != "--expected-peers" && key != "--expected-online" &&
             key != "--native-headbutt-control" && key != "--effect-video" && key != "--native-object-count" && key != "--effect-span" && key != "--effect-watch" && key != "--native-scene-field" && key != "--acceptance-menu-routine" && key != "--measurement-gate" && key != "--measurement-warmup" && key != "--functional-horizon" && key != "--acceptance") fail("Unknown option: " + key);
         arguments[key] = argv[i + 1];
+    }
+    const bool initializer_requested = arguments.count("--native-initializer-probe");
+    if (initializer_requested) {
+        for (const char* required : {"--accepted-ordinary-inputs", "--static-intent-sources", "--symbols", "--ordinary-stream", "--ordinary-count"})
+            if (!arguments.count(required)) fail(std::string("Initializer diagnostic requires ") + required);
+        if (arguments.at("--ordinary-count") != "64" || arguments.count("--ordinary-start") || arguments.count("--ordinary-gate") || arguments.count("--cold-intent-boundaries"))
+            fail("Initializer diagnostic requires exactly64 startup outputs and its genuine native anchor");
     }
     const bool cold_requested = arguments.count("--cold-intent-boundaries");
     if (cold_requested) for (const char* required : {"--accepted-ordinary-inputs", "--static-intent-sources", "--symbols"})
@@ -1015,7 +1022,7 @@ int main(int argc, char** argv) {
                 effect_options["--native-scene-field"].size() != 8 || !effect_options["--effect-span"].empty() ||
                 !effect_options["--effect-watch"].empty()) fail("Accepted inputs require stationary ordinary native scene declarations");
         for (const char* unsupported : {"--native-vblank-timing", "--disabled-native-reference", "--ordinary-stream", "--snapshot-in", "--snapshot-out", "--test-snapshot-out", "--test-snapshot-roundtrip", "--native-headbutt-control", "--effect-video", "--measurement-gate", "--expected-online", "--expected-peers"})
-            if (arguments.count(unsupported)) fail(std::string("Accepted input diagnostic excludes ") + unsupported);
+            if (arguments.count(unsupported) && !(initializer_requested && std::string(unsupported)=="--ordinary-stream")) fail(std::string("Accepted input diagnostic excludes ") + unsupported);
     }
     const bool timing_requested = arguments.count("--native-vblank-timing");
     if (timing_requested) {
@@ -1152,7 +1159,35 @@ int main(int argc, char** argv) {
     uint64_t (*input_event)(unsigned,unsigned,unsigned) = nullptr;
     unsigned (*input_drain)(unsigned) = nullptr;
     unsigned input_events_written = 0;
-    std::ofstream input_log;
+    std::ofstream input_log, initializer_log;
+    uint64_t (*initializer_value)(unsigned,unsigned,unsigned) = nullptr;
+    unsigned initializer_written = 0;
+    auto initializer_array = [&](unsigned section,unsigned index,unsigned count) {
+        initializer_log << '[';
+        for(unsigned f=0;f<count;++f)initializer_log << (f ? "," : "") << initializer_value(section,index,f);
+        initializer_log << ']';
+    };
+    auto initializer_flush = [&](bool final) {
+        if(!initializer_value)return;
+        while(initializer_written < initializer_value(0,0,5)) {
+            const unsigned i=initializer_written++;
+            initializer_log << "{\"row\":" << i << ",\"binding\":";initializer_array(2,i,22);
+            initializer_log << ",\"sample\":";initializer_array(3,i,567);
+            if(initializer_value(2,i,0)==2) {
+                initializer_log << ",\"source\":";initializer_array(4,i,1576);
+                initializer_log << ",\"definition\":";initializer_array(5,i,113);
+                initializer_log << ",\"outer_scene\":";initializer_array(6,i,13);
+            }
+            initializer_log << "}\n";
+        }
+        if(final) {
+            initializer_log << "{\"status\":";initializer_array(0,0,27);
+            if(initializer_value(0,0,3)) {initializer_log << ",\"initializer\":";initializer_array(1,0,567);}
+            initializer_log << "}\n";
+        }
+        initializer_log.flush();
+        if(!initializer_log)fail("Initializer evidence write failed");
+    };
     bool input_ready_written = false;
     Metric static_status = nullptr;
     uint64_t (*static_source)(uint64_t,unsigned,unsigned) = nullptr;
@@ -1467,6 +1502,33 @@ int main(int argc, char** argv) {
                 input_event=symbol<uint64_t(*)(unsigned,unsigned,unsigned)>(core,"acceptance_profile_input_event");
                 input_drain=symbol<unsigned(*)(unsigned)>(core,"acceptance_profile_input_drain");
                 if (input_status(0)!=2) fail("Accepted input ABI mismatch");
+                if (initializer_requested) {
+                    if (acceptance_data("AcceptanceScenarioID") != 0 || acceptance_data("AcceptanceLighting") != 255 ||
+                        acceptance_data("AcceptanceHour") != 12 || acceptance_data("AcceptanceNPCOverride") != 0 ||
+                        acceptance_data("AcceptanceScenarioLoad") != 1 || acceptance_data("AcceptanceAvatar") > 3 ||
+                        acceptance_data("AcceptanceSpawn",0) != 11 || acceptance_data("AcceptanceSpawn",1) != 23)
+                        fail("Initializer diagnostic requires finite EMPTY hour12 scenario-load1 fixture");
+                    auto field = symbol<unsigned(*)(unsigned,unsigned,unsigned)>(core,"acceptance_profile_initializer_field");
+                    const char* fields[] = {"wShadowOAM", "hUsedOAMIndex", "wLoadedObjPal0", "wLoadedObjPalType",
+                        "wLoadedObjPalGlows", "wLoadedObjPalPrevGlows", "wObjectGlowTypes", "wObjectPrevGlowTypes",
+                        "wObjectGlowFadeActive", "wTimeOfDay", "wTimeOfDayPal", "wPalState", "hHours", "wPalFadeDelayFrames",
+                        "wPalFlags", "wCurPalStates", "wCurWeather", "wMapTimeOfDay", "wTimeOfDayPalset",
+                        "wMapGroup", "wMapNumber", "wEnvironment", "hAcceptanceLighting", "wNeededObjPalGlow"};
+                    initializer_log.open(arguments.at("--native-initializer-probe"));
+                    if(!initializer_log)fail("Cannot open initializer diagnostic");
+                    initializer_log << "{\"abi\":1,\"scope\":\"finite startup diagnostic, no acceptance claim\",\"role\":" << acceptance_data("AcceptanceAvatar")
+                        << ",\"experiment_lifetime\":1,\"lighting_fields\":[";
+                    for(unsigned i=0;i<24;++i) {
+                        const auto p=native_addresses.at(fields[i]);
+                        if(!field(i,p.first,p.second))fail("Initializer field configuration failed");
+                        initializer_log << (i?",":"") << "[\"" << fields[i] << "\"," << p.first << ',' << p.second << ']';
+                    }
+                    const auto anchor=native_addresses.at("RefreshMapSprites");
+                    if(!symbol<unsigned(*)(unsigned,unsigned,unsigned,unsigned)>(core,"acceptance_profile_initializer_config")(anchor.first,anchor.second,11,23))
+                        fail("Initializer configuration failed");
+                    initializer_value=symbol<uint64_t(*)(unsigned,unsigned,unsigned)>(core,"acceptance_profile_initializer_value");
+                    initializer_log << "],\"anchor\":[" << anchor.first << ',' << anchor.second << "]}\n";initializer_log.flush();
+                }
                 if (cold_requested) {
                     if (acceptance_data("AcceptanceScenarioID") != 0 || acceptance_data("AcceptanceLighting") != 255 ||
                         acceptance_data("AcceptanceHour") != 12 || acceptance_data("AcceptanceNPCOverride") != 0 ||
@@ -1763,7 +1825,7 @@ int main(int argc, char** argv) {
         if (requested_start >= frame_limit) fail("Invalid ordinary capture start");
         ordinary_start = requested_start;
         if (!ordinary_count || ordinary_count > 800 || ordinary_start >= frame_limit) fail("Invalid ordinary capture bounds");
-        if (disabled_reference) ordinary_start = ~0u; // Control request commits only after authenticated source/DMA readiness.
+        if (disabled_reference || initializer_requested) ordinary_start = ~0u; // Control request commits only after authenticated source/DMA readiness.
         std::signal(SIGPIPE, SIG_IGN);
         ordinary_fd = open(arguments.at("--ordinary-stream").c_str(), O_WRONLY | O_NONBLOCK);
         struct stat info;
@@ -1885,7 +1947,7 @@ int main(int argc, char** argv) {
                 ordinary_requested = true; ordinary_request_frame = input_frame;
             }
         }
-        if (ordinary_status && !ordinary_gate && input_frame == ordinary_start) {
+        if (ordinary_status && !ordinary_gate && !initializer_requested && input_frame == ordinary_start) {
             const unsigned count = arguments.count("--ordinary-count") ? std::stoul(arguments.at("--ordinary-count")) : 800;
             if (!symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_ordinary_arm")(count)) fail("Ordinary capture arm failed");
             ordinary_requested = true; ordinary_request_frame = input_frame;
@@ -1918,6 +1980,7 @@ int main(int argc, char** argv) {
             fail("Ordinary capture lost live readiness before execution");
         const auto raster_before = raster_state ? raster_state() : 0;
         run();
+        initializer_flush(false);
         cold_flush();
         if (cold_value && !cold_log) fail("Cold boundary diagnostic write failed");
         if (cold_value && cold_value(0,0,4)) fail("MissingColdIntent: first actual postactivation row zero has no causal completed source and outer latch");
@@ -2245,6 +2308,9 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i + 2 < image.size(); i += 3)
         colors.insert((unsigned(image[i]) << 16) | (unsigned(image[i + 1]) << 8) | image[i + 2]);
     reference_snapshot("final");
+    initializer_flush(true);
+    if(initializer_value && (initializer_value(0,0,6) || initializer_written!=64 || !initializer_value(0,0,3) || !initializer_value(0,0,13)))
+        fail("Initializer diagnostic incomplete or failed; see retained raw startup evidence");
     cold_flush();
     if (cold_value && (!cold_log || !cold_value(0,0,2) || !cold_value(0,0,5)))
         fail("Cold boundary diagnostic incomplete: no actual postactivation LCD row zero");

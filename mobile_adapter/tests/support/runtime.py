@@ -177,7 +177,7 @@ def observer_fingerprint():
              ROOT / "mobile_adapter/tools/conditional_input.hpp",
              TESTS / "support/profile_native.hpp", TESTS / "support/static_ordinary_intent.hpp",
              TESTS / "support/native_reference.hpp", TESTS / "support/native_vblank_timing.hpp",
-             TESTS / "support/accepted_ordinary_input.hpp", TESTS / "support/cold_intent_boundaries.hpp",
+             TESTS / "support/accepted_ordinary_input.hpp", TESTS / "support/cold_intent_boundaries.hpp", TESTS / "support/native_initializer.hpp",
              TESTS / "support/observer.hpp", Path(__file__)]
     return hashlib.sha256("".join(sha(path) for path in paths).encode()).hexdigest()
 
@@ -350,6 +350,7 @@ def extend_profile(profile_source):
     cpu.write_text(cpu_text)
     libretro.write_text(libretro_text)
     shutil.copyfile(TESTS / "support/profile_native.hpp", profile_source / "gb_core/acceptance_profile.hpp")
+    shutil.copyfile(TESTS / "support/native_initializer.hpp", profile_source / "gb_core/native_initializer.hpp")
     shutil.copyfile(TESTS / "support/cold_intent_boundaries.hpp", profile_source / "gb_core/cold_intent_boundaries.hpp")
     shutil.copyfile(TESTS / "support/static_ordinary_intent.hpp", profile_source / "gb_core/static_ordinary_intent.hpp")
     shutil.copyfile(TESTS / "support/native_reference.hpp", profile_source / "gb_core/native_reference.hpp")
