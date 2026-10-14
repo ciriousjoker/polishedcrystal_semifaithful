@@ -57,6 +57,7 @@ must not be used as a faithful full-game training environment.
 python3 -B tools/trainer_ai/extract_simulator_data.py
 cc -std=c11 -O3 -Wall -Wextra -Werror tools/trainer_ai/simulator.c -o /tmp/polished-ai-simulator
 /tmp/polished-ai-simulator --self-test
+/tmp/polished-ai-simulator --features
 /tmp/polished-ai-simulator 200000
 ```
 
@@ -74,3 +75,10 @@ outcome. Start with the native CPU engine as the fidelity reference and GPU
 learning; consider a GPU simulation port only against a matched synchronized
 CPU/GPU workload. Game Boy inference must be checked numerically and measured
 with the complete extractor/layers/action adapter before deployment.
+
+The `--features` demo exposes exact rational expected raw/useful damage, KO
+probability and min/max damage for the supported profile, without changing
+state or consuming RNG. Per slot it evaluates normal/critical base damage once
+each, then aggregates 32 spread outcomes with denominator 384. This is a
+provisional condensed-observation experiment; GBC extraction cost and the
+final observation schema are unmeasured and are not part of neural timing.
