@@ -41,6 +41,91 @@ def run(command, cwd, log, timeout=240):
                        stderr=subprocess.STDOUT, check=True, timeout=timeout)
 
 
+class OrdinaryProcesses:
+    """Own only this capture's runners/readers and bounded FIFO status."""
+    def __init__(self, reader, count):
+        self.reader, self.count = reader, count
+        self.stop = threading.Event()
+        self.lock = threading.Lock()
+        self.children = []
+
+    def spawn(self, command, **kwargs):
+        with self.lock:
+            if self.stop.is_set():
+                raise RuntimeError("Ordinary capture cancelled")
+            child = subprocess.Popen(list(map(str, command)), **kwargs)
+            self.children.append(child)
+            return child
+
+    def close(self):
+        self.stop.set()
+        with self.lock:
+            children = list(self.children)
+        for child in children:
+            if child.poll() is None:
+                child.terminate()
+        for child in children:
+            try:
+                child.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                child.kill()
+                child.wait()
+
+    def run(self, command, cwd, log, directory, timeout=100):
+        fifo = directory / "ordinary.fifo"
+        os.mkfifo(fifo)
+        read_fd = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
+        keeper = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
+        os.set_blocking(read_fd, True)
+        lines = []
+        def drain(pipe):
+            count, last = 0, ""
+            with pipe:
+                for line in pipe:
+                    count, last = count + 1, line.strip()
+            lines.extend((count, last))
+        try:
+            with (directory / "ordinary-reader-errors.log").open("w") as errors, Path(log).open("w") as output:
+                reader = self.spawn([self.reader, self.count], stdin=read_fd, stdout=subprocess.PIPE,
+                                    stderr=errors, text=True)
+                drainer = threading.Thread(target=drain, args=(reader.stdout,), daemon=True)
+                drainer.start()
+                os.close(read_fd)
+                read_fd = -1
+                runner = self.spawn(command, cwd=cwd, stdout=output, stderr=subprocess.STDOUT)
+                deadline = time.monotonic() + timeout
+                while runner.poll() is None:
+                    if keeper >= 0 and (directory / "state.json.ordinary-complete").exists():
+                        os.close(keeper)
+                        keeper = -1
+                    if reader.poll() not in (None, 0):
+                        raise RuntimeError("Ordinary physical reader rejected stream: " + str(directory))
+                    if self.stop.is_set() or time.monotonic() >= deadline:
+                        raise TimeoutError("Ordinary runner cancelled or timed out")
+                    time.sleep(.01)
+                if keeper >= 0:
+                    os.close(keeper)
+                    keeper = -1
+                if runner.returncode:
+                    raise subprocess.CalledProcessError(runner.returncode, command)
+                reader.wait(timeout=5)
+                drainer.join(timeout=2)
+                if reader.returncode or len(lines) != 2 or lines[0] != self.count:
+                    raise RuntimeError("Ordinary reader lacks exact records/footer/EOF")
+                (directory / "ordinary-reader.json").write_text(json.dumps({
+                    "records": lines[0], "last": lines[1], "footer_eof": True,
+                    "physical": "PASS", "intent": "UNPROVEN"}))
+        except BaseException:
+            self.close()
+            raise
+        finally:
+            if read_fd >= 0:
+                os.close(read_fd)
+            if keeper >= 0:
+                os.close(keeper)
+            fifo.unlink(missing_ok=True)
+
+
 def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
@@ -900,7 +985,9 @@ def native_headbutt_control_inputs(rom, names, profile, index):
     return native_headbutt_inputs(rom, names, profile, index)
 
 
-def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 1), duplicate=False, settle_frames=300, functional=False, moving_peers=False, identity=None):
+def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 1), duplicate=False, settle_frames=300, functional=False, moving_peers=False, identity=None, ordinary_count=0):
+    if ordinary_count and (ordinary_count != 800 or not functional or action != "idle" or fault != "none" or identity or moving_peers):
+        raise ValueError("Ordinary capture requires exactly 800 idle functional outputs without faults")
     if out.exists():
         original = out
         attempt = 2
@@ -913,6 +1000,12 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
     native = Path(fx["single_rom"])
     mobile_symbols, native_symbols = symbols(mobile.with_suffix(".sym")), symbols(native.with_suffix(".sym"))
     out.mkdir(exist_ok=True)
+    ordinary = None
+    if ordinary_count:
+        reader = out / "ordinary-picture-reader"
+        run(["rustc", "--edition=2021", "-O", TESTS / "support/ordinary_picture_reader.rs", "-o", reader],
+            source, out / "ordinary-reader-build.log")
+        ordinary = OrdinaryProcesses(reader, ordinary_count)
     log = (out / "bridge.log").open("w")
     bridge = subprocess.Popen([meta["bridge"], "--bind", "127.0.0.1:0"], stdout=log, stderr=subprocess.STDOUT)
     deadline = time.monotonic() + 8
@@ -927,10 +1020,24 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
             time.sleep(.02)
     except Exception:
         bridge.terminate()
-        bridge.wait(timeout=5)
+        try:
+            bridge.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            bridge.kill()
+            bridge.wait()
         log.close()
         raise
-    proxy = Proxy(upstream_port, fault, wait_for_arm=functional, identity=identity)
+    try:
+        proxy = Proxy(upstream_port, fault, wait_for_arm=functional, identity=identity)
+    except BaseException:
+        bridge.terminate()
+        try:
+            bridge.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            bridge.kill()
+            bridge.wait()
+        log.close()
+        raise
     port = proxy.server_address[1]
     threading.Thread(target=proxy.serve_forever, daemon=True).start()
     proxy.started = time.monotonic()
@@ -1061,7 +1168,7 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
                 text += f"{event['frame']} {button_name} {event['duration']}\n"
         if fx.get("native_map_events"):
             text = text.replace("vAcceptanceReady", ready)
-            if index == 0 and enabled:
+            if index == 0 and enabled and not ordinary_count:
                 peer_gate = ",".join(f"vAcceptancePeer{peer}Complete=1,wMobilePeer{peer}NativeStage=7" for peer in range(1,4))
                 text += native_headbutt_inputs(mobile, mobile_symbols, profile, index,
                                               f"vAcceptanceMeasuring=1,{peer_gate}")
@@ -1076,7 +1183,7 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
             "--state-out", directory / "state.json", "--ram-out", directory / "wram.bin", "--save-out", directory / "result.sav",
             "--save-in", seeds[index],
             "--trace-out", directory / "trace.jsonl.gz", "--input-events", directory / "input-events.jsonl",
-            "--profile-out", directory / "profile.json", "--profile-window-start", total - 1000 if functional and enabled else profile,
+            "--profile-out", directory / "profile.json", *([] if ordinary_count else ["--profile-window-start", total - 1000 if functional and enabled else profile]),
             "--pace-from", first if enabled else total, "--pace-multiplier", speed, "--adapter", int(enabled), "--acceptance", "1"]
         command += functional_horizon_options(functional, enabled, action)
         if functional and index == 0 and action in ("native-headbutt", "native-headbutt-held"):
@@ -1101,11 +1208,11 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
             watches.append(("hScriptBank",3))
             for number,(name,length) in enumerate(watches):
                 command += ["--effect-watch", f"{number}:{name}:{length}"]
-        if fx.get("native_map_events") and index == 0:
+        if fx.get("native_map_events") and index == 0 and not ordinary_count:
             command += ["--effect-video", "1"]
         if enabled and index == 0 and action.startswith("mobile-menu-"):
             command += ["--acceptance-menu-routine", "MobileMenuInput"]
-        if functional and enabled:
+        if functional and enabled and not ordinary_count:
             command += ["--measurement-gate", out / "measure", "--measurement-warmup", "300"]
             if action.startswith("private:") or identity in ("digest", "schema", "digest-held"):
                 command += ["--expected-online", 0 if index == 0 else 1, "--expected-peers", 0 if index == 0 else 2]
@@ -1113,12 +1220,25 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
             command += ["--test-snapshot-out", directory / "online.state"]
         if enabled:
             command += ["--finish-barrier", out / "capture"]
-        run(command, source, directory / "process.log", timeout=100)
+        if ordinary_count:
+            # Read-only state/profile summaries suffice; do not retain frame traces.
+            trace_at = command.index("--trace-out")
+            del command[trace_at:trace_at + 2]
+            command += ["--ordinary-stream", directory / "ordinary.fifo", "--ordinary-count", ordinary_count,
+                        "--ordinary-gate", out / "ordinary.gate"]
+            ordinary.run(command, source, directory / "process.log", directory)
+            state = json.loads((directory / "state.json").read_text())
+            return {"frame_calls": state["frame_calls"], "state": state["symbols"],
+                    "profile": json.loads((directory / "profile.json").read_text())}
+        else:
+            run(command, source, directory / "process.log", timeout=100)
         return projected(directory)
 
     try:
         capture_barrier = out / "capture.exit"
         capture_barrier.touch()
+        if ordinary_count:
+            (out / "capture").touch()
         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
             if identity in ("digest", "schema", "digest-held"):
                 healthy = [pool.submit(client, index, True) for index in range(1, 4)]
@@ -1134,7 +1254,22 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
                 futures = [pool.submit(client,index,True) for index in range(4)]
             deadline = time.monotonic() + 90
             try:
-                if functional:
+                if ordinary_count:
+                    while not all((out / f"mobile/{index}/state.json.ordinary-ready").exists() for index in range(4)):
+                        for future in futures:
+                            if future.done(): future.result()
+                        if time.monotonic() >= deadline:
+                            raise TimeoutError("Four ordinary clients did not reach actual readiness")
+                        time.sleep(.01)
+                    (out / "ordinary.gate").touch()
+                    while not all((out / f"mobile/{index}/state.json.ordinary-complete").exists() for index in range(4)):
+                        for future in futures:
+                            if future.done(): future.result()
+                        if time.monotonic() >= deadline:
+                            raise TimeoutError("Four exact ordinary captures did not complete")
+                        time.sleep(.01)
+                    (out / "capture").unlink()
+                elif functional:
                     while not all((out / f"mobile/{index}/state.json.measurement-ready").exists() for index in range(4)):
                         for future in futures:
                             if future.done(): future.result()
@@ -1167,9 +1302,17 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
                     if captured == 4: break
                     if time.monotonic() >= deadline: raise TimeoutError("Four-core final capture did not complete")
                     time.sleep(.02)
+            except BaseException:
+                if ordinary:
+                    ordinary.close()
+                raise
             finally:
                 capture_barrier.unlink(missing_ok=True)
             online = [future.result() for future in futures]
+        if ordinary_count:
+            return {"fixture": fx, "clients": online, "ordinary_count": ordinary_count,
+                    "ordinary_readers": [json.loads((out / f"mobile/{i}/ordinary-reader.json").read_text()) for i in range(4)],
+                    "artifact_directory": str(out), "intent": "UNPROVEN"}
         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
             offline = list(pool.map(lambda index: client(index, False), range(4)))
         # Keep equal actor load for performance. Separately replay the same
@@ -1223,6 +1366,8 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
             "assumptions": ASSUMPTIONS,
             "source_rom_sha256": meta["mobile_sha256"], "core_sha256": meta["core_sha256"]}
     finally:
+        if ordinary:
+            ordinary.close()
         bridge.terminate()
         try:
             bridge.wait(timeout=5)

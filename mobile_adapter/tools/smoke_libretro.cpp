@@ -839,7 +839,7 @@ int main(int argc, char** argv) {
                      "Options: --frames N --input SCRIPT --symbols SYM --state-out JSON\n"
                      "         --save-in SAV --save-out SAV --adapter 0|1 --pace-from FRAME --trace-out JSONL\n"
                      "         --checkpoint-dir EXISTING_DIRECTORY --profile-out JSON --pace-multiplier 1|2|3|4\n"
-                     "         --ordinary-stream FIFO --ordinary-count 1..800 --ordinary-start FRAME (functional capture only)\n"
+                     "         --ordinary-stream FIFO --ordinary-count 1..800 --ordinary-start FRAME | --ordinary-gate PATH (functional capture only)\n"
                      "         --functional-horizon 1000..4000 (gated acceptance completion only)\n"
                      "         --snapshot-out STATE --snapshot-in STATE (manual-play preparation only)\n"
                      "Input: FRAME BUTTON DURATION, ON MIN_FRAME SYMBOL=VALUE[,SYMBOL=VALUE] BUTTON DURATION, AFTER/CHECKED_AFTER DELAY CONDITIONS BUTTON DURATION, or WALK MIN_FRAME X Y TIMEOUT\n";
@@ -861,7 +861,7 @@ int main(int argc, char** argv) {
             fail("Effect/native-scene observation does not support snapshot restore");
     for (int i = 5; i < argc; i += 2) {
         std::string key = argv[i];
-        if (key != "--ordinary-stream" && key != "--ordinary-count" && key != "--ordinary-start" && key != "--frames" && key != "--input" && key != "--symbols" &&
+        if (key != "--ordinary-gate" && key != "--ordinary-stream" && key != "--ordinary-count" && key != "--ordinary-start" && key != "--frames" && key != "--input" && key != "--symbols" &&
             key != "--rtc-in" && key != "--rtc-out" && key != "--ram-out" && key != "--state-out" && key != "--save-in" && key != "--save-out" &&
             key != "--adapter" && key != "--pace-from" && key != "--trace-out" &&
             key != "--checkpoint-dir" && key != "--profile-out" && key != "--profile-window-start" &&
@@ -870,7 +870,7 @@ int main(int argc, char** argv) {
             key != "--native-headbutt-control" && key != "--effect-video" && key != "--native-object-count" && key != "--effect-span" && key != "--effect-watch" && key != "--native-scene-field" && key != "--acceptance-menu-routine" && key != "--measurement-gate" && key != "--measurement-warmup" && key != "--functional-horizon" && key != "--acceptance") fail("Unknown option: " + key);
         arguments[key] = argv[i + 1];
     }
-    if ((arguments.count("--ordinary-count") || arguments.count("--ordinary-start")) && !arguments.count("--ordinary-stream"))
+    if ((arguments.count("--ordinary-gate") || arguments.count("--ordinary-count") || arguments.count("--ordinary-start")) && !arguments.count("--ordinary-stream"))
         fail("Ordinary capture bounds require a stream");
     if (arguments.count("--frames")) {
         try { frame_limit = std::stoul(arguments.at("--frames")); }
@@ -1295,7 +1295,7 @@ int main(int argc, char** argv) {
     }
     if (av_info.timing.fps <= 0) fail("Invalid emulator frame rate");
     if (arguments.count("--ordinary-stream")) {
-        if (arguments.count("--effect-video") || arguments.count("--snapshot-in") || arguments.count("--test-snapshot-roundtrip") || arguments.count("--measurement-gate"))
+        if (arguments.count("--effect-video") || arguments.count("--snapshot-in") || arguments.count("--test-snapshot-roundtrip") || arguments.count("--snapshot-out") || arguments.count("--test-snapshot-out") || arguments.count("--measurement-gate"))
             fail("Ordinary capture cannot share Head capture or restore state");
         const auto requested_count = arguments.count("--ordinary-count") ? std::stoul(arguments.at("--ordinary-count")) : 800;
         if (!requested_count || requested_count > 800) fail("Invalid ordinary capture count");
@@ -1320,6 +1320,18 @@ int main(int argc, char** argv) {
         // Count is now owned by the observer; the runner stores only its stream ordinal.
         ordinary_count = 0;
     }
+    const bool ordinary_gate = arguments.count("--ordinary-gate");
+    bool ordinary_armed = false, ordinary_announced = false, ordinary_completed = false;
+    if (ordinary_gate && (arguments.count("--ordinary-start") || !acceptance_enabled || !profile_frame || !arguments.count("--state-out")))
+        fail("Ordinary gate requires acceptance readiness and excludes a fixed start");
+    auto ordinary_ready = [&]() {
+        const auto live = capture(sram, sram_size);
+        const bool scene = effect_options["--native-scene-field"].empty()
+            ? acceptance_marker_count && acceptance_marker_count(0)
+            : symbol<unsigned(*)()>(core, "acceptance_profile_native_scene_ready")();
+        return scene && metric && metric(21) > 0 && live.at("wMapStatus") == 2 &&
+            live.at("wScriptRunning") == 0 && live.at("wMobileOnline") == 1 && live.at("wMobilePeerCount") == 3;
+    };
     unsigned measurement_start = arguments.count("--profile-window-start") ? std::stoul(arguments.at("--profile-window-start")) : 3600;
     const bool measurement_gate = arguments.count("--measurement-gate");
     bool measurement_released = !measurement_gate, measurement_ready = false;
@@ -1356,7 +1368,28 @@ int main(int argc, char** argv) {
             // Keep pumping until all clients are ready. Freezing an earlier
             // client here would expire its wall-clock server presence lease.
         }
-        if (ordinary_status && input_frame == ordinary_start) {
+        if (ordinary_gate && !ordinary_armed) {
+            const bool ready = ordinary_ready();
+            if (ready && !ordinary_announced) {
+                std::ofstream(arguments.at("--state-out") + ".ordinary-ready") << input_frame << '\n';
+                ordinary_announced = true;
+            }
+            if (std::ifstream(arguments.at("--ordinary-gate")).good()) {
+                if (!ready) fail("Ordinary gate released without current actual readiness");
+                // Finish a real raster before arming, preserving the first full
+                // cold output. No alignment occurs inside the capture window.
+                if (raster_state() != 0x100) {
+                    raster_alignment_lines = align_raster();
+                    if (!raster_alignment_lines || raster_state() != 0x100)
+                        fail("Ordinary gate could not reach a real raster boundary");
+                }
+                if (!ordinary_ready()) fail("Ordinary readiness changed during pre-arm alignment");
+                const unsigned count = arguments.count("--ordinary-count") ? std::stoul(arguments.at("--ordinary-count")) : 800;
+                if (!symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_ordinary_arm")(count)) fail("Ordinary capture arm failed");
+                ordinary_armed = true;
+            }
+        }
+        if (ordinary_status && !ordinary_gate && input_frame == ordinary_start) {
             const unsigned count = arguments.count("--ordinary-count") ? std::stoul(arguments.at("--ordinary-count")) : 800;
             if (!symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_ordinary_arm")(count)) fail("Ordinary capture arm failed");
         }
@@ -1365,12 +1398,27 @@ int main(int argc, char** argv) {
             auto offset = std::chrono::duration<double>((input_frame - pace_from) / (av_info.timing.fps * pace_multiplier));
             std::this_thread::sleep_until(paced_start + std::chrono::duration_cast<std::chrono::steady_clock::duration>(offset));
         }
+        // Check the idle scene on both sides of each captured execution. A
+        // transient change wholly inside run() is not observable here.
+        if (ordinary_gate && ordinary_armed && !ordinary_completed && !ordinary_ready())
+            fail("Ordinary capture lost live readiness before execution");
         const auto raster_before = raster_state ? raster_state() : 0;
         run();
+        if (ordinary_gate && ordinary_armed && !ordinary_completed && !ordinary_ready())
+            fail("Ordinary capture lost live readiness after execution");
         const auto raster_after = raster_state ? raster_state() : 0;
         if (raster_aligned && input_frame >= measurement_start && input_frame < measurement_start + 800 &&
                 (raster_before != 0x100 || raster_after != 0x100)) raster_boundary_failures++;
         if (profile_frame) profile_frame();
+        if (ordinary_gate && !ordinary_completed && ordinary_status(1) == 2) {
+            if (!ordinary_ready()) fail("Ordinary capture completed outside live readiness");
+            const unsigned count = arguments.count("--ordinary-count") ? std::stoul(arguments.at("--ordinary-count")) : 800;
+            if (!ordinary_armed || ordinary_fd >= 0 || ordinary_count != count || ordinary_status(2) != count)
+                fail("Ordinary completion lacks exact count/footer");
+            frame_limit = input_frame + 1;
+            ordinary_completed = true;
+            std::ofstream(arguments.at("--state-out") + ".ordinary-complete") << ordinary_count << '\n';
+        }
         if (effect_enabled) {
             const auto event_record = symbol<unsigned(*)(unsigned,unsigned)>(core, "acceptance_profile_effect_record");
             if (event_record(0, 33))
@@ -1411,7 +1459,7 @@ int main(int argc, char** argv) {
         if (native_headbutt_control)
             values["vAcceptanceHeadbuttControlUpReleased"] =
                 headbutt_control_up.completed_frame(input_frame, values.at("hJoypadDown"));
-        if (acceptance_enabled && profile_frame && !raster_aligned && (effect_options["--native-scene-field"].empty() ? values.at("vAcceptanceReady") : values.at("vAcceptanceNativeSceneReady")) &&
+        if (!ordinary_status && acceptance_enabled && profile_frame && !raster_aligned && (effect_options["--native-scene-field"].empty() ? values.at("vAcceptanceReady") : values.at("vAcceptanceNativeSceneReady")) &&
                 values.at("wMapStatus") == 2 && values.at("wScriptRunning") == 0 &&
                 (raster_state() & 0x100) &&
                 (!bindings.count("wMobileOwner") ||
