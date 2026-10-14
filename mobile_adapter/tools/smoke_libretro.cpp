@@ -4,6 +4,12 @@
 // per instance. Acceptance tests boot battery saves. Explicit snapshot flags are
 // for regenerating manual-play start states with the current ROM/core only.
 #include <libretro.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <poll.h>
+#include <cerrno>
+#include <csignal>
 #include <algorithm>
 #include <zlib.h>
 #include <dlfcn.h>
@@ -46,6 +52,18 @@ static unsigned (*effect_video_field)(unsigned) = nullptr;
 static unsigned (*effect_display_field)(unsigned) = nullptr;
 static unsigned (*effect_display_matches)(const void*) = nullptr;
 static unsigned effect_display_last = 0;
+static unsigned (*ordinary_effect_video_byte)(unsigned) = nullptr;
+static unsigned (*ordinary_effect_video_field)(unsigned) = nullptr;
+static unsigned (*ordinary_effect_display_field)(unsigned) = nullptr;
+static unsigned (*ordinary_effect_display_matches)(const void*) = nullptr;
+static unsigned (*ordinary_effect_video_row)(unsigned,unsigned) = nullptr;
+static unsigned (*ordinary_effect_video_change)(unsigned,unsigned) = nullptr;
+static unsigned (*ordinary_status)(unsigned) = nullptr;
+static unsigned (*ordinary_callback)(const void*) = nullptr;
+static int ordinary_fd = -1;
+static unsigned ordinary_start = 0, ordinary_count = 0;
+static void ordinary_capture(const void*, unsigned, unsigned, size_t);
+
 static unsigned (*effect_video_row)(unsigned,unsigned) = nullptr;
 static unsigned (*effect_video_change)(unsigned,unsigned) = nullptr;
 struct EffectVideoFrame {
@@ -97,6 +115,76 @@ static void fail(const std::string& message) {
     std::exit(1);
 }
 
+// OUTF v1: LE u32 magic, version, ordinal, payload bytes, CRC32, then payload.
+// Payload: host frame, display[24], metadata[14], change count, hardware bytes,
+// rows[144][16], change pairs, tightly packed native RGB565 pixels.
+// END1 footer carries requested count. Missing footer never means completion.
+static void ordinary_write(const std::vector<unsigned char>& bytes,
+    std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1)) {
+    size_t offset = 0;
+    while (offset < bytes.size()) {
+        if (std::chrono::steady_clock::now() >= deadline) fail("Ordinary capture backpressure timeout/truncated record");
+        const auto written = write(ordinary_fd, bytes.data() + offset, bytes.size() - offset);
+        if (std::chrono::steady_clock::now() >= deadline) fail("Ordinary capture backpressure timeout/truncated record");
+        if (written > 0) { offset += size_t(written); continue; }
+        if (written < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
+            fail("Ordinary capture pipe disconnected");
+        if (std::chrono::steady_clock::now() >= deadline) fail("Ordinary capture backpressure timeout/truncated record");
+        pollfd fd = {ordinary_fd, POLLOUT, 0};
+        if (poll(&fd, 1, 10) < 0 && errno != EINTR) fail("Ordinary capture pipe poll failed");
+    }
+    if (std::chrono::steady_clock::now() >= deadline) fail("Ordinary capture backpressure timeout/truncated record");
+}
+static void ordinary_u32(std::vector<unsigned char>& data, unsigned value) {
+    for (unsigned i = 0; i < 4; ++i) data.push_back((value >> (8 * i)) & 255);
+}
+static void ordinary_capture(const void* data, unsigned w, unsigned h, size_t pitch) {
+    if (!ordinary_status || ordinary_status(1) == 0 || ordinary_status(1) == 2) return;
+    if (ordinary_status(1) != 1) fail("Ordinary capture unsupported/incomplete output coverage");
+    if (!ordinary_callback(data)) {
+        if (ordinary_status(1) != 1) fail("Ordinary callback ahead or wrong buffer");
+        return;
+    }
+    unsigned d[24]; for (unsigned i = 0; i < 24; ++i) d[i] = ordinary_effect_display_field(i);
+    float factor; std::memcpy(&factor, &d[11], sizeof(factor));
+    if (!data || w != 160 || h != 144 || pitch != 320 || pixel_format != RETRO_PIXEL_FORMAT_RGB565 ||
+        d[0] != 1 || d[23] != 24 || d[4] != 144 || d[5] != w || d[6] != h || d[7] != 16 || d[8] != pitch ||
+        d[9] > 1 || d[10] > 1 || d[12] > 1 || d[13] != 1 || d[14] || d[15] != 1 || d[16] ||
+        d[17] != 1 || d[18] != 11 || (d[19] != 1 && d[19] != 2) || d[20] || d[21] || d[22] ||
+        !std::isfinite(factor) || factor < 1 || factor > 2 || (d[9] && !d[10]) || !ordinary_effect_display_matches(data) ||
+        d[2] != ordinary_effect_video_field(1) || d[3] != ordinary_effect_video_field(2))
+        fail("Unsupported ordinary render mode or display binding");
+    const unsigned changes = ordinary_effect_video_change(0, 2);
+    if (changes > 65536) fail("Ordinary row change overflow");
+    std::vector<unsigned char> payload;
+    payload.reserve(600000);
+    ordinary_u32(payload, input_frame);
+    for (unsigned value : d) ordinary_u32(payload, value);
+    for (unsigned i = 0; i < 14; ++i) ordinary_u32(payload, ordinary_effect_video_field(i));
+    ordinary_u32(payload, changes);
+    for (unsigned i = 0; i < 160 + 0x4000 + 128 + 128 + 6 + 160; ++i) payload.push_back(ordinary_effect_video_byte(i));
+    for (unsigned row = 0; row < 144; ++row) {
+        if (ordinary_effect_video_row(row, 8) > 0x7fffffffu) fail("Unsupported ordinary window line");
+        for (unsigned field = 0; field < 16; ++field)
+            ordinary_u32(payload, ordinary_effect_video_row(row, field));
+    }
+    for (unsigned i = 0; i < changes; ++i) for (unsigned field = 0; field < 2; ++field)
+        ordinary_u32(payload, ordinary_effect_video_change(i, field));
+    const auto* pixels = static_cast<const unsigned char*>(data);
+    payload.insert(payload.end(), pixels, pixels + 160 * 144 * 2);
+    std::vector<unsigned char> header;
+    for (unsigned value : {0x4654554fu, 1u, ++ordinary_count, unsigned(payload.size()), unsigned(crc32(0, payload.data(), payload.size()))})
+        ordinary_u32(header, value);
+    // Header and payload share one absolute record completion budget.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    ordinary_write(header, deadline); ordinary_write(payload, deadline);
+    if (ordinary_status(1) == 2) {
+        header.clear(); ordinary_u32(header, 0x31444e45u); ordinary_u32(header, ordinary_count);
+        // END has its own absolute completion budget, then closes immediately.
+        ordinary_write(header);
+        close(ordinary_fd); ordinary_fd = -1;
+    }
+}
 static const unsigned char* descriptor(unsigned start) {
     for (const auto& entry : memory_maps)
         if (entry.start == start && entry.ptr)
@@ -637,6 +725,7 @@ static void video(const void* data, unsigned w, unsigned h, size_t pitch) {
         std::memcpy(video_native_tiles, vram, sizeof(video_native_tiles));
     }
     capture_video_figures();
+    ordinary_capture(data, w, h, pitch);
     if (effect_video_field && effect_video_field(0) && effect_video_field(1) != effect_video_last) {
         effect_video_last = effect_video_field(1);
         if (effect_video_frames.size() >= 256) ++effect_video_overflow;
@@ -750,6 +839,7 @@ int main(int argc, char** argv) {
                      "Options: --frames N --input SCRIPT --symbols SYM --state-out JSON\n"
                      "         --save-in SAV --save-out SAV --adapter 0|1 --pace-from FRAME --trace-out JSONL\n"
                      "         --checkpoint-dir EXISTING_DIRECTORY --profile-out JSON --pace-multiplier 1|2|3|4\n"
+                     "         --ordinary-stream FIFO --ordinary-count 1..800 --ordinary-start FRAME (functional capture only)\n"
                      "         --functional-horizon 1000..4000 (gated acceptance completion only)\n"
                      "         --snapshot-out STATE --snapshot-in STATE (manual-play preparation only)\n"
                      "Input: FRAME BUTTON DURATION, ON MIN_FRAME SYMBOL=VALUE[,SYMBOL=VALUE] BUTTON DURATION, AFTER/CHECKED_AFTER DELAY CONDITIONS BUTTON DURATION, or WALK MIN_FRAME X Y TIMEOUT\n";
@@ -771,7 +861,7 @@ int main(int argc, char** argv) {
             fail("Effect/native-scene observation does not support snapshot restore");
     for (int i = 5; i < argc; i += 2) {
         std::string key = argv[i];
-        if (key != "--frames" && key != "--input" && key != "--symbols" &&
+        if (key != "--ordinary-stream" && key != "--ordinary-count" && key != "--ordinary-start" && key != "--frames" && key != "--input" && key != "--symbols" &&
             key != "--rtc-in" && key != "--rtc-out" && key != "--ram-out" && key != "--state-out" && key != "--save-in" && key != "--save-out" &&
             key != "--adapter" && key != "--pace-from" && key != "--trace-out" &&
             key != "--checkpoint-dir" && key != "--profile-out" && key != "--profile-window-start" &&
@@ -780,6 +870,8 @@ int main(int argc, char** argv) {
             key != "--native-headbutt-control" && key != "--effect-video" && key != "--native-object-count" && key != "--effect-span" && key != "--effect-watch" && key != "--native-scene-field" && key != "--acceptance-menu-routine" && key != "--measurement-gate" && key != "--measurement-warmup" && key != "--functional-horizon" && key != "--acceptance") fail("Unknown option: " + key);
         arguments[key] = argv[i + 1];
     }
+    if ((arguments.count("--ordinary-count") || arguments.count("--ordinary-start")) && !arguments.count("--ordinary-stream"))
+        fail("Ordinary capture bounds require a stream");
     if (arguments.count("--frames")) {
         try { frame_limit = std::stoul(arguments.at("--frames")); }
         catch (...) { fail("Invalid frame count"); }
@@ -1202,6 +1294,32 @@ int main(int argc, char** argv) {
         pace_multiplier = std::stoul(value);
     }
     if (av_info.timing.fps <= 0) fail("Invalid emulator frame rate");
+    if (arguments.count("--ordinary-stream")) {
+        if (arguments.count("--effect-video") || arguments.count("--snapshot-in") || arguments.count("--test-snapshot-roundtrip") || arguments.count("--measurement-gate"))
+            fail("Ordinary capture cannot share Head capture or restore state");
+        const auto requested_count = arguments.count("--ordinary-count") ? std::stoul(arguments.at("--ordinary-count")) : 800;
+        if (!requested_count || requested_count > 800) fail("Invalid ordinary capture count");
+        ordinary_count = requested_count;
+        const auto requested_start = arguments.count("--ordinary-start") ? std::stoul(arguments.at("--ordinary-start")) : 0;
+        if (requested_start >= frame_limit) fail("Invalid ordinary capture start");
+        ordinary_start = requested_start;
+        if (!ordinary_count || ordinary_count > 800 || ordinary_start >= frame_limit) fail("Invalid ordinary capture bounds");
+        std::signal(SIGPIPE, SIG_IGN);
+        ordinary_fd = open(arguments.at("--ordinary-stream").c_str(), O_WRONLY | O_NONBLOCK);
+        struct stat info;
+        if (ordinary_fd < 0 || fstat(ordinary_fd, &info) || !S_ISFIFO(info.st_mode)) fail("Ordinary stream requires a FIFO with a live reader");
+        ordinary_status = symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_ordinary_status");
+        if (ordinary_status(0) != 1) fail("Ordinary capture ABI mismatch");
+        ordinary_callback = symbol<unsigned(*)(const void*)>(core, "acceptance_profile_ordinary_callback");
+        ordinary_effect_video_byte = symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_video_byte");
+        ordinary_effect_video_field = symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_video_field");
+        ordinary_effect_display_field = symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_display_field");
+        ordinary_effect_display_matches = symbol<unsigned(*)(const void*)>(core, "acceptance_profile_display_matches");
+        ordinary_effect_video_row = symbol<unsigned(*)(unsigned,unsigned)>(core, "acceptance_profile_video_row");
+        ordinary_effect_video_change = symbol<unsigned(*)(unsigned,unsigned)>(core, "acceptance_profile_video_change");
+        // Count is now owned by the observer; the runner stores only its stream ordinal.
+        ordinary_count = 0;
+    }
     unsigned measurement_start = arguments.count("--profile-window-start") ? std::stoul(arguments.at("--profile-window-start")) : 3600;
     const bool measurement_gate = arguments.count("--measurement-gate");
     bool measurement_released = !measurement_gate, measurement_ready = false;
@@ -1237,6 +1355,10 @@ int main(int argc, char** argv) {
             }
             // Keep pumping until all clients are ready. Freezing an earlier
             // client here would expire its wall-clock server presence lease.
+        }
+        if (ordinary_status && input_frame == ordinary_start) {
+            const unsigned count = arguments.count("--ordinary-count") ? std::stoul(arguments.at("--ordinary-count")) : 800;
+            if (!symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_ordinary_arm")(count)) fail("Ordinary capture arm failed");
         }
         if (input_frame == pace_from) paced_start = std::chrono::steady_clock::now();
         if (input_frame >= pace_from) {
@@ -1441,6 +1563,13 @@ int main(int argc, char** argv) {
     std::set<unsigned> colors;
     for (size_t i = 0; i + 2 < image.size(); i += 3)
         colors.insert((unsigned(image[i]) << 16) | (unsigned(image[i + 1]) << 8) | image[i + 2]);
+    if (ordinary_status) {
+        if (ordinary_status(1) != 2 || ordinary_count != ordinary_status(2)) {
+            symbol<void(*)()>(core, "acceptance_profile_ordinary_cancel")();
+            fail("Ordinary capture ended incomplete");
+        }
+        if (ordinary_fd >= 0) close(ordinary_fd); ordinary_fd = -1;
+    }
     // LCD-off transitions can omit video callbacks while CPU execution continues.
     if (width != 160 || height != 144 || colors.size() < 2 || video_frames < frame_limit * 9 / 10 ||
         !adapter_option_requested) {

@@ -258,6 +258,9 @@ class ObserverHooks(unittest.TestCase):
             "void cpu::io_write(word adr,byte dat)\n{\n}\n"
             "mobile_profile_before_instruction(ref_gb, regs, total_clock);\n"
             "mobile_profile_after_instruction(ref_gb, regs, total_clock, observed_opcode, tmp_clocks);\n")
+        (root / "gb_core/gb.cpp").write_text(
+            "void gb::run_step() {\n            memset(vframe, 0xff, 160 * 144 * 2);\n}\n"
+            "void gb::run() {\n\t\t\t\tmemset(vframe,0xff,160*144*2);\n}\n")
         (root / "gb_core/lcd.cpp").write_text('#include "gb.h"\nvoid lcd::render(void *buf,int scanline)\n{\n}\n')
         (root / "libretro/libretro.cpp").write_text(
             "bool retro_load_game(const struct retro_game_info *info)\n{\n}\n"
@@ -268,6 +271,27 @@ class ObserverHooks(unittest.TestCase):
         (root / "libretro/dmy_renderer.cpp").write_text(
             "word dmy_renderer::map_color(word gb_col)\n{\n}\n"
             "void dmy_renderer::apply_all_gb_effects_and_render(byte* buf, int width, int height, int depth, int pitch)\n{\n}\n")
+
+    def test_native_lcd_off_hooks_precede_both_clears(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.source(root)
+            gb = root / "gb_core/gb.cpp"
+            gb.write_bytes(b"\xef\xbb\xbf" + gb.read_bytes().replace(b"\n", b"\r\n"))
+            runtime.extend_profile(root)
+            first = gb.read_bytes()
+            self.assertTrue(first.startswith(b"\xef\xbb\xbf"))
+            self.assertNotIn(b"\n", first.replace(b"\r\n", b""))
+            text = gb.read_text(encoding="utf-8-sig")
+            self.assertIn("acceptance_profile_ordinary_unsupported_output();\n            memset(vframe, 0xff, 160 * 144 * 2);", text)
+            self.assertIn("acceptance_profile_ordinary_unsupported_output();\n\t\t\t\tmemset(vframe,0xff,160*144*2);", text)
+            runtime.extend_profile(root)
+            self.assertEqual(first, gb.read_bytes())
+            gb.write_bytes(first.replace(b"memset(vframe,0xff", b"memset(other,0xff"))
+            before = {p:p.read_bytes() for p in root.rglob("*") if p.is_file()}
+            with self.assertRaises(RuntimeError):
+                runtime.extend_profile(root)
+            self.assertEqual(before, {p:p.read_bytes() for p in before})
 
     def test_supported_hooks_are_idempotent_and_missing_anchors_fail_before_write(self):
         with tempfile.TemporaryDirectory() as tmp:

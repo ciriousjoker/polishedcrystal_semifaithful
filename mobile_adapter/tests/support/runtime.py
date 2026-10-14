@@ -119,6 +119,12 @@ def extend_profile(profile_source):
     if ('acceptance_profile_render_line(gb*, unsigned);' in lcd_text or
             'acceptance_profile_render_line(ref_gb, scanline);' in lcd_text):
         raise RuntimeError("Incompatible prior LCD observer hook; rebuild from original pinned core source")
+    if ('acceptance_profile_render_line(ref_gb, scanline, now_win_line);' in lcd_text and
+            'acceptance_profile_render_buffer(buf, scanline);' not in lcd_text):
+        raise RuntimeError('Incompatible prior buffer observer hook; rebuild from original pinned core source')
+    buffer_declaration = 'extern "C" void acceptance_profile_render_buffer(const void*, unsigned);'
+    if buffer_declaration not in lcd_text:
+        lcd_text = buffer_declaration + '\n' + lcd_text
     declaration = 'extern "C" void acceptance_profile_render_line(gb*, unsigned, int);'
     if lcd_text.count(declaration) > 1:
         raise RuntimeError("Duplicate LCD observer declaration")
@@ -128,7 +134,26 @@ def extend_profile(profile_source):
             raise RuntimeError("Expected unique LCD include anchor")
         lcd_text = lcd_text.replace(include, include + "\n" + declaration)
     lcd_text = inject_unique(lcd_text, "void lcd::render(void *buf,int scanline)\n{",
-        "void lcd::render(void *buf,int scanline)\n{\n    acceptance_profile_render_line(ref_gb, scanline, now_win_line);")
+        "void lcd::render(void *buf,int scanline)\n{\n    acceptance_profile_render_buffer(buf, scanline);\n    acceptance_profile_render_line(ref_gb, scanline, now_win_line);")
+    # Both native LCD-off paths clear the shared output without lcd::render.
+    # Reject before the write, including a completed but unconsumed raster.
+    gb_source = profile_source / "gb_core/gb.cpp"
+    gb_bytes = gb_source.read_bytes()
+    gb_newline = "\r\n" if b"\r\n" in gb_bytes else "\n"
+    gb_text = gb_bytes.decode("utf-8").replace("\r\n", "\n")
+    unsupported_declaration = 'extern "C" void acceptance_profile_ordinary_unsupported_output();'
+    if gb_text.count(unsupported_declaration) > 1:
+        raise RuntimeError("Duplicate unsupported output observer declaration")
+    if unsupported_declaration not in gb_text:
+        declaration_offset = int(gb_text.startswith("\ufeff"))
+        gb_text = gb_text[:declaration_offset] + unsupported_declaration + "\n" + gb_text[declaration_offset:]
+    for anchor in ("            memset(vframe, 0xff, 160 * 144 * 2);",
+                   "\t\t\t\tmemset(vframe,0xff,160*144*2);"):
+        indent = anchor[:len(anchor) - len(anchor.lstrip())]
+        gb_text = inject_unique(gb_text, anchor,
+            indent + "acceptance_profile_ordinary_unsupported_output();\n" + anchor)
+    if gb_text.count("acceptance_profile_ordinary_unsupported_output();") != 3:
+        raise RuntimeError("Expected both native LCD-off clear hooks and one declaration")
     # Observe actual renderer globals at the conversion and output calls. All
     # anchors are checked before any source is written.
     renderer = profile_source / "libretro/dmy_renderer.cpp"
@@ -171,6 +196,7 @@ def extend_profile(profile_source):
         renderer_text = renderer_text.replace(anchor, getter + anchor)
     renderer_header.write_text(renderer_header_text)
     renderer.write_text(renderer_text)
+    gb_source.write_bytes(gb_text.replace("\n", gb_newline).encode("utf-8"))
     lcd_source.write_text(lcd_text)
     header.write_text(text)
     cpu.write_text(cpu_text)
