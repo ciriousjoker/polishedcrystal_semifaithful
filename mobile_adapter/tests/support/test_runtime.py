@@ -255,6 +255,12 @@ class ObserverHooks(unittest.TestCase):
         (root / "gb_core").mkdir()
         (root / "libretro").mkdir()
         (root / "gb_core/cpu.cpp").write_text(
+            "void cpu::irq_process()\n{\n"
+            "\tif ((ref_gb->get_regs()->IF&ref_gb->get_regs()->IE)&&(regs.I||halt)){\n"
+            "\t\tif (halt)\n\t\t\tregs.PC++;\n"
+            "\t\twrite(regs.SP-2,regs.PC&0xff);write(regs.SP-1,regs.PC>>8);regs.SP-=2;\n"
+            "\t\tregs.PC=0x40;\n\t\thalt=false;\n\t\tregs.I=0;\n\t}\n}\n"
+            "void cpu::exec(int clocks) {}\n"
             "void cpu::io_write(word adr,byte dat)\n{\n}\n"
             "mobile_profile_before_instruction(ref_gb, regs, total_clock);\n"
             "mobile_profile_after_instruction(ref_gb, regs, total_clock, observed_opcode, tmp_clocks);\n")
@@ -271,6 +277,24 @@ class ObserverHooks(unittest.TestCase):
         (root / "libretro/dmy_renderer.cpp").write_text(
             "word dmy_renderer::map_color(word gb_col)\n{\n}\n"
             "void dmy_renderer::apply_all_gb_effects_and_render(byte* buf, int width, int height, int depth, int pitch)\n{\n}\n")
+
+    def test_native_timing_dispatch_hooks_are_exact_and_reject_partial_placement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.source(root)
+            runtime.extend_profile(root)
+            cpu = root / "gb_core/cpu.cpp"
+            text = cpu.read_text()
+            self.assertEqual(text.count("const auto acceptance_irq_pre ="), 1)
+            self.assertEqual(text.count("acceptance_timing_irq(ref_gb,"), 1)
+            self.assertLess(text.index("regs.PC++;"), text.index("const auto acceptance_irq_pre ="))
+            self.assertLess(text.index("const auto acceptance_irq_pre ="), text.index("write(regs.SP-2"))
+            self.assertLess(text.index("regs.I=0;"), text.index("acceptance_timing_irq(ref_gb,"))
+            runtime.extend_profile(root)
+            self.assertEqual(cpu.read_text(), text)
+            cpu.write_text(text.replace("        acceptance_timing_irq(ref_gb,", "        misplaced_acceptance_timing_irq(ref_gb,"))
+            with self.assertRaises(RuntimeError):
+                runtime.extend_profile(root)
 
     def test_native_lcd_off_hooks_precede_both_clears(self):
         with tempfile.TemporaryDirectory() as tmp:

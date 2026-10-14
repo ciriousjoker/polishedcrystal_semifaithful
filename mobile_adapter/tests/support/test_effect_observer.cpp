@@ -6,7 +6,7 @@
 #include <cstring>
 union Reg { unsigned short w; struct { unsigned char l,h; } b; Reg():w(0){} };
 struct cpu_regs { Reg AF,BC,DE,HL; unsigned short SP=0,PC=0; };
-struct CPU { unsigned char memory[65536]={}, ram[32768]={}; unsigned read(unsigned p) {return memory[p&65535];} unsigned char* get_ram(){return ram;} unsigned char oam[160]={},vram[0x4000]={}; unsigned char* get_oam(){return oam;} unsigned char* get_vram(){return vram;} };
+struct CPU { cpu_regs regs; unsigned clock=0; cpu_regs* get_regs(){return &regs;} unsigned get_clock(){return clock;} bool get_speed(){return true;} unsigned char memory[65536]={}, ram[32768]={}; unsigned read(unsigned p) {return memory[p&65535];} unsigned char* get_ram(){return ram;} unsigned char oam[160]={},vram[0x4000]={}; unsigned char* get_oam(){return oam;} unsigned char* get_vram(){return vram;} };
 struct ROM { unsigned char data[4*0x4000]={}; unsigned char* get_rom(){return data;} };
 struct MBC { unsigned char* mapping; unsigned char* get_rom(){return mapping;} };
 struct LCD { bool get_enable(unsigned){return true;} unsigned short palette[16][4]={},mapped[16][4]={}; unsigned short* get_pal(unsigned i){return palette[i];} unsigned short* get_mapped_pal(unsigned i){return mapped[i];} };
@@ -20,6 +20,53 @@ extern "C" void acceptance_profile_palette_current() { acceptance_profile_palett
 static void stack(gb& g,unsigned sp,unsigned pc) {g.cpu.memory[sp]=pc&255;g.cpu.memory[sp+1]=pc>>8;}
 int main(){
  gb g; cpu_regs r; r.SP=0xc100;r.PC=0x100;r.AF.w=0x1234;r.BC.w=0x5678;r.DE.w=0x86d0;r.HL.w=0x8610;
+
+ // Genuine taken dispatch, CB first-byte provenance and bounded stop.
+ assert(acceptance_profile_timing_point(0,0x1000,1)==1);
+ for(unsigned i=0;i<8;++i)assert(acceptance_profile_timing_field(i,0xff90+i));
+ assert(acceptance_profile_timing_config(0xff98,0xff99,0xc800,0xffa0,0,0x200,0x200,0,0));
+ acceptance_game_context=&g;assert(acceptance_profile_timing_arm());
+ g.cpu.clock=10;
+ for(unsigned n=0;n<16;++n){
+   r.PC=0x200;r.SP=0xc100;
+   auto pre=acceptance_timing_sample(&g,r);
+   r.PC=0x40;r.SP=0xc0fe;stack(g,r.SP,0x200);
+   acceptance_timing_irq(&g,pre,r,0x200);
+   acceptance_timing_before(&g,r);r.PC=0x42;g.cpu.clock+=8;
+   acceptance_timing_after(&g,r,0xcb,8); // CB D9 cannot close an IRQ.
+   assert(acceptance_profile_timing_status(5)==n);
+   acceptance_timing_before(&g,r);r.PC=0x200;r.SP=0xc100;g.cpu.clock+=16;
+   acceptance_timing_after(&g,r,0xd9,16);
+ }
+ assert(acceptance_profile_timing_status(2)&&!acceptance_profile_timing_status(1));
+ assert(acceptance_profile_timing_status(5)==16&&acceptance_profile_timing_status(6)==32);
+ auto frozen=acceptance_profile_timing_status(6);
+ acceptance_timing_before(&g,r);acceptance_timing_after(&g,r,0x00,4);
+ assert(acceptance_profile_timing_status(6)==frozen);
+ acceptance_profile_restore_boundary();assert(acceptance_profile_timing_status(4)==unsigned(native_vblank_timing::Failure::restored));
+ acceptance_profile_effect_reset();
+ // Exact HRAM wait RET closes the owner atomically, including disabled tail-JP.
+ assert(acceptance_profile_timing_status(0)); // Reset preserves immutable bindings.
+ assert(!acceptance_profile_timing_status(3)&&!acceptance_profile_timing_status(4));
+ acceptance_game_context=&g;assert(acceptance_profile_timing_arm());
+ r.PC=0x200;r.SP=0xc100;auto dma_pre=acceptance_timing_sample(&g,r);
+ r.PC=0x40;r.SP=0xc0fe;stack(g,r.SP,0x200);acceptance_timing_irq(&g,dma_pre,r,0x200);
+ r.PC=0x1000;r.SP=0xc0fc;stack(g,r.SP,0x200);
+ acceptance_timing_before(&g,r);r.PC=0xffa0;g.cpu.clock+=16;acceptance_timing_after(&g,r,0xc3,16);
+ const unsigned char dma_bytes[]={0xe2,0x05,0x20,0xfd,0xc9};
+ for(unsigned i=0;i<5;++i)g.cpu.memory[0xffa0+i]=dma_bytes[i];
+ acceptance_timing_before(&g,r);g.cpu.regs=r;
+ acceptance_profile_effect_io_write(&g,0xff46,0xc0);
+ r.PC=0xffa1;g.cpu.clock+=8;acceptance_timing_after(&g,r,0xe2,8);
+ r.PC=0xffa4;acceptance_timing_before(&g,r);
+ r.PC=0x200;r.SP=0xc0fe;g.cpu.clock+=16;acceptance_timing_after(&g,r,0xc9,16);
+ assert(!acceptance_profile_timing_status(3)&&!acceptance_profile_timing_status(4));
+ assert(acceptance_timing.event(3)->kind==native_vblank_timing::Kind::dma_wait_complete);
+ assert(acceptance_timing.event(4)->kind==native_vblank_timing::Kind::job_return);
+ acceptance_timing_before(&g,r);r.SP=0xc100;g.cpu.clock+=16;acceptance_timing_after(&g,r,0xd9,16);
+ assert(acceptance_profile_timing_status(5)==1);
+ acceptance_profile_effect_reset();
+ r.PC=0x100;r.SP=0xc100;
  acceptance_profile_before(&g,r);acceptance_profile_effect_io_write(&g,0xff55,5);
  assert(acceptance_effect_sequence==0 && acceptance_profile_effect_record(0,32)==0);
  acceptance_profile_effect_io_write(&g,0xff46,0xc0);assert(acceptance_oam_dma_count==0);

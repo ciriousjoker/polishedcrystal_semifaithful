@@ -151,6 +151,136 @@ extern "C" void acceptance_profile_native_scene_enable(unsigned count) {
     acceptance_native_world_completed = false;
 }
 extern "C" unsigned acceptance_profile_native_scene_ready() { return acceptance_native_scene_ready; }
+// Explicit, bounded timing observation. Disabled paths execute no sampler.
+#include "native_vblank_timing.hpp"
+static native_vblank_timing::Observer acceptance_timing;
+static native_vblank_timing::Point acceptance_timing_points[32];
+static unsigned acceptance_timing_point_count = 0, acceptance_timing_pending[8] = {};
+static unsigned acceptance_timing_mode_address = 0, acceptance_timing_map_anims = 0;
+static unsigned acceptance_timing_footprint = 0, acceptance_timing_hram = 0;
+static unsigned acceptance_timing_dma_bank = 0, acceptance_timing_dma_return = 0;
+static unsigned acceptance_timing_vblank_return = 0, acceptance_timing_chooser = 0;
+static unsigned acceptance_timing_far_return = 0;
+static bool acceptance_timing_configured = false, acceptance_timing_running = false;
+static bool acceptance_timing_done = false;
+static unsigned acceptance_timing_fault = 0, acceptance_timing_map_guard = 0;
+static native_vblank_timing::Sample acceptance_timing_pre, acceptance_timing_first_failure;
+static unsigned acceptance_timing_dma_sp = 0;
+static void acceptance_timing_check(bool ok) {
+    if (!ok && !acceptance_timing_fault) {
+        acceptance_timing_fault = 1; acceptance_timing_first_failure = acceptance_timing_pre;
+    }
+    if (!ok) acceptance_timing_running = false;
+}
+static unsigned acceptance_timing_bank(gb* game, unsigned pc) {
+    return pc < 0x4000 || pc >= 0x8000 ? 0 :
+        1 + (game->get_mbc()->get_rom() - game->get_rom()->get_rom()) / 0x4000;
+}
+static unsigned acceptance_timing_read16(gb* game, unsigned sp) {
+    return game->get_cpu()->read(sp) | game->get_cpu()->read((sp + 1) & 0xffff) << 8;
+}
+static native_vblank_timing::Sample acceptance_timing_sample(gb* game, const cpu_regs& regs) {
+    native_vblank_timing::Sample s;
+    s.pc = regs.PC; s.sp = regs.SP; s.bank = acceptance_timing_bank(game, regs.PC);
+    s.core_clock = uint32_t(game->get_cpu()->get_clock());
+    s.ly = game->get_cpu()->read(0xff44); s.lcdc = game->get_cpu()->read(0xff40);
+    s.speed = game->get_cpu()->get_speed(); s.mode = game->get_cpu()->read(acceptance_timing_mode_address);
+    for (unsigned i = 0; i < 8; ++i) s.pending[i] = game->get_cpu()->read(acceptance_timing_pending[i]);
+    return s;
+}
+extern "C" unsigned acceptance_profile_timing_point(unsigned bank, unsigned pc, unsigned job) {
+    if (acceptance_timing_configured || acceptance_timing_point_count == 32 || !pc || (pc >= 0x8000 && pc < 0xff80) || ((pc < 0x4000 || pc >= 0x8000) && bank)) return 0;
+    const unsigned id = ++acceptance_timing_point_count;
+    acceptance_timing_points[id - 1] = {uint16_t(bank), uint16_t(pc), uint16_t(id), bool(job)};
+    return id;
+}
+extern "C" unsigned acceptance_profile_timing_field(unsigned index, unsigned address) {
+    if (acceptance_timing_configured || index >= 8 || address < 0xff80 || address > 0xfffe) return 0;
+    acceptance_timing_pending[index] = address; return 1;
+}
+extern "C" unsigned acceptance_profile_timing_config(unsigned mode, unsigned anims, unsigned footprint,
+        unsigned hram, unsigned dma_bank, unsigned dma_return, unsigned vblank_return,
+        unsigned chooser, unsigned far_return) {
+    if (acceptance_timing_configured || !mode || !anims || !footprint || hram < 0xff80 || hram + 4 > 0xfffe ||
+        !vblank_return || vblank_return >= 0x4000 || (chooser && (!far_return || far_return >= 0x4000))) return 0;
+    for (auto address : acceptance_timing_pending) if (!address) return 0;
+    acceptance_timing_mode_address = mode; acceptance_timing_map_anims = anims;
+    acceptance_timing_footprint = footprint; acceptance_timing_hram = hram;
+    acceptance_timing_dma_bank = dma_bank; acceptance_timing_dma_return = dma_return;
+    acceptance_timing_vblank_return = vblank_return; acceptance_timing_chooser = chooser;
+    acceptance_timing_far_return = far_return;
+    acceptance_timing_configured = acceptance_timing.configure(acceptance_timing_points, acceptance_timing_point_count);
+    for (unsigned i = 0; i < acceptance_timing_point_count; ++i)
+        if (acceptance_timing_points[i].job) acceptance_timing_check(acceptance_timing.job_return_bank(i + 1, 0));
+    return acceptance_timing_configured && !acceptance_timing_fault;
+}
+extern "C" unsigned acceptance_profile_timing_arm() {
+    if (!acceptance_timing_configured || acceptance_timing_running || acceptance_timing_done || acceptance_timing_fault || !acceptance_game_context) return 0;
+    acceptance_timing_map_guard = acceptance_game_context->get_cpu()->read(acceptance_timing_map_anims);
+    acceptance_timing_running = true; return 1;
+}
+static void acceptance_timing_irq(gb* game, const native_vblank_timing::Sample& pre,
+        const cpu_regs& regs, unsigned stacked_pc) {
+    if (!acceptance_timing_running) return;
+    const auto post = acceptance_timing_sample(game, regs);
+    acceptance_timing_pre = pre;
+    // First scope supports ordinary VBlank0 only. No alternate VBlank table.
+    if (post.pc == 0x40 && post.mode != 0) { acceptance_timing_check(false); return; }
+    acceptance_timing_check(acceptance_timing.irq_dispatch(pre, post, stacked_pc));
+}
+static void acceptance_timing_before(gb* game, const cpu_regs& regs) {
+    if (!acceptance_timing_running) return;
+    acceptance_timing_pre = acceptance_timing_sample(game, regs);
+    if (game->get_cpu()->read(acceptance_timing_map_anims) != acceptance_timing_map_guard ||
+        game->get_cpu()->read(acceptance_timing_footprint)) { acceptance_timing_check(false); return; }
+    // Independently authenticate tail-call caller frames from frozen ROM binding.
+    if (regs.PC == acceptance_timing_points[0].pc && acceptance_timing_pre.bank == 0 &&
+        acceptance_timing_read16(game, regs.SP) != acceptance_timing_vblank_return) { acceptance_timing_check(false); return; }
+    if (acceptance_timing.active() && acceptance_timing_chooser && regs.PC == acceptance_timing_chooser &&
+        acceptance_timing_read16(game, regs.SP) != acceptance_timing_far_return) { acceptance_timing_check(false); return; }
+    if (regs.PC == acceptance_timing_hram && acceptance_timing.active()) {
+        const unsigned char bytes[] = {0xe2, 0x05, 0x20, 0xfd, 0xc9};
+        for (unsigned i = 0; i < 5; ++i)
+            if (game->get_cpu()->read(regs.PC + i) != bytes[i]) { acceptance_timing_check(false); return; }
+        if (acceptance_timing_read16(game, regs.SP) != acceptance_timing_dma_return) { acceptance_timing_check(false); return; }
+        acceptance_timing_dma_sp = regs.SP;
+    }
+    acceptance_timing_check(acceptance_timing.before(acceptance_timing_pre,
+        [game](unsigned sp) { return acceptance_timing_read16(game, sp); }));
+}
+static void acceptance_timing_after(gb* game, const cpu_regs& regs, unsigned opcode, unsigned cycles) {
+    if (!acceptance_timing_running) return;
+    const auto post = acceptance_timing_sample(game, regs);
+    const bool dma_return = acceptance_timing.active() && opcode == 0xc9 &&
+        acceptance_timing_pre.pc == acceptance_timing_hram + 4 &&
+        acceptance_timing_pre.sp == acceptance_timing_dma_sp &&
+        post.sp == uint16_t(acceptance_timing_dma_sp + 2) && post.pc == acceptance_timing_dma_return &&
+        post.bank == acceptance_timing_dma_bank;
+    acceptance_timing_check(acceptance_timing.after(post, opcode, cycles, dma_return));
+    if (acceptance_timing_running && acceptance_timing.completed() == 16) {
+        // Close the16th instruction pair before stopping. No17th dispatch.
+        acceptance_timing_check(acceptance_timing.finish());
+        acceptance_timing_running = false; acceptance_timing_done = !acceptance_timing_fault;
+    }
+}
+extern "C" uint64_t acceptance_profile_timing_status(unsigned field) {
+    const uint64_t values[] = {acceptance_timing_configured, acceptance_timing_running, acceptance_timing_done,
+        acceptance_timing_fault, uint64_t(acceptance_timing.failure()), acceptance_timing.completed(),
+        acceptance_timing.size(), acceptance_timing.instruction_t(), acceptance_timing.core_t(),
+        acceptance_timing.intervals(), acceptance_timing.retained(), acceptance_timing.repeated(), acceptance_timing_map_guard};
+    return field < sizeof(values) / sizeof(values[0]) ? values[field] : 0;
+}
+extern "C" uint64_t acceptance_profile_timing_event(unsigned index, unsigned field) {
+    native_vblank_timing::Event first_failure;
+    first_failure.sample = acceptance_timing_first_failure;
+    const auto* e = index == ~0u ? &first_failure : acceptance_timing.event(index); if (!e) return 0;
+    const auto& s = e->sample;
+    const uint64_t values[] = {uint64_t(e->kind), e->id, e->instruction_t, e->core_t, e->irq, e->scope,
+        s.pc, s.sp, s.bank, s.core_clock, s.ly, s.lcdc, s.mode, s.speed, e->value};
+    if (field >= 15 && field < 23) return s.pending[field - 15];
+    return field < 15 ? values[field] : 0;
+}
+
 static unsigned acceptance_effect_bank(gb* game, unsigned pc) {
     return pc < 0x4000 ? 0 : 1 + (game->get_mbc()->get_rom() - game->get_rom()->get_rom()) / 0x4000;
 }
@@ -326,6 +456,8 @@ static unsigned acceptance_oam_dma_wbk = 0, acceptance_oam_dma_bank = 0;
 static unsigned char acceptance_oam_dma_source[160] = {};
 // Called by the isolated core at io_write, before the real synchronous GDMA.
 static void acceptance_profile_effect_io_write(gb* game, unsigned address, unsigned value) {
+    if (address == 0xff46 && acceptance_timing_running)
+        acceptance_timing_check(acceptance_timing.dma_start(acceptance_timing_sample(game, *game->get_cpu()->get_regs()), value));
     if (address == 0xff46 && acceptance_video_enabled && !acceptance_observation_invalid) {
         acceptance_oam_dma_page = value;
         acceptance_oam_dma_wbk = game->get_cpu()->read(0xff70);
@@ -581,6 +713,8 @@ static void acceptance_video_hardware(gb* game, unsigned char* data) {
     std::memcpy(data + acceptance_video_size - 160, acceptance_oam_dma_source, 160);
 }
 extern "C" void acceptance_profile_render_line(gb* game, unsigned line, int window_line = 1) {
+    if (line == 0 && acceptance_timing_running)
+        acceptance_timing_check(acceptance_timing.output_row0(acceptance_timing_sample(game, *game->get_cpu()->get_regs())));
     if (!acceptance_video_enabled || acceptance_observation_invalid || line >= 144) return;
     if (acceptance_ordinary_state == 1 && window_line < 0) { acceptance_ordinary_fail(19, line, window_line); return; }
     // The real renderer getter observes final cartridge/configuration state,
@@ -640,6 +774,7 @@ extern "C" void acceptance_profile_render_line(gb* game, unsigned line, int wind
 
 // Runs after the opcode completes, before the next irq_process can change PC/SP.
 static void acceptance_profile_after(gb* game, const cpu_regs& regs, unsigned opcode, unsigned cycles) {
+    acceptance_timing_after(game, regs, opcode, cycles);
     if (acceptance_observation_invalid) return;
     const bool returned = opcode == 0xc9 || opcode == 0xd9 ||
         ((opcode & 0xe7) == 0xc0 && cycles == 20);
@@ -709,6 +844,7 @@ static bool acceptance_native_scene_is_ready(gb* game) {
 }
 
 static void acceptance_profile_before(gb* game, const cpu_regs& regs) {
+    acceptance_timing_before(game, regs);
     if (acceptance_observation_invalid) return;
     acceptance_game_context = game;
     acceptance_instruction_sp = regs.SP;
@@ -800,6 +936,17 @@ static void acceptance_profile_before(gb* game, const cpu_regs& regs) {
 }
 
 extern "C" void acceptance_profile_effect_reset() {
+    acceptance_timing = native_vblank_timing::Observer{};
+    // Load/reset starts a fresh experiment. Runner-declared ROM bindings and
+    // fields precede core load and remain immutable across that boundary.
+    acceptance_timing_running = acceptance_timing_done = false;
+    acceptance_timing_fault = acceptance_timing_dma_sp = acceptance_timing_map_guard = 0;
+    acceptance_timing_pre = acceptance_timing_first_failure = native_vblank_timing::Sample{};
+    if (acceptance_timing_configured) {
+        acceptance_timing_check(acceptance_timing.configure(acceptance_timing_points, acceptance_timing_point_count));
+        for (unsigned i = 0; i < acceptance_timing_point_count; ++i)
+            if (acceptance_timing_points[i].job) acceptance_timing_check(acceptance_timing.job_return_bank(i + 1, 0));
+    }
     acceptance_static_intent.reset();
     acceptance_native_reference.reset();
     acceptance_static_world_active = acceptance_static_world_ready = false;
@@ -837,6 +984,7 @@ extern "C" void acceptance_profile_effect_reset() {
 
 // Host observation is not serialized. Restored CPU state cannot prove missed entries.
 extern "C" void acceptance_profile_restore_boundary() {
+    if (acceptance_timing_configured) { acceptance_timing.restored(); acceptance_timing_check(false); }
     if (acceptance_native_reference.configured) {
         acceptance_native_reference.fail(15);
         acceptance_native_reference.enabled = false;

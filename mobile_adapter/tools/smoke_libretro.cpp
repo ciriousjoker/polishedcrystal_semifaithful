@@ -965,7 +965,7 @@ int main(int argc, char** argv) {
             fail("Effect/native-scene observation does not support snapshot restore");
     for (int i = 5; i < argc; i += 2) {
         std::string key = argv[i];
-        if (key != "--disabled-native-reference" && key != "--static-intent-sources" && key != "--ordinary-gate" && key != "--ordinary-stream" && key != "--ordinary-count" && key != "--ordinary-start" && key != "--frames" && key != "--input" && key != "--symbols" &&
+        if (key != "--native-vblank-timing" && key != "--disabled-native-reference" && key != "--static-intent-sources" && key != "--ordinary-gate" && key != "--ordinary-stream" && key != "--ordinary-count" && key != "--ordinary-start" && key != "--frames" && key != "--input" && key != "--symbols" &&
             key != "--rtc-in" && key != "--rtc-out" && key != "--ram-out" && key != "--state-out" && key != "--save-in" && key != "--save-out" &&
             key != "--adapter" && key != "--pace-from" && key != "--trace-out" &&
             key != "--checkpoint-dir" && key != "--profile-out" && key != "--profile-window-start" &&
@@ -973,6 +973,23 @@ int main(int argc, char** argv) {
             key != "--finish-barrier" && key != "--pace-multiplier" && key != "--expected-peers" && key != "--expected-online" &&
             key != "--native-headbutt-control" && key != "--effect-video" && key != "--native-object-count" && key != "--effect-span" && key != "--effect-watch" && key != "--native-scene-field" && key != "--acceptance-menu-routine" && key != "--measurement-gate" && key != "--measurement-warmup" && key != "--functional-horizon" && key != "--acceptance") fail("Unknown option: " + key);
         arguments[key] = argv[i + 1];
+    }
+    const bool timing_requested = arguments.count("--native-vblank-timing");
+    if (timing_requested) {
+        for (const char* required : {"--frames", "--symbols", "--state-out", "--profile-out", "--adapter", "--acceptance", "--profile-window-start"})
+            if (!arguments.count(required)) fail(std::string("Native timing requires ") + required);
+        if (arguments.at("--profile-window-start") != "0") fail("Native timing requires an explicit world observation window starting at zero");
+        if (arguments.at("--acceptance") != "1" || effect_options["--native-scene-field"].size() != 8 ||
+            !effect_options["--effect-span"].empty() || !effect_options["--effect-watch"].empty())
+            fail("Native timing requires eight declared ordinary native scene fields without effect actions");
+        for (const char* unsupported : {"--snapshot-in", "--snapshot-out", "--test-snapshot-out", "--test-snapshot-roundtrip",
+                "--ordinary-stream", "--static-intent-sources", "--native-headbutt-control", "--effect-video", "--finish-barrier"})
+            if (arguments.count(unsupported)) fail(std::string("Native timing excludes ") + unsupported);
+        if (arguments.at("--adapter") == "1" && (!arguments.count("--measurement-gate") ||
+            arguments.count("--expected-online") || arguments.count("--expected-peers")))
+            fail("Enabled timing requires the genuine four-client ready gate");
+        if (arguments.at("--adapter") == "0" && arguments.count("--measurement-gate"))
+            fail("Disabled timing arms from its declared completed native world boundary without a lobby gate");
     }
     const bool disabled_reference = arguments.count("--disabled-native-reference");
     if (disabled_reference && (arguments.at("--disabled-native-reference") != "1" ||
@@ -1097,6 +1114,12 @@ int main(int argc, char** argv) {
     bool static_started = false;
     uint64_t previous_profile_cycles[5] = {};
     void (*profile_frame)() = nullptr;
+    using TimingValue = uint64_t(*)(unsigned);
+    using TimingEvent = uint64_t(*)(unsigned,unsigned);
+    TimingValue timing_status = nullptr; TimingEvent timing_event = nullptr;
+    std::vector<std::pair<std::string, std::pair<unsigned,unsigned>>> timing_bindings;
+    unsigned timing_arm_frame = 0, timing_done_frame = 0;
+    bool timing_armed = false;
     if (arguments.count("--profile-out")) {
         metric = symbol<Metric>(core, "mobile_profile_metric");
         profile_frame = symbol<void(*)()>(core, "mobile_profile_frame");
@@ -1133,6 +1156,94 @@ int main(int argc, char** argv) {
                 std::stoul(location.substr(0, colon), nullptr, 16),
                 std::stoul(location.substr(colon + 1), nullptr, 16));
             configured = true;
+        }
+        if (timing_requested) {
+            timing_status = symbol<TimingValue>(core, "acceptance_profile_timing_status");
+            timing_event = symbol<TimingEvent>(core, "acceptance_profile_timing_event");
+            auto binding = [&](const std::string& name) {
+                if (!native_addresses.count(name)) fail("Missing timing symbol: " + name);
+                const auto p = native_addresses.at(name); timing_bindings.push_back({name,p}); return p;
+            };
+            std::ifstream source_rom(argv[2], std::ios::binary);
+            std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(source_rom)), {});
+            auto offset = [&](std::pair<unsigned,unsigned> p) -> size_t {
+                const size_t n = p.first * 0x4000 + (p.second & 0x3fff);
+                if (n >= bytes.size()) fail("Timing symbol outside ROM"); return n;
+            };
+            const auto vblank = binding("VBlank0"), game_time = binding("VBlank.doGameTime");
+            if (vblank.first || game_time.first) fail("Native VBlank callers must be ROM0");
+            const auto hram = binding("hPushOAM"), dma_source = binding("OAMDMACode");
+            const unsigned char expected[] = {0xe2,0x05,0x20,0xfd,0xc9};
+            const size_t source = offset(dma_source);
+            if (source + 5 > bytes.size() || !std::equal(expected, expected + 5, bytes.begin() + source))
+                fail("Original HRAM DMA code changed");
+            auto point = symbol<unsigned(*)(unsigned,unsigned,unsigned)>(core, "acceptance_profile_timing_point");
+            const char* jobs[] = {"VBlank0", "UpdateBGMapBuffer", "UpdateCGBPals", "DMATransfer", "AnimateTileset",
+                "PlaceFootprints", "UpdateBGMap", "Serve2bppRequest", "Serve1bppRequest", "PushOAM"};
+            for (const auto* name : jobs) { const auto p = binding(name);
+                if (p.first || !point(p.first,p.second,1)) fail("Invalid ROM0 timing job"); }
+            for (const char* name : {"VBlankUpdateSound", "_UpdateSound", "VBlank.doGameTime", "_Serve2bppRequest", "_Serve1bppRequest", "UpdateBGMap.DoTiles", "UpdateBGMap.DoAttributes", "UpdateBGMap.DoBGMap1Tiles", "UpdateBGMap.DoBGMap1Attributes", "UpdateBGMap.DoCustomSourceTiles"}) {
+                const auto p = binding(name); if (!point(p.first,p.second,0)) fail("Invalid timing work/sound point");
+            }
+            // HRAM is a mark, never a second job sharing PushOAM's return frame.
+            // The wrapper authenticates the copied HRAM entry and RET separately.
+            if (!point(0,hram.second,0)) fail("Invalid HRAM timing point");
+            const auto hl_tail = binding("_hl_");
+            const size_t return_offset = offset(game_time);
+            if (return_offset < 3 || bytes[return_offset-3] != 0xcd ||
+                unsigned(bytes[return_offset-2] | bytes[return_offset-1] << 8) != hl_tail.second)
+                fail("Changed native VBlank0 tailcall caller");
+            const char* pending[] = {"hBGMapUpdate", "hBGMapTileCount", "hCGBPalUpdate", "hDMATransfer",
+                "hBGMapMode", "hRequested2bpp", "hRequested1bpp", "hOAMUpdate"};
+            for (unsigned i = 0; i < 8; ++i) {
+                const auto p = binding(pending[i]);
+                if (!symbol<unsigned(*)(unsigned,unsigned)>(core,"acceptance_profile_timing_field")(i,p.second))
+                    fail("Invalid timing pending field");
+            }
+            unsigned dma_return = 0, dma_bank = 0, chooser = 0, far_return = 0;
+            auto unique_call_return = [&](std::pair<unsigned,unsigned> begin, unsigned length, unsigned target) {
+                unsigned found = 0, result = 0; const size_t first = offset(begin);
+                if (first + length > bytes.size()) fail("Timing caller range outside ROM");
+                for (unsigned i = 0; i + 2 < length; ++i)
+                    if (bytes[first+i] == 0xcd && unsigned(bytes[first+i+1] | bytes[first+i+2] << 8) == target) {
+                        ++found; result = begin.second + i + 3;
+                    }
+                if (found != 1) fail("Missing or ambiguous timing CALL provenance"); return result;
+            };
+            const auto native_end = binding("VBlank2");
+            if (native_end.first || native_end.second <= vblank.second) fail("Invalid native VBlank0 caller range");
+            // Each configured native job is reached by the original ROM0 CALL.
+            // UpdateBGMap is the sole conditional CALL in this scope.
+            for (unsigned i = 1; i < sizeof(jobs) / sizeof(jobs[0]); ++i) {
+                const auto target = native_addresses.at(jobs[i]);
+                const size_t first = offset(vblank); unsigned matches = 0;
+                for (unsigned n = 0; n + 2 < native_end.second - vblank.second; ++n) {
+                    const unsigned call = i == 6 ? 0xdc : 0xcd;
+                    if (bytes[first+n] == call && unsigned(bytes[first+n+1] | bytes[first+n+2] << 8) == target.second) ++matches;
+                }
+                if (matches != 1) fail(std::string("Changed native VBlank0 CALL provenance: ") + jobs[i]);
+            }
+            if (adapter_enabled) {
+                const auto caller = binding("MobileVirtualPushOAM"); dma_bank = caller.first;
+                dma_return = unique_call_return(caller, 256, hram.second);
+                chooser = binding("MobileVirtualChooseOutput").second;
+                const auto chooser_point = native_addresses.at("MobileVirtualChooseOutput");
+                if (!point(chooser_point.first,chooser,1)) fail("Invalid chooser timing point");
+                far_return = binding("_ReturnFarCall").second;
+                const auto far_call = binding("_DoFarCall.call_hl");
+                const auto hl = binding("_hl_");
+                if (far_call.first || unique_call_return(far_call,3,hl.second) != far_return)
+                    fail("Changed original ROM0 farcall return trampoline");
+            } else {
+                const auto end = binding("VBlank2");
+                if (end.first || end.second <= vblank.second) fail("Invalid VBlank0 caller range");
+                dma_return = unique_call_return(vblank,end.second-vblank.second,native_addresses.at("PushOAM").second);
+            }
+            const auto mode = binding("hVBlank"), anims = binding("hMapAnims"), footprint = binding("wFootprintQueue");
+            if (footprint.second < 0xc000 || footprint.second >= 0xd000) fail("Unsupported footprint queue bank");
+            const auto config = symbol<unsigned(*)(unsigned,unsigned,unsigned,unsigned,unsigned,unsigned,unsigned,unsigned,unsigned)>(core,"acceptance_profile_timing_config");
+            if (!config(mode.second,anims.second,footprint.second,hram.second,dma_bank,dma_return,game_time.second,chooser,far_return))
+                fail("Native timing configuration failed");
         }
         if (effect_enabled) {
             // Each repeated option is ID:SYMBOL[:LENGTH] or INDEX:SYMBOL:EXPECTED:MASK.
@@ -1767,6 +1878,17 @@ int main(int argc, char** argv) {
                 measurement_released = true;
             }
         }
+        if (timing_requested && timing_armed && timing_status(2) && !timing_done_frame) timing_done_frame = input_frame;
+        if (timing_requested && !timing_armed) {
+            const bool scene = symbol<unsigned(*)()>(core, "acceptance_profile_native_scene_ready")() &&
+                metric && metric(21) > 0 && values.at("wMapStatus") == 2 && values.at("wScriptRunning") == 0;
+            const bool ready = scene && (!adapter_enabled || (measurement_released && measurement_ready &&
+                values.at("wMobileOnline") == 1 && values.at("wMobilePeerCount") == 3));
+            if (ready) {
+                if (!symbol<unsigned(*)()>(core, "acceptance_profile_timing_arm")()) fail("Native timing arm failed");
+                timing_arm_frame = input_frame; timing_armed = true;
+            }
+        }
         values["vAcceptanceFaultArmed"] = measurement_gate && std::ifstream(arguments.at("--measurement-gate") + ".fault").good();
         values["vAcceptanceMeasuring"] = measurement_released && input_frame >= measurement_start;
         if (profile_frame && native_graphics_wait)
@@ -1913,6 +2035,39 @@ int main(int argc, char** argv) {
     }
     if (measurement_gate && !measurement_released) fail("Actual four-client lobby did not become ready");
     write_image(argv[3]);
+    if (timing_requested) {
+        std::ofstream timing(arguments.at("--native-vblank-timing"));
+        timing << "{\"schema\":\"native-vblank-timing-v1\",\"scope\":\""
+               << (adapter_enabled ? "warm-established-all-four-ready" : "disabled-completed-native-world")
+               << "\",\"arm_frame\":" << timing_arm_frame
+               << ",\"done_host_frame\":" << timing_done_frame
+               << ",\"target_completed_irqs\":16,\"event_cap\":4096,\"non_rom_bank\":0,"
+                  "\"clock_limit\":\"unsigned32-wrap-gap-below-2^31\","
+                  "\"core_limits\":\"batched-LY; synchronous-OAM; missing-hardware-20T-IRQ; core-T-includes-GDMA-and-HALT\","
+                  "\"footprints\":\"empty-queue-required\",\"pending_names\":["
+                  "\"hBGMapUpdate\",\"hBGMapTileCount\",\"hCGBPalUpdate\",\"hDMATransfer\",\"hBGMapMode\","
+                  "\"hRequested2bpp\",\"hRequested1bpp\",\"hOAMUpdate\"],\"bindings\":{";
+        bool first = true;
+        for (const auto& b : timing_bindings) {
+            if (!first) timing << ','; first = false;
+            timing << '"' << b.first << "\":[" << b.second.first << ',' << b.second.second << ']';
+        }
+        timing << "},\"status_fields\":[\"configured\",\"running\",\"done\",\"fault\",\"observer_failure\",\"completed_irqs\",\"event_count\",\"instruction_t\",\"core_t\",\"row0_intervals\",\"retained\",\"repeated\",\"hMapAnims_guard\"],\"first_failure_sample\":[";
+        for (unsigned f = 6; f < 23; ++f) timing << (f == 6 ? "" : ",") << timing_event(~0u,f);
+        timing << "],\"status\":[";
+        for (unsigned i = 0; i < 13; ++i) timing << (i ? "," : "") << timing_status(i);
+        timing << "],\"event_fields\":[\"kind\",\"id\",\"instruction_t\",\"core_t\",\"irq\",\"scope\","
+                  "\"pc\",\"sp\",\"bank\",\"core_clock\",\"ly\",\"lcdc\",\"mode\",\"speed\",\"value\","
+                  "\"pending0\",\"pending1\",\"pending2\",\"pending3\",\"pending4\",\"pending5\",\"pending6\",\"pending7\"],\"events\":[";
+        for (unsigned i = 0; i < timing_status(6); ++i) {
+            timing << (i ? ",[" : "[");
+            for (unsigned f = 0; f < 23; ++f) timing << (f ? "," : "") << timing_event(i,f);
+            timing << ']';
+        }
+        timing << "]}"; timing.close();
+        if (!timing || !timing_armed || !timing_status(2) || timing_status(3) || timing_status(4) || timing_status(5) != 16)
+            fail("Incomplete or invalid bounded native timing evidence");
+    }
     if (metric) {
         const char* names[] = {"serial_count", "serial_max_cycles", "serial_total_cycles", "serial_failures",
             "serial_lowest_sp", "tick_count", "tick_max_cycles", "tick_total_cycles", "tick_failures",

@@ -176,7 +176,7 @@ def observer_fingerprint():
     paths = [ROOT / "mobile_adapter/tools/smoke_libretro.cpp", ROOT / "mobile_adapter/tools/profile_core.h",
              ROOT / "mobile_adapter/tools/conditional_input.hpp",
              TESTS / "support/profile_native.hpp", TESTS / "support/static_ordinary_intent.hpp",
-             TESTS / "support/native_reference.hpp",
+             TESTS / "support/native_reference.hpp", TESTS / "support/native_vblank_timing.hpp",
              TESTS / "support/observer.hpp", Path(__file__)]
     return hashlib.sha256("".join(sha(path) for path in paths).encode()).hexdigest()
 
@@ -216,6 +216,24 @@ def extend_profile(profile_source):
                  "mobile_profile_after_instruction(ref_gb, regs, total_clock, observed_opcode, tmp_clocks);"):
         if cpu_text.count(hook) != 1:
             raise RuntimeError("Expected unique CPU instruction hook: " + hook)
+    # Authenticate placement inside the genuine taken IRQ branch. The original
+    # CPU hash is checked by prepare_profile_core before this clone extension.
+    if cpu_text.count("void cpu::irq_process()\n{") != 1:
+        raise RuntimeError("Expected unique genuine irq_process function")
+    start = cpu_text.index("void cpu::irq_process()\n{")
+    end = cpu_text.index("\nvoid cpu::exec(", start)
+    body = cpu_text[start:end]
+    if body.count("if ((ref_gb->get_regs()->IF&ref_gb->get_regs()->IE)&&(regs.I||halt))") != 1:
+        raise RuntimeError("Unsupported taken IRQ branch")
+    pre_anchor = "\t\tif (halt)\n\t\t\tregs.PC++;\n"
+    post_anchor = "\t\thalt=false;\n\t\tregs.I=0;"
+    pre_hook = "        const auto acceptance_irq_pre = acceptance_timing_running ? acceptance_timing_sample(ref_gb, regs) : native_vblank_timing::Sample{};\n"
+    post_hook = "\n        acceptance_timing_irq(ref_gb, acceptance_irq_pre, regs, read(regs.SP) | read(word(regs.SP + 1)) << 8);"
+    body = inject_unique(body, pre_anchor, pre_anchor + pre_hook)
+    body = inject_unique(body, post_anchor, post_anchor + post_hook)
+    cpu_text = cpu_text[:start] + body + cpu_text[end:]
+    if cpu_text.count(pre_hook.strip()) != 1 or cpu_text.count(post_hook.strip()) != 1:
+        raise RuntimeError("Duplicate or misplaced native timing IRQ hooks")
     cpu_text = inject_unique(cpu_text, "void cpu::io_write(word adr,byte dat)\n{",
         "void cpu::io_write(word adr,byte dat)\n{\n    acceptance_profile_effect_io_write(ref_gb, adr, dat);")
     libretro = profile_source / "libretro/libretro.cpp"
@@ -333,6 +351,7 @@ def extend_profile(profile_source):
     shutil.copyfile(TESTS / "support/profile_native.hpp", profile_source / "gb_core/acceptance_profile.hpp")
     shutil.copyfile(TESTS / "support/static_ordinary_intent.hpp", profile_source / "gb_core/static_ordinary_intent.hpp")
     shutil.copyfile(TESTS / "support/native_reference.hpp", profile_source / "gb_core/native_reference.hpp")
+    shutil.copyfile(TESTS / "support/native_vblank_timing.hpp", profile_source / "gb_core/native_vblank_timing.hpp")
 
 
 def refresh_observers(meta, prepared):
