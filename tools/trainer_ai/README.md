@@ -82,3 +82,59 @@ state or consuming RNG. Per slot it evaluates normal/critical base damage once
 each, then aggregates 32 spread outcomes with denominator 384. This is a
 provisional condensed-observation experiment; GBC extraction cost and the
 final observation schema are unmeasured and are not part of neural timing.
+
+## Source-driven native arithmetic lifting
+
+`lifting.py` generates native C from the actual DamagePass1..4 and Multiply/Divide
+assembly instructions, using assembled UNION symbols for shared math memory.
+`lifting_check.py` compares native execution with separately assembled byte
+execution and independent arithmetic formulas, tests a copied-source update, and
+rejects unsupported instruction/operand mutations. The fixture abstracts farcall
+bank effects and native return addresses; it is not full-ROM parity.
+
+```sh
+python3 -B tools/trainer_ai/lifting_check.py --build-dir /tmp/polished-ai-lifting
+```
+
+See `lifting.md` for exact scope, benchmark commands, remaining architecture
+risks and why a source-derived arithmetic slice is not yet a full battle engine.
+These are host tools and add no bytes to the game ROM.
+
+## Evaluation ratings
+
+`ratings.py` fits scenario-balanced batch Bradley-Terry ratings on an Elo scale,
+with a frozen reference at 1000, fixed policy hashes, rules/suite/protocol
+provenance and pairwise coverage. Disconnected pools are labeled incomparable;
+reported score uncertainty is not an Elo posterior. `ratings_check.py` uses only
+synthetic fixtures. A faithful evaluator and trained policies still need to
+produce real whole-fight outcomes. See `ratings.md` for JSON schema and protocol.
+
+```sh
+python3 -B tools/trainer_ai/ratings_check.py
+python3 -B tools/trainer_ai/ratings.py /path/to/evaluation.json --output /tmp/ratings.json
+```
+
+## Bounded storage and CPU scheduling
+
+`training_store.py` writes bounded framed shards under a cooperating-writer
+application quota. The selected data root is
+`/Volumes/Shared/polished_ai/training_data`; the default ceiling is
+100000000000 bytes including conservatively charged metadata and crash residue.
+No full-size allocation or replay corpus is created by initialization. Filesystem
+allocation assumptions, interrupted writes and recovery limits are in `training.md`.
+
+`training_runtime_native.c` exposes explicit seed ranges for the restricted
+synthetic simulator. `training_runtime.py` launches bounded single-thread native
+children with two workers/two in-flight batches by default. CPU library thread
+limits are set before imports and inherited. Future backend metadata includes
+CPU/CUDA/MPS; no learner or GPU kernel is implemented or started. Current tests
+must stay within the user's coordinated two-to-three CPU-task limit.
+
+```sh
+cc -std=c11 -O2 -Wall -Wextra -Werror tools/trainer_ai/training_runtime_native.c -o /tmp/polished-ai-runtime
+python3 -B tools/trainer_ai/training_runtime.py --simulator /tmp/polished-ai-runtime --workers 2 --max-inflight 2 --batches 4 --fights-per-batch 250
+python3 -B tools/trainer_ai/training_check.py --artifact-dir /tmp/polished-ai-storage-check
+```
+
+Rating/storage/resource tooling does not remove the simulator's current fidelity
+boundary. Do not train or announce game strength using unsupported mechanics.
