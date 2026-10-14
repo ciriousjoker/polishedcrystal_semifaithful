@@ -388,6 +388,20 @@ int main(int argc,char**argv) {
             subprocess.run([str(exe), str(sidecar)], check=True)
             self.assertEqual(len(sidecar.read_text().splitlines()), 8)
 
+    def test_original_unused_oam_tail_is_height8_hidden(self):
+        # Original producer hides the unused prefix after allocating figures
+        # at the end of OAM. This is source evidence, not native acceptance.
+        root = SUPPORT.parents[2]
+        producer = (root / "engine/overworld/map_objects.asm").read_text()
+        update = producer.split("_UpdateSprites::", 1)[1].split("ApplyBGMapAnchorToObjects:", 1)[0]
+        self.assertIn("call InitSprites\n\tcall .hide_unused_sprites", update)
+        self.assertIn("ld c, OAM_YCOORD_HIDDEN\n.loop\n\tld [hl], c", update)
+        self.assertIn("ld de, -OBJ_SIZE", update)
+        constants = (root / "constants/gfx_constants.asm").read_text()
+        self.assertIn("DEF OAM_YCOORD_HIDDEN EQU 160", constants)
+        self.assertFalse(set(range(160 - 16, 160 - 16 + 8)) & set(range(144)))
+        self.assertEqual(set(range(159 - 16, 159 - 16 + 8)) & set(range(144)), {143})
+
     def test_actual_row_reference_counterexamples(self):
         with tempfile.TemporaryDirectory() as directory:
             exe = Path(directory) / "reader-tests"

@@ -93,7 +93,12 @@ fn parts(r: &[u8], h: &[u8], y: usize) {
         }
     }
     for q in 0..40 {
-        if !owned[q] { assert_eq!(h[q*4], 0, "unknown disabled native OAM constituent"); }
+        if !owned[q] {
+            // ClearSprites uses Y0; _UpdateSprites.hide_unused_sprites writes
+            // OAM_YCOORD_HIDDEN (160). At height8 both occupy no LCD row.
+            // Do not filter by X: hidden-X objects can consume first-ten slots.
+            assert!(matches!(h[q*4], 0 | 160), "unknown disabled native OAM constituent");
+        }
     }
 }
 fn consume(input: &mut impl Read, expected: u32) {
@@ -249,6 +254,29 @@ mod reference_tests {
         let mut order=h.clone(); let left=order[39*4..40*4].to_vec(); let right=order[38*4..39*4].to_vec();
         order[39*4..40*4].copy_from_slice(&right); order[38*4..39*4].copy_from_slice(&left);
         assert!(std::panic::catch_unwind(||parts(&r,&order,16)).is_err());
+    }
+    #[test]
+    fn original_unused_tail_and_occupied_row_counterexamples() {
+        let (r,mut h)=fixture();
+        for q in 0..24 { h[q*4]=160; }
+        for y in 0..144 { parts(&r,&h,y); }
+        // Exhaust all Y bytes and both invisible-X boundaries. Only the two
+        // original inactive sentinels are admitted, even for other hidden Y.
+        for x in [0, 168, 255] { for y in 0..=255u8 {
+            if matches!(y, 0 | 160) { continue; }
+            let mut changed=h.clone(); changed[0]=y; changed[1]=x;
+            assert!(std::panic::catch_unwind(||parts(&r,&changed,143)).is_err());
+        }}
+        // Ten X0 blockers on an actor's row must still lose that constituent
+        // in the actual first-ten list before any unknown-slot filtering.
+        let mut blocked=h.clone();
+        for q in 0..10 { blocked[q*4]=32; }
+        let failure=std::panic::catch_unwind(||parts(&r,&blocked,16)).unwrap_err();
+        let message=failure.downcast_ref::<&str>().copied()
+            .or_else(||failure.downcast_ref::<String>().map(String::as_str)).unwrap();
+        assert!(message.contains("native constituent lost in actual first-ten list"));
+        let mut tall=h; tall[16800]|=4;
+        assert!(std::panic::catch_unwind(||parts(&r,&tall,0)).is_err());
     }
     #[test]
     fn rejects_missing_truncated_and_wrong_pair_reference() {
