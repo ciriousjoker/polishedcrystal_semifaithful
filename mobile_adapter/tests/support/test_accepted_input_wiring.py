@@ -45,6 +45,50 @@ for(unsigned n:{0u,7u,9u}){bool rejected=false;try{check(a,n);}catch(const std::
             subprocess.run(['c++','-std=c++17','-Wall','-Wextra','-Werror',str(root/'guard.cpp'),'-o',str(root/'guard')],check=True)
             subprocess.run([str(root/'guard')],check=True)
 
+    def test_actual_supplement_binding_and_export(self):
+        import json
+        runner = (SUPPORT.parents[1] / 'tools/smoke_libretro.cpp').read_text()
+        start = runner.index('                auto operand = symbol<')
+        end = runner.index('                auto point = ', start)
+        export_start = runner.index('                    static_log << "{\\\"source')
+        export_end = runner.index('                    if (!static_log)', export_start)
+        source = r'''#include <map>
+#include <string>
+#include <sstream>
+#include <iostream>
+#include <cassert>
+#include <cstdint>
+#include <stdexcept>
+static unsigned calls=0;
+static unsigned bind(unsigned i,unsigned b,unsigned a){assert(i==calls++&&b==i%3&&a==0xd380+i);return 1;}
+static uint64_t values(uint64_t id,unsigned s,unsigned f){assert(id==7);return s*10+f;}
+template<class T>T symbol(void*,const char* name){return reinterpret_cast<T>(std::string(name)=="acceptance_profile_static_operand" ? reinterpret_cast<void*>(&bind):reinterpret_cast<void*>(&values));}
+static void fail(const std::string& s){throw std::runtime_error(s);}
+int main(){
+ void* core=nullptr;
+ std::map<std::string,std::pair<unsigned,unsigned>> native_addresses;
+ const char* names[]={"wXCoord","wYCoord","wPlayerStepFlags","wPlayerStepVectorX","wPlayerStepVectorY","wPlayerState"};
+ for(unsigned i=0;i<6;++i)native_addresses[names[i]]={i%3,0xd380+i};
+ uint64_t (*static_operands)(uint64_t,unsigned,unsigned)=nullptr;
+ std::string static_operand_provenance;
+''' + runner[start:end] + r'''
+ assert(calls==6);
+ std::ostringstream static_log;const uint64_t static_written=7;
+ auto static_source=&values;
+''' + runner[export_start:export_end] + r'''
+ std::cout<<static_log.str();
+}
+'''
+        with tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR')) as directory:
+            root = Path(directory)
+            (root/'export.cpp').write_text(source)
+            subprocess.run(['c++','-std=c++17','-Wall','-Wextra','-Werror',str(root/'export.cpp'),'-o',str(root/'export')],check=True)
+            row=json.loads(subprocess.check_output([str(root/'export')],text=True))
+        self.assertEqual(row['original_operand_fields'], [[name,i%3,0xd380+i] for i,name in enumerate(
+            ['wXCoord','wYCoord','wPlayerStepFlags','wPlayerStepVectorX','wPlayerStepVectorY','wPlayerState'])])
+        self.assertEqual(row['original_operands'],[[s*10+i for i in range(6)] for s in range(1,4)])
+        self.assertEqual([len(s) for s in row['inputs']],[444,444,444])
+
     def test_generated_lifecycle_and_original_instruction_wrappers(self):
         import runtime
         from test_runtime import ObserverHooks
@@ -133,9 +177,22 @@ static void arm(unsigned walking=255,unsigned duration=0) {
  g.mbc.mapping=g.rom.data; r.PC=0x4600;r.SP=0xc100;stack(g,r.SP,0x4700);
  acceptance_profile_before(&g,r);r.PC=0x4700;r.SP=0xc102;acceptance_profile_after(&g,r,0xc9,16);
  assert(acceptance_profile_static_status(6));assert(acceptance_profile_static_enable());
+ for(unsigned i=0;i<6;++i)g.cpu.ram[(i%2)*0x1000+0x380+i]=10+i;
  r.PC=0x4500;r.SP=0xc100;stack(g,r.SP,0x4520);
- acceptance_profile_before(&g,r);r.PC=0x4520;r.SP=0xc102;acceptance_profile_after(&g,r,0xc9,16);
+ acceptance_profile_before(&g,r);
+ for(unsigned i=0;i<6;++i)g.cpu.ram[(i%2)*0x1000+0x380+i]=30+i;
+ r.PC=0x4520;r.SP=0xc102;acceptance_profile_after(&g,r,0xc9,16);
+ for(unsigned i=0;i<6;++i)g.cpu.ram[(i%2)*0x1000+0x380+i]=50+i;
  tick(0x4540);
+ for(unsigned i=0;i<6;++i)g.cpu.ram[(i%2)*0x1000+0x380+i]=70+i;
+ for(unsigned section=1;section<=3;++section)for(unsigned i=0;i<6;++i)
+  assert(acceptance_profile_static_operands(1,section,i)==10+20*(section-1)+i);
+ const auto before_getters=acceptance_static_intent.failure;
+ assert(acceptance_profile_static_operands(0,1,0)==~uint64_t(0));
+ assert(acceptance_profile_static_operands(1,0,0)==~uint64_t(0));
+ assert(acceptance_profile_static_operands(1,4,0)==~uint64_t(0));
+ assert(acceptance_profile_static_operands(1,1,6)==~uint64_t(0));
+ assert(acceptance_static_intent.failure==before_getters);
  if(walking!=255) {
   assert(!acceptance_profile_input_status(2));
   assert(acceptance_input.failure==accepted_ordinary_input::Failure::static_transition);
@@ -217,7 +274,16 @@ int main() {
  acceptance_profile_static_inputs(1,0xd000,0xd300,0xd301);
  for(unsigned i=0;i<4;++i)acceptance_profile_static_world_field(i,0,0xc310+i);
  acceptance_profile_simulation(1,0x4600,1,0xd000,34,1,0);
- assert(retro_load_game(nullptr));arm();welcome();
+ assert(!acceptance_static_intent.operands_configured);
+ assert(acceptance_profile_static_operands(1,1,0)==~uint64_t(0));
+ for(unsigned i=0;i<6;++i)assert(acceptance_profile_static_operand(i,i%2,0xd380+i));
+ assert(acceptance_static_intent.operands_configured);
+ assert(retro_load_game(nullptr));
+ assert(acceptance_static_intent.operands_configured&&!acceptance_static_intent.enabled&&!acceptance_static_intent.failure);
+ assert(!acceptance_static_intent.next_id&&!acceptance_static_intent.pending.operands_captured);
+ assert(acceptance_profile_static_operands(1,1,0)==~uint64_t(0));
+ for(unsigned i=0;i<6;++i)assert(acceptance_static_intent.operand_fields[i].bank==i%2&&acceptance_static_intent.operand_fields[i].pc==0xd380+i);
+ arm();welcome();
  for(unsigned n=0;n<=3;++n)commit(n);
  assert(acceptance_input.next_definition==4&&acceptance_input.current.count==3);
  tick(0x4580);const auto old=acceptance_input.latched;
@@ -419,6 +485,23 @@ int main() {
  assert(acceptance_input.released==3&&acceptance_input.latest==4&&acceptance_input.latched.input==4);
  for(unsigned i=0;i<20;++i){tick(0x4580);commit(0);}
  assert(!acceptance_profile_input_status(3));
+ // Supplemental declarations cannot be changed during an active observation.
+ assert(!acceptance_profile_static_operand(0,1,0xd390));
+ assert(acceptance_static_intent.failure==10);
+ assert(acceptance_static_intent.operand_fields[0].pc==0xd380);
+ retro_reset();assert(!acceptance_static_intent.failure&&acceptance_static_intent.operands_configured);
+ for(unsigned invalid : {0u,1u,2u,3u}) {
+  const unsigned i=invalid==0 ? 6 : 0,b=invalid==1 ? 8 : 0;
+  const unsigned a=invalid==2 ? 0xbfff : invalid==3 ? 0xe000 : 0xd380;
+  assert(!acceptance_profile_static_operand(i,b,a));assert(acceptance_static_intent.failure==10);
+  retro_reset();assert(!acceptance_static_intent.failure&&!acceptance_static_intent.next_id);
+ }
+ // Partial declarations fail closed; no historical/default declaration requires them.
+ acceptance_static_intent.operand_fields[5]={};acceptance_static_intent.operands_configured=false;
+ assert(!acceptance_profile_static_enable()&&acceptance_static_intent.failure==10);
+ retro_reset();assert(!acceptance_static_intent.failure);
+ assert(acceptance_profile_static_operand(5,1,0xd385));
+ assert(acceptance_static_intent.operands_configured);
  std::puts("PASS actual generated load/reset and real wrapper accepted WELCOME/capture/commit/cancel/source/lifetime negatives");
 }
 '''

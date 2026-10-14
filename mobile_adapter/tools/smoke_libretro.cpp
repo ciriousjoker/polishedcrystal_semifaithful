@@ -1123,6 +1123,8 @@ int main(int argc, char** argv) {
     bool input_ready_written = false;
     Metric static_status = nullptr;
     uint64_t (*static_source)(uint64_t,unsigned,unsigned) = nullptr;
+    uint64_t (*static_operands)(uint64_t,unsigned,unsigned) = nullptr;
+    std::string static_operand_provenance;
     void (*static_release)(uint64_t) = nullptr;
     unsigned (*static_enable)() = nullptr;
     std::ofstream static_log, static_status_log;
@@ -1368,6 +1370,18 @@ int main(int argc, char** argv) {
             static_enable = symbol<unsigned(*)()>(core, "acceptance_profile_static_enable");
             if (static_status(0) != 1) fail("Static source ABI mismatch");
             if (accepted_inputs_requested) {
+                auto operand = symbol<unsigned(*)(unsigned,unsigned,unsigned)>(core, "acceptance_profile_static_operand");
+                static_operands = symbol<uint64_t(*)(uint64_t,unsigned,unsigned)>(core, "acceptance_profile_static_operands");
+                const char* operands[] = {"wXCoord", "wYCoord", "wPlayerStepFlags", "wPlayerStepVectorX", "wPlayerStepVectorY", "wPlayerState"};
+                std::ostringstream provenance;
+                provenance << "[";
+                for (unsigned i = 0; i < 6; ++i) {
+                    if (!native_addresses.count(operands[i])) fail(std::string("Missing original source operand: ") + operands[i]);
+                    const auto p = native_addresses.at(operands[i]);
+                    if (!operand(i, p.first, p.second)) fail("Invalid original source operand binding");
+                    provenance << (i ? "," : "") << "[\"" << operands[i] << "\"," << p.first << ',' << p.second << ']';
+                }
+                provenance << "]"; static_operand_provenance = provenance.str();
                 auto point = symbol<unsigned(*)(unsigned,unsigned,unsigned,unsigned)>(core,"acceptance_profile_input_point");
                 auto field = symbol<unsigned(*)(unsigned,unsigned,unsigned)>(core,"acceptance_profile_input_field");
                 std::ifstream source_rom(argv[2],std::ios::binary);
@@ -1938,7 +1952,17 @@ int main(int argc, char** argv) {
                         for (unsigned b = 0; b < 444; ++b) static_log << (b ? "," : "") << static_source(static_written, section, b);
                         static_log << "]";
                     }
-                    static_log << "]}\n"; static_log.flush();
+                    static_log << "]";
+                    if (static_operands) {
+                        static_log << ",\"original_operand_fields\":" << static_operand_provenance << ",\"original_operands\":[";
+                        for (unsigned section = 1; section <= 3; ++section) {
+                            static_log << (section > 1 ? ",[" : "[");
+                            for (unsigned b = 0; b < 6; ++b) static_log << (b ? "," : "") << static_operands(static_written, section, b);
+                            static_log << "]";
+                        }
+                        static_log << "]";
+                    }
+                    static_log << "}\n"; static_log.flush();
                     if (!static_log) fail("Static source evidence write failed");
                 }
             }

@@ -425,9 +425,34 @@ extern "C" void acceptance_profile_static_inputs(unsigned bank, unsigned objects
     acceptance_static_intent.object_bank = bank; acceptance_static_intent.objects = objects;
     acceptance_static_intent.camera_x = x; acceptance_static_intent.camera_y = y;
 }
+// Supplemental diagnostic declarations are accepted only before observation.
+// A partially configured set cannot silently turn into a zero-valued snapshot.
+extern "C" unsigned acceptance_profile_static_operand(unsigned index, unsigned bank, unsigned address) {
+    auto& observer = acceptance_static_intent;
+    if (observer.enabled || observer.started || index >= static_ordinary_intent::operand_bytes ||
+            bank > 7 || address < 0xc000 || address >= 0xe000) {
+        observer.fail(10); return 0;
+    }
+    observer.operand_fields[index] = {bank, address};
+    observer.operands_configured = true;
+    for (const auto& field : observer.operand_fields) observer.operands_configured &= field.pc != 0;
+    return 1;
+}
+// Separate bounded getter preserves the historical source API and 444-byte payload.
+extern "C" uint64_t acceptance_profile_static_operands(uint64_t id, unsigned section, unsigned field) {
+    const auto& observer = acceptance_static_intent;
+    if (!id || id <= observer.released || id > observer.next_id ||
+            observer.next_id - id >= static_ordinary_intent::source_capacity ||
+            field >= static_ordinary_intent::operand_bytes || section < 1 || section > 3) return ~uint64_t(0);
+    const auto& source = observer.sources[(id - 1) % static_ordinary_intent::source_capacity];
+    if (source.id != id || !source.operands_captured) return ~uint64_t(0);
+    return section == 1 ? source.operands_entry[field] : section == 2 ? source.operands_return[field] : source.operands_close[field];
+}
 extern "C" unsigned acceptance_profile_static_enable() {
     for (const auto& point : acceptance_static_intent.points)
         if (!point.pc) acceptance_static_intent.fail(10);
+    for (const auto& field : acceptance_static_intent.operand_fields)
+        if (field.pc && !acceptance_static_intent.operands_configured) acceptance_static_intent.fail(10);
     if (!acceptance_static_intent.objects || !acceptance_static_world_configured) acceptance_static_intent.fail(10);
     if (!acceptance_static_world_ready || acceptance_observation_invalid) return 0;
     acceptance_static_intent.enabled = !acceptance_static_intent.failure;

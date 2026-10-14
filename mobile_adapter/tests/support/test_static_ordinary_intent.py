@@ -15,6 +15,51 @@ class StaticOrdinaryIntentTests(unittest.TestCase):
                             str(SUPPORT / "test_effect_observer.cpp"), "-o", str(exe)], check=True)
             subprocess.run([str(exe)], check=True)
 
+    def test_supplement_bank_binding_and_default_off(self):
+        source = r'''#include "static_ordinary_intent.hpp"
+#include <cassert>
+int main() {
+ using namespace static_ordinary_intent;
+ static_assert(input_bytes==444);
+ Observer o;o.enabled=true;o.objects=0xd000;o.object_bank=1;
+ o.camera_x=0xd200;o.camera_y=0xd201;
+ o.points={{{1,0x4000},{1,0x4100},{1,0x4200},{2,0x4300}}};
+ unsigned value=10,reads=0;
+ auto read=[&](unsigned bank,unsigned at)->unsigned {
+  if(at==0xc000)return 0x10;
+  if(at==0xc001)return 0x40;
+  if(at>=0xc380&&at<0xc386){++reads;assert(bank==(at-0xc380)%3);return value+at-0xc380;}
+  return 0;
+ };
+ auto enter=[&]{o.before(1,0x4000,0xc000,0,read);};
+ auto ret=[&]{o.before(1,0x4011,0xc000,0,read);o.after(1,0x4010,0xc002,true,read);};
+ auto close=[&]{o.before(1,0x4200,0xc000,0,read);};
+ enter();ret();close();assert(!reads&&!o.get(1)->operands_captured);
+ for(unsigned i=0;i<6;++i)o.operand_fields[i]={i%3,0xc380+i};
+ o.operands_configured=true;o.reset();assert(!o.enabled&&!o.failure&&o.operands_configured);
+ o.enabled=true;
+ enter();value=30;
+ o.after(2,0x4010,0xc002,true,read);assert(o.active&&reads==6);
+ ret();value=50;close();value=70;
+ const auto first=*o.get(1);
+ for(unsigned i=0;i<6;++i){assert(first.operands_entry[i]==10+i);assert(first.operands_return[i]==30+i);assert(first.operands_close[i]==50+i);}
+ for(unsigned n=0;n<7;++n){enter();ret();close();}
+ assert(!o.failure&&o.next_id==8);enter();ret();close();assert(o.failure==6);
+ assert(o.sources[0].operands_entry==first.operands_entry&&o.sources[0].operands_close==first.operands_close);
+ o.reset();assert(!o.failure&&!o.next_id&&o.operands_configured&&!o.pending.operands_captured);
+ o.enabled=true;enter();ret();close();o.release(1);
+ for(unsigned n=0;n<8;++n){enter();ret();close();}
+ assert(!o.failure&&o.next_id==9&&o.sources[0].id==9);
+ assert(!o.get(1)&&o.failure==8);
+}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            cpp = Path(directory) / "operands.cpp"
+            exe = Path(directory) / "operands"
+            cpp.write_text(source)
+            subprocess.run(["c++", "-std=c++17", "-Wall", "-Wextra", "-Werror", "-I", str(SUPPORT), str(cpp), "-o", str(exe)], check=True)
+            subprocess.run([str(exe)], check=True)
+
     def test_source_return_closure_and_bounded_retention(self):
         source = r'''
 #include "static_ordinary_intent.hpp"

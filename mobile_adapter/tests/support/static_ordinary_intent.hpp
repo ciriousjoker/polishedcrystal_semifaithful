@@ -7,15 +7,20 @@ namespace static_ordinary_intent {
 constexpr unsigned actor_count = 13, actor_stride = 34, source_capacity = 8;
 constexpr unsigned camera_bytes = 2, input_bytes = actor_count * actor_stride + camera_bytes;
 struct Point { unsigned bank = 0, pc = 0; };
+constexpr unsigned operand_bytes = 6; // X/Y coordinates, step flags/vector X/Y, player state
 struct Source {
     uint64_t id = 0, entry = 0, returned = 0, closed = 0;
     std::array<unsigned char, input_bytes> original{}, at_return{}, at_close{};
+    std::array<unsigned char, operand_bytes> operands_entry{}, operands_return{}, operands_close{};
+    bool operands_captured = false;
     uint16_t emitted = 0;
 };
 // Each definition remains live until the consumer explicitly releases it. Ring
 // pressure is an observer failure, never permission to replace a referenced ID.
 struct Observer {
     std::array<Point, 4> points{}; // producer, emitter, pre-limiter, outer opportunity
+    std::array<Point, operand_bytes> operand_fields{}; // original WRAM bank/address declarations
+    bool operands_configured = false;
     unsigned objects = 0, object_bank = 0, camera_x = 0, camera_y = 0;
     uint64_t instruction = 0, next_id = 0, released = 0, latest = 0, opportunity = 0;
     unsigned failure = 0, pre_sp = 0, call_sp = 0, return_pc = 0, return_bank = 0;
@@ -27,9 +32,12 @@ struct Observer {
         const auto configured_points = points;
         const auto configured_objects = objects, configured_bank = object_bank;
         const auto configured_x = camera_x, configured_y = camera_y;
+        const auto configured_operands = operand_fields;
+        const auto capture_operands = operands_configured;
         *this = Observer{};
         points = configured_points; objects = configured_objects; object_bank = configured_bank;
         camera_x = configured_x; camera_y = configured_y;
+        operand_fields = configured_operands; operands_configured = capture_operands;
     }
     template<class Read> std::array<unsigned char, input_bytes> capture(Read read) const {
         std::array<unsigned char, input_bytes> out{};
@@ -37,6 +45,12 @@ struct Observer {
             out[i] = read(object_bank, objects + i);
         out[input_bytes - 2] = read(object_bank, camera_x);
         out[input_bytes - 1] = read(object_bank, camera_y);
+        return out;
+    }
+    template<class Read> std::array<unsigned char, operand_bytes> capture_operands(Read read) const {
+        std::array<unsigned char, operand_bytes> out{};
+        for (unsigned i = 0; i < operand_bytes; ++i)
+            out[i] = read(operand_fields[i].bank, operand_fields[i].pc);
         return out;
     }
     bool matches(unsigned i, unsigned bank, unsigned pc) const {
@@ -55,6 +69,8 @@ struct Observer {
             if (active || has_return) { fail(2); return; }
             active = true; pending = Source{}; pending.entry = instruction;
             pending.original = capture(read);
+            pending.operands_captured = operands_configured;
+            if (pending.operands_captured) pending.operands_entry = capture_operands(read);
             call_sp = sp; return_pc = read(8, sp) | read(8, (sp + 1) & 0xffff) << 8;
             return_bank = return_pc < 0x4000 ? 0 : bank;
         }
@@ -69,6 +85,7 @@ struct Observer {
             if (!has_return || active) { fail(5); return; }
             if (next_id - released >= source_capacity) { fail(6); return; }
             pending.closed = instruction; pending.at_close = capture(read);
+            if (pending.operands_captured) pending.operands_close = capture_operands(read);
             pending.id = ++next_id; sources[(next_id - 1) % source_capacity] = pending;
             latest = next_id; has_return = false;
         }
@@ -88,6 +105,7 @@ struct Observer {
         if (pre_sp == call_sp && sp == ((call_sp + 2) & 0xffff) &&
                 pc == return_pc && bank == return_bank) {
             pending.returned = instruction; pending.at_return = capture(read);
+            if (pending.operands_captured) pending.operands_return = capture_operands(read);
             active = false; has_return = true;
         }
     }
