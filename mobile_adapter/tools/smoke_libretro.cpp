@@ -1369,7 +1369,7 @@ int main(int argc, char** argv) {
                 std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(source_rom)),{});
                 input_log.open(arguments.at("--accepted-ordinary-inputs"));
                 if (!input_log) fail("Cannot open accepted input diagnostic");
-                input_log << "{\"abi\":1,\"scope\":\"stationary accepted wire inputs only\",\"points\":[";
+                input_log << "{\"abi\":2,\"scope\":\"stationary accepted wire inputs only\",\"points\":[";
                 const char* names[] = {"MobileConsumeFrame.welcome","MobileConsumeFrame.accepted","MobileExpandRoster",
                     "MobileConsumeFrame.roster_done","MobileConsumeFrame.bad","MobileAppendPending.bad","MobileAppendPending.copy",
                     "MobileBegin","MobileReleaseNoIME","MobileConsumeFrame.left","MobileMapEntered","MobileTick.frame_pending"};
@@ -1387,8 +1387,8 @@ int main(int argc, char** argv) {
                 input_log << "],\"fields\":[";
                 const char* fields[] = {"wMobileApp","wMobileAppCount","wMobileDecodePhase","wMobilePeer1","wMobileOnline",
                     "wPlayerBGMapOffsetX","wPlayerBGMapOffsetY","wXCoord","wYCoord","wPlayerFacing","wPlayerGender",
-                    "wPlayerState","wPlayerStepDuration","wPlayerDirection","wPlayerSpriteYOffset","wTimeOfDay","wTimeOfDayPal"};
-                for (unsigned i=0;i<17;++i) {
+                    "wPlayerState","wPlayerStepDuration","wPlayerDirection","wPlayerSpriteYOffset","wTimeOfDay","wTimeOfDayPal","wPlayerWalking"};
+                for (unsigned i=0;i<18;++i) {
                     if (!native_addresses.count(fields[i])) fail("Missing accepted input field");
                     const auto p=native_addresses.at(fields[i]);
                     if (!field(i,p.first,p.second)) fail("Invalid accepted input field");
@@ -1400,7 +1400,7 @@ int main(int argc, char** argv) {
                 input_failure_context=symbol<Metric>(core,"acceptance_profile_input_failure_context");
                 input_event=symbol<uint64_t(*)(unsigned,unsigned,unsigned)>(core,"acceptance_profile_input_event");
                 input_drain=symbol<unsigned(*)(unsigned)>(core,"acceptance_profile_input_drain");
-                if (input_status(0)!=1) fail("Accepted input ABI mismatch");
+                if (input_status(0)!=2) fail("Accepted input ABI mismatch");
             }
             if (disabled_reference) {
                 if (native_addresses.count("MobileNativeBatch") || acceptance_data("AcceptanceScenarioID") != 0 ||

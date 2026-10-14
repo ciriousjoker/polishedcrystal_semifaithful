@@ -424,8 +424,8 @@ struct AcceptanceInputPoint { unsigned bank = 0, pc = 0, bytes = 0; };
 static AcceptanceInputPoint acceptance_input_points[12];
 // welcome, accepted, expand, roster_done, consume.bad, append.bad,
 // append.copy, begin, releaseNoIME, left, mapEntered, emergency clear.
-static unsigned acceptance_input_fields[17][2] = {}; // wire fields then fixed original local/scene inputs
-static unsigned acceptance_input_scene[12] = {};
+static unsigned acceptance_input_fields[18][2] = {}; // wire fields then fixed original local/scene inputs
+static unsigned acceptance_input_scene[13] = {};
 static bool acceptance_input_configured = false, acceptance_input_active = false;
 static bool acceptance_input_pair = false, acceptance_input_welcome_path = false;
 static uint64_t acceptance_input_previous = 0;
@@ -457,7 +457,7 @@ extern "C" unsigned acceptance_profile_input_point(unsigned i, unsigned bank, un
     acceptance_input_points[i] = {bank,pc,bytes}; return 1;
 }
 extern "C" unsigned acceptance_profile_input_field(unsigned i, unsigned bank, unsigned address) {
-    if (acceptance_input_configured || i >= 17 || bank > 7 || address < 0xc000 || address >= 0xe000 ||
+    if (acceptance_input_configured || i >= 18 || bank > 7 || address < 0xc000 || address >= 0xe000 ||
             (i == 3 && (bank != 2 || address < 0xd000 || address + 192 > 0xe000))) return 0;
     acceptance_input_fields[i][0] = bank; acceptance_input_fields[i][1] = address; return 1;
 }
@@ -469,7 +469,7 @@ extern "C" unsigned acceptance_profile_input_config() {
     acceptance_input_configured = true; return 1;
 }
 extern "C" uint64_t acceptance_profile_input_status(unsigned field) {
-    const uint64_t v[] = {1, acceptance_input_configured, acceptance_input_active,
+    const uint64_t v[] = {2, acceptance_input_configured, acceptance_input_active,
         uint64_t(acceptance_input.failure), acceptance_input.failure_instruction, acceptance_input_event_count,
         acceptance_input.next_definition, acceptance_input.next_opportunity, acceptance_input.online,
         acceptance_input.pending, acceptance_input_previous, acceptance_input.latest};
@@ -549,14 +549,17 @@ static void acceptance_input_before(gb* game, const cpu_regs& regs) {
         if (point == 7 || point == 0 || point == 2) { acceptance_input_fail(accepted_ordinary_input::Failure::missing_source); return; }
         if (!acceptance_static_world_ready || !acceptance_static_intent.enabled || !acceptance_static_intent.latest) return;
         if (acceptance_input_read(game,4)) { acceptance_input_fail(accepted_ordinary_input::Failure::lifetime); return; }
-        for (unsigned i=5;i<17;++i) acceptance_input_scene[i-5]=acceptance_input_read(game,i);
-        if (acceptance_input_scene[7]) { acceptance_input_fail(accepted_ordinary_input::Failure::static_transition); return; }
+        for (unsigned i=5;i<18;++i) acceptance_input_scene[i-5]=acceptance_input_read(game,i);
+        if (acceptance_input_scene[12] != 255) { acceptance_input_fail(accepted_ordinary_input::Failure::static_transition); return; }
         acceptance_input_active = true; acceptance_input_emit(0);
     }
     const auto ordinal = acceptance_static_intent.instruction;
     if (acceptance_input_pair || !ordinal || ordinal <= acceptance_input_previous) { acceptance_input_fail(accepted_ordinary_input::Failure::ordinal); return; }
     acceptance_input_pair = true; acceptance_input_previous = ordinal;
-    for (unsigned i=5;i<17;++i) if (acceptance_input_scene[i-5] != acceptance_input_read(game,i)) {
+    // Native SleepStep changes duration while standing. Its counter is bound
+    // for provenance, while exact walking STANDING255 and the other pose/scene
+    // fields independently exclude local motion throughout this static mode.
+    for (unsigned i=5;i<18;++i) if (i != 12 && acceptance_input_scene[i-5] != acceptance_input_read(game,i)) {
         context.field(i,acceptance_input_scene[i-5],acceptance_input_read(game,i));
         acceptance_input.retire(ordinal); return;
     }

@@ -120,12 +120,13 @@ static void slots(unsigned n,unsigned revision=1) {
   std::copy_n(p,20,g.cpu.ram+0x2400+i*64);
  }
 }
-static void arm() {
+static void arm(unsigned walking=255,unsigned duration=0) {
  retro_reset();assert(acceptance_profile_input_status(1));
  assert(!acceptance_profile_input_failure_context(0));
  assert(!acceptance_profile_input_status(2)&&!acceptance_profile_input_status(5));
  assert(!acceptance_profile_input_point(0,1,0x4100,0));
  g.mbc.mapping=g.rom.data;g.cpu.memory[0xc302]=0;
+ g.cpu.memory[0xc331]=walking;g.cpu.memory[0xc32c]=duration;
  g.cpu.memory[0xc310]=1;g.cpu.memory[0xc311]=2;g.cpu.memory[0xc312]=2;g.cpu.memory[0xc313]=0;
  tick(0x200);assert(!acceptance_static_intent.instruction&&!acceptance_profile_input_status(5));
  g.mbc.mapping=g.rom.data; r.PC=0x4600;r.SP=0xc100;stack(g,r.SP,0x4700);
@@ -133,7 +134,14 @@ static void arm() {
  assert(acceptance_profile_static_status(6));assert(acceptance_profile_static_enable());
  r.PC=0x4500;r.SP=0xc100;stack(g,r.SP,0x4520);
  acceptance_profile_before(&g,r);r.PC=0x4520;r.SP=0xc102;acceptance_profile_after(&g,r,0xc9,16);
- tick(0x4540);assert(acceptance_profile_input_status(2));
+ tick(0x4540);
+ if(walking!=255) {
+  assert(!acceptance_profile_input_status(2));
+  assert(acceptance_input.failure==accepted_ordinary_input::Failure::static_transition);
+  assert(!acceptance_profile_input_status(5)&&!acceptance_input.next_opportunity);
+  return;
+ }
+ assert(acceptance_profile_input_status(2));
  assert(!acceptance_profile_input_status(3));
  assert(acceptance_profile_input_event(0,0,13)==0); // prejoin empty membership retained
  assert(acceptance_profile_input_event(0,0,9)==1&&acceptance_profile_input_event(0,0,10)>0);
@@ -177,7 +185,10 @@ int main() {
  const unsigned banks[]={2,0,0,2,0},addresses[]={0xd000,0xc300,0xc301,0xd400,0xc302};
  for(unsigned i=0;i<5;++i)assert(acceptance_profile_input_field(i,banks[i],addresses[i]));
  for(unsigned i=5;i<17;++i)assert(acceptance_profile_input_field(i,0,0xc320+i));
- assert(acceptance_profile_input_config());
+ assert(!acceptance_profile_input_config()); // stale 17-field declarations fail closed
+ assert(acceptance_profile_input_field(17,0,0xc331));
+ assert(!acceptance_profile_input_field(18,0,0xc332));
+ assert(acceptance_profile_input_config());assert(acceptance_profile_input_status(0)==2);
  acceptance_profile_static_point(0,1,0x4500);acceptance_profile_static_point(1,1,0x4510);
  acceptance_profile_static_point(2,1,0x4540);acceptance_profile_static_point(3,1,0x4580);
  acceptance_profile_static_inputs(1,0xd000,0xd300,0xd301);
@@ -235,6 +246,38 @@ int main() {
  arm();welcome();acceptance_profile_after(&g,r,0,4);assert(acceptance_input.failure==accepted_ordinary_input::Failure::ordinal);
  arm();welcome();acceptance_static_intent.sources[0].closed=acceptance_static_intent.instruction+100;tick(0x4580);assert(acceptance_input.failure==accepted_ordinary_input::Failure::missing_source);
  arm();welcome();for(unsigned i=0;i<40;++i)tick(0x4580);assert(acceptance_input.failure==accepted_ordinary_input::Failure::definition_pressure);
+
+ // Native sleep duration is not displacement: retain cold activation and
+ // accepted WELCOME/capture/commit while duration changes under STANDING255.
+ arm();g.cpu.memory[0xc32c]=1;tick(0x4200);
+ assert(acceptance_profile_input_status(2)&&!acceptance_profile_input_status(3));
+ welcome();commit(1);g.cpu.memory[0xc32c]=0;tick(0x4580);
+ assert(!acceptance_profile_input_status(3)&&acceptance_input.latched.input==1);
+ arm(255,1);welcome();commit(0);assert(!acceptance_profile_input_status(3));
+ // Motion at duration0 rejects activation even with unchanged coordinates/pose.
+ for(unsigned walking : {0u,1u,2u,3u})arm(walking,0);
+ // Each retained scene/pose guard retires before a new outer opportunity.
+ for(unsigned field=5;field<18;++field) {
+  if(field==12)continue;
+  arm();welcome();commit(0);
+  const auto opportunities=acceptance_input.next_opportunity;
+  const auto old=g.cpu.memory[0xc320+field];
+  g.cpu.memory[0xc320+field]=old^1;tick(0x4580);
+  assert(acceptance_input.failure==accepted_ordinary_input::Failure::retired);
+  assert(acceptance_input.next_opportunity==opportunities&&!acceptance_input.latest);
+  assert(acceptance_profile_input_failure_context(8)==field);
+  assert(acceptance_profile_input_failure_context(11)==old);
+  assert(acceptance_profile_input_failure_context(12)==(old^1));
+  g.cpu.memory[0xc320+field]=old;
+ }
+ // Walking starts with every original field, including duration0, unchanged.
+ arm();const auto queued_before_motion=acceptance_profile_input_status(5);
+ g.cpu.memory[0xc331]=0;tick(0x4580);
+ assert(acceptance_input.failure==accepted_ordinary_input::Failure::retired);
+ assert(!acceptance_input.next_opportunity&&!acceptance_input.online);
+ assert(acceptance_profile_input_status(5)==queued_before_motion);
+ assert(acceptance_profile_input_failure_context(8)==17);
+ assert(acceptance_profile_input_failure_context(11)==255&&acceptance_profile_input_failure_context(12)==0);
 
  // Independent119: four retained definitions and a live outer latch make release fallible.
  arm();welcome();
