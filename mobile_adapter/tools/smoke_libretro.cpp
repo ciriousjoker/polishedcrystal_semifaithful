@@ -965,7 +965,7 @@ int main(int argc, char** argv) {
             fail("Effect/native-scene observation does not support snapshot restore");
     for (int i = 5; i < argc; i += 2) {
         std::string key = argv[i];
-        if (key != "--native-vblank-timing" && key != "--disabled-native-reference" && key != "--static-intent-sources" && key != "--ordinary-gate" && key != "--ordinary-stream" && key != "--ordinary-count" && key != "--ordinary-start" && key != "--frames" && key != "--input" && key != "--symbols" &&
+        if (key != "--accepted-ordinary-inputs" && key != "--native-vblank-timing" && key != "--disabled-native-reference" && key != "--static-intent-sources" && key != "--ordinary-gate" && key != "--ordinary-stream" && key != "--ordinary-count" && key != "--ordinary-start" && key != "--frames" && key != "--input" && key != "--symbols" &&
             key != "--rtc-in" && key != "--rtc-out" && key != "--ram-out" && key != "--state-out" && key != "--save-in" && key != "--save-out" &&
             key != "--adapter" && key != "--pace-from" && key != "--trace-out" &&
             key != "--checkpoint-dir" && key != "--profile-out" && key != "--profile-window-start" &&
@@ -973,6 +973,16 @@ int main(int argc, char** argv) {
             key != "--finish-barrier" && key != "--pace-multiplier" && key != "--expected-peers" && key != "--expected-online" &&
             key != "--native-headbutt-control" && key != "--effect-video" && key != "--native-object-count" && key != "--effect-span" && key != "--effect-watch" && key != "--native-scene-field" && key != "--acceptance-menu-routine" && key != "--measurement-gate" && key != "--measurement-warmup" && key != "--functional-horizon" && key != "--acceptance") fail("Unknown option: " + key);
         arguments[key] = argv[i + 1];
+    }
+    const bool accepted_inputs_requested = arguments.count("--accepted-ordinary-inputs");
+    if (accepted_inputs_requested) {
+        for (const char* required : {"--static-intent-sources", "--symbols", "--profile-out", "--frames", "--acceptance", "--adapter", "--input"})
+            if (!arguments.count(required)) fail(std::string("Accepted input diagnostic requires ") + required);
+        if (arguments.at("--acceptance") != "1" || arguments.at("--adapter") != "1" ||
+                effect_options["--native-scene-field"].size() != 8 || !effect_options["--effect-span"].empty() ||
+                !effect_options["--effect-watch"].empty()) fail("Accepted inputs require stationary ordinary native scene declarations");
+        for (const char* unsupported : {"--native-vblank-timing", "--disabled-native-reference", "--ordinary-stream", "--snapshot-in", "--snapshot-out", "--test-snapshot-out", "--test-snapshot-roundtrip", "--native-headbutt-control", "--effect-video", "--measurement-gate", "--expected-online", "--expected-peers"})
+            if (arguments.count(unsupported)) fail(std::string("Accepted input diagnostic excludes ") + unsupported);
     }
     const bool timing_requested = arguments.count("--native-vblank-timing");
     if (timing_requested) {
@@ -1105,6 +1115,12 @@ int main(int argc, char** argv) {
     auto native_graphics_wait = reinterpret_cast<uint64_t(*)()>(dlsym(core, "mobile_profile_native_graphics_wait"));
     auto native_wait_ly = reinterpret_cast<uint64_t(*)()>(dlsym(core, "mobile_profile_native_wait_ly"));
     // Diagnostic extraction only. This option cannot award intent acceptance.
+    Metric input_status = nullptr;
+    uint64_t (*input_event)(unsigned,unsigned,unsigned) = nullptr;
+    unsigned (*input_drain)(unsigned) = nullptr;
+    unsigned input_events_written = 0;
+    std::ofstream input_log;
+    bool input_ready_written = false;
     Metric static_status = nullptr;
     uint64_t (*static_source)(uint64_t,unsigned,unsigned) = nullptr;
     void (*static_release)(uint64_t) = nullptr;
@@ -1346,6 +1362,45 @@ int main(int argc, char** argv) {
             static_release = symbol<void(*)(uint64_t)>(core, "acceptance_profile_static_release");
             static_enable = symbol<unsigned(*)()>(core, "acceptance_profile_static_enable");
             if (static_status(0) != 1) fail("Static source ABI mismatch");
+            if (accepted_inputs_requested) {
+                auto point = symbol<unsigned(*)(unsigned,unsigned,unsigned,unsigned)>(core,"acceptance_profile_input_point");
+                auto field = symbol<unsigned(*)(unsigned,unsigned,unsigned)>(core,"acceptance_profile_input_field");
+                std::ifstream source_rom(argv[2],std::ios::binary);
+                std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(source_rom)),{});
+                input_log.open(arguments.at("--accepted-ordinary-inputs"));
+                if (!input_log) fail("Cannot open accepted input diagnostic");
+                input_log << "{\"abi\":1,\"scope\":\"stationary accepted wire inputs only\",\"points\":[";
+                const char* names[] = {"MobileConsumeFrame.welcome","MobileConsumeFrame.accepted","MobileExpandRoster",
+                    "MobileConsumeFrame.roster_done","MobileConsumeFrame.bad","MobileAppendPending.bad","MobileAppendPending.copy",
+                    "MobileBegin","MobileReleaseNoIME","MobileConsumeFrame.left","MobileMapEntered","MobileTick.frame_pending"};
+                for (unsigned i=0;i<12;++i) {
+                    if (!native_addresses.count(names[i])) fail(std::string("Missing accepted input anchor: ")+names[i]);
+                    auto p = native_addresses.at(names[i]);
+                    if (i == 11) p.second += 6; // original emergency clear, after conditional branch
+                    const size_t offset = p.first*0x4000+(p.second&0x3fff);
+                    if (offset+2 > bytes.size()) fail("Accepted input anchor outside ROM");
+                    const unsigned code = bytes[offset] | bytes[offset+1]<<8;
+                    if (i == 11 && bytes[offset] != 0xaf) fail("Emergency clear anchor changed");
+                    if (!point(i,p.first,p.second,code)) fail("Invalid accepted input point");
+                    input_log << (i ? "," : "") << "[\"" << names[i] << "\"," << p.first << ',' << p.second << ',' << code << ']';
+                }
+                input_log << "],\"fields\":[";
+                const char* fields[] = {"wMobileApp","wMobileAppCount","wMobileDecodePhase","wMobilePeer1","wMobileOnline",
+                    "wPlayerBGMapOffsetX","wPlayerBGMapOffsetY","wXCoord","wYCoord","wPlayerFacing","wPlayerGender",
+                    "wPlayerState","wPlayerStepDuration","wPlayerDirection","wPlayerSpriteYOffset","wTimeOfDay","wTimeOfDayPal"};
+                for (unsigned i=0;i<17;++i) {
+                    if (!native_addresses.count(fields[i])) fail("Missing accepted input field");
+                    const auto p=native_addresses.at(fields[i]);
+                    if (!field(i,p.first,p.second)) fail("Invalid accepted input field");
+                    input_log << (i ? "," : "") << "[\"" << fields[i] << "\"," << p.first << ',' << p.second << ']';
+                }
+                input_log << "]}\n"; input_log.flush();
+                if (!input_log || !symbol<unsigned(*)()>(core,"acceptance_profile_input_config")()) fail("Accepted input configuration failed");
+                input_status=symbol<Metric>(core,"acceptance_profile_input_status");
+                input_event=symbol<uint64_t(*)(unsigned,unsigned,unsigned)>(core,"acceptance_profile_input_event");
+                input_drain=symbol<unsigned(*)(unsigned)>(core,"acceptance_profile_input_drain");
+                if (input_status(0)!=1) fail("Accepted input ABI mismatch");
+            }
             if (disabled_reference) {
                 if (native_addresses.count("MobileNativeBatch") || acceptance_data("AcceptanceScenarioID") != 0 ||
                         acceptance_data("AcceptanceLighting") != 255 || acceptance_data("AcceptanceHour") != 12 ||
@@ -1732,7 +1787,7 @@ int main(int argc, char** argv) {
             const bool scene = effect_options["--native-scene-field"].empty()
                 ? acceptance_marker_count && acceptance_marker_count(0)
                 : symbol<unsigned(*)()>(core, "acceptance_profile_native_scene_ready")();
-            if (scene && static_status(6) && live.at("wMapStatus") == 2 && live.at("wScriptRunning") == 0) {
+            if ((accepted_inputs_requested || scene) && static_status(6) && live.at("wMapStatus") == 2 && live.at("wScriptRunning") == 0) {
                 if (!static_enable()) { static_snapshot("enable_failed"); fail("Static source enable failed; see static status snapshot"); }
                 static_started = true;
                 if (disabled_reference) {
@@ -1784,6 +1839,37 @@ int main(int argc, char** argv) {
                 fail("Native effect evidence overflow: count=" + std::to_string(event_record(0, 32)) +
                      " overflow=" + std::to_string(event_record(0, 33)));
         }
+        if (input_status) {
+            // Preserve the immutable witness before event limits, writes or release can fail.
+            const auto input_failure = input_status(3), input_failure_instruction = input_status(4);
+            if (input_failure) {
+                input_log << "{\"first_failure\":" << input_failure << ",\"instruction\":" << input_failure_instruction << "}\n";
+                input_log.flush();
+                if (!input_log) fail("Accepted input first failure write failed");
+            }
+            const unsigned count = input_status(5);
+            if (count > 32768 - input_events_written) fail("Accepted input event export limit exceeded (32768)");
+            input_events_written += count;
+            for (unsigned i=0;i<count;++i) {
+                input_log << "{\"event\":[";
+                for (unsigned f=0;f<14;++f) input_log << (f ? "," : "") << input_event(i,0,f);
+                input_log << "],\"wire\":[";
+                for (unsigned f=0;f<input_event(i,0,12);++f) input_log << (f ? "," : "") << input_event(i,1,f);
+                input_log << "],\"expanded\":[";
+                for (unsigned f=0;f<input_event(i,0,13)*20;++f) input_log << (f ? "," : "") << input_event(i,2,f);
+                input_log << "]}\n";
+            }
+            input_log.flush();
+            if (!input_log) fail("Accepted input event write failed");
+            if (input_failure)
+                fail("Accepted input observer failed: reason="+std::to_string(input_failure)+" instruction="+std::to_string(input_failure_instruction));
+            if (!input_drain(count)) fail("Accepted input durable drain failed");
+            if (input_status(2) && !input_ready_written) {
+                input_log << "{\"ready_frame\":" << input_frame << ",\"predicate\":\"vAcceptanceInputReady\"}\n";
+                input_log.flush(); if (!input_log) fail("Accepted input readiness write failed");
+                input_ready_written=true;
+            }
+        }
         if (static_started) {
             if (native_reference_value && native_reference_value(0, 1)) fail("Disabled reference observer failed: " + std::to_string(native_reference_value(0, 1)));
             if (static_status(1)) {
@@ -1795,7 +1881,8 @@ int main(int argc, char** argv) {
                 ++static_written;
                 // Keep bounded raw evidence from the first sixteen sources.
                 // Continue checking the observer and release only unreferenced IDs.
-                if (static_written <= 16) {
+                if (accepted_inputs_requested && static_written > 4096) fail("Accepted input source export limit exceeded (4096)");
+                if (static_written <= 16 || accepted_inputs_requested) {
                     static_log << "{\"source\":[";
                     for (unsigned f = 0; f < 5; ++f) static_log << (f ? "," : "") << static_source(static_written, 0, f);
                     static_log << "],\"inputs\":[";
@@ -1814,6 +1901,7 @@ int main(int argc, char** argv) {
         if (!trace_enabled && conditional_actions.empty() && walk_waypoints.empty()) continue;
         auto values = capture(sram, sram_size);
         values.insert(video_figure_values.begin(), video_figure_values.end());
+        if (input_status) values["vAcceptanceInputReady"] = input_status(2) && !input_status(3);
         if (effect_enabled) {
             const auto record = symbol<unsigned(*)(unsigned,unsigned)>(core, "acceptance_profile_effect_record");
             values["vAcceptanceSerialSC"] = effect_serial_status(0);
@@ -2009,6 +2097,7 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i + 2 < image.size(); i += 3)
         colors.insert((unsigned(image[i]) << 16) | (unsigned(image[i + 1]) << 8) | image[i + 2]);
     reference_snapshot("final");
+    if (input_status && (!input_ready_written || input_status(3))) fail("Accepted input diagnostic never became ready or failed");
     if (static_status) static_snapshot(static_started ? "final" : "never_armed");
     if (static_status && (!static_started || !static_written || static_status(1)))
         fail("Static source extraction incomplete: started=" + std::to_string(static_started) +

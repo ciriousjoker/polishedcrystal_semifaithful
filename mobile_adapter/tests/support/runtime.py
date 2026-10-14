@@ -177,6 +177,7 @@ def observer_fingerprint():
              ROOT / "mobile_adapter/tools/conditional_input.hpp",
              TESTS / "support/profile_native.hpp", TESTS / "support/static_ordinary_intent.hpp",
              TESTS / "support/native_reference.hpp", TESTS / "support/native_vblank_timing.hpp",
+             TESTS / "support/accepted_ordinary_input.hpp",
              TESTS / "support/observer.hpp", Path(__file__)]
     return hashlib.sha256("".join(sha(path) for path in paths).encode()).hexdigest()
 
@@ -352,6 +353,7 @@ def extend_profile(profile_source):
     shutil.copyfile(TESTS / "support/static_ordinary_intent.hpp", profile_source / "gb_core/static_ordinary_intent.hpp")
     shutil.copyfile(TESTS / "support/native_reference.hpp", profile_source / "gb_core/native_reference.hpp")
     shutil.copyfile(TESTS / "support/native_vblank_timing.hpp", profile_source / "gb_core/native_vblank_timing.hpp")
+    shutil.copyfile(TESTS / "support/accepted_ordinary_input.hpp", profile_source / "gb_core/accepted_ordinary_input.hpp")
 
 
 def refresh_observers(meta, prepared):
