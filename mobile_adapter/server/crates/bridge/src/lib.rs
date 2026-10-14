@@ -164,6 +164,9 @@ impl Backend {
 }
 
 struct Client {
+    stream: u16,
+    last_input: Option<(u8, u16, u64)>,
+    authority_kind: u8,
     writer: Option<mpsc::Sender<Frame>>,
     local_lobby: u16,
     compatibility: Option<(u8, [u8; 32])>,
@@ -178,6 +181,14 @@ struct Client {
     delivered: Vec<u8>,
 }
 impl Client {
+    fn retire(&mut self, now: u64, reason: &str) {
+        if self.writer.is_some() {
+            println!("BRIDGE_RETIRE stream={} at_ms={now} reason={reason} last_input={:?} authority_at={} authority_kind={} authority_age_ms={}",
+                self.stream, self.last_input, self.authority_at, self.authority_kind,
+                now.saturating_sub(self.authority_at));
+        }
+        self.writer = None;
+    }
     fn take_presence(&mut self, now: u64, interval: u64) -> Option<Frame> {
         if now < self.next_presence_at {
             return None;
@@ -192,7 +203,7 @@ impl Client {
         bytes.extend(self.generation.to_be_bytes());
         bytes
     }
-    fn publish_cached(&mut self) {
+    fn publish_cached(&mut self, now: u64) {
         self.local_credit = true;
         if self.roster.is_none() {
             return;
@@ -231,8 +242,8 @@ impl Client {
                 }
                 None => return,
             };
-            if writer.try_send(reply).is_err() {
-                self.writer = None;
+            if let Err(error) = writer.try_send(reply) {
+                self.retire(now, &format!("cached_send:{error}"));
             }
         }
     }
@@ -277,9 +288,11 @@ async fn tcp_client(stream: TcpStream, id: u16, tx: mpsc::Sender<Command>) -> io
                 .await
                 .map_err(|_| invalid("Local write deadline"))??;
             if matches!(frame.kind, wire::LEFT | wire::ERROR) {
+                println!("BRIDGE_WRITE_END stream={id} reason=terminal_frame kind={}", frame.kind);
                 return Ok(());
             }
         }
+        println!("BRIDGE_WRITE_END stream={id} reason=channel_closed");
         Ok::<(), io::Error>(())
     };
     let result = tokio::select! { result = read => result, result = write => result };
@@ -297,7 +310,7 @@ fn dispatch(
     for envelope in envelopes {
         let Some(mut frame) = envelope.frame else {
             if let Some(c) = clients.get_mut(&envelope.stream) {
-                c.writer = None;
+                c.retire(now, "owner_close");
             }
             continue;
         };
@@ -316,6 +329,7 @@ fn dispatch(
                 client.player = Some(welcome.player);
                 client.generation = welcome.generation;
                 client.authority_at = now;
+                client.authority_kind = frame.kind;
                 println!(
                     "BRIDGE_JOINED stream={} player={} generation={}",
                     envelope.stream, welcome.player, welcome.generation
@@ -338,14 +352,16 @@ fn dispatch(
                     }
                 }
                 client.authority_at = now;
+                client.authority_kind = frame.kind;
                 client.roster = Some(frame);
                 if client.local_credit {
-                    client.publish_cached();
+                    client.publish_cached(now);
                 }
                 continue;
             }
             wire::RECEIPT if client.joined && frame.payload == client.identity() => {
                 client.authority_at = now;
+                client.authority_kind = frame.kind;
                 // The ROM already received a bounded local transfer receipt.
                 continue;
             }
@@ -359,8 +375,8 @@ fn dispatch(
             _ => return Err(invalid("Invalid upstream effect")),
         }
         if let Some(writer) = &client.writer {
-            if writer.try_send(frame).is_err() {
-                client.writer = None;
+            if let Err(error) = writer.try_send(frame) {
+                client.retire(now, &format!("dispatch_send:{error}"));
             }
         }
     }
@@ -413,7 +429,7 @@ pub async fn serve(
                 if let Some(id) = (1..=MAX_STREAM).find(|id| !clients.contains_key(id)) {
                     println!("BRIDGE_EMULATOR_CONNECTED stream={id} peer={}", stream.peer_addr()?);
                     let (placeholder, _) = mpsc::channel(1);
-                    clients.insert(id, Client { writer: Some(placeholder), local_lobby: 0, compatibility: None,
+                    clients.insert(id, Client { stream: id, last_input: None, authority_kind: 0, writer: Some(placeholder), local_lobby: 0, compatibility: None,
                         presence: None, next_presence_at: 0, joined: false, player: None,
                         generation: 0, authority_at: now, roster: None, local_credit: false, delivered: Vec::new() });
                     let tx = tx.clone();
@@ -435,6 +451,7 @@ pub async fn serve(
                             .find(|c| c.joined && c.writer.is_some())
                             .and_then(|c| c.compatibility);
                         if let Some(c) = clients.get_mut(&id).filter(|c| c.writer.is_some()) {
+                            c.last_input = Some((frame.kind, frame.sequence, now));
                             match frame.kind {
                                 wire::HELLO if c.local_lobby == 0 => {
                                     match wire::Hello::decode(&frame.payload) {
@@ -447,7 +464,7 @@ pub async fn serve(
                                                         sequence: frame.sequence,
                                                         payload: vec![wire::Error::Incompatible as u8] });
                                                 }
-                                                c.writer = None;
+                                                c.retire(now, "incompatible_hello");
                                                 Ok(Vec::new())
                                             } else {
                                                 c.compatibility = Some(identity);
@@ -462,7 +479,7 @@ pub async fn serve(
                                                     sequence: frame.sequence,
                                                     payload: vec![error as u8] });
                                             }
-                                            c.writer = None;
+                                            c.retire(now, "invalid_hello");
                                             Ok(Vec::new())
                                         }
                                     }
@@ -471,10 +488,10 @@ pub async fn serve(
                                     if frame.payload.len() != wire::PRESENCE_LEN
                                         || frame.payload[..4] != c.identity()
                                         || wire::Snapshot::decode(&frame.payload[4..]).is_err() {
-                                        c.writer = None;
+                                        c.retire(now, "invalid_presence");
                                         backend.input(Envelope { stream: id, frame: None }, now).await
                                     } else {
-                                        c.publish_cached();
+                                        c.publish_cached(now);
                                         c.presence = Some(frame);
                                         let interval = if matches!(backend, Backend::Local(_)) { 0 } else { 50 };
                                         let at = started.elapsed().as_millis() as u64;
@@ -486,7 +503,7 @@ pub async fn serve(
                                     }
                                 },
                                 wire::POLL if c.joined && frame.sequence == 0 && frame.payload.is_empty() => {
-                                    c.publish_cached();
+                                    c.publish_cached(now);
                                     Ok(Vec::new())
                                 },
                                 wire::POLL if c.local_lobby != 0 && !c.joined
@@ -500,7 +517,7 @@ pub async fn serve(
                                     if frame.kind == wire::LEAVE { c.presence = None; }
                                     backend.input(Envelope { stream: id, frame: Some(frame) }, now).await
                                 },
-                                _ => { c.writer = None; backend.input(Envelope { stream: id, frame: None }, now).await }
+                                _ => { c.retire(now, "invalid_input"); backend.input(Envelope { stream: id, frame: None }, now).await }
                             }
                         } else { Ok(Vec::new()) }
                     }
@@ -516,7 +533,7 @@ pub async fn serve(
                 for (&id, client) in &mut clients {
                     if client.writer.is_none() { continue; }
                     if client.joined && now.saturating_sub(client.authority_at) >= 3000 {
-                        client.writer = None;
+                        client.retire(now, "authority_deadline");
                         pending.push(Envelope { stream: id, frame: None });
                         continue;
                     }
@@ -547,7 +564,7 @@ pub async fn serve(
         }) {
             println!("BRIDGE_UPSTREAM_LOST error={error}");
             for c in clients.values_mut() {
-                c.writer = None;
+                c.retire(started.elapsed().as_millis() as u64, "upstream_lost");
                 c.presence = None;
             }
             backend.reset();
@@ -592,6 +609,7 @@ mod tests {
     #[test]
     fn presence_is_immediately_eligible_but_coalesces_inside_the_cloud_interval() {
         let mut client = Client {
+            stream: 1, last_input: None, authority_kind: 0,
             writer: None,
             local_lobby: 1,
             compatibility: Some((0, [0x42; 32])),
@@ -630,6 +648,7 @@ mod tests {
     fn local_delivery_coalesces_positions_and_deltas_preserve_membership() {
         let (tx, mut rx) = mpsc::channel(8);
         let mut client = Client {
+            stream: 1, last_input: None, authority_kind: 0,
             writer: Some(tx),
             local_lobby: 1,
             compatibility: Some((0, [0x42; 32])),
@@ -657,7 +676,7 @@ mod tests {
             payload: wire::roster(1, 1, peers),
         };
         client.roster = Some(roster(&peers));
-        client.publish_cached();
+        client.publish_cached(0);
         assert_eq!(rx.try_recv().unwrap().kind, wire::ROSTER);
         for x in 1..=100 {
             peers[0].snapshot.x = x;
@@ -667,7 +686,7 @@ mod tests {
             rx.try_recv().is_err(),
             "Positions wait for the local read credit"
         );
-        client.publish_cached();
+        client.publish_cached(0);
         let delta = rx.try_recv().unwrap();
         assert_eq!(delta.kind, wire::DELTA);
         assert_eq!(delta.payload.len(), 5 + wire::PEER_LEN);
@@ -677,10 +696,10 @@ mod tests {
         );
         peers.pop();
         client.roster = Some(roster(&peers));
-        client.publish_cached();
+        client.publish_cached(0);
         let full = rx.try_recv().unwrap();
         assert_eq!((full.kind, full.payload[4]), (wire::ROSTER, 2));
-        client.publish_cached();
+        client.publish_cached(0);
         assert!(
             rx.try_recv().is_err(),
             "Empty reads must not enqueue identity receipts"
