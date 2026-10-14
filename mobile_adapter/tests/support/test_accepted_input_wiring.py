@@ -73,13 +73,23 @@ for(unsigned n:{0u,7u,9u}){bool rejected=false;try{check(a,n);}catch(const std::
 #include <sstream>
 #include <stdexcept>
 static void fail(const std::string& message) {throw std::runtime_error(message);}
+static unsigned input_drain_calls=0;
 static void export_inputs(std::ostream& input_log, unsigned input_events_written=0) {
  const auto input_status=&acceptance_profile_input_status;
+ const auto input_failure_context=&acceptance_profile_input_failure_context;
  const auto input_event=&acceptance_profile_input_event;
- const auto input_drain=&acceptance_profile_input_drain;
+ const auto input_drain=[](unsigned n){++input_drain_calls;return acceptance_profile_input_drain(n);};
  bool input_ready_written=false;const unsigned input_frame=0;
 ''' + runner[export_start:export_end] + '}\n'
             source = preamble + export_fixture + '\nstruct retro_game_info {};\n' + load + '\n' + reset + r'''
+// Faults are injected into the actual production export block above.
+struct FaultSink : std::stringbuf {
+ unsigned syncs=0,fail_sync=0;bool fail_write=false;
+ int sync() override {return ++syncs==fail_sync ? -1 : 0;}
+ std::streamsize xsputn(const char* s,std::streamsize n) override {
+  return fail_write ? 0 : std::stringbuf::xsputn(s,n);
+ }
+};
 static gb g; static cpu_regs r;
 static void tick(unsigned pc) {
  r.PC=pc;r.SP=0xc100;acceptance_profile_before(&g,r);
@@ -112,6 +122,7 @@ static void slots(unsigned n,unsigned revision=1) {
 }
 static void arm() {
  retro_reset();assert(acceptance_profile_input_status(1));
+ assert(!acceptance_profile_input_failure_context(0));
  assert(!acceptance_profile_input_status(2)&&!acceptance_profile_input_status(5));
  assert(!acceptance_profile_input_point(0,1,0x4100,0));
  g.mbc.mapping=g.rom.data;g.cpu.memory[0xc302]=0;
@@ -127,6 +138,29 @@ static void arm() {
  assert(acceptance_profile_input_event(0,0,13)==0); // prejoin empty membership retained
  assert(acceptance_profile_input_event(0,0,9)==1&&acceptance_profile_input_event(0,0,10)>0);
  assert(acceptance_profile_input_drain(acceptance_profile_input_status(5)));
+}
+static void witness(unsigned trigger,unsigned point,unsigned pc) {
+ assert(acceptance_profile_input_failure_context(0)==1);
+ assert(acceptance_profile_input_failure_context(1)==acceptance_profile_input_status(3));
+ assert(acceptance_profile_input_failure_context(2)==acceptance_profile_input_status(4));
+ assert(acceptance_profile_input_failure_context(4)==1);
+ assert(acceptance_profile_input_failure_context(5)==pc);
+ assert(acceptance_profile_input_failure_context(6)==point);
+ assert(acceptance_profile_input_failure_context(7)==trigger);
+ assert(acceptance_profile_input_failure_context(13)==1);
+ assert(acceptance_profile_input_failure_context(14)>0);
+ uint64_t frozen[34];for(unsigned i=0;i<34;++i)frozen[i]=acceptance_profile_input_failure_context(i);
+ const auto events=acceptance_profile_input_status(5);
+ for(unsigned pass=0;pass<3;++pass) {
+  tick(0x4300);acceptance_profile_restore_boundary();
+  (void)acceptance_profile_input_event(0,0,0);(void)acceptance_profile_input_status(3);
+  assert(acceptance_profile_input_failure_context(34)==~uint64_t(0));
+  for(unsigned i=0;i<34;++i)assert(acceptance_profile_input_failure_context(i)==frozen[i]);
+ }
+ assert(acceptance_profile_input_status(5)==events);
+ const auto after=acceptance_static_intent.failure;
+ for(unsigned i=0;i<40;++i)(void)acceptance_profile_input_failure_context(i);
+ assert(acceptance_static_intent.failure==after);
 }
 static void commit(unsigned n,unsigned kind=19,unsigned revision=1) {
  setframe(frame(n,kind,revision));g.cpu.memory[0xc301]=0;input(2);
@@ -177,10 +211,25 @@ int main() {
  arm();welcome();setframe(frame(1));g.cpu.ram[0x2009]=9;input(2);assert(acceptance_input.failure==accepted_ordinary_input::Failure::receiver);
  for(unsigned corrupt : {12u,18u}) {arm();welcome();setframe(frame(1));input(2);slots(1);g.cpu.ram[0x2400+corrupt]^=1;input(3);assert(acceptance_input.failure==accepted_ordinary_input::Failure::committed_input);}
  arm();welcome();input(0);input(1);assert(acceptance_input.failure==accepted_ordinary_input::Failure::lifetime);
- for(unsigned boundary : {8u,9u,10u,11u}) {arm();welcome();input(boundary);assert(acceptance_input.failure==accepted_ordinary_input::Failure::retired);assert(!acceptance_input.latest);}
+ for(unsigned boundary : {8u,9u,10u,11u}) {arm();welcome();input(boundary);assert(acceptance_input.failure==accepted_ordinary_input::Failure::retired);assert(!acceptance_input.latest);witness(3,boundary,0x4100+boundary*0x10);}
  arm();welcome();acceptance_profile_restore_boundary();assert(acceptance_input.failure==accepted_ordinary_input::Failure::retired);
- arm();welcome();g.cpu.memory[0xc327]=1;tick(0x4200);assert(acceptance_input.failure==accepted_ordinary_input::Failure::retired);g.cpu.memory[0xc327]=0;
- arm();welcome();g.cpu.memory[0xc302]=0;tick(0x4200);assert(acceptance_input.failure==accepted_ordinary_input::Failure::retired);
+ assert(acceptance_profile_input_failure_context(7)==6&&acceptance_profile_input_failure_context(5)==~0u);
+ assert(acceptance_profile_input_failure_context(20)==1);
+ const auto restore_ordinal=acceptance_profile_input_failure_context(2);
+ acceptance_profile_restore_boundary();tick(0x4200);
+ assert(acceptance_profile_input_failure_context(7)==6&&acceptance_profile_input_failure_context(2)==restore_ordinal);
+ assert(retro_load_game(nullptr));assert(!acceptance_profile_input_failure_context(0));
+ assert(acceptance_profile_input_status(1));
+ arm();welcome();input(7);witness(4,7,0x4170);
+ arm();welcome();acceptance_static_intent.fail(77);tick(0x4200);
+ assert(acceptance_profile_input_failure_context(15)==77);witness(0,12,0x4200);
+ arm();welcome();acceptance_static_world_ready=false;tick(0x4200);
+ assert(!acceptance_profile_input_failure_context(17));witness(2,12,0x4200);
+ arm();welcome();g.cpu.memory[0xc327]=1;tick(0x4200);assert(acceptance_input.failure==accepted_ordinary_input::Failure::retired);assert(acceptance_profile_input_failure_context(8)==7&&acceptance_profile_input_failure_context(9)==0);
+ assert(acceptance_profile_input_failure_context(10)==0xc327);
+ assert(acceptance_profile_input_failure_context(11)==0&&acceptance_profile_input_failure_context(12)==1);
+ witness(1,12,0x4200);g.cpu.memory[0xc327]=0;
+ arm();welcome();g.cpu.memory[0xc302]=0;tick(0x4200);assert(acceptance_input.failure==accepted_ordinary_input::Failure::retired);assert(!acceptance_profile_input_failure_context(19)&&acceptance_profile_input_failure_context(20));witness(5,12,0x4200);
  arm();welcome();g.cpu.memory[0x4120]=1;setframe(frame(1));input(2);assert(acceptance_input.failure==accepted_ordinary_input::Failure::transaction);g.cpu.memory[0x4120]=0;
  arm();welcome();r.PC=0x4200;acceptance_profile_before(&g,r);acceptance_profile_before(&g,r);assert(acceptance_input.failure==accepted_ordinary_input::Failure::ordinal);
  arm();welcome();acceptance_profile_after(&g,r,0,4);assert(acceptance_input.failure==accepted_ordinary_input::Failure::ordinal);
@@ -208,14 +257,27 @@ int main() {
     // Read before the writer closes: the original witness was explicitly flushed.
     std::ifstream durable("failure.jsonl");std::string witness;
     assert(std::getline(durable,witness)&&witness=="{\"first_failure\":4,\"instruction\":17}");
+    assert(std::getline(durable,witness)&&witness.find("{\"failure_context\":{")==0);
+    assert(witness.find("\"reason\":4,\"failure_instruction\":17,")!=std::string::npos);
+    assert(witness.find("\"bank\":1,\"pc\":16672,\"point\":2,\"trigger\":0,")!=std::string::npos);
    }
    assert(rejected);}
   std::ifstream log("failure.jsonl");std::string line;
   assert(std::getline(log,line)&&line=="{\"first_failure\":4,\"instruction\":17}");
   unsigned records=0;while(std::getline(log,line))++records;
-  assert(records==(exported ? 0 : queued));
+  assert(records==1+(exported ? 0 : queued));
   assert(acceptance_profile_input_status(3)==4&&acceptance_profile_input_status(4)==17);
   assert(acceptance_profile_input_status(5)==queued&&acceptance_input.released==0);
+ }
+ // First witness write/flush, context flush and event flush faults never drain.
+ for(unsigned fault=0;fault<4;++fault) {
+  FaultSink sink;sink.fail_write=fault==0;sink.fail_sync=fault;
+  std::ostream log(&sink);input_drain_calls=0;bool rejected=false;
+  try {export_inputs(log);}catch(const std::runtime_error&){rejected=true;}
+  assert(rejected&&!input_drain_calls);
+  assert(acceptance_profile_input_status(3)==4&&acceptance_profile_input_status(4)==17);
+  assert(acceptance_profile_input_status(5)==queued&&acceptance_input.released==0);
+  if(fault>=2)assert(sink.str().find("{\"first_failure\":4,\"instruction\":17}\n")==0);
  }
  // A normal successful export still releases old definitions and keeps latest/latch.
  arm();welcome();

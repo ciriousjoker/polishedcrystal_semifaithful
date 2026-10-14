@@ -1115,7 +1115,7 @@ int main(int argc, char** argv) {
     auto native_graphics_wait = reinterpret_cast<uint64_t(*)()>(dlsym(core, "mobile_profile_native_graphics_wait"));
     auto native_wait_ly = reinterpret_cast<uint64_t(*)()>(dlsym(core, "mobile_profile_native_wait_ly"));
     // Diagnostic extraction only. This option cannot award intent acceptance.
-    Metric input_status = nullptr;
+    Metric input_status = nullptr, input_failure_context = nullptr;
     uint64_t (*input_event)(unsigned,unsigned,unsigned) = nullptr;
     unsigned (*input_drain)(unsigned) = nullptr;
     unsigned input_events_written = 0;
@@ -1397,6 +1397,7 @@ int main(int argc, char** argv) {
                 input_log << "]}\n"; input_log.flush();
                 if (!input_log || !symbol<unsigned(*)()>(core,"acceptance_profile_input_config")()) fail("Accepted input configuration failed");
                 input_status=symbol<Metric>(core,"acceptance_profile_input_status");
+                input_failure_context=symbol<Metric>(core,"acceptance_profile_input_failure_context");
                 input_event=symbol<uint64_t(*)(unsigned,unsigned,unsigned)>(core,"acceptance_profile_input_event");
                 input_drain=symbol<unsigned(*)(unsigned)>(core,"acceptance_profile_input_drain");
                 if (input_status(0)!=1) fail("Accepted input ABI mismatch");
@@ -1846,6 +1847,18 @@ int main(int argc, char** argv) {
                 input_log << "{\"first_failure\":" << input_failure << ",\"instruction\":" << input_failure_instruction << "}\n";
                 input_log.flush();
                 if (!input_log) fail("Accepted input first failure write failed");
+                const char* context_fields[] = {"version","reason","failure_instruction","hook_instruction",
+                    "bank","pc","point","trigger","field","field_bank","field_address","old","new",
+                    "source","source_closed","source_failure","source_enabled","world_ready","world_active",
+                    "original_online","accepted_online","lifetime","definition","pending","latch_input",
+                    "latch_source","latch_source_closed","active","pair","source_active","source_has_return",
+                    "committed","latch_instruction","observer_instruction"};
+                input_log << "{\"failure_context\":{";
+                for (unsigned f=0;f<34;++f)
+                    input_log << (f ? "," : "") << '\"' << context_fields[f] << "\":" << input_failure_context(f);
+                input_log << "}}\n";
+                input_log.flush();
+                if (!input_log) fail("Accepted input failure context write failed");
             }
             const unsigned count = input_status(5);
             if (count > 32768 - input_events_written) fail("Accepted input event export limit exceeded (32768)");

@@ -503,11 +503,48 @@ static void acceptance_input_fail(accepted_ordinary_input::Failure reason) {
         acceptance_input.failure_instruction = acceptance_static_intent.instruction;
     }
 }
+// Diagnostic-only first failure. Values are sampled before the failing hook and
+// frozen on exit, before later callbacks/getters can change their provenance.
+// Trigger: 0 observer/guard, 1 scene field, 2 source/world, 3 lifecycle8..11,
+// 4 begin while online, 5 original online lost, 6 restore, 7 after pairing.
+static uint64_t acceptance_input_failure_context[34] = {};
+extern "C" uint64_t acceptance_profile_input_failure_context(unsigned field) {
+    return field < 34 ? acceptance_input_failure_context[field] : ~uint64_t(0);
+}
+struct AcceptanceInputFailureContext {
+    uint64_t v[34] = {};
+    AcceptanceInputFailureContext(gb* game, unsigned bank, unsigned pc, unsigned point, unsigned trigger = 0) {
+        const auto& a = acceptance_input;
+        const auto& s = acceptance_static_intent;
+        // Do not call get(): a diagnostic must not manufacture source failure8.
+        uint64_t close = 0;
+        for (const auto& source : s.sources) if (s.latest && source.id == s.latest) close = source.closed;
+        const uint64_t values[] = {1, 0, 0, s.instruction, bank, pc, point, trigger,
+            ~uint64_t(0), ~uint64_t(0), ~uint64_t(0), ~uint64_t(0), ~uint64_t(0),
+            s.latest, close, s.failure, s.enabled, acceptance_static_world_ready,
+            acceptance_static_world_active, game ? acceptance_input_read(game,4) : ~uint64_t(0),
+            a.online, a.lifetime, a.latest, a.pending, a.latched.input, a.latched.source,
+            a.latched.source_closed, acceptance_input_active, acceptance_input_pair,
+            s.active, s.has_return, a.current.committed, a.latched.instruction, a.instruction};
+        std::copy_n(values,34,v);
+    }
+    void field(unsigned i, unsigned old_value, unsigned new_value) {
+        v[7] = 1; v[8] = i; v[9] = acceptance_input_fields[i][0];
+        v[10] = acceptance_input_fields[i][1]; v[11] = old_value; v[12] = new_value;
+    }
+    ~AcceptanceInputFailureContext() {
+        if (!acceptance_input_failure_context[0] && acceptance_input.failure != accepted_ordinary_input::Failure::none) {
+            v[1] = uint64_t(acceptance_input.failure); v[2] = acceptance_input.failure_instruction;
+            std::copy_n(v,34,acceptance_input_failure_context);
+        }
+    }
+};
 static void acceptance_input_before(gb* game, const cpu_regs& regs) {
     if (!acceptance_input_configured || acceptance_input.failure != accepted_ordinary_input::Failure::none) return;
     const unsigned bank = acceptance_effect_bank(game,regs.PC);
     unsigned point = 12;
     for (unsigned i=0;i<12;++i) if (acceptance_input_points[i].pc == regs.PC && acceptance_input_points[i].bank == bank) point=i;
+    AcceptanceInputFailureContext context(game,bank,regs.PC,point);
     if (!acceptance_input_active) {
         if (point == 7 || point == 0 || point == 2) { acceptance_input_fail(accepted_ordinary_input::Failure::missing_source); return; }
         if (!acceptance_static_world_ready || !acceptance_static_intent.enabled || !acceptance_static_intent.latest) return;
@@ -520,9 +557,11 @@ static void acceptance_input_before(gb* game, const cpu_regs& regs) {
     if (acceptance_input_pair || !ordinal || ordinal <= acceptance_input_previous) { acceptance_input_fail(accepted_ordinary_input::Failure::ordinal); return; }
     acceptance_input_pair = true; acceptance_input_previous = ordinal;
     for (unsigned i=5;i<17;++i) if (acceptance_input_scene[i-5] != acceptance_input_read(game,i)) {
+        context.field(i,acceptance_input_scene[i-5],acceptance_input_read(game,i));
         acceptance_input.retire(ordinal); return;
     }
     if (acceptance_static_intent.failure || !acceptance_static_world_ready) {
+        context.v[7] = 2;
         acceptance_input.retire(ordinal); return;
     }
     if (point != 12) {
@@ -550,17 +589,18 @@ static void acceptance_input_before(gb* game, const cpu_regs& regs) {
     } else if (point == 4 || point == 5 || point == 6) {
         acceptance_input_welcome_path = false;
         if (acceptance_input.pending) { acceptance_input.cancel(ordinal,acceptance_input.candidate.transaction); acceptance_input_emit(4); }
-    } else if (point >= 8 && point < 12) acceptance_input.retire(ordinal);
-    else if (point == 7 && acceptance_input.online) acceptance_input.retire(ordinal);
-    else if (acceptance_input.online && !acceptance_input_read(game,4)) acceptance_input.retire(ordinal);
+    } else if (point >= 8 && point < 12) { context.v[7] = 3; acceptance_input.retire(ordinal); }
+    else if (point == 7 && acceptance_input.online) { context.v[7] = 4; acceptance_input.retire(ordinal); }
+    else if (acceptance_input.online && !acceptance_input_read(game,4)) { context.v[7] = 5; acceptance_input.retire(ordinal); }
     if (acceptance_static_intent.matches(3,bank,regs.PC)) {
         const auto id = acceptance_static_intent.latest;
         const auto* source = acceptance_static_intent.get(id);
         if (source && acceptance_input.opportunity(ordinal,id,source->closed)) acceptance_input_emit(3);
     }
 }
-static void acceptance_input_after() {
+static void acceptance_input_after(gb* game, const cpu_regs& regs) {
     if (!acceptance_input_active || acceptance_input.failure != accepted_ordinary_input::Failure::none) return;
+    AcceptanceInputFailureContext context(game,acceptance_effect_bank(game,regs.PC),regs.PC,12,7);
     if (!acceptance_input_pair) { acceptance_input_fail(accepted_ordinary_input::Failure::ordinal); return; }
     acceptance_input_pair = false;
 }
@@ -923,7 +963,7 @@ extern "C" void acceptance_profile_render_line(gb* game, unsigned line, int wind
 // Runs after the opcode completes, before the next irq_process can change PC/SP.
 static void acceptance_profile_after(gb* game, const cpu_regs& regs, unsigned opcode, unsigned cycles) {
     acceptance_timing_after(game, regs, opcode, cycles);
-    acceptance_input_after();
+    acceptance_input_after(game,regs);
     if (acceptance_observation_invalid) return;
     const bool returned = opcode == 0xc9 || opcode == 0xd9 ||
         ((opcode & 0xe7) == 0xc0 && cycles == 20);
@@ -1097,6 +1137,7 @@ extern "C" void acceptance_profile_effect_reset() {
         for (unsigned i = 0; i < acceptance_timing_point_count; ++i)
             if (acceptance_timing_points[i].job) acceptance_timing_check(acceptance_timing.job_return_bank(i + 1, 0));
     }
+    std::fill_n(acceptance_input_failure_context,34,0);
     acceptance_input = accepted_ordinary_input::Observer{};
     acceptance_input_active = acceptance_input_pair = acceptance_input_welcome_path = false;
     acceptance_input_previous = acceptance_input_event_count = 0;
@@ -1138,6 +1179,7 @@ extern "C" void acceptance_profile_effect_reset() {
 // Host observation is not serialized. Restored CPU state cannot prove missed entries.
 extern "C" void acceptance_profile_restore_boundary() {
     if (acceptance_input_configured) {
+        AcceptanceInputFailureContext context(nullptr,~0u,~0u,12,6);
         acceptance_input.retire_membership(accepted_ordinary_input::Failure::retired);
         acceptance_input.online = false;
     }
