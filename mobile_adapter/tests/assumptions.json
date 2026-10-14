@@ -4,6 +4,7 @@
     "empty",
     "pool",
     "speeds",
+    "speeds-100",
     "npc-movement"
   ],
   "hard_dependencies": [

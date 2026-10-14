@@ -269,6 +269,123 @@ fn crowded_frame_timing_retains_native_baseline_gaps() {
 fn mixed_100_200_300_400_percent_speeds() {
     cadence(&evidence("speeds"));
 }
+fn normal_speed_receiver_presentation(e: &Value, speeds: &[u64]) {
+    assert_eq!(e["speeds"], serde_json::json!(speeds));
+    connected(e);
+    colors(e);
+    let references: BTreeMap<_, _> = clients(e)
+        .iter()
+        .enumerate()
+        .map(|(avatar, client)| {
+            let native: Vec<_> = steady(&client["single"])
+                .filter(|s| n(s, "vAcceptanceLocalComplete") == 1)
+                .collect();
+            let tiles: BTreeSet<_> = native
+                .iter()
+                .map(|s| n(s, "vAcceptanceLocalTileHash"))
+                .collect();
+            let palettes: BTreeSet<_> = native
+                .iter()
+                .map(|s| n(s, "vAcceptanceLocalPaletteHash"))
+                .collect();
+            assert!(
+                !tiles.is_empty() && !palettes.is_empty(),
+                "Avatar {avatar}: no complete native appearance/color reference"
+            );
+            (avatar as u64, (tiles, palettes))
+        })
+        .collect();
+    let receiver: Vec<_> = steady(&clients(e)[0]["mobile"]).collect();
+    assert_eq!(receiver.len() as u64, limit("profile_frames"));
+    for (sender_index, sender) in clients(e).iter().enumerate().skip(1) {
+        let run = &sender["mobile"];
+        let first = n(&run["profile"], "world_window_start");
+        assert!(
+            run["events"]
+                .as_array()
+                .expect("Physical input events")
+                .iter()
+                .any(|event| {
+                    // These are the declared libretro UP/DOWN physical button IDs.
+                    matches!(n(event, "button"), 4 | 5)
+                        && n(event, "duration") > 0
+                        && n(event, "frame") >= first
+                        && n(event, "frame") < first + limit("profile_frames")
+                }),
+            "Sender {sender_index}: no measured physical movement input"
+        );
+        let motion: BTreeSet<_> = steady(run)
+            .map(|s| (n(s, "wXCoord"), n(s, "wYCoord")))
+            .collect();
+        assert!(
+            motion.len() > 1,
+            "Sender {sender_index}: physical input did not move the native player"
+        );
+        let id = n(&run["state"], "wMobilePlayerId");
+        let generation = n(&run["state"], "wMobileGeneration");
+        let mut presented_positions = BTreeSet::new();
+        let mut peer_slots = BTreeSet::new();
+        for state in &receiver {
+            assert_eq!(n(state, "vAcceptanceReady"), 1);
+            assert_eq!(n(state, "wMobileOnline"), 1);
+            assert_eq!(n(state, "wMobilePeerCount"), 3);
+            let peers: Vec<_> = (1..=3)
+                .filter(|p| n(state, &format!("wMobilePeer{p}Id")) == id)
+                .collect();
+            assert_eq!(
+                peers.len(),
+                1,
+                "Sender {sender_index}: missing/duplicate receiver identity"
+            );
+            let p = peers[0];
+            peer_slots.insert(p);
+            assert_eq!(n(state, &format!("wMobilePeer{p}Generation")), generation);
+            assert_eq!(
+                n(state, &format!("wMobilePeer{p}Avatar")),
+                sender_index as u64
+            );
+            assert_eq!(n(state, &format!("wMobilePeer{p}Visible")), 1);
+            assert_eq!(
+                n(state, &format!("vAcceptancePeer{p}Complete")),
+                1,
+                "Sender {sender_index}: normal-speed receiver omitted a complete figure"
+            );
+            assert_eq!(n(state, &format!("vAcceptancePeer{p}Partial")), 0);
+            let (tiles, palettes) = &references[&(sender_index as u64)];
+            assert!(
+                tiles.contains(&n(state, &format!("vAcceptancePeer{p}TileHash"))),
+                "Sender {sender_index}: presented pixels differ from current native appearance"
+            );
+            assert!(
+                palettes.contains(&n(state, &format!("vMobilePeer{p}PaletteHash"))),
+                "Sender {sender_index}: presented colors differ from current native palette"
+            );
+            // The existing observer reads these coordinates from actual video OAM.
+            // Complete selection above prevents a cached/hidden figure proving motion.
+            presented_positions.insert((
+                n(state, &format!("vMobilePeer{p}OAM0")),
+                n(state, &format!("vMobilePeer{p}OAM1")),
+            ));
+        }
+        assert_eq!(
+            peer_slots.len(),
+            1,
+            "Sender {sender_index}: receiver record changed identity"
+        );
+        assert!(
+            presented_positions.len() > 1,
+            "Sender {sender_index}: no actual presented coordinate change at normal speed"
+        );
+    }
+}
+#[test]
+fn normal_speed_receiver_presents_mixed_speed_remote_figures() {
+    normal_speed_receiver_presentation(&evidence("speeds"), &[1, 2, 3, 4]);
+}
+#[test]
+fn normal_speed_receiver_presents_normal_speed_remote_figures() {
+    normal_speed_receiver_presentation(&evidence("speeds-100"), &[1, 1, 1, 1]);
+}
 #[test]
 fn identical_trainer_ids_have_distinct_sessions() {
     let e = evidence("duplicate-ids");
@@ -1072,4 +1189,126 @@ fn single_client_transport_reset_reconnects_without_another_join_input() {
     );
     safety(&e);
     native_preserved(&e);
+}
+
+fn identity_bytes(text: &str) -> Vec<u8> {
+    assert_eq!(text.len() % 2, 0, "Incomplete wire hex");
+    (0..text.len())
+        .step_by(2)
+        .map(|at| u8::from_str_radix(&text[at..at + 2], 16).expect("Actual wire hex"))
+        .collect()
+}
+
+fn native_identity_wire(e: &Value, mismatch: Option<&str>) {
+    use mobile_protocol::lobby::{ERROR, HELLO, SCHEMA, WELCOME};
+    let expected = identity_bytes(e["clean_counterpart_sha256"].as_str().unwrap());
+    assert_eq!(expected.len(), 32);
+    let wire = e["identity_wire"].as_array().expect("Actual proxy wire evidence");
+    assert!(!wire.is_empty());
+    let mut healthy = BTreeSet::new();
+    let mut rejected = BTreeSet::new();
+    for item in wire {
+        let frame = identity_bytes(item["frame"].as_str().unwrap());
+        assert!(frame.len() >= 8);
+        assert_eq!(&frame[..3], b"PC\x01");
+        assert_eq!(frame.len(), 8 + u16::from_be_bytes([frame[6], frame[7]]) as usize);
+        if item["direction"] == "native-to-bridge" && frame[3] == HELLO {
+            assert_eq!(frame.len(), 55, "Actual outgoing HELLO length");
+            let connection = n(item, "connection");
+            if &frame[23..55] == expected.as_slice() && frame[8] == SCHEMA {
+                healthy.insert(connection);
+            } else {
+                match mismatch {
+                    Some("digest") => {
+                        assert_eq!(frame[8], SCHEMA, "Digest negative changed schema");
+                        let mut declared = expected.clone();
+                        declared[0] ^= 1;
+                        assert_eq!(&frame[23..55], declared.as_slice());
+                    }
+                    Some("schema") => {
+                        assert_eq!(&frame[23..55], expected.as_slice(), "Schema negative changed digest");
+                        assert_eq!(frame[8], SCHEMA ^ 0xff);
+                    }
+                    _ => panic!("Actual native HELLO did not match clean counterpart"),
+                }
+                rejected.insert(connection);
+            }
+        }
+    }
+    assert_eq!(healthy.len(), if mismatch.is_some() { 3 } else { 4 });
+    assert_eq!(rejected.len(), usize::from(mismatch.is_some()));
+    for connection in &healthy {
+        assert!(wire.iter().any(|item| n(item, "connection") == *connection
+            && item["direction"] == "bridge-to-native"
+            && identity_bytes(item["frame"].as_str().unwrap())[3] == WELCOME),
+            "Matching native stream never received authoritative WELCOME");
+    }
+    for connection in &rejected {
+        let replies: Vec<_> = wire.iter().filter(|item| n(item, "connection") == *connection
+            && item["direction"] == "bridge-to-native")
+            .map(|item| identity_bytes(item["frame"].as_str().unwrap())).collect();
+        assert!(replies.iter().any(|frame| frame[3] == ERROR && frame.len() == 9 && frame[8] == 2),
+            "Declared mismatch did not receive authoritative incompatible rejection");
+        assert!(!replies.iter().any(|frame| frame[3] == WELCOME),
+            "Rejected candidate received successful admission");
+    }
+}
+
+#[test]
+fn native_identity_hello_matches_clean_counterpart() {
+    let e = evidence("identity-match");
+    native_identity_wire(&e, None);
+    connected(&e);
+    safety(&e);
+}
+
+fn native_identity_rejection(kind: &str) {
+    let e = evidence(&format!("identity-{kind}"));
+    native_identity_wire(&e, Some(kind.trim_end_matches("-held")));
+    safety(&e);
+    native_preserved(&e);
+    let candidate = &clients(&e)[0]["mobile"];
+    for row in frames(candidate) {
+        assert_eq!(n(&row["state"], "wMobileOnline"), 0, "Rejected candidate participated");
+        assert_eq!(n(&row["state"], "wMobilePeerCount"), 0, "Rejected candidate acquired peers");
+    }
+    if kind == "digest-held" {
+        assert_eq!(n(before_exit(&e), "wMobileWanted"), 1,
+            "Held rejection did not retain a live native join for physical escape");
+        emergency(&e);
+    } else {
+        assert!(frames(candidate).iter().any(|row| n(&row["state"], "wMobileServerError") == 2),
+            "Native ROM never consumed the incompatible ERROR payload");
+        for state in steady(candidate) {
+            for key in ["wMobileWanted", "wMobileOwner", "wMobileOnline", "wMobilePeerCount"] {
+                assert_eq!(n(state, key), 0, "Native ERROR did not tear down {key}");
+            }
+        }
+        assert_ne!(candidate["state"]["wXCoord"], e["fixture"]["primary"][0],
+            "Rejected native client did not resume ordinary movement");
+    }
+    let mut ids = BTreeSet::new();
+    for client in &clients(&e)[1..] {
+        for state in steady(&client["mobile"]) {
+            assert_eq!(n(state, "wMobileOnline"), 1, "Healthy sibling lost admission");
+            assert_eq!(n(state, "wMobilePeerCount"), 2, "Rejected candidate changed healthy membership");
+        }
+        ids.insert(n(&client["mobile"]["state"], "wMobilePlayerId"));
+    }
+    assert_eq!(ids.len(), 3, "Healthy native identities were merged");
+}
+
+#[test]
+fn native_identity_declared_digest_rejected_before_participation() {
+    native_identity_rejection("digest");
+}
+
+#[test]
+fn native_identity_schema_rejected_independently() {
+    native_identity_rejection("schema");
+}
+
+#[test]
+fn native_identity_held_rejection_remains_physically_escapable() {
+    native_identity_rejection("digest-held");
 }

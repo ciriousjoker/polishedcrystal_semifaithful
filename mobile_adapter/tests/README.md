@@ -145,6 +145,7 @@ disposable producers. Production feature assembly continues to live in
 | Save independence and compatibility | Current native main/backup copy observers, complete SRAM equality, bidirectional counterpart loading |
 | Priority exit | Overworld, actual observed native menu, scripted input lock, save, malformed/partial/silent/flooded transport, invalid private states during native save and restored online state without adapter |
 | Relative frame timing | Equal visible actor load, full native pool and mixed 100/200/300/400 percent speeds with moving peers; native baseline gaps retained |
+| Normal-speed remote presentation | Moving 200/300/400 percent senders and a separate all-100 percent control; every one of 800 receiver frames requires complete selected figures, source-matched native pixels/colors, stable identities and actual presented coordinate changes |
 | Background priority | Measured serial/hook register restoration and multiplayer job deadline crossings |
 | Malformed transport | Header/length/type/roster corruption, truncation, silence and sustained flooding against actual cores; exhaustive one-byte mutations and deterministic generated host event sequences |
 | Reconnect and stale identity | Controlled two-second transport blackout, successful later responses without another join input; production resume tokens, sequence ordering and obsolete generations |
@@ -270,3 +271,53 @@ multiplayer from the original engine's duplicate-update contract.
 Focused `m2-admission-plans-11-20261013` passes both NPC contracts in 48.96 seconds
 using the shared prepared ROM pair. This is focused evidence only, not completion
 of milestone 2 or the full suite.
+
+The `speeds` and `speeds-100` cases share the same empty fixture and eight
+UP/DOWN cycles for each remote sender. Both use the exclusive performance lane,
+full performance warmup and unchanged 800-frame measurement window. The
+normal-speed receiver contracts require physical directional inputs and native
+player movement from every sender. Actual hardware OAM coordinates must also
+change while every measured receiver frame presents complete figures with exact
+current native appearance and colors. Product visibility flags cannot exclude
+frames from this gate. Existing mixed-speed cadence acceptance remains separate.
+
+## Actual native compatibility wire evidence
+
+The four `native_identity_` contracts run fresh four-core functional scenes at
+400 percent. The matching case records complete outgoing native TCP HELLO frames
+at the existing proxy boundary and compares their raw digest bytes with the
+current prepared clean 2 MiB counterpart artifact SHA-256. Authoritative WELCOME
+and actual native online/peer state are independently required for all four cores.
+This executes the real HELLO builder and serial path, rather than relying on the
+emitted static vector.
+
+The digest and schema negatives start three healthy real clients first, then a
+fourth real candidate. Only disposable optional-test cartridge data is changed:
+`MobileCompatibilityHash..MobileCompatibilityHashEnd` for the declared digest,
+or the schema byte of the five-byte `MobileHelloPrefix..MobileHelloVector` data
+span. Named span checks and the cartridge checksum are retained. No opcode, game
+RAM, CPU state or native save is patched. The declared digest negative is a
+protocol fixture, not a claim of different faithful/standard edition gameplay.
+The schema negative retains the clean digest, proving independent validation.
+
+Each negative requires actual authoritative incompatible ERROR, no WELCOME for
+the candidate, no online/peer participation in any candidate trace frame, native
+ERROR consumption and local teardown, normal movement afterward, and three
+healthy admitted siblings throughout measurement. The additional held-rejection
+case records the Bridge ERROR but deliberately holds its delivery only for that
+candidate; actual Select+B must cancel the still-live native join within the
+unchanged emergency-exit ceiling. It proves physical escape during the rejected
+wait, separately from the ordinary ERROR-consumption cases.
+
+Evidence retains at most four HELLO/WELCOME/ERROR observations per stream,
+direction and kind, with a 256-record global cap. Presence and polling traffic are
+forwarded normally. Fresh native seed saves, source fingerprints, paired controls
+and all existing performance/rendering oracles remain required.
+
+Focused execution after the shared native lane is released:
+
+```sh
+MOBILE_ACCEPTANCE_OUTPUT=/fresh/output/path \
+  cargo test --locked --manifest-path mobile_adapter/tests/Cargo.toml \
+  --test rom native_identity_ -- --nocapture
+```

@@ -185,6 +185,27 @@ def patch_data(rom, names, values, destination):
     destination.write_bytes(data)
 
 
+def patch_identity_fixture(rom, names, mismatch, destination):
+    """Negative declarations only, in a disposable optional-test cartridge."""
+    if "AcceptanceConfig" not in names or "AcceptanceConfigEnd" not in names:
+        raise ValueError("Identity negatives require an optional test cartridge")
+    data = bytearray(rom.read_bytes())
+    first = rom_offset(names["MobileCompatibilityHash"])
+    last = rom_offset(names["MobileCompatibilityHashEnd"])
+    prefix = rom_offset(names["MobileHelloPrefix"])
+    vector = rom_offset(names["MobileHelloVector"])
+    if last - first != 32 or vector - prefix != 5 or not (0 <= first < last <= len(data)) or not (0 <= prefix < vector <= len(data)):
+        raise ValueError("Identity declaration data spans changed")
+    if mismatch == "digest":
+        data[first] ^= 1
+    elif mismatch == "schema":
+        data[prefix] ^= 0xff
+    else:
+        raise ValueError("Unknown negative identity declaration")
+    data[0x14e:0x150] = ((sum(data[:0x14e]) + sum(data[0x150:])) & 65535).to_bytes(2, "big")
+    destination.write_bytes(data)
+
+
 def prepare(out):
     prepared = out / "prepared"
     if (prepared / "manifest.json").exists():
@@ -312,22 +333,43 @@ def fixture(meta, out, scene):
 class Proxy(socketserver.ThreadingTCPServer):
     daemon_threads = True
     allow_reuse_address = True
-    def __init__(self, upstream, fault, wait_for_arm=False):
+    def __init__(self, upstream, fault, wait_for_arm=False, identity=None):
         self.upstream, self.fault = upstream, fault
+        self.identity = identity
         self.started = time.monotonic()
         self.injected = 0
         self.recovered = 0
         self.connection_lock = threading.Lock()
         self.single_reset = False
+        self.next_connection = 0
+        self.wire = []
+        self.wire_counts = {}
         self.armed = False
         self.wait_for_arm = wait_for_arm
         super().__init__(("127.0.0.1", 0), ProxyHandler)
 
 
+    def observe(self, connection, direction, frame):
+        # Identity evidence is bounded independently of ongoing presence/polls.
+        if not self.identity or frame[3] not in (WIRE_KINDS["HELLO"], WIRE_KINDS["WELCOME"], WIRE_KINDS["ERROR"]):
+            return
+        with self.connection_lock:
+            key = (connection, direction, frame[3])
+            if key not in self.wire_counts and len(self.wire_counts) >= 256:
+                return
+            count = self.wire_counts.get(key, 0)
+            self.wire_counts[key] = count + 1
+            if count < 4 and len(self.wire) < 256:
+                self.wire.append({"connection": connection, "direction": direction, "frame": frame.hex()})
+
+
 class ProxyHandler(socketserver.BaseRequestHandler):
     def handle(self):
         pending = bytearray()
+        outgoing = bytearray()
         with self.server.connection_lock:
+            connection = self.server.next_connection
+            self.server.next_connection += 1
             opened_after_reset = self.server.single_reset
         try:
             with socket.create_connection(("127.0.0.1", self.server.upstream)) as upstream:
@@ -350,6 +392,18 @@ class ProxyHandler(socketserver.BaseRequestHandler):
                         if not data:
                             return
                         if stream is self.request:
+                            if not self.server.identity:
+                                upstream.sendall(data)
+                                continue
+                            outgoing.extend(data)
+                            while len(outgoing) >= 8:
+                                size = 8 + int.from_bytes(outgoing[6:8], "big")
+                                if size > 128:
+                                    raise RuntimeError("Unexpected native framing")
+                                if len(outgoing) < size:
+                                    break
+                                self.server.observe(connection, "native-to-bridge", bytes(outgoing[:size]))
+                                del outgoing[:size]
                             upstream.sendall(data)
                             continue
                         pending.extend(data)
@@ -361,7 +415,20 @@ class ProxyHandler(socketserver.BaseRequestHandler):
                                 break
                             frame = bytes(pending[:size])
                             original_frame = frame
+                            if self.server.identity:
+                                self.server.observe(connection, "bridge-to-native", frame)
                             del pending[:size]
+                            if self.server.identity == "digest-held" and frame[3] == WIRE_KINDS["ERROR"]:
+                                # Record the authoritative rejection, but hold its delivery.
+                                # The rejected native candidate must cancel its live wait
+                                # physically, without racing automatic ERROR teardown.
+                                # Keep EOF from becoming an alternate automatic escape.
+                                hold_deadline = time.monotonic() + 15
+                                while time.monotonic() < hold_deadline:
+                                    readable, _, _ = select.select((self.request,), (), (), .02)
+                                    if readable and not self.request.recv(4096):
+                                        return
+                                return
                             elapsed = time.monotonic() - self.server.started
                             fault = self.server.fault
                             if (self.server.armed or (not self.server.wait_for_arm and elapsed >= 4)) and fault != "none":
@@ -398,7 +465,7 @@ class ProxyHandler(socketserver.BaseRequestHandler):
 def projected(directory):
     names = ("hCrashCode", "hInMenu", "wMapStatus", "wScriptRunning", "wInputFlags", "wXCoord", "wYCoord",
         "wMapGroup", "wMapNumber", "wTimeOfDay", "vAcceptanceReady", "vAcceptanceDialogDone", "vAcceptanceLoaded", "vAcceptanceLoadFailed", "vStoryFlagsHash",
-        "wMobileOnline", "wMobileWanted", "wMobileOwner", "wMobilePeerCount", "wMobilePlayerId", "wMobileGeneration",
+        "wMobileOnline", "wMobileWanted", "wMobileOwner", "wMobileServerError", "wMobilePeerCount", "wMobilePlayerId", "wMobileGeneration",
         "vNPCOccupiedMask", "vNPCPositionsHash", "vLocalPaletteHash", "vOAMMaxScanline",
         "vProfileWorldUpdates", "vAcceptanceNativeHash", "vAcceptancePartyHash", "vAcceptanceInventoryHash",
         "vAcceptanceOAMHash", "vAcceptanceLocalComplete", "vAcceptanceFrameAudio", "vAcceptanceSaveCount",
@@ -420,7 +487,7 @@ def projected(directory):
                     key = f"wMobilePeer{peer}{suffix}"
                     if key in state:
                         values[key] = state[key]
-                for suffix in ("PaletteHash", "TileHash", "CacheHash", "OAM0"):
+                for suffix in ("PaletteHash", "TileHash", "CacheHash", "OAM0", "OAM1"):
                     key = f"vMobilePeer{peer}{suffix}"
                     if key in state:
                         values[key] = state[key]
@@ -471,7 +538,7 @@ def seed_saves(meta, session, fx, hour):
         return list(pool.map(produce, range(4), [fx["primary"], *fx["peers"]]))
 
 
-def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 1), duplicate=False, settle_frames=300, functional=False):
+def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 1), duplicate=False, settle_frames=300, functional=False, moving_peers=False, identity=None):
     if out.exists():
         original = out
         attempt = 2
@@ -501,7 +568,7 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
         bridge.wait(timeout=5)
         log.close()
         raise
-    proxy = Proxy(upstream_port, fault, wait_for_arm=functional)
+    proxy = Proxy(upstream_port, fault, wait_for_arm=functional, identity=identity)
     port = proxy.server_address[1]
     threading.Thread(target=proxy.serve_forever, daemon=True).start()
     proxy.started = time.monotonic()
@@ -550,10 +617,17 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
                 controls.extend((figures[avatar], py + 4, px + 4))
             changes["AcceptanceControlPeers"] = bytes(controls)
         patch_data(current, bindings, changes, rom)
+        if enabled and index == 0 and identity in ("digest", "schema", "digest-held"):
+            patch_identity_fixture(rom, bindings, identity.removesuffix("-held"), rom)
         text = "# Native initialization enters the fixture without title/dialog input.\n"
         if enabled and not (index == 0 and action.startswith("private:")):
             for button in ("SELECT", "B"):
                 text += f"ON 0 vAcceptanceReady=1,wMapStatus=2,wScriptRunning=0 {button} 8\n"
+        if enabled and index == 0 and identity in ("digest", "schema", "digest-held"):
+            # Observe rejection first; the held case exercises physical local cancellation.
+            if identity == "digest-held":
+                text += "AFTER 100 vAcceptanceMeasuring=1 SELECT 8\nAFTER 100 vAcceptanceMeasuring=1 B 8\n"
+            text += "AFTER 200 vAcceptanceMeasuring=1 LEFT 12\n"
         if functional and enabled and index == 1 and fault not in ("none", "reconnect", "reconnect-one"):
             # Demand a genuine response after arming the proxy. Standing clients
             # can be served by the Bridge cache without any upstream bytes.
@@ -565,7 +639,7 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
             text += f"{at} START 8\n"
         if index > 0 and action == "clear-conflict":
             text += f"{at} UP 12\n"
-        if index > 0 and len(set(speeds)) > 1:
+        if index > 0 and moving_peers:
             for cycle in range(8):
                 step = profile + 30 + cycle * 72
                 text += f"{step} UP 12\n{step + 36} DOWN 12\n"
@@ -629,7 +703,7 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
             "--pace-from", first if enabled else total, "--pace-multiplier", speed, "--adapter", int(enabled), "--acceptance", "1"]
         if functional and enabled:
             command += ["--measurement-gate", out / "measure", "--measurement-warmup", "300"]
-            if action.startswith("private:"):
+            if action.startswith("private:") or identity in ("digest", "schema", "digest-held"):
                 command += ["--expected-online", 0 if index == 0 else 1, "--expected-peers", 0 if index == 0 else 2]
         if enabled and index == 0 and action == "resume":
             command += ["--test-snapshot-out", directory / "online.state"]
@@ -642,7 +716,18 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
         capture_barrier = out / "capture.exit"
         capture_barrier.touch()
         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-            futures = [pool.submit(client,index,True) for index in range(4)]
+            if identity in ("digest", "schema", "digest-held"):
+                healthy = [pool.submit(client, index, True) for index in range(1, 4)]
+                deadline = time.monotonic() + 60
+                while not all((out / f"mobile/{index}/state.json.measurement-ready").exists() for index in range(1, 4)):
+                    for future in healthy:
+                        if future.done(): future.result()
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError("Three healthy native clients did not establish admission")
+                    time.sleep(.01)
+                futures = [pool.submit(client, 0, True), *healthy]
+            else:
+                futures = [pool.submit(client,index,True) for index in range(4)]
             deadline = time.monotonic() + 90
             try:
                 if functional:
@@ -652,6 +737,11 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
                         if time.monotonic() >= deadline:
                             raise TimeoutError("Four actual clients did not reach lobby readiness")
                         time.sleep(.01)
+                    if identity in ("digest", "schema", "digest-held"):
+                        while not any(item["direction"] == "bridge-to-native" and bytes.fromhex(item["frame"])[3] == WIRE_KINDS["ERROR"] for item in proxy.wire):
+                            if time.monotonic() >= deadline:
+                                raise TimeoutError("Native candidate received no rejection")
+                            time.sleep(.01)
                     proxy.armed = True
                     (out / "measure.fault").touch()
                     if fault not in ("none", "reconnect", "reconnect-one"):
@@ -715,6 +805,8 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
                 "--adapter", "0", "--acceptance", "1"], source, recovery_dir / "process.log")
             recovery = projected(recovery_dir)
         return {"fixture": fx, "clients": [{"mobile": m, "single": s} for m, s in zip(online, offline)],
+            "identity": identity, "identity_wire": list(proxy.wire) if identity else [],
+            "clean_counterpart_sha256": meta["baseline_sha256"],
             "fault": fault, "injected": proxy.injected, "recovered": proxy.recovered, "speeds": speeds, "action": action,
             "execution_mode": "functional-400-percent" if functional else "controlled-real-time",
             "recovery": recovery,
@@ -790,7 +882,9 @@ def main():
         execution_wall_start = time.time()
         data = execute(meta, fx, args.output / args.case, seeds,
                        action, fault, speeds, args.case == "duplicate-ids",
-                       settle_frames=1300 if args.case in ASSUMPTIONS["performance_cases"] else 300, functional=functional)
+                       settle_frames=1300 if args.case in ASSUMPTIONS["performance_cases"] else 300, functional=functional,
+                       moving_peers=args.case in ("speeds", "speeds-100"),
+                       identity=args.case.removeprefix("identity-") if args.case.startswith("identity-") else None)
         data["execution_wall_start"] = execution_wall_start
         data["execution_wall_end"] = time.time()
         data["execution_seconds"] = time.monotonic() - prepared_at

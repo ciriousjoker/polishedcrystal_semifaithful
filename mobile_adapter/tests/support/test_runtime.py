@@ -156,6 +156,95 @@ class StorageReserve(unittest.TestCase):
                              headroom=0, free=lambda: 100), [])
             self.assertTrue(old.exists())
 
+class IdentityEvidence(unittest.TestCase):
+    def test_negative_identity_patches_only_named_data_and_checksum(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rom, result = Path(tmp) / "fixture.gbc", Path(tmp) / "negative.gbc"
+            original = bytes(0x4000)
+            rom.write_bytes(original)
+            names = {"AcceptanceConfig": (0, 0x200), "AcceptanceConfigEnd": (0, 0x220),
+                     "MobileCompatibilityHash": (0, 0x300), "MobileCompatibilityHashEnd": (0, 0x320),
+                     "MobileHelloPrefix": (0, 0x400), "MobileHelloVector": (0, 0x405)}
+            for mismatch, changed in (("digest", 0x300), ("schema", 0x400)):
+                runtime.patch_identity_fixture(rom, names, mismatch, result)
+                data = result.read_bytes()
+                self.assertEqual([i for i, (a, b) in enumerate(zip(original, data))
+                                  if a != b and i not in (0x14e, 0x14f)], [changed])
+                self.assertEqual(int.from_bytes(data[0x14e:0x150], "big"),
+                                 (sum(data[:0x14e]) + sum(data[0x150:])) & 65535)
+            names["MobileHelloVector"] = (0, 0x406)
+            with self.assertRaisesRegex(ValueError, "data spans"):
+                runtime.patch_identity_fixture(rom, names, "schema", result)
+            names.pop("AcceptanceConfig")
+            with self.assertRaisesRegex(ValueError, "optional test cartridge"):
+                runtime.patch_identity_fixture(rom, names, "digest", result)
+
+    def test_proxy_captures_fragmented_native_hello_and_delivered_error(self):
+        hello = b"PC\x01\x10\x00\x01\x00\x2f" + bytes([5, 0, 4, 0, 1]) + bytes(42)
+        error = b"PC\x01\x16\x00\x01\x00\x01\x02"
+        with socket.create_server(("127.0.0.1", 0)) as upstream:
+            def serve():
+                connection, _ = upstream.accept()
+                with connection:
+                    observed = bytearray()
+                    while len(observed) < len(hello):
+                        observed.extend(connection.recv(128))
+                    self.assertEqual(bytes(observed), hello)
+                    connection.sendall(error)
+            worker = threading.Thread(target=serve)
+            worker.start()
+            proxy = runtime.Proxy(upstream.getsockname()[1], "none", identity="digest")
+            host = threading.Thread(target=proxy.serve_forever)
+            host.start()
+            try:
+                with socket.create_connection(proxy.server_address, timeout=2) as client:
+                    client.sendall(hello[:7])
+                    client.sendall(hello[7:19])
+                    client.sendall(hello[19:])
+                    received = bytearray()
+                    while len(received) < len(error):
+                        received.extend(client.recv(128))
+                    self.assertEqual(bytes(received), error)
+                worker.join(timeout=2)
+                self.assertFalse(worker.is_alive())
+                self.assertEqual([(row["direction"], row["frame"]) for row in proxy.wire],
+                                 [("native-to-bridge", hello.hex()), ("bridge-to-native", error.hex())])
+                for _ in range(1000):
+                    proxy.observe(0, "bridge-to-native", error)
+                self.assertEqual(len(proxy.wire), 5)
+            finally:
+                proxy.shutdown()
+                proxy.server_close()
+                host.join(timeout=2)
+
+    def test_held_rejection_preserves_pending_native_socket_after_bridge_eof(self):
+        error = b"PC\x01\x16\x00\x01\x00\x01\x02"
+        with socket.create_server(("127.0.0.1", 0)) as upstream:
+            def serve():
+                connection, _ = upstream.accept()
+                with connection:
+                    connection.sendall(error)
+            worker = threading.Thread(target=serve)
+            worker.start()
+            proxy = runtime.Proxy(upstream.getsockname()[1], "none", identity="digest-held")
+            host = threading.Thread(target=proxy.serve_forever)
+            host.start()
+            try:
+                with socket.create_connection(proxy.server_address, timeout=2) as client:
+                    deadline = time.monotonic() + 2
+                    while not proxy.wire and time.monotonic() < deadline:
+                        time.sleep(.001)
+                    self.assertEqual(proxy.wire[0]["frame"], error.hex())
+                    worker.join(timeout=2)
+                    self.assertFalse(worker.is_alive())
+                    client.settimeout(.1)
+                    with self.assertRaises(socket.timeout):
+                        client.recv(1)
+            finally:
+                proxy.shutdown()
+                proxy.server_close()
+                host.join(timeout=2)
+
 
 if __name__ == "__main__":
     unittest.main()
