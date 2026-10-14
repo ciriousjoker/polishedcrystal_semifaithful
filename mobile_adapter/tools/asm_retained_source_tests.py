@@ -446,15 +446,123 @@ def verify_guards_and_output(image):
     return {'palette_guard_range_bank_cases': guard_cases, 'shared_output_cases': hardware_cases, 'frozen_camera_cases': camera_cases, 'suppressed_pose_cases': 1, 'exact_rgb_sharing_cases': 2, 'useful_composer_stage_trace': stages,
             'guard_entry_t_clocks': {name: {'min': min(values), 'max': max(values)} for name, values in costs.items()}}
 
+def verify_native_guard_callers(image, disabled):
+    """Pair complete native callers, executing FarCall and original ROM0 helpers.
+
+    SetBlackObjectPals is paired through its actual tail jump into DelayFrame.
+    The frame wait itself belongs to the separate native integration oracle.
+    """
+    cases = stores = same_byte_stores = delay_paths = 0
+    class DelayBoundary(Exception):
+        pass
+    source_flags = ('wMobileStableSourceValid', 'wMobileStablePendingValid',
+                    'wMobileStableNativeCandidateValid')
+    feature_bytes = set()
+    for name, length in ([(name, 1) for name in source_flags] +
+                         [('wMobileStablePendingNative', 2), ('wMobileStablePendingPrivate', 2)] +
+                         [(name, 1) for name in ('wMobileStableActorViewValid', 'wMobileStableCapacityValid',
+                           'wMobileStableFinalDecision', 'wMobileStableProducerActive', 'wMobilePrivatePalDirty')]):
+        address = image[1][name][1]
+        if 0xd000 <= address < 0xe000:
+            feature_bytes.update(range(address - 0xd000, address - 0xd000 + length))
+    specifications = [('ClearSprites', 0), ('RestoreSprites', 0),
+                      ('SetBlackObjectPals', 0)]
+    specifications += [('ClearNormalSprites', used) for used in (0, 1, 4, 159, 160, 161, 255)]
+    for seed in (11, 42, 99):
+        for wbk in (0, 1, 5, 0xf9):
+            for entry, used in specifications:
+                for equal in (False, True):
+                    pair = []
+                    for enabled, linked in ((False, disabled), (True, image)):
+                        current = machine(linked, seed, bank=7, wbk=wbk)
+                        # Stable native addresses, deterministic native source, and complete bank image.
+                        current.memory[current.address('hUsedOAMIndex')] = used
+                        raw_start = current.address('wShadowOAM')
+                        current.memory[raw_start:raw_start + 512] = bytes(512) if equal else bytes(range(256)) * 2
+                        backup = current.address('wShadowOAMBackup') - 0xd000
+                        backup_bank = linked[1]['wShadowOAMBackup'][0]
+                        current.banks[backup_bank][backup:backup + 160] = current.memory[raw_start:raw_start + 160] if equal else bytes(reversed(range(160)))
+                        current.banks[5][0xdc0:0xe00] = bytes(64) if equal else bytes(range(64))
+                        headers_address = current.address('wMobileVirtualDescriptors') if enabled else 0
+                        if enabled:
+                            current.memory[0xff70] = 5
+                            for name in source_flags + ('wMobileStableProducerActive', 'wMobileNativeCaptureActive'):
+                                put(current, name, 1)
+                            put(current, 'wMobileStableFinalDecision', 0x82)
+                            put(current, 'wMobilePrivatePalDirty', 0)
+                            current.memory[0xff70] = wbk
+                            current.memory[headers_address:headers_address + 104] = bytes([0xc4]) * 104
+                        headers = bytes(current.memory[headers_address:headers_address + 104])
+                        owners = bytes(current.banks[5][0x868:0x890])
+                        native_writes = []
+                        original_write, original_read = current.write, current.read
+                        visited = set()
+                        def read(address):
+                            if address in (current.address('ByteFill'), current.address('_ByteFill'), current.address('CopyBytes'), current.address('_CopyBytes')):
+                                visited.add(address)
+                            if entry == 'SetBlackObjectPals' and address == current.address('DelayFrame'):
+                                raise DelayBoundary
+                            return original_read(address)
+                        def write(address, value):
+                            nonlocal stores, same_byte_stores
+                            span_start = (raw_start & 0xff00) | ((160 - used) & 255) if entry == 'ClearNormalSprites' else raw_start
+                            span_count = used if entry == 'ClearNormalSprites' else 160
+                            native = span_start <= address < span_start + span_count or ((current.memory[0xff70] & 7 or 1) == 5 and 0xddc0 <= address < 0xde00)
+                            if native:
+                                if enabled:
+                                    require(all(current.banks[5][current.address(n) - 0xd000] == 0 for n in source_flags), 'Native store preceded guard')
+                                    require(current.banks[5][current.address('wMobileStableFinalDecision') - 0xd000] == 0x82, 'Guard broke private RGB lock')
+                                    if entry == 'SetBlackObjectPals':
+                                        require(bytes(current.memory[headers_address:headers_address + 104]) == headers and bytes(current.banks[5][0x868:0x890]) == owners, 'Black guard changed headers/owners')
+                                        require(get(current, 'wMobileNativeCaptureActive') == 1 and current.banks[5][current.address('wMobileStableProducerActive') - 0xd000] == 1, 'Black guard consumed producer authorization')
+                                        require(current.banks[5][current.address('wMobilePrivatePalDirty') - 0xd000] & 7 == 7, 'Black guard did not dirty all peer colors')
+                                    else:
+                                        require(get(current, 'wMobileNativeCaptureActive') == 0 and current.banks[5][current.address('wMobileStableProducerActive') - 0xd000] == 0, 'OAM guard retained producer authorization')
+                                    stores += 1
+                                    same_byte_stores += int(original_read(address) == value)
+                                native_writes.append((address, value, dict(current.r), current.f, current.memory[0xff70]))
+                            original_write(address, value)
+                        current.read, current.write = read, write
+                        try:
+                            current.execute(entry)
+                            require(entry != 'SetBlackObjectPals', 'Black caller bypassed DelayFrame')
+                        except DelayBoundary:
+                            require(entry == 'SetBlackObjectPals' and current.sp == 0xc7fe, 'Black caller tail stack changed')
+                        require(current.bank == 7 and current.memory[current.address('hROMBank')] == 7 and current.memory[0xff70] == wbk, 'Native caller leaked bank state')
+                        if enabled:
+                            require(all(current.banks[5][current.address(n) - 0xd000] == 0 for n in source_flags), 'Caller did not revoke even with zero native stores')
+                            require(current.banks[5][current.address('wMobileStableFinalDecision') - 0xd000] == 0x82, 'Caller lost private RGB lock')
+                        target = 'CopyBytes' if entry == 'RestoreSprites' else 'ByteFill'
+                        require(current.address(target) in visited and current.address('_' + target) in visited, 'Original native RST entry/body was not executed')
+                        # All actual native store registers and flags must match, as must terminal ABI.
+                        pair.append((dict(current.r), current.f, current.sp, current.bank,
+                                     current.memory[current.address('hROMBank')], current.memory[0xff70],
+                                     bytes(current.memory[raw_start:raw_start + 512]), bytes(current.banks[1]),
+                                     bytes(value for i, value in enumerate(current.banks[5]) if i not in feature_bytes),
+                                     tuple(bytes(current.banks[i]) for i in (2, 3, 4, 6, 7)), native_writes))
+                    require(pair[0] == pair[1], f'Native caller ABI/output mismatch: {entry}/{used}/{wbk}/{equal}')
+                    count = 160 if entry in ('ClearSprites', 'RestoreSprites') else 64 if entry == 'SetBlackObjectPals' else used
+                    require(len(pair[1][-1]) == count, f'Native boundary/zero-count semantics changed: {entry}/{used}')
+                    cases += 1
+                    delay_paths += int(entry == 'SetBlackObjectPals')
+    return {'native_guard_caller_pairs': cases, 'native_guard_actual_stores': stores,
+            'native_guard_same_byte_stores': same_byte_stores, 'black_delay_tail_paths': delay_paths}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--rom', type=Path, required=True)
     parser.add_argument('--sym', type=Path, required=True)
     parser.add_argument('--output', type=Path)
+    parser.add_argument('--disabled-rom', type=Path)
+    parser.add_argument('--disabled-sym', type=Path)
     args = parser.parse_args()
     image = (args.rom.read_bytes(), symbols(args.sym))
     result = verify(image)
     result.update(verify_guards_and_output(image))
+    if args.disabled_rom:
+        require(args.disabled_sym is not None, 'Disabled symbol file is required')
+        result.update(verify_native_guard_callers(image, (args.disabled_rom.read_bytes(), symbols(args.disabled_sym))))
     text = json.dumps(result, indent=2) + '\n'
     if args.output:
         args.output.write_text(text)

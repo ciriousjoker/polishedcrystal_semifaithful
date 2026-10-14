@@ -272,9 +272,6 @@ Special_ReloadSpritesNoPalettes::
 	jmp DelayFrame
 
 SetBlackObjectPals::
-if DEF(MOBILE_ADAPTER)
-	farcall MobilePalettePrewriteBlack
-endc
 	ldh a, [rWBK]
 	push af
 	ld a, BANK(wOBPals2)
@@ -282,7 +279,11 @@ endc
 	ld hl, wOBPals2
 	ld bc, 8 palettes
 	xor a
+if DEF(MOBILE_ADAPTER)
+	farcall MobileClearBlackObjectPals
+else
 	rst ByteFill
+endc
 	pop af
 	ldh [rWBK], a
 	ld a, 1

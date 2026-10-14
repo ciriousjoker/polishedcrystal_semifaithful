@@ -1,18 +1,16 @@
 ClearSprites::
-if DEF(MOBILE_ADAPTER)
-	farcall MobileInvalidateNormalSource
-endc
 ; Erase OAM data
 	ld hl, wShadowOAM
 	ld bc, wShadowOAMEnd - wShadowOAM
 	xor a
+if DEF(MOBILE_ADAPTER)
+	farcall MobileClearNormalSourceBytes
+else
 	rst ByteFill
+endc
 	ret
 
 ClearNormalSprites::
-if DEF(MOBILE_ADAPTER)
-	farcall MobileInvalidateNormalSource
-endc
 	ldh a, [hUsedOAMIndex]
 	ld c, a
 	; a = OAM_SIZE - a
@@ -22,7 +20,11 @@ endc
 	ld l, a
 	xor a
 	ld b, a
+if DEF(MOBILE_ADAPTER)
+	farcall MobileClearNormalSourceBytes
+else
 	rst ByteFill
+endc
 	ret
 
 HideSprites::
@@ -80,9 +82,6 @@ BackupSprites::
 	ret
 
 RestoreSprites::
-if DEF(MOBILE_ADAPTER)
-	farcall MobileInvalidateNormalSource
-endc
 	; Copy wShadowOAMBackup to wShadowOAM
 	ldh a, [rWBK]
 	push af
@@ -91,7 +90,11 @@ endc
 	ld hl, wShadowOAMBackup
 	ld de, wShadowOAM
 	ld bc, wShadowOAMEnd - wShadowOAM
+if DEF(MOBILE_ADAPTER)
+	farcall MobileRestoreNormalSourceBytes
+else
 	rst CopyBytes
+endc
 	pop af
 	ldh [rWBK], a
 	ret

@@ -1,5 +1,15 @@
 ; Serialized normal producer source. Ordinary refresh preserves identity/history.
 SECTION "Mobile Retained Normal Source", ROMX, BANK[MOBILE_ROM_BANK]
+; Revoke immediately before the original native fill/copy, including equal bytes.
+; Setup before these entries does not modify the captured source.
+MobileClearNormalSourceBytes::
+ call MobileInvalidateNormalSource
+ jp ByteFill
+
+MobileRestoreNormalSourceBytes::
+ call MobileInvalidateNormalSource
+ jp CopyBytes
+
 MobileInvalidateNormalSource::
  push af
  push bc

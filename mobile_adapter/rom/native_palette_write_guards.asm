@@ -68,6 +68,11 @@ MobilePalettePrewriteFixedCopy::
  ld l, e
  jr MobilePaletteGuardFixedBank
 
+; Native bank setup precedes this entry; revoke before the first active OBJ store.
+MobileClearBlackObjectPals::
+ call MobilePalettePrewriteBlack
+ jp ByteFill
+
 MobilePalettePrewriteBlack::
  push af
  push bc
