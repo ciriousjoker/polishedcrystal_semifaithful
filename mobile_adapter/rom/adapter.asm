@@ -592,6 +592,8 @@ endr
 
 MobilePrepareCommand:
 	ld a, [wMobileStep]
+	cp (MobileCommandsEnd - MobileCommands) / 4
+	jp nc, .invalid
 	add a
 	add a
 	ld e, a
@@ -644,6 +646,10 @@ MobilePrepareCommand:
 .outgoing
 	ld hl, wMobileOutgoing
 	ld a, [wMobileOutgoingLength]
+	cp 8 ; application frame header
+	jp c, .invalid
+	cp MOBILE_FRAME_SIZE + 1
+	jp nc, .invalid
 	ld c, a
 	inc c
 	ld a, 1
@@ -765,6 +771,10 @@ MobilePrepareCommand:
 	ld a, MOBILE_WIRE_TX
 	ld [wMobileWire], a
 	jmp MobileClock
+.invalid
+; Abandon the partial stream and retain the normal reconnect cooldown.
+	ld a, MOBILE_ERROR_PACKET
+	jp MobileFail
 
 MobileSetRxPointer:
 	ld a, l
@@ -1186,6 +1196,8 @@ MobileCommands:
 	dw MobilePing
 	db $11, 0
 	dw MobilePing
+MobileCommandsEnd:
+ASSERT (MobileCommandsEnd - MobileCommands) % 4 == 0
 MobileResponseSizes:
 	db 8, 0, 12, 1, $ff, 1, 0, 0, 0
 MobileNintendo:
