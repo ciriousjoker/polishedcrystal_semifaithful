@@ -173,7 +173,9 @@ Portable manual save fixtures and provenance remain under
 [tests/scenarios](tests/scenarios/README.md). Existing historical passes do not
 establish current renderer acceptance; consult the external run's evidence index.
 
-The wire currently checks transport 1, lobby schema 4, capacity 4 and mechanics.
+The wire checks transport 1, lobby schema 5, capacity 4, mechanics and the
+32-byte clean single-player counterpart digest. Bridge households and shared room
+admission reject a different identity before participation.
 Prototype room IDs are nonzero 16-bit identifiers, not secure invite codes.
 See [the protocol reference](protocol/lobby-v2.md) for current compatibility
 boundaries; finite test evidence does not prove every possible fault or WAN path.

@@ -166,6 +166,7 @@ impl Backend {
 struct Client {
     writer: Option<mpsc::Sender<Frame>>,
     local_lobby: u16,
+    compatibility: Option<(u8, [u8; 32])>,
     presence: Option<Frame>,
     next_presence_at: u64,
     joined: bool,
@@ -412,7 +413,7 @@ pub async fn serve(
                 if let Some(id) = (1..=MAX_STREAM).find(|id| !clients.contains_key(id)) {
                     println!("BRIDGE_EMULATOR_CONNECTED stream={id} peer={}", stream.peer_addr()?);
                     let (placeholder, _) = mpsc::channel(1);
-                    clients.insert(id, Client { writer: Some(placeholder), local_lobby: 0,
+                    clients.insert(id, Client { writer: Some(placeholder), local_lobby: 0, compatibility: None,
                         presence: None, next_presence_at: 0, joined: false, player: None,
                         generation: 0, authority_at: now, roster: None, local_credit: false, delivered: Vec::new() });
                     let tx = tx.clone();
@@ -428,17 +429,42 @@ pub async fn serve(
                         backend.input(Envelope { stream: id, frame: None }, now).await
                     },
                     Command::Input(id, mut frame) => {
+                        // Only an authoritative WELCOME binds household compatibility.
+                        // Failed/full/pending joins cannot establish or poison it.
+                        let household = clients.values()
+                            .find(|c| c.joined && c.writer.is_some())
+                            .and_then(|c| c.compatibility);
                         if let Some(c) = clients.get_mut(&id).filter(|c| c.writer.is_some()) {
                             match frame.kind {
                                 wire::HELLO if c.local_lobby == 0 => {
                                     match wire::Hello::decode(&frame.payload) {
                                         Ok(mut hello) => {
+                                            let identity = (hello.mechanics, hello.counterpart);
                                             c.local_lobby = hello.lobby;
-                                            hello.lobby = config.lobby;
-                                            frame.payload = hello.encode();
-                                            backend.input(Envelope { stream: id, frame: Some(frame) }, now).await
+                                            if household.is_some_and(|bound| bound != identity) {
+                                                if let Some(writer) = &c.writer {
+                                                    let _ = writer.try_send(Frame { kind: wire::ERROR,
+                                                        sequence: frame.sequence,
+                                                        payload: vec![wire::Error::Incompatible as u8] });
+                                                }
+                                                c.writer = None;
+                                                Ok(Vec::new())
+                                            } else {
+                                                c.compatibility = Some(identity);
+                                                hello.lobby = config.lobby;
+                                                frame.payload = hello.encode();
+                                                backend.input(Envelope { stream: id, frame: Some(frame) }, now).await
+                                            }
                                         },
-                                        Err(_) => { c.writer = None; Ok(Vec::new()) }
+                                        Err(error) => {
+                                            if let Some(writer) = &c.writer {
+                                                let _ = writer.try_send(Frame { kind: wire::ERROR,
+                                                    sequence: frame.sequence,
+                                                    payload: vec![error as u8] });
+                                            }
+                                            c.writer = None;
+                                            Ok(Vec::new())
+                                        }
                                     }
                                 },
                                 wire::PRESENCE if c.joined => {
@@ -568,6 +594,7 @@ mod tests {
         let mut client = Client {
             writer: None,
             local_lobby: 1,
+            compatibility: Some((0, [0x42; 32])),
             presence: None,
             next_presence_at: 0,
             joined: true,
@@ -605,6 +632,7 @@ mod tests {
         let mut client = Client {
             writer: Some(tx),
             local_lobby: 1,
+            compatibility: Some((0, [0x42; 32])),
             presence: None,
             next_presence_at: 0,
             joined: true,

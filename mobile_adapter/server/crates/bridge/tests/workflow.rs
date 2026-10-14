@@ -75,6 +75,7 @@ impl Client {
                 lobby: 1,
                 resume: 0,
                 token: [0; 8],
+                counterpart: [0x42; 32],
             }
             .encode(),
         };
@@ -222,6 +223,7 @@ async fn exercise(first: &Service, second: &Service) {
                     lobby: 1,
                     resume: 0,
                     token: [0; 8],
+                    counterpart: [0x42; 32],
                 }
                 .encode(),
             }
@@ -248,6 +250,9 @@ async fn exercise(first: &Service, second: &Service) {
     )
     .await
     .unwrap();
+    let rejected = receive(&mut bad).await;
+    assert_eq!(rejected.kind, wire::ERROR);
+    assert_eq!(rejected.payload, [wire::Error::Malformed as u8]);
     assert!(
         tokio::time::timeout(Duration::from_secs(1), mobile_server::read_frame(&mut bad))
             .await
@@ -495,6 +500,9 @@ async fn maximum_delay_keeps_four_active_players_and_isolates_a_bad_local_stream
     )
     .await
     .unwrap();
+    let rejected = receive(&mut bad).await;
+    assert_eq!(rejected.kind, wire::ERROR);
+    assert_eq!(rejected.payload, [wire::Error::Malformed as u8]);
     assert!(
         tokio::time::timeout(Duration::from_secs(1), mobile_server::read_frame(&mut bad))
             .await
@@ -504,6 +512,132 @@ async fn maximum_delay_keeps_four_active_players_and_isolates_a_bad_local_stream
     for task in tasks {
         task.await.unwrap();
     }
+    first.finish().await;
+    second.finish().await;
+    host.finish().await;
+}
+
+async fn hello_attempt(address: SocketAddr, hello: wire::Hello) -> (TcpStream, Frame) {
+    let mut stream = TcpStream::connect(address).await.unwrap();
+    stream
+        .write_all(
+            &Frame {
+                kind: wire::HELLO,
+                sequence: 1,
+                payload: hello.encode(),
+            }
+            .encode()
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    let reply = receive(&mut stream).await;
+    (stream, reply)
+}
+
+async fn exercise_counterpart(first: &Service, second: &Service) {
+    let identity = wire::Hello {
+        mechanics: 0,
+        lobby: 1,
+        resume: 0,
+        token: [0; 8],
+        counterpart: [0x42; 32],
+    };
+    // A rejected attempt must not establish a household identity.
+    let mut invalid = identity.clone();
+    invalid.mechanics = 2;
+    let mut schema = identity.encode();
+    schema[0] ^= 0xff;
+    for payload in [invalid.encode(), schema] {
+        let mut bad = TcpStream::connect(first.address).await.unwrap();
+        bad.write_all(
+            &Frame {
+                kind: wire::HELLO,
+                sequence: 1,
+                payload,
+            }
+            .encode()
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+        let rejected = receive(&mut bad).await;
+        assert_eq!(rejected.kind, wire::ERROR);
+        assert_eq!(rejected.payload, [wire::Error::Incompatible as u8]);
+        assert!(
+            tokio::time::timeout(Duration::from_secs(1), mobile_server::read_frame(&mut bad))
+                .await
+                .unwrap()
+                .is_err()
+        );
+    }
+    let mut healthy = Client::join(first.address).await;
+    let mut changed = identity.clone();
+    changed.counterpart[31] ^= 1;
+    let (_, rejected) = hello_attempt(first.address, changed.clone()).await;
+    assert_eq!(
+        (rejected.kind, rejected.payload),
+        (wire::ERROR, vec![wire::Error::Incompatible as u8])
+    );
+    // A separate Bridge must also receive an authoritative room rejection.
+    let (_, rejected) = hello_attempt(second.address, changed).await;
+    assert_eq!(
+        (rejected.kind, rejected.payload),
+        (wire::ERROR, vec![wire::Error::Incompatible as u8])
+    );
+    let mut sibling = Client::join(first.address).await;
+    let mut other = Client::join(second.address).await;
+    healthy.position(10).await;
+    sibling.position(20).await;
+    other.position(30).await;
+    healthy.peers(2).await;
+    sibling.peers(2).await;
+    other.peers(2).await;
+    // Repeated HELLO still disconnects only its original stream.
+    other
+        .stream
+        .write_all(
+            &Frame {
+                kind: wire::HELLO,
+                sequence: 2,
+                payload: identity.encode(),
+            }
+            .encode()
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    let closed = tokio::time::timeout(Duration::from_secs(1), async {
+        loop {
+            if mobile_server::read_frame(&mut other.stream).await.is_err() {
+                break;
+            }
+        }
+    })
+    .await;
+    assert!(closed.is_ok());
+    healthy.position(11).await;
+    sibling.position(21).await;
+    healthy.peers(1).await;
+    sibling.peers(1).await;
+}
+
+#[tokio::test]
+async fn counterpart_household_local_rejection_preserves_siblings() {
+    let bridge = Service::bridge(Mode::Local).await;
+    exercise_counterpart(&bridge, &bridge).await;
+    bridge.finish().await;
+}
+
+#[tokio::test]
+async fn counterpart_two_hosted_bridges_reject_before_participation() {
+    let host = Service::host(0).await;
+    let mode = Mode::Internet {
+        origin: format!("ws://{}", host.address),
+    };
+    let first = Service::bridge(mode.clone()).await;
+    let second = Service::bridge(mode).await;
+    exercise_counterpart(&first, &second).await;
     first.finish().await;
     second.finish().await;
     host.finish().await;

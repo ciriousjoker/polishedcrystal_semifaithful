@@ -28,7 +28,7 @@ MobileSetFrame:
 
 MobileBuildHello:
 	ld a, MOBILE_HELLO
-	lb bc, MOBILE_WELCOME, 15
+	lb bc, MOBILE_WELCOME, MOBILE_HELLO_PAYLOAD_SIZE
 	call MobileSetFrame
 	ld hl, MobileHelloPrefix
 	ld bc, 5
@@ -39,15 +39,23 @@ MobileBuildHello:
 	ld hl, wMobileResumeToken
 	ld bc, 8
 	rst CopyBytes
+	farcall MobileCopyCompatibilityHash
 	ret
 MobileHelloPrefix:
 	db MOBILE_SCHEMA, MOBILE_MECHANICS, MOBILE_CAPACITY, 0, 1 ; public test lobby 1
 MobileHelloVector::
-	db $50, $43, 1, MOBILE_HELLO, 0, 1, 0, 15
+	db $50, $43, 1, MOBILE_HELLO, 0, 1, 0, MOBILE_HELLO_PAYLOAD_SIZE
 	db MOBILE_SCHEMA, MOBILE_MECHANICS, MOBILE_CAPACITY, 0, 1, 0, 0
 	db 0, 0, 0, 0, 0, 0, 0, 0
+if DEF(MOBILE_TEST_SCENARIOS)
+	INCBIN "mobile_adapter/build-mobile-test/compatibility.sha256"
+elif DEF(FAITHFUL)
+	INCBIN "mobile_adapter/build-faithful-mobile/compatibility.sha256"
+else
+	INCBIN "mobile_adapter/build-mobile/compatibility.sha256"
+endc
 MobileHelloVectorEnd::
-ASSERT MobileHelloVectorEnd - MobileHelloVector == 23
+ASSERT MobileHelloVectorEnd - MobileHelloVector == MOBILE_HELLO_PAYLOAD_SIZE + 8
 MobilePollVector:
 	db $50, $43, 1, MOBILE_POLL, 0, 0, 0, 0
 
@@ -1198,3 +1206,14 @@ MobileStepProgress:
 .down
 	ld e, c
 	ret
+
+; The farcall restores the caller ROM bank; CopyBytes retains DE as output end.
+; Keep this helper with the digest, without relocating any ordinary game code.
+PUSHS
+SECTION "Mobile Compatibility Copy", ROMX, BANK[MOBILE_ROM_BANK + 5]
+MobileCopyCompatibilityHash::
+	ld hl, MobileCompatibilityHash
+	ld bc, 32
+	rst CopyBytes
+	ret
+POPS

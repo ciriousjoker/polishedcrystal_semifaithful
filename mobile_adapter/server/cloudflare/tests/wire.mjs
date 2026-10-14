@@ -3,14 +3,17 @@ import assert from 'node:assert/strict';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 export const CAPACITY = 4;
+export const SCHEMA = 5;
+export const COUNTERPART = Buffer.alloc(32, 0x42);
 export function frame(kind, sequence, payload = []) {
   const data = Buffer.alloc(8 + payload.length);
   data.set([0x50, 0x43, 1, kind]); data.writeUInt16BE(sequence, 4);
   data.writeUInt16BE(payload.length, 6); data.set(payload, 8); return data;
 }
-export function hello(room, resume = 0, token = Buffer.alloc(8)) {
-  const data = Buffer.alloc(15); data.set([4, 0, CAPACITY]);
-  data.writeUInt16BE(room, 3); data.writeUInt16BE(resume, 5); data.set(token, 7);
+export function hello(room, resume = 0, token = Buffer.alloc(8), counterpart = COUNTERPART) {
+  assert.equal(token.length, 8); assert.equal(counterpart.length, 32);
+  const data = Buffer.alloc(47); data.set([SCHEMA, 0, CAPACITY]);
+  data.writeUInt16BE(room, 3); data.writeUInt16BE(resume, 5); data.set(token, 7); data.set(counterpart, 15);
   return frame(16, 1, data);
 }
 export function presence(welcome, sequence, x) {

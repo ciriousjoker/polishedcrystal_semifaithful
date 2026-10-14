@@ -10,7 +10,7 @@ REPO = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--rgbds", type=Path, required=True, help="Pinned RGBDS directory")
 parser.add_argument("--renderer", choices=("virtual",), default="virtual", help="Independent renderer; retained for existing test commands")
-parser.add_argument("--only", choices=("all", "admission"), default="all", help="Run a focused compiled family during renderer iteration")
+parser.add_argument("--only", choices=("all", "admission", "hello"), default="all", help="Run a focused compiled family during renderer iteration")
 args = parser.parse_args()
 if args.renderer == "virtual":
     from prepare_virtual_avatars import inventory, source
@@ -126,9 +126,30 @@ with tempfile.TemporaryDirectory(prefix="mobile-asm-") as temporary:
             "Actual ROM vector differs from Rust protocol")
     bank, address = symbols["MobileHelloVector"]
     offset = bank * 0x4000 + address - 0x4000
-    require(rom[offset:offset + 23] == bytes.fromhex(
-        "50 43 01 10 00 01 00 0f 04 00 04 00 01 00 00 00 00 00 00 00 00 00 00"),
-        "Actual ROM HELLO differs from the standard-build lobby protocol")
+    prefix = bytes.fromhex(
+        "50 43 01 10 00 01 00 2f 05 00 04 00 01 00 00 00 00 00 00 00 00 00 00")
+    digest = (REPO / "mobile_adapter/build-mobile/compatibility.sha256").read_bytes()
+    require(len(digest) == 32, "Clean counterpart digest must be 32 bytes")
+    vector = rom[offset:offset + 55]
+    require(vector == prefix + digest,
+            "Actual ROM HELLO differs from schema 5 and the clean counterpart digest")
+    hash_bank, hash_address = symbols["MobileCompatibilityHash"]
+    hash_offset = hash_bank * 0x4000 + hash_address - 0x4000
+    require(vector[23:] == rom[hash_offset:hash_offset + 32],
+            "Actual HELLO digest differs from the embedded compatibility identity")
+    helper_bank, helper_address = symbols["MobileCopyCompatibilityHash"]
+    helper_offset = helper_bank * 0x4000 + helper_address - 0x4000
+    require(helper_bank == hash_bank, "Digest copy helper must share the digest ROM bank")
+    require(rom[helper_offset:helper_offset + 8] == bytes([0x21])
+            + hash_address.to_bytes(2, "little") + bytes.fromhex("01 20 00 e7 c9"),
+            "Digest copy helper must copy exactly 32 bytes using ordinary CopyBytes")
+    if args.only == "hello":
+        import hashlib
+        print("HELLO_VECTOR=" + vector.hex())
+        print("COUNTERPART=" + digest.hex())
+        print("FIXTURE_SHA256=" + hashlib.sha256(rom).hexdigest())
+        print("Focused compiled schema-5 HELLO contracts passed")
+        raise SystemExit(0)
     require(symbols["wMobileResidentStart"] == (0, 0xcec4), "Resident placement changed")
     require(symbols["wMobileBufferStart"] == (2, 0xd4eb), "Buffer placement changed")
     require(symbols["wMobileBufferEnd"][1] <= 0xe000, "Buffer overflow")

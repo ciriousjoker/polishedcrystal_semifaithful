@@ -74,7 +74,7 @@ impl LobbyObject {
                 continue;
             };
             ws.serialize_attachment(Attachment {
-                version: 4,
+                version: 5,
                 group,
                 next_group: runtime.next_group,
                 owner: owner.checkpoint(),
@@ -151,7 +151,7 @@ impl DurableObject for LobbyObject {
         for ws in &sockets {
             match ws.deserialize_attachment::<Attachment>() {
                 Ok(Some(a))
-                    if a.version == 4
+                    if a.version == 5
                         && a.budget.validate_checkpoint()
                         && a.group != 0
                         && a.next_group >= a.group

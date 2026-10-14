@@ -1,7 +1,7 @@
 //! Explicit, bounded lobby wire fields. All multibyte fields are big endian.
 use crate::DecodeError;
 
-pub const SCHEMA: u8 = 4;
+pub const SCHEMA: u8 = 5;
 include!(concat!(env!("OUT_DIR"), "/capacity.rs"));
 pub const HELLO: u8 = 16;
 pub const WELCOME: u8 = 17;
@@ -16,7 +16,7 @@ pub const DELTA: u8 = 24;
 pub const RECEIPT: u8 = 25;
 pub const SNAPSHOT_LEN: usize = 11;
 pub const PEER_LEN: usize = 17;
-pub const HELLO_LEN: usize = 15;
+pub const HELLO_LEN: usize = 47;
 pub const WELCOME_LEN: usize = 15;
 pub const PRESENCE_LEN: usize = 4 + SNAPSHOT_LEN;
 
@@ -37,6 +37,8 @@ fn word(bytes: &[u8], at: usize) -> u16 {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Hello {
+    /// SHA-256 of the matching clean ordinary cartridge, independent of schema.
+    pub counterpart: [u8; 32],
     pub mechanics: u8,
     pub lobby: u16,
     pub resume: u16,
@@ -59,6 +61,7 @@ impl Hello {
             lobby: word(bytes, 3),
             resume: word(bytes, 5),
             token: bytes[7..15].try_into().unwrap(),
+            counterpart: bytes[15..47].try_into().unwrap(),
         })
     }
 
@@ -67,6 +70,7 @@ impl Hello {
         bytes.extend(self.lobby.to_be_bytes());
         bytes.extend(self.resume.to_be_bytes());
         bytes.extend(self.token);
+        bytes.extend(self.counterpart);
         bytes
     }
 }
@@ -222,9 +226,26 @@ mod tests {
             lobby: 0x1234,
             resume: 7,
             token: [0xa5; 8],
+            counterpart: [0x42; 32],
         };
-        assert_eq!(&hello.encode()[..7], &[4, 1, 4, 0x12, 0x34, 0, 7]);
-        assert_eq!(Hello::decode(&hello.encode()), Ok(hello));
+        assert_eq!(&hello.encode()[..7], &[5, 1, 4, 0x12, 0x34, 0, 7]);
+        let encoded = hello.encode();
+        assert_eq!(encoded.len(), HELLO_LEN);
+        assert_eq!(&encoded[7..15], &[0xa5; 8]);
+        assert_eq!(&encoded[15..47], &[0x42; 32]);
+        let frame = crate::Frame {
+            kind: HELLO,
+            sequence: 1,
+            payload: encoded.clone(),
+        };
+        assert_eq!(frame.encode().unwrap().len(), 55);
+        assert_eq!(Hello::decode(&encoded), Ok(hello));
+        let mut oversized = encoded.clone();
+        oversized.push(0);
+        assert_eq!(Hello::decode(&oversized), Err(Error::Malformed));
+        let mut old_schema = encoded;
+        old_schema[0] = 4;
+        assert_eq!(Hello::decode(&old_schema), Err(Error::Incompatible));
         let welcome = Welcome {
             player: 0x1234,
             generation: 2,
@@ -244,6 +265,7 @@ mod tests {
             lobby: 1,
             resume: 0,
             token: [0; 8],
+            counterpart: [0x42; 32],
         }
         .encode();
         for at in 0..3 {

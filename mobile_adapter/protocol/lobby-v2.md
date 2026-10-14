@@ -1,7 +1,7 @@
-# Lobby schema 4
+# Lobby schema 5
 
-The historical filename is retained for links. This is the current schema-4
-four-player wire contract. Schema 2/3 clients must update with their Bridge.
+The historical filename is retained for links. This is the current schema-5
+four-player wire contract. Schema 2/3/4 clients must update with their Bridge.
 Each ROM opens one TCP stream through libmobile's ISP path to the local Bridge.
 Transport-v1 has an eight-byte PC header, version 1 and a maximum 120-byte payload.
 Words are unsigned big endian. Reads and adapter DATA responses may split/combine
@@ -9,7 +9,7 @@ frames; parsing never assumes a socket read equals a complete application frame.
 
 | Kind | Value | Payload |
 | --- | ---: | --- |
-| HELLO | 16 | schema u8, mechanics u8, capacity u8, lobby u16, resume ID u16, token 8 bytes |
+| HELLO | 16 | schema u8, mechanics u8, capacity u8, lobby u16, resume ID u16, token 8 bytes, clean counterpart digest 32 bytes |
 | WELCOME | 17 | ID u16, generation u16, lobby u16, token 8 bytes, capacity u8 |
 | PRESENCE | 18 | ID u16, generation u16, snapshot 11 bytes |
 | ROSTER | 19 | receiver ID u16, generation u16, count u8, count times 17-byte peer record |
@@ -20,7 +20,7 @@ frames; parsing never assumes a socket read equals a complete application frame.
 | DELTA | 24 | ROSTER layout, changed existing peers only |
 | RECEIPT | 25 | receiver ID u16, generation u16 |
 
-Schema is 4; mechanics is standard 0 or faithful 1. Capacity is read from the
+Schema is 5; mechanics is standard 0 or faithful 1. Capacity is read from the
 single `rom/capacity.asm` declaration by both assembly and the Rust build script.
 The supported value is four total players, with three generic remote pool entries.
 This knob is subject to ROM, RAM, graphics and audited layout bounds; increasing
@@ -61,11 +61,33 @@ intermediate presence may be skipped. Remote actors have no scripts or collision
 Map instance keys hash interior blocks and tileset in bounded idle phases. A
 scripted layout change invalidates the visual key. The 16-bit key can collide and
 is only a visibility hint. It never synchronizes story, items, puzzles or encounters.
-Transport/schema/capacity/mechanics checks are not complete cross-revision game
-compatibility. The current 15-byte HELLO carries no clean-game build digest.
-The build embeds a clean-counterpart digest, but live digest negotiation and
-Bridge/server enforcement remain open work. Protocol identity must be checked
-separately from game content identity.
+HELLO has exactly 47 payload bytes and a 55-byte transport frame. Its offsets are
+schema 0, mechanics 1, capacity 2, lobby 3..5, resume ID 5..7, token 7..15 and
+counterpart digest 15..47, with ranges excluding the end. The digest is the raw
+32-byte SHA-256 of the matching clean ordinary cartridge, embedded by the build.
+It is a conservative identity, not a semantic content digest. Separate schema,
+mechanics and capacity checks still apply even if the clean digest matches.
+
+The authority rejects a new or resumed player whose digest or mechanics differ
+from live members in that room. A retained offline resume additionally checks its
+own original digest and returns incompatible for a changed digest without changing
+its token, generation or identity. Room identity lasts while live membership
+exists. Once all members leave, disconnect or expire, a fresh join may establish a
+different identity. Earlier offline records retain their individual constraints
+for the existing resume window; they cannot rejoin an incompatible live group.
+A reconstructed checkpoint retains only live members and their digests, validates
+uniform compatibility and discards offline resume records as before. Recreating
+an empty owner permits a new identity. Missing digest fields in an old checkpoint
+fail deserialization rather than silently establishing compatibility.
+
+Each Bridge validates every initial emulator HELLO and preserves all fields except
+the configured lobby translation. Its household identity is derived only from
+currently connected clients with an authoritative WELCOME. Pending, incompatible,
+full or otherwise rejected attempts cannot bind it. A mismatch gets incompatible
+before participation, and healthy sibling streams remain independent. The shared
+room enforces the same rule between different Bridges. Repeated HELLO on a stream
+still disconnects that stream. This is compatibility negotiation, not attestation
+against a modified client lying about its digest.
 
 ## Household envelope and owner
 
@@ -82,7 +104,9 @@ upgrade at `/lobbies/<id>/ws` to one owner per lobby. Native hosted simulation a
 WASM Durable Object share this same socket-independent owner; subsequent DO
 messages are handled by the DO, not a Worker relay per packet. The DO's validated
 hibernation attachments retain transient owner state and accepted socket identities.
-They do not contain cartridge saves, inventory or any irreplaceable game state.
+Attachment version 5 retains the live compatibility fields and rejects older
+attachments so clients rejoin through current admission. They do not contain
+cartridge saves, inventory or any irreplaceable game state.
 
 Internet presence and authority rosters coalesce at 20Hz per player. Embedded mode
 flushes dirty state immediately. Local POLL grants one delivery credit and stays

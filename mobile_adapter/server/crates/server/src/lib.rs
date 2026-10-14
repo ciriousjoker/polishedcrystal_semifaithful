@@ -485,6 +485,7 @@ mod tests {
                     lobby: 7,
                     resume: 0,
                     token: [0; 8],
+                    counterpart: [0x42; 32],
                 }
                 .encode(),
             };
@@ -587,6 +588,7 @@ mod tests {
                                 lobby: 7,
                                 resume: 0,
                                 token: [0; 8],
+                                counterpart: [0x42; 32],
                             }
                             .encode(),
                         }

@@ -13,6 +13,7 @@ const LIVE_MS: u64 = 3_000;
 struct Player {
     welcome: Welcome,
     mechanics: u8,
+    counterpart: [u8; 32],
     session: Option<u64>,
     last_seen: u64,
     revision: Option<u16>,
@@ -156,6 +157,7 @@ impl Room {
             && players.values().all(|p| {
                 players.values().all(|q| {
                     p.mechanics == q.mechanics
+                        && p.counterpart == q.counterpart
                         && (p.welcome.player == q.welcome.player || p.session != q.session)
                 })
             })
@@ -214,12 +216,15 @@ impl Lobbies {
         if self.players.values().any(|player| {
             player.session.is_some()
                 && player.welcome.lobby == hello.lobby
-                && player.mechanics != hello.mechanics
+                && (player.mechanics != hello.mechanics || player.counterpart != hello.counterpart)
         }) {
             return Err(Error::Incompatible);
         }
         if hello.resume != 0 {
             let player = self.players.get_mut(&hello.resume).ok_or(Error::Resume)?;
+            if player.counterpart != hello.counterpart {
+                return Err(Error::Incompatible);
+            }
             if player.welcome.token != hello.token
                 || player.welcome.lobby != hello.lobby
                 || player.mechanics != hello.mechanics
@@ -265,6 +270,7 @@ impl Lobbies {
             Player {
                 welcome: welcome.clone(),
                 mechanics: hello.mechanics,
+                counterpart: hello.counterpart,
                 session: Some(session),
                 last_seen: now,
                 revision: None,
@@ -383,6 +389,7 @@ mod tests {
             lobby: 1,
             resume: 0,
             token: [0; 8],
+            counterpart: [0x42; 32],
         }
     }
     fn snapshot() -> Snapshot {
@@ -395,6 +402,66 @@ mod tests {
             status: 1,
             ..Snapshot::default()
         }
+    }
+
+    #[test]
+    fn counterpart_admission_resume_and_empty_room_lifetime() {
+        let mut model = Lobbies::default();
+        let first = model.join(1, hello(), [7; 8], 0).unwrap();
+        let mut changed = hello();
+        changed.counterpart[31] ^= 1;
+        assert_eq!(
+            model.join(2, changed.clone(), [2; 8], 1),
+            Err(Error::Incompatible)
+        );
+        // Same trainer identity is irrelevant: no trainer ID participates in HELLO.
+        let healthy = model.join(2, hello(), [2; 8], 1).unwrap();
+        assert_ne!(first.player, healthy.player);
+        let mut other_room = changed.clone();
+        other_room.lobby = 2;
+        assert!(model.join(3, other_room, [3; 8], 1).is_ok());
+        model.disconnect(1, 2);
+        model.disconnect(2, 2);
+        changed.resume = first.player;
+        changed.token = first.token;
+        assert_eq!(
+            model.join(4, changed.clone(), [4; 8], 3),
+            Err(Error::Incompatible)
+        );
+        // A rejected mismatch cannot mutate the retained identity or generation.
+        let mut resume = hello();
+        resume.resume = first.player;
+        resume.token = first.token;
+        let resumed = model.join(4, resume.clone(), [4; 8], 3).unwrap();
+        assert_eq!(resumed.generation, 2);
+        model.disconnect(4, 4);
+        changed.resume = 0;
+        changed.token = [0; 8];
+        // With no live members, a fresh join may establish a new room identity.
+        let replacement = model.join(5, changed, [5; 8], 5).unwrap();
+        assert_eq!(
+            model.join(6, resume.clone(), [6; 8], 6),
+            Err(Error::Incompatible)
+        );
+        model.disconnect(5, 7);
+        assert_eq!(model.join(6, resume, [6; 8], 8).unwrap().generation, 3);
+        assert_ne!(replacement.player, first.player);
+    }
+
+    #[test]
+    fn typed_invalid_identity_attempt_does_not_change_membership() {
+        let mut model = Lobbies::default();
+        let mut invalid = hello();
+        invalid.mechanics = 2;
+        assert_eq!(model.join(1, invalid, [1; 8], 0), Err(Error::Malformed));
+        let mut invalid = hello();
+        invalid.lobby = 0;
+        assert_eq!(model.join(1, invalid, [1; 8], 0), Err(Error::Malformed));
+        assert_eq!(model.join(0, hello(), [1; 8], 0), Err(Error::Malformed));
+        for session in 1..=4 {
+            assert!(model.join(session, hello(), [session as u8; 8], 1).is_ok());
+        }
+        assert_eq!(model.join(5, hello(), [5; 8], 1), Err(Error::Full));
     }
 
     #[test]

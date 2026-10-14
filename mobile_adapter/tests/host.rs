@@ -43,6 +43,7 @@ fn hello() -> Hello {
         lobby: 1,
         resume: 0,
         token: [0; 8],
+        counterpart: [0x42; 32],
     }
 }
 
@@ -240,4 +241,91 @@ fn work_before_measurement_cannot_mask_a_later_dropped_frame() {
     assert_eq!(native, vec![1, 1, 1]);
     assert_eq!(mobile, vec![1, 0, 1]);
     assert!(cadence_regression(&native, &mobile).is_some());
+}
+
+#[test]
+fn owner_counterpart_checkpoint_restore_and_recreation() {
+    fn input(stream: u16, hello: Hello) -> Envelope {
+        Envelope {
+            stream,
+            frame: Some(Frame {
+                kind: wire::HELLO,
+                sequence: 1,
+                payload: hello.encode(),
+            }),
+        }
+    }
+    fn result(effects: &[mobile_lobby_core::group::Effect], group: u64, stream: u16) -> &Frame {
+        effects
+            .iter()
+            .find(|e| {
+                e.group == group
+                    && e.envelope.stream == stream
+                    && e.envelope
+                        .frame
+                        .as_ref()
+                        .is_some_and(|f| matches!(f.kind, wire::WELCOME | wire::ERROR))
+            })
+            .unwrap()
+            .envelope
+            .frame
+            .as_ref()
+            .unwrap()
+    }
+    let mut owner = Owner::new(1).unwrap();
+    let first = owner.receive(1, input(1, hello()), [1; 8], 0);
+    assert_eq!(result(&first, 1, 1).kind, wire::WELCOME);
+    let mut changed = hello();
+    changed.counterpart[0] ^= 1;
+    let rejected = owner.receive(2, input(1, changed.clone()), [2; 8], 1);
+    assert_eq!(
+        result(&rejected, 2, 1).payload,
+        vec![Error::Incompatible as u8]
+    );
+    assert_eq!(owner.member_count(), 1);
+    let mut restored = owner.checkpoint();
+    assert!(restored.validate_checkpoint());
+    let rejected = restored.receive(2, input(1, changed.clone()), [2; 8], 2);
+    assert_eq!(
+        result(&rejected, 2, 1).payload,
+        vec![Error::Incompatible as u8]
+    );
+    for group in 2..=4 {
+        let accepted = restored.receive(group, input(1, hello()), [group as u8; 8], 3);
+        assert_eq!(result(&accepted, group, 1).kind, wire::WELCOME);
+    }
+    assert_eq!(restored.member_count(), 4);
+    assert!(restored.checkpoint().validate_checkpoint());
+    // Room serialization is independent of the Owner's transport tuple-key map.
+    let mut room = mobile_lobby_core::Room::new(1).unwrap();
+    room.reply(1, input(1, hello()).frame.as_ref().unwrap(), [1; 8], 0)
+        .unwrap();
+    room.reply(2, input(2, hello()).frame.as_ref().unwrap(), [2; 8], 0)
+        .unwrap();
+    let bytes = serde_json::to_vec(&room.checkpoint()).unwrap();
+    let mut decoded: mobile_lobby_core::Room = serde_json::from_slice(&bytes).unwrap();
+    assert!(decoded.validate_checkpoint());
+    assert_eq!(
+        decoded.reply(
+            3,
+            input(3, changed.clone()).frame.as_ref().unwrap(),
+            [3; 8],
+            1
+        ),
+        Err(Error::Incompatible)
+    );
+    // Checkpoint corruption cannot erase one retained player's identity constraint.
+    let mut mixed = serde_json::to_value(room.checkpoint()).unwrap();
+    mixed["model"]["players"]["1"]["counterpart"][0] = serde_json::json!(0);
+    let invalid: mobile_lobby_core::Room = serde_json::from_value(mixed).unwrap();
+    assert!(!invalid.validate_checkpoint());
+    let mut missing = serde_json::to_value(room.checkpoint()).unwrap();
+    missing["model"]["players"]["1"]
+        .as_object_mut()
+        .unwrap()
+        .remove("counterpart");
+    assert!(serde_json::from_value::<mobile_lobby_core::Room>(missing).is_err());
+    let mut recreated = Owner::new(1).unwrap();
+    let accepted = recreated.receive(1, input(1, changed), [1; 8], 4);
+    assert_eq!(result(&accepted, 1, 1).kind, wire::WELCOME);
 }
