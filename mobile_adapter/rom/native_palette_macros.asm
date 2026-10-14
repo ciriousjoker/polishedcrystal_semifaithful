@@ -80,12 +80,15 @@ MACRO mobile_virtual_capture
 	ld l, a
 	ld h, HIGH(wMobileVirtualDescriptors)
 	ld a, [wMobileVirtualCaptureClass]
-	or $c4 ; current native OAM, canonical rectangle, four quads
+	or $44 ; pending native rectangle, four quads
 	ld [hl], a
 	inc hl
 	ld a, c
 	sub 3 * OBJ_SIZE
 	ld [hl], a
+	dec hl
+	dec hl
+	ld [hl], $80 ; unused raw byte 5, impossible ROM template high byte
 	pop hl
 	if _NARG >= 2
 	jp \2 ; the captured four-quad bounds are already proved
@@ -180,10 +183,12 @@ MACRO mobile_virtual_capture
 	jr c, .template\@
 	sub c
 	ld c, a
-	ld a, b
-	or $80
-	ld [hli], a
+	ld [hl], b ; intention only until the final native tuple is stored
+	inc hl
 	ld [hl], c
+	dec hl
+	dec hl
+	ld [hl], $80 ; unused raw byte 5, never a template pointer
 	jr .restore\@
 .template\@
 	ld [hl], b
@@ -228,6 +233,33 @@ MACRO mobile_virtual_capture
 	pop bc
 .capture_done\@
 	ldh a, [hUsedSpriteTile]
+ENDM
+
+MACRO mobile_virtual_complete_capture
+; Both native paths meet after all tuple stores. Raw byte 5 distinguishes a
+; pending raw group from old templates whose bytes 4/5 remain ROM pointers.
+; Resident descriptors need no WRAM bank switch. Preserve producer state.
+	push af
+	ld a, [wMobileVirtualStage]
+	and a
+	jr z, .done\@
+	push hl
+	ld a, [wMobileVirtualIndex]
+	add a
+	add a
+	add a
+	add LOW(wMobileVirtualDescriptors + 5)
+	ld l, a
+	ld h, HIGH(wMobileVirtualDescriptors)
+	ld a, [hl]
+	cp $80
+	jr nz, .restore\@
+	inc hl
+	set 7, [hl]
+.restore\@
+	pop hl
+.done\@
+	pop af
 ENDM
 
 MACRO mobile_virtual_bin_coordinate

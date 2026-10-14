@@ -8,6 +8,15 @@ MobileVirtualBeginSprites::
 	push bc
 	push de
 	push hl
+; Clear resident completion before any fence, peer or eligibility abort.
+	ld hl, wMobileVirtualDescriptors + 6
+	ld de, 8
+	ld b, NUM_OBJECT_STRUCTS
+.clear_descriptors
+	ld [hl], 0
+	add hl, de
+	dec b
+	jr nz, .clear_descriptors
 	ldh a, [rWBK]
 	push af
 	ld a, [wMapGroup]
@@ -85,14 +94,6 @@ endr
 .ready_peer
 	ld a, MOBILE_BACKUP_BANK
 	ldh [rWBK], a
-	ld hl, wMobileVirtualDescriptors + 6
-	ld de, 8
-	ld b, NUM_OBJECT_STRUCTS
-.clear_descriptors
-	ld [hl], 0
-	add hl, de
-	dec b
-	jr nz, .clear_descriptors
 	ld a, 1
 	ld [wMobileVirtualStage], a
 	ld a, 2

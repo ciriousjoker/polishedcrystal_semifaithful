@@ -17,7 +17,10 @@ def batch_source(engine, native, rectangle_source):
     body = engine.split('.InitSpritesByPriority:\n', 1)[1].split('StepFunction_Half1:\n', 1)[0]
     body = '.InitSpritesByPriority:\n' + body
     body = replace_once(body, '\tand $f\n\tadd a',
-                        '\tand $f\n\tld [wMobileVirtualIndex], a\n\tadd a')
+                        '\tand $f\n\tcp NUM_OBJECT_STRUCTS\n\tjr nc, .invalid_priority\n'
+                        '\tld [wMobileVirtualIndex], a\n\tadd a')
+    body = replace_once(body, '\tpop hl\n\tpop bc\n\tjr .next_sprite',
+                        '.invalid_priority\n\tpop hl\n\tpop bc\n\tjr .next_sprite')
     body = replace_once(body, '\tcall .InitSprite\n',
                         '\tmobile_virtual_capture_kind\n\tcall .InitSprite\n')
     # Near jumps need the same extended range as the previous inline capture.
@@ -28,7 +31,8 @@ def batch_source(engine, native, rectangle_source):
                         '\tldh a, [hUsedSpriteTile]\n\tcp 4\n\tjr nz, .addsprite\n'
                         '.draw_rectangle\n\tcall MobileBatchRectangleDispatch\n\tjr .sprite_done')
     body = replace_once(body, '\tld a, OBJ_SIZE * (OAM_COUNT - 1)\n',
-                        '.sprite_done\n\tld a, OBJ_SIZE * (OAM_COUNT - 1)\n')
+                        '.sprite_done\n\tmobile_virtual_complete_capture\n'
+                        '\tld a, OBJ_SIZE * (OAM_COUNT - 1)\n')
     body = replace_once(body, '\tld bc, Facings\n', '\tld bc, MobileBatchFacings\n')
     # Contiguous native fields can be addressed incrementally without changing
     # byte arithmetic, including structures that cross a WRAM page boundary.
