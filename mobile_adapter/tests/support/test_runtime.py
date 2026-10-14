@@ -1,6 +1,7 @@
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 import socket
 import threading
 import time
@@ -51,6 +52,52 @@ class Workspaces(unittest.TestCase):
             runtime.retain_rom_outputs(source)
             self.assertEqual(sorted(p.name for p in source.iterdir()),
                              ["fixture.gbc", "fixture.map", "fixture.sym"])
+
+
+class PristineCopyright(unittest.TestCase):
+    def generate(self, size, compressed_size=288):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "gfx/splash").mkdir(parents=True)
+            (root / "tools").mkdir()
+            (root / "Makefile").write_text("archived reference recipe")
+            text = "@ 1 9 9 5 - 2 0 2 6    G A M E   F R E A K"
+            (root / "gfx/splash/copyright.txt").write_text(text + "\n")
+            calls = []
+
+            def fake_run(command, cwd, log):
+                calls.append(command)
+                self.assertEqual(cwd, root)
+                if len(calls) == 1:
+                    (root / "tools/fine_print").write_bytes(b"compiled generator")
+                if len(calls) == 2:
+                    self.assertEqual(calls[0], ["make", "-C", "tools", "-j1", "fine_print", "lzpcompress"])
+                    self.assertEqual(command, ["tools/fine_print", "-c", "013", "-s", "0",
+                                               text, "gfx/splash/copyright.2bpp"])
+                    (root / "gfx/splash/copyright.2bpp").write_bytes(bytes(size))
+                if len(calls) == 3:
+                    self.assertEqual(command, ["tools/lzpcompress", "--", "gfx/splash/copyright.2bpp",
+                                               "gfx/splash/copyright.2bpp.lzp"])
+                    (root / "gfx/splash/copyright.2bpp.lzp").write_bytes(bytes(compressed_size))
+
+            with patch.object(runtime, "run", side_effect=fake_run):
+                evidence = runtime.prepare_pristine_copyright(root, root)
+            self.assertEqual(evidence["text"], text)
+            self.assertEqual(evidence["asset_bytes"], 480)
+            self.assertEqual(evidence["compressed_bytes"], 288)
+            self.assertEqual(evidence["asset_sha256"], runtime.sha(root / "gfx/splash/copyright.2bpp"))
+            self.assertTrue((root / "pristine-copyright.json").is_file())
+
+    def test_dependencies_precede_generation_with_exact_text(self):
+        self.generate(480)
+
+    def test_empty_artwork_is_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, "288 compressed bytes"):
+            self.generate(1)
+
+    def test_empty_linked_artwork_is_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, "288 compressed bytes"):
+            self.generate(480, compressed_size=1)
 
 
 class DeclarativeConfiguration(unittest.TestCase):

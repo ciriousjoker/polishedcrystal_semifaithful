@@ -206,6 +206,35 @@ def patch_identity_fixture(rom, names, mismatch, destination):
     destination.write_bytes(data)
 
 
+def prepare_pristine_copyright(pristine, logs):
+    """Generate the archived recipe's asset before parallel Make expansion."""
+    # GNU Make 3.81 can expand the old $(shell cat $<) recipe without its
+    # automatic prerequisite value. Keep the reference source unchanged and
+    # invoke the same fine_print tool directly after building its dependencies.
+    run(["make", "-C", "tools", "-j1", "fine_print", "lzpcompress"], pristine,
+        logs / "pristine-copyright-tool.log")
+    source = pristine / "gfx/splash/copyright.txt"
+    text = " ".join(source.read_text().rstrip("\n").split("\n"))
+    if not text.strip():
+        raise RuntimeError("Pristine copyright text is empty")
+    asset = pristine / "gfx/splash/copyright.2bpp"
+    run(["tools/fine_print", "-c", "013", "-s", "0", text,
+         "gfx/splash/copyright.2bpp"], pristine, logs / "pristine-copyright-asset.log")
+    compressed = pristine / "gfx/splash/copyright.2bpp.lzp"
+    run(["tools/lzpcompress", "--", "gfx/splash/copyright.2bpp",
+         "gfx/splash/copyright.2bpp.lzp"], pristine, logs / "pristine-copyright-compress.log")
+    if asset.stat().st_size != 480 or compressed.stat().st_size != 288:
+        raise RuntimeError("Pristine copyright artwork must contain 480 raw and 288 compressed bytes")
+    evidence = {"text": text, "text_sha256": sha(source),
+                "asset_bytes": asset.stat().st_size, "asset_sha256": sha(asset),
+                "compressed_bytes": compressed.stat().st_size, "compressed_sha256": sha(compressed),
+                "makefile_sha256": sha(pristine / "Makefile"),
+                "tool_sha256": sha(pristine / "tools/fine_print"),
+                "generator": "tools/fine_print -c 013 -s 0 <copyright.txt> gfx/splash/copyright.2bpp"}
+    (logs / "pristine-copyright.json").write_text(json.dumps(evidence, indent=2) + "\n")
+    return evidence
+
+
 def prepare(out):
     prepared = out / "prepared"
     if (prepared / "manifest.json").exists():
@@ -230,7 +259,11 @@ def prepare(out):
     archive = prepared / "pristine.tar"
     run(["git", "archive", "-o", archive, pristine_ref], ROOT, prepared / "archive.log")
     run(["tar", "-xf", archive, "-C", pristine], ROOT, prepared / "extract.log")
+    pristine_copyright = prepare_pristine_copyright(pristine, prepared)
     run(toolchain + ["crystal"], pristine, prepared / "pristine.log")
+    if (sha(pristine / "gfx/splash/copyright.2bpp") != pristine_copyright["asset_sha256"] or
+            sha(pristine / "gfx/splash/copyright.2bpp.lzp") != pristine_copyright["compressed_sha256"]):
+        raise RuntimeError("Parallel pristine build changed the prepared copyright artwork")
     retain_rom_outputs(pristine)
     archive.unlink()
     core_source = Path(os.environ.get("MOBILE_ACCEPTANCE_CORE_SOURCE",
@@ -261,6 +294,7 @@ def prepare(out):
          "--target-dir", shared_target, "--bin", "mobile-bridge"], ROOT, prepared / "server.log")
     shutil.copy2(shared_target / "debug/mobile-bridge", prepared / "mobile-bridge")
     manifest = {"source": str(source), "pristine": str(pristine), "pristine_ref": pristine_ref,
+        "pristine_copyright": pristine_copyright,
         "version": version, "rgbds": str(rgbds), "core": str(core), "runner": str(runner),
         "bridge": str(prepared / "mobile-bridge"),
         "baseline_sha256": sha(source / f"polishedcrystal-{version}.gbc"),
