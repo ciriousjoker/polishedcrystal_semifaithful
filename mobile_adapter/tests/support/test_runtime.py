@@ -20,6 +20,136 @@ class ConditionalInputs(unittest.TestCase):
             subprocess.run([str(binary)], check=True)
 
 
+class FinalStateExport(unittest.TestCase):
+    def test_production_final_export_reads_world_updates_and_retains_observers(self):
+        import json
+        import subprocess
+
+        frontend = Path(__file__).resolve().parents[2] / "tools/smoke_libretro.cpp"
+        source = frontend.read_text()
+        start = source.index('    if (arguments.count("--state-out")) {')
+        end = source.index('\n    if (barrier_enabled', start)
+        export = source[start:end]
+        harness = r'''
+#include <cstdint>
+#include <cstdlib>
+#include <fstream>
+#include <map>
+#include <string>
+#include <type_traits>
+#include <vector>
+using Values = std::map<std::string, unsigned>;
+static unsigned metric_calls = 0, metric_index = ~0u;
+static uint64_t metric_value = 0;
+static uint64_t read_metric(unsigned index) {
+    ++metric_calls;
+    metric_index = index;
+    return metric_value;
+}
+static void fail(const std::string&) { std::exit(2); }
+static Values capture(const unsigned char*, size_t) {
+    return {{"hCrashCode", 0}, {"hCGB", 1}, {"wMobileOnline", 1}};
+}
+static void acceptance_capture(Values& values, const unsigned char*, size_t) {
+    values["vAcceptanceCaptured"] = 43;
+}
+static unsigned marker_count(unsigned index) { return 10 + index; }
+static unsigned serial_status(unsigned index) { return 20 + index; }
+static unsigned effect_record(unsigned, unsigned field) {
+    return field == 32 ? 3 : 0;
+}
+static unsigned effect_returns(unsigned index) {
+    return index == 0 ? 2 : 1;
+}
+static unsigned effect_active(unsigned index) { return index == 4; }
+static unsigned scene_ready() { return 1; }
+template<class Function> static Function symbol(void*, const char* name) {
+    if constexpr (std::is_same_v<Function, unsigned(*)(unsigned, unsigned)>) {
+        if (std::string(name) == "acceptance_profile_effect_record") return effect_record;
+    } else if constexpr (std::is_same_v<Function, unsigned(*)(unsigned)>) {
+        if (std::string(name) == "acceptance_profile_effect_returns") return effect_returns;
+        if (std::string(name) == "acceptance_profile_effect_active") return effect_active;
+    } else if constexpr (std::is_same_v<Function, unsigned(*)()>) {
+        if (std::string(name) == "acceptance_profile_native_scene_ready") return scene_ready;
+    }
+    fail("Unexpected core getter");
+    return nullptr;
+}
+int main(int argc, char** argv) {
+    if (argc != 6) return 3;
+    const std::string system_directory = argv[1];
+    std::map<std::string, std::string> arguments = {
+        {"--state-out", system_directory + "/state.json"}, {"--symbols", "fixture.sym"}};
+    const bool acceptance_enabled = std::stoul(argv[2]);
+    const bool effect_enabled = true;
+    using Metric = uint64_t(*)(unsigned);
+    Metric metric = std::stoul(argv[3]) ? read_metric : nullptr;
+    metric_value = std::stoull(argv[4]);
+    auto acceptance_marker_count = std::stoul(argv[5]) ? marker_count : nullptr;
+    auto effect_serial_status = serial_status;
+    void* core = nullptr;
+    const unsigned char* sram = nullptr;
+    const size_t sram_size = 0;
+    const unsigned input_frame = 3200;
+    const unsigned char video_oam[160] = {};
+    const Values video_figure_values = {{"vNativeFigureComplete0", 1}};
+    const std::vector<unsigned> effect_span_ids = {0, 4};
+''' + export + r'''
+    std::ofstream calls(system_directory + "/calls.json");
+    calls << "{\"calls\":" << metric_calls << ",\"index\":" << metric_index << "}";
+}
+'''
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cpp, binary = root / "export.cpp", root / "export"
+            cpp.write_text(harness)
+            subprocess.run(["c++", "-std=c++17", "-O0", str(cpp), "-o", str(binary)], check=True)
+
+            def run(acceptance, getter, value, markers=1):
+                subprocess.run([str(binary), str(root), str(acceptance), str(getter),
+                                str(value), str(markers)], check=True)
+                state = json.loads((root / "state.json").read_text())
+                calls = json.loads((root / "calls.json").read_text())
+                self.assertEqual(state["frame_calls"], 3200)
+                self.assertEqual((root / "hardware-oam.bin").stat().st_size, 160)
+                fields = state["symbols"]
+                expected = {"hCrashCode": 0, "hCGB": 1, "wMobileOnline": 1,
+                            "vNativeFigureComplete0": 1, "vAcceptanceSerialSC": 20,
+                            "vAcceptanceSerialIE": 21, "vAcceptanceHeadbuttAsked": 1,
+                            "vAcceptanceHeadbuttFinished": 2,
+                            "vAcceptanceHeadbuttAnimationStarted": 1,
+                            "vAcceptanceEffectCount": 3, "vAcceptanceEffectOverflow": 0,
+                            "vAcceptanceNativeSceneReady": 1,
+                            "vAcceptanceEffectActive0": 0, "vAcceptanceEffectActive4": 1}
+                if acceptance:
+                    expected.update(vAcceptanceCaptured=43,
+                                    vProfileWorldUpdates=value if getter else 0)
+                    names = ("Ready", "DialogDone", "Loaded", "LoadFailed", "LinkEntered")
+                    expected.update({"vAcceptance" + name: 10 + i if markers else 0
+                                     for i, name in enumerate(names)})
+                self.assertEqual(fields, expected)
+                self.assertEqual(calls["calls"], int(bool(acceptance and getter)))
+                if acceptance and getter:
+                    self.assertEqual(calls["index"], 21)
+
+            # A populated getter must export its actual current value, not an
+            # earlier trace sample. Zero and missing optional getters stay zero.
+            run(1, 1, 138)
+            run(1, 1, 500)
+            run(1, 1, 0)
+            run(1, 0, 138, markers=0)
+            run(0, 1, 138)
+
+            # The former final block compiles but fails the same output check.
+            old_export = export.replace(
+                '            values["vProfileWorldUpdates"] = metric ? metric(21) : 0;\n', '')
+            self.assertNotEqual(export, old_export)
+            cpp.write_text(harness.replace(export, old_export))
+            subprocess.run(["c++", "-std=c++17", "-O0", str(cpp), "-o", str(binary)], check=True)
+            with self.assertRaises(AssertionError):
+                run(1, 1, 138)
+
+
 class ObserverHooks(unittest.TestCase):
     def test_compiled_effect_observer_boundaries(self):
         import subprocess

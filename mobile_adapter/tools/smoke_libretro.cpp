@@ -1681,6 +1681,7 @@ int main(int argc, char** argv) {
             acceptance_capture(values, sram, sram_size);
             const char* marker_names[] = {"vAcceptanceReady", "vAcceptanceDialogDone", "vAcceptanceLoaded", "vAcceptanceLoadFailed", "vAcceptanceLinkEntered"};
             for (unsigned i = 0; i < 5; ++i) values[marker_names[i]] = acceptance_marker_count ? acceptance_marker_count(i) : 0;
+            values["vProfileWorldUpdates"] = metric ? metric(21) : 0;
         }
         if (!values.count("hCrashCode") || !values.count("hCGB")) fail("Required observer symbols missing");
         if (values.at("hCrashCode")) fail("ROM crash marker is nonzero");
