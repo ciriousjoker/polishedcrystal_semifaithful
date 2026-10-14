@@ -100,6 +100,19 @@ See `lifting.md` for exact scope, benchmark commands, remaining architecture
 risks and why a source-derived arithmetic slice is not yet a full battle engine.
 These are host tools and add no bytes to the game ROM.
 
+## Stateful real-ROM translation
+
+`stateful_lifting.py` extends the experiment to actual assembled game ROM bytes,
+real RAM return stacks, MBC3 bank wrappers, actor stats and recorded DIV events.
+`stateful_fixture_check.py` compares bounded routines and a chained confusion
+transition with independent mGBA execution. `stateful_fixture_updates.py` rebuilds
+copied game sources and checks supported updates and explicit rejection paths.
+These host tools do not alter the game ROM or provide a whole-fight simulator.
+
+See [stateful_lifting.md](stateful_lifting.md) for the supported memory profile,
+source verification gate, reproducible commands and limitations. The old
+arithmetic fixture remains a separate, narrower experiment.
+
 ## Evaluation ratings
 
 `ratings.py` fits scenario-balanced batch Bradley-Terry ratings on an Elo scale,
