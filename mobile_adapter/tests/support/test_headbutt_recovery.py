@@ -120,6 +120,86 @@ int main() {
         self.assertLess(runtime.HEADBUTT_RECOVERY_WINDOW + 8,
                         runtime.HEADBUTT_FUNCTIONAL_HORIZON)
 
+    def test_actual_frontend_bindings_parse_run_inputs_and_reject_unknowns(self):
+        import os
+        import re
+        import subprocess
+        frontend = (runtime.ROOT / 'mobile_adapter/tools/smoke_libretro.cpp').read_text()
+        begin = frontend.index('static void load_bindings(')
+        end = frontend.index('static std::map<std::string, unsigned> capture(', begin)
+        loader = frontend[begin:end]
+        binding = re.search(r'^struct Binding .*$', frontend, re.M).group()
+        known = re.search(
+            r'\[\]\(const std::string& name\) \{\s*return bindings.count\(name\) \|\|'
+            r'\s*\(acceptance_enabled && name.rfind\("vAcceptance", 0\) == 0\);\s*\}',
+            frontend).group()
+        # Exercise the unchanged production loader and its former whitelist,
+        # rather than declaring every generated condition to be a known symbol.
+        old_loader = loader.replace('load_bindings(', 'load_old_bindings(', 1)
+        self.assertEqual(old_loader.count('"wMenuCursorX", '), 1)
+        old_loader = old_loader.replace('"wMenuCursorX", ', '', 1)
+        header = runtime.ROOT / 'mobile_adapter/tools/conditional_input.hpp'
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rom, names = self.fixture(root)
+            with patch.object(runtime, 'ROOT', root):
+                inputs = runtime.native_headbutt_recovery_inputs(rom, names)
+            script = root / 'recovery.input'
+            script.write_text(inputs)
+            fixture = root / 'realistic.sym'
+            fixture.write_text(
+                '; RGBDS symbol export\n'
+                '00:ff96 hJoypadDown\n00:ffb5 hScriptBank\n00:ffb6 hScriptPos\n'
+                '00:ce51 wMenuCursorX\n00:ce52 wMenuCursorY\n'
+                '00:d438 wScriptRunning\n01:d226 wBattleMode\n'
+                '00:ce59 wBattleMenuFlags\n00:c100 wUnlistedCursor\n')
+            prelude = ('#include "' + str(header) + '"\n#include <cassert>\n'
+                       '#include <fstream>\n#include <set>\n' + binding + '\n'
+                       'static std::map<std::string, Binding> bindings;\n'
+                       'static bool acceptance_enabled = true;\n'
+                       'static void fail(const std::string& message) '
+                       '{ throw std::runtime_error(message); }\n')
+            harness = root / 'frontend-bindings.cpp'
+            harness.write_text(prelude + loader + old_loader +
+                'static bool parses(const std::string& path) {\n'
+                '  std::ifstream stream(path); std::string line;\n'
+                '  try { while (std::getline(stream, line)) {\n'
+                '    std::istringstream row(line.substr(9));\n'
+                '    parse_conditional_action(row, true, 3200, {{"A",1},{"B",2}}, ' + known + ');\n'
+                '  } } catch (const std::runtime_error&) { return false; }\n'
+                '  return true;\n}\n' + r'''
+int main(int argc, char** argv) {
+    assert(argc == 4);
+    load_bindings(argv[1]);
+    assert(bindings.count("wMenuCursorX") && bindings.count("hJoypadDown"));
+    assert(!bindings.count("wUnlistedCursor"));
+    assert(parses(argv[2]));
+    std::istringstream unknown("CHECKED_AFTER 16 wUnlistedCursor=2 A 8");
+    bool rejected = false;
+    try { parse_conditional_action(unknown, true, 3200, {{"A",1}},
+''' + known + r'''); }
+    catch (const std::runtime_error&) { rejected = true; }
+    assert(rejected);
+    bindings.clear();
+    load_old_bindings(argv[1]);
+    assert(!bindings.count("wMenuCursorX") && !parses(argv[2]));
+    bindings.clear();
+    load_bindings(argv[3]);
+    assert(!bindings.count("wMenuCursorX") && !parses(argv[2]));
+}
+''')
+            binary = root / 'frontend-bindings'
+            subprocess.run(['c++', '-std=c++17', str(harness), '-o', str(binary)], check=True)
+            symbols = [fixture]
+            if os.environ.get('MOBILE_BINDING_TEST_SYMBOLS'):
+                symbols.append(Path(os.environ['MOBILE_BINDING_TEST_SYMBOLS']))
+            for symbol_file in symbols:
+                missing = root / 'missing-cursor.sym'
+                missing.write_text('\n'.join(
+                    line for line in symbol_file.read_text().splitlines()
+                    if not re.search(r'\s+wMenuCursorX\s*$', line)) + '\n')
+                subprocess.run([str(binary), str(symbol_file), str(script), str(missing)], check=True)
+
     def test_changed_native_script_fails_before_generating_inputs(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

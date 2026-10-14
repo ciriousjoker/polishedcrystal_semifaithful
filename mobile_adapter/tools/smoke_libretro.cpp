@@ -125,7 +125,7 @@ static void load_bindings(const std::string& path) {
     const std::set<std::string> watched = {
         "hROMBank", "hJoypadDown", "hJoyPressed", "hCGB", "hCrashCode", "hVBlankCounter", "hDelayFrameLY", "hInMenu", "wJumptableIndex",
         "hNbTilesToCopy", "hRequested1bpp", "hRequested2bpp", "hHours", "hMinutes", "wTimeOfDay",
-        "hScriptBank", "hScriptPos", "wMenuCursorY", "wInputFlags", "wGameLogicPaused", "wBattleMode", "wBattleMenuFlags", "wBattleMenuCursorBuffer",
+        "hScriptBank", "hScriptPos", "wMenuCursorX", "wMenuCursorY", "wInputFlags", "wGameLogicPaused", "wBattleMode", "wBattleMenuFlags", "wBattleMenuCursorBuffer",
         "wSaveFileExists", "wMapGroup", "wMapNumber", "wXCoord", "wYCoord",
         "wPlayerMapX", "wPlayerMapY", "wPlayerSpriteX", "wPlayerSpriteY",
         "wPlayerSpriteXOffset", "wPlayerSpriteYOffset", "wPlayerFacing", "wPlayerDirection",
