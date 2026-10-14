@@ -314,7 +314,10 @@ extern "C" uint64_t acceptance_profile_reference(unsigned section, unsigned fiel
 }
 static unsigned acceptance_reference_read(gb* game, unsigned bank, unsigned address) {
     if (bank == 9) return game->get_cpu()->get_vram()[address];
-    if (bank == 10) return game->get_lcd()->get_pal(address / 8)[address % 8];
+    if (bank == 10) {
+        const unsigned color = game->get_lcd()->get_pal(address / 8)[(address % 8) / 2];
+        return (color >> (8 * (address % 2))) & 0xff;
+    }
     return bank == 8 ? game->get_cpu()->read(address) : acceptance_effect_read(game, bank, address);
 }
 static unsigned acceptance_oam_dma_page = ~0u, acceptance_oam_dma_sequence = 0, acceptance_oam_dma_frame = 0, acceptance_oam_dma_count = 0;

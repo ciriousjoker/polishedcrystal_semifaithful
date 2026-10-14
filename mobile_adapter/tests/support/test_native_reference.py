@@ -8,6 +8,65 @@ SUPPORT = Path(__file__).resolve().parent
 
 
 class NativeReferenceTests(unittest.TestCase):
+    def test_profile_reads_raw_palette_bytes_from_four_word_lcd_api(self):
+        source = r'''
+#define main prior_observer_main
+#include "test_effect_observer.cpp"
+#undef main
+int main() {
+    gb g;
+    // Distinct nonzero low/high bytes in every original RGB555 color word.
+    for (unsigned p=0; p<16; ++p) for (unsigned w=0; w<4; ++w) {
+        const unsigned color=p*4+w;
+        g.lcd.palette[p][w]=(0x11+color)*256+(0x81+color);
+        g.lcd.mapped[p][w]=0x7fff;
+    }
+    const unsigned char expected[128]={
+        0x81,0x11,0x82,0x12,0x83,0x13,0x84,0x14,
+        0x85,0x15,0x86,0x16,0x87,0x17,0x88,0x18,
+        0x89,0x19,0x8a,0x1a,0x8b,0x1b,0x8c,0x1c,
+        0x8d,0x1d,0x8e,0x1e,0x8f,0x1f,0x90,0x20,
+        0x91,0x21,0x92,0x22,0x93,0x23,0x94,0x24,
+        0x95,0x25,0x96,0x26,0x97,0x27,0x98,0x28,
+        0x99,0x29,0x9a,0x2a,0x9b,0x2b,0x9c,0x2c,
+        0x9d,0x2d,0x9e,0x2e,0x9f,0x2f,0xa0,0x30,
+        0xa1,0x31,0xa2,0x32,0xa3,0x33,0xa4,0x34,
+        0xa5,0x35,0xa6,0x36,0xa7,0x37,0xa8,0x38,
+        0xa9,0x39,0xaa,0x3a,0xab,0x3b,0xac,0x3c,
+        0xad,0x3d,0xae,0x3e,0xaf,0x3f,0xb0,0x40,
+        0xb1,0x41,0xb2,0x42,0xb3,0x43,0xb4,0x44,
+        0xb5,0x45,0xb6,0x46,0xb7,0x47,0xb8,0x48,
+        0xb9,0x49,0xba,0x4a,0xbb,0x4b,0xbc,0x4c,
+        0xbd,0x4d,0xbe,0x4e,0xbf,0x4f,0xc0,0x50,
+    };
+    unsigned short original[16][4];
+    unsigned char snapshot[sizeof g];
+    std::memcpy(original,g.lcd.palette,sizeof original);
+    std::memcpy(snapshot,&g,sizeof g);
+    for (unsigned address=0; address<128; ++address) {
+        const auto value=acceptance_reference_read(&g,10,address);
+        assert(value==expected[address]);
+        assert(value<=255);
+    }
+    // Revisit neighboring slots and the last palette's last word explicitly.
+    for (unsigned address : {7u,8u,63u,64u,119u,120u,126u,127u})
+        assert(acceptance_reference_read(&g,10,address)==expected[address]);
+    for (unsigned p=0; p<16; ++p) for (unsigned w=0; w<4; ++w) {
+        const unsigned at=p*8+w*2;
+        const unsigned raw=acceptance_reference_read(&g,10,at) |
+            (acceptance_reference_read(&g,10,at+1)<<8);
+        assert(raw==original[p][w] && raw<0x8000);
+    }
+    assert(std::memcmp(snapshot,&g,sizeof g)==0);
+}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            cpp = Path(directory) / "palette_bytes.cpp"
+            exe = Path(directory) / "palette_bytes"
+            cpp.write_text(source)
+            subprocess.run(["c++", "-std=c++17", "-I", str(SUPPORT), str(cpp), "-o", str(exe)], check=True)
+            subprocess.run([str(exe)], check=True)
+
     def test_native_source_closure_palette_and_dma_lifetime(self):
         source = r'''
 #include "static_ordinary_intent.hpp"
