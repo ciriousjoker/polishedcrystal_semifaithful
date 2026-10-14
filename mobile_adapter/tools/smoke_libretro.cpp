@@ -62,6 +62,35 @@ static unsigned (*ordinary_status)(unsigned) = nullptr;
 static unsigned (*ordinary_failure)(unsigned) = nullptr;
 static unsigned (*ordinary_callback)(const void*) = nullptr;
 static uint64_t (*native_reference_value)(unsigned,unsigned) = nullptr;
+static uint64_t (*cold_value)(unsigned,unsigned,unsigned) = nullptr;
+static void (*cold_callback)(const void*) = nullptr;
+static std::ofstream cold_log;
+static unsigned cold_written = 0;
+static bool cold_missing_written = false;
+static void cold_flush() {
+    if (!cold_value) return;
+    const char* fields[] = {"kind","phase","instruction","host_frame","ly","raster_id","display_id",
+        "source","pending_entry","pending_return","pending_close","source_active","source_returned",
+        "latched_opportunity","latched_instruction","latched_source","latched_closed","latched_input",
+        "current_input","lifetime","receiver","generation","input_active","input_failure",
+        "world_ready","scene_ready","map_group","map_number","map_status","script",
+        "cpu_phase","source_failure","invalid"};
+    auto row = [&](unsigned section,unsigned index,const char* event) {
+        cold_log << "{\"event\":\"" << event << "\",\"index\":" << index;
+        for(unsigned f=0;f<33;++f) {
+            cold_log << ",\"" << fields[f] << "\":";
+            const auto value=cold_value(section,index,f);
+            if(value==~uint64_t(0)) cold_log << "null"; else cold_log << value;
+        }
+        cold_log << "}\n";
+    };
+    const auto count=cold_value(0,0,3);
+    while(cold_written<count) { row(1,cold_written,"boundary"); ++cold_written; }
+    if(cold_value(0,0,4) && !cold_missing_written) {
+        row(2,0,"MissingColdIntent"); cold_missing_written=true;
+    }
+    cold_log.flush();
+}
 static unsigned ordinary_start = 0, ordinary_count = 0;
 static std::ofstream reference_status_log;
 static unsigned reference_status_count = 0;
@@ -731,6 +760,7 @@ static bool environment(unsigned command, void* data) {
 }
 
 static void video(const void* data, unsigned w, unsigned h, size_t pitch) {
+    if (cold_callback) cold_callback(data);
     video_wall_us = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count();
     ++video_frames;
@@ -965,7 +995,7 @@ int main(int argc, char** argv) {
             fail("Effect/native-scene observation does not support snapshot restore");
     for (int i = 5; i < argc; i += 2) {
         std::string key = argv[i];
-        if (key != "--accepted-ordinary-inputs" && key != "--native-vblank-timing" && key != "--disabled-native-reference" && key != "--static-intent-sources" && key != "--ordinary-gate" && key != "--ordinary-stream" && key != "--ordinary-count" && key != "--ordinary-start" && key != "--frames" && key != "--input" && key != "--symbols" &&
+        if (key != "--cold-intent-boundaries" && key != "--accepted-ordinary-inputs" && key != "--native-vblank-timing" && key != "--disabled-native-reference" && key != "--static-intent-sources" && key != "--ordinary-gate" && key != "--ordinary-stream" && key != "--ordinary-count" && key != "--ordinary-start" && key != "--frames" && key != "--input" && key != "--symbols" &&
             key != "--rtc-in" && key != "--rtc-out" && key != "--ram-out" && key != "--state-out" && key != "--save-in" && key != "--save-out" &&
             key != "--adapter" && key != "--pace-from" && key != "--trace-out" &&
             key != "--checkpoint-dir" && key != "--profile-out" && key != "--profile-window-start" &&
@@ -974,6 +1004,9 @@ int main(int argc, char** argv) {
             key != "--native-headbutt-control" && key != "--effect-video" && key != "--native-object-count" && key != "--effect-span" && key != "--effect-watch" && key != "--native-scene-field" && key != "--acceptance-menu-routine" && key != "--measurement-gate" && key != "--measurement-warmup" && key != "--functional-horizon" && key != "--acceptance") fail("Unknown option: " + key);
         arguments[key] = argv[i + 1];
     }
+    const bool cold_requested = arguments.count("--cold-intent-boundaries");
+    if (cold_requested) for (const char* required : {"--accepted-ordinary-inputs", "--static-intent-sources", "--symbols"})
+        if (!arguments.count(required)) fail(std::string("Cold boundary diagnostic requires ") + required);
     const bool accepted_inputs_requested = arguments.count("--accepted-ordinary-inputs");
     if (accepted_inputs_requested) {
         for (const char* required : {"--static-intent-sources", "--symbols", "--profile-out", "--frames", "--acceptance", "--adapter", "--input"})
@@ -1434,6 +1467,23 @@ int main(int argc, char** argv) {
                 input_event=symbol<uint64_t(*)(unsigned,unsigned,unsigned)>(core,"acceptance_profile_input_event");
                 input_drain=symbol<unsigned(*)(unsigned)>(core,"acceptance_profile_input_drain");
                 if (input_status(0)!=2) fail("Accepted input ABI mismatch");
+                if (cold_requested) {
+                    if (acceptance_data("AcceptanceScenarioID") != 0 || acceptance_data("AcceptanceLighting") != 255 ||
+                        acceptance_data("AcceptanceHour") != 12 || acceptance_data("AcceptanceNPCOverride") != 0 ||
+                        acceptance_data("AcceptanceAvatar") > 3 || acceptance_data("AcceptanceSpawn",0) != 11 ||
+                        acceptance_data("AcceptanceSpawn",1) != 23)
+                        fail("Cold boundary diagnostic requires the finite EMPTY hour12 fixture");
+                    cold_value=symbol<uint64_t(*)(unsigned,unsigned,unsigned)>(core,"acceptance_profile_cold_value");
+                    cold_callback=symbol<void(*)(const void*)>(core,"acceptance_profile_cold_callback");
+                    if (!symbol<unsigned(*)()>(core,"acceptance_profile_cold_config")() || cold_value(0,0,0)!=1 || cold_value(0,0,6)!=33)
+                        fail("Cold boundary diagnostic configuration/ABI mismatch");
+                    cold_log.open(arguments.at("--cold-intent-boundaries"));
+                    if (!cold_log) fail("Cannot open cold boundary diagnostic");
+                    cold_log << "{\"abi\":1,\"scope\":\"cold LCD boundary diagnostic only\",\"capacity\":16,\"declared_experiment_lifetime\":1,"
+                        "\"kind_names\":[\"absent\",\"activation\",\"source_entry\",\"source_return\",\"source_close\",\"outer\",\"row0\",\"raster\",\"display\",\"callback\"],"
+                        "\"phase_names\":[\"frontend\",\"beforeCPU\",\"afterCPU\",\"renderbegin\",\"render_line\",\"display\",\"callback\"]}\n";
+                    cold_log.flush();
+                }
             }
             if (disabled_reference) {
                 if (native_addresses.count("MobileNativeBatch") || acceptance_data("AcceptanceScenarioID") != 0 ||
@@ -1868,6 +1918,9 @@ int main(int argc, char** argv) {
             fail("Ordinary capture lost live readiness before execution");
         const auto raster_before = raster_state ? raster_state() : 0;
         run();
+        cold_flush();
+        if (cold_value && !cold_log) fail("Cold boundary diagnostic write failed");
+        if (cold_value && cold_value(0,0,4)) fail("MissingColdIntent: first actual postactivation row zero has no causal completed source and outer latch");
         if (ordinary_gate && ordinary_armed && !ordinary_completed && !ordinary_ready())
             fail("Ordinary capture lost live readiness after execution");
         const auto raster_after = raster_state ? raster_state() : 0;
@@ -2192,6 +2245,9 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i + 2 < image.size(); i += 3)
         colors.insert((unsigned(image[i]) << 16) | (unsigned(image[i + 1]) << 8) | image[i + 2]);
     reference_snapshot("final");
+    cold_flush();
+    if (cold_value && (!cold_log || !cold_value(0,0,2) || !cold_value(0,0,5)))
+        fail("Cold boundary diagnostic incomplete: no actual postactivation LCD row zero");
     if (input_status && (!input_ready_written || input_status(3))) fail("Accepted input diagnostic never became ready or failed");
     if (static_status) static_snapshot(static_started ? "final" : "never_armed");
     if (static_status && (!static_started || !static_written || static_status(1)))

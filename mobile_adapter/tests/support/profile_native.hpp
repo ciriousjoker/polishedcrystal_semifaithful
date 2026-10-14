@@ -470,6 +470,8 @@ extern "C" uint64_t acceptance_profile_static_map_preimage(uint64_t id, unsigned
     if (source.id != id || !source.map_captured) return ~uint64_t(0);
     return section == 1 ? source.map_entry[field] : section == 2 ? source.map_return[field] : source.map_close[field];
 }
+static void acceptance_cold_record(unsigned kind, unsigned phase, gb* game = nullptr,
+    uint64_t raster = ~uint64_t(0), uint64_t display = ~uint64_t(0));
 extern "C" unsigned acceptance_profile_static_enable() {
     for (const auto& point : acceptance_static_intent.points)
         if (!point.pc) acceptance_static_intent.fail(10);
@@ -482,6 +484,7 @@ extern "C" unsigned acceptance_profile_static_enable() {
     acceptance_static_intent.enabled = !acceptance_static_intent.failure;
     if (acceptance_static_intent.enabled && acceptance_native_reference.configured)
         acceptance_native_reference.enabled = !acceptance_native_reference.failure;
+    if (acceptance_static_intent.enabled) acceptance_cold_record(1, 0);
     return acceptance_static_intent.enabled;
 }
 // Additive status fields: 0 ABI, 1 first failure, 2 count, 3 latest, 4 opportunity,
@@ -537,6 +540,40 @@ struct AcceptanceInputEvent {
 };
 static AcceptanceInputEvent acceptance_input_events[32];
 static unsigned acceptance_input_event_count = 0;
+#include "cold_intent_boundaries.hpp"
+static cold_intent_boundaries::Ledger acceptance_cold;
+extern "C" unsigned acceptance_profile_cold_config() {
+    if (acceptance_cold.configured || acceptance_static_intent.enabled || !acceptance_input_configured) return 0;
+    acceptance_cold.configured = true; return 1;
+}
+extern "C" uint64_t acceptance_profile_cold_value(unsigned section, unsigned index, unsigned field) {
+    return acceptance_cold.value(section,index,field);
+}
+static void acceptance_cold_record(unsigned kind, unsigned phase, gb* game, uint64_t raster, uint64_t display) {
+    if (!acceptance_cold.configured) return;
+    if (!game) game = acceptance_game_context;
+    const auto& s = acceptance_static_intent;
+    const auto& a = acceptance_input; const auto& l = a.latched;
+    cold_intent_boundaries::Record r = {kind,phase,s.instruction,mobile_observed_frames,
+        game ? game->get_cpu()->read(0xff44) : ~uint64_t(0),raster,display,
+        s.latest,s.pending.entry,s.pending.returned,s.pending.closed,s.active,s.has_return,
+        l.opportunity,l.instruction,l.source,l.source_closed,l.input,a.current.id,a.lifetime,
+        a.receiver_id,a.receiver_generation,acceptance_input_active,uint64_t(a.failure),
+        acceptance_static_world_ready,acceptance_native_scene_ready,
+        game ? acceptance_static_world_value(game,0) : ~uint64_t(0),
+        game ? acceptance_static_world_value(game,1) : ~uint64_t(0),
+        game ? acceptance_static_world_value(game,2) : ~uint64_t(0),
+        game ? acceptance_static_world_value(game,3) : ~uint64_t(0),
+        acceptance_cold.cpu,s.failure,acceptance_observation_invalid};
+    acceptance_cold.push(r);
+}
+extern "C" void acceptance_profile_cold_callback(const void* buffer) {
+    if (!acceptance_cold.active || !acceptance_cold.callback_pending || buffer != acceptance_cold.display_buffer) return;
+    acceptance_cold.callback_pending=false;
+    acceptance_cold_record(cold_intent_boundaries::callback,cold_intent_boundaries::frontend_callback,
+        nullptr,acceptance_cold.display_raster,acceptance_cold.display_token);
+}
+
 static void acceptance_input_emit(unsigned kind, const unsigned char* wire = nullptr, unsigned length = 0) {
     if (acceptance_input_event_count == 32) { acceptance_input.fail(accepted_ordinary_input::Failure::definition_pressure); return; }
     auto& e = acceptance_input_events[acceptance_input_event_count++]; e = AcceptanceInputEvent{};
@@ -920,6 +957,7 @@ extern "C" void acceptance_profile_ordinary_unsupported_output() {
     if (acceptance_ordinary_state == 1) acceptance_ordinary_fail(1);
 }
 extern "C" void acceptance_profile_render_buffer(const void* buffer, unsigned line) {
+    if (line == 0) acceptance_cold_record(cold_intent_boundaries::row0,cold_intent_boundaries::render_begin);
     acceptance_native_reference.context(mobile_observed_frames, acceptance_static_intent.instruction,
         acceptance_game_context ? acceptance_game_context->get_cpu()->read(0xff44) : ~0u);
     acceptance_native_reference.row(line);
@@ -968,6 +1006,13 @@ extern "C" unsigned acceptance_profile_display_matches(const void* buffer) {
 extern "C" void acceptance_profile_display_begin(const void* buffer, unsigned width,
     unsigned height, unsigned depth, unsigned pitch, unsigned applied, unsigned fast,
     float factor, unsigned parity, unsigned gbc, unsigned dmg_gbc, unsigned upscale, unsigned blur) {
+    const unsigned cold_display_index=acceptance_cold.count;
+    acceptance_cold_record(cold_intent_boundaries::display,cold_intent_boundaries::display_begin,nullptr,
+        acceptance_video_enabled && acceptance_video_meta[0] ? acceptance_video_meta[1] : ~uint64_t(0));
+    if (acceptance_cold.active) {
+        acceptance_cold.display_buffer=buffer; acceptance_cold.callback_pending=true;
+        acceptance_cold.display_raster=acceptance_cold.display_token=~uint64_t(0);
+    }
     if (!acceptance_video_enabled || acceptance_observation_invalid) return;
     if (acceptance_ordinary_state == 1) {
         const unsigned reason = acceptance_ordinary_pending ? 10 : !acceptance_ordinary_rows_started ? 11 :
@@ -986,6 +1031,15 @@ extern "C" void acceptance_profile_display_begin(const void* buffer, unsigned wi
         acceptance_palette_config[3], acceptance_palette_config[4], acceptance_video_meta[6], 24};
     std::copy_n(snapshot, 24, acceptance_display_metadata);
     acceptance_display_buffer = buffer;
+    if (acceptance_cold.active) {
+        acceptance_cold.display_raster=acceptance_video_meta[1];
+        acceptance_cold.display_token=acceptance_display_output;
+        // IDs become available only after the physical observer assigns them.
+        if (cold_display_index<acceptance_cold.count) {
+            acceptance_cold.records[cold_display_index][cold_intent_boundaries::raster_id]=acceptance_video_meta[1];
+            acceptance_cold.records[cold_display_index][cold_intent_boundaries::display_id]=acceptance_display_output;
+        }
+    }
 }
 // One acknowledgment per actual display invocation. A duplicate frontend callback
 // returns zero; missing/ahead/wrong-buffer callbacks fail closed.
@@ -1058,6 +1112,7 @@ extern "C" void acceptance_profile_render_line(gb* game, unsigned line, int wind
         for (unsigned layer = 0; layer < 3; ++layer)
             if (game->get_lcd()->get_enable(layer)) acceptance_video_meta[13] |= 1u << layer;
         acceptance_video_meta[4] = acceptance_oam_dma_producer;
+        acceptance_cold_record(cold_intent_boundaries::raster,cold_intent_boundaries::render_line,game,acceptance_video_meta[1]);
     }
     if (!acceptance_video_meta[0]) return;
     if (acceptance_video_meta[5] != line) acceptance_video_meta[6] |= 1;
@@ -1088,6 +1143,8 @@ extern "C" void acceptance_profile_render_line(gb* game, unsigned line, int wind
 
 // Runs after the opcode completes, before the next irq_process can change PC/SP.
 static void acceptance_profile_after(gb* game, const cpu_regs& regs, unsigned opcode, unsigned cycles) {
+    acceptance_cold.cpu = cold_intent_boundaries::after_cpu;
+    const auto cold_return_before = acceptance_static_intent.pending.returned;
     acceptance_timing_after(game, regs, opcode, cycles);
     acceptance_input_after(game,regs);
     if (acceptance_observation_invalid) return;
@@ -1100,6 +1157,8 @@ static void acceptance_profile_after(gb* game, const cpu_regs& regs, unsigned op
         acceptance_instruction_sp, returned, [game](unsigned b, unsigned a) { return acceptance_reference_read(game, b, a); });
     acceptance_static_intent.after(acceptance_effect_bank(game, regs.PC), regs.PC, regs.SP, returned,
         [game](unsigned bank, unsigned address) { return bank == 8 ? game->get_cpu()->read(address) : acceptance_effect_read(game, bank, address); });
+    if (acceptance_static_intent.pending.returned != cold_return_before && acceptance_static_intent.next_id == 0)
+        acceptance_cold_record(cold_intent_boundaries::source_return,cold_intent_boundaries::after_cpu,game);
     if (returned && acceptance_static_world_active && acceptance_instruction_sp == acceptance_static_world_sp &&
             regs.SP == ((acceptance_static_world_sp + 2) & 0xffff) && regs.PC == acceptance_static_world_pc &&
             acceptance_effect_bank(game, regs.PC) == acceptance_static_world_bank) {
@@ -1181,6 +1240,10 @@ static bool acceptance_native_scene_is_ready(gb* game) {
 }
 
 static void acceptance_profile_before(gb* game, const cpu_regs& regs) {
+    acceptance_cold.cpu = cold_intent_boundaries::before_cpu;
+    const auto cold_entry_before = acceptance_static_intent.pending.entry;
+    const auto cold_close_before = acceptance_static_intent.next_id;
+    const auto cold_outer_before = acceptance_input.next_opportunity;
     acceptance_timing_before(game, regs);
     if (acceptance_observation_invalid) return;
     acceptance_game_context = game;
@@ -1193,6 +1256,12 @@ static void acceptance_profile_before(gb* game, const cpu_regs& regs) {
     acceptance_static_intent.before(acceptance_effect_bank(game, regs.PC), regs.PC, regs.SP, regs.BC.w,
         [game](unsigned bank, unsigned address) { return bank == 8 ? game->get_cpu()->read(address) : acceptance_effect_read(game, bank, address); });
     acceptance_input_before(game, regs);
+    if (acceptance_static_intent.pending.entry != cold_entry_before && !cold_close_before)
+        acceptance_cold_record(cold_intent_boundaries::source_entry,cold_intent_boundaries::before_cpu,game);
+    if (acceptance_static_intent.next_id != cold_close_before && !cold_close_before)
+        acceptance_cold_record(cold_intent_boundaries::source_close,cold_intent_boundaries::before_cpu,game);
+    if (acceptance_input.next_opportunity != cold_outer_before && !cold_outer_before)
+        acceptance_cold_record(cold_intent_boundaries::outer,cold_intent_boundaries::before_cpu,game);
     if (acceptance_static_intent.enabled && acceptance_static_intent.started) {
         const unsigned b = acceptance_effect_bank(game, regs.PC);
         if (acceptance_static_intent.matches(0, b, regs.PC) || acceptance_static_intent.matches(1, b, regs.PC) ||
@@ -1302,6 +1371,7 @@ extern "C" void acceptance_profile_effect_reset() {
     acceptance_input = accepted_ordinary_input::Observer{};
     acceptance_input_active = acceptance_input_pair = acceptance_input_welcome_path = false;
     acceptance_input_previous = acceptance_input_event_count = 0;
+    acceptance_cold.reset();
     acceptance_static_intent.reset();
     acceptance_native_reference.reset();
     acceptance_static_world_active = acceptance_static_world_ready = false;
