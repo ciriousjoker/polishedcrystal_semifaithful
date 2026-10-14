@@ -175,7 +175,8 @@ def sha(path):
 def observer_fingerprint():
     paths = [ROOT / "mobile_adapter/tools/smoke_libretro.cpp", ROOT / "mobile_adapter/tools/profile_core.h",
              ROOT / "mobile_adapter/tools/conditional_input.hpp",
-             TESTS / "support/profile_native.hpp", TESTS / "support/observer.hpp", Path(__file__)]
+             TESTS / "support/profile_native.hpp", TESTS / "support/static_ordinary_intent.hpp",
+             TESTS / "support/observer.hpp", Path(__file__)]
     return hashlib.sha256("".join(sha(path) for path in paths).encode()).hexdigest()
 
 
@@ -329,6 +330,7 @@ def extend_profile(profile_source):
     cpu.write_text(cpu_text)
     libretro.write_text(libretro_text)
     shutil.copyfile(TESTS / "support/profile_native.hpp", profile_source / "gb_core/acceptance_profile.hpp")
+    shutil.copyfile(TESTS / "support/static_ordinary_intent.hpp", profile_source / "gb_core/static_ordinary_intent.hpp")
 
 
 def refresh_observers(meta, prepared):
@@ -1027,7 +1029,7 @@ def native_headbutt_control_inputs(rom, names, profile, index):
     return native_headbutt_inputs(rom, names, profile, index)
 
 
-def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 1), duplicate=False, settle_frames=300, functional=False, moving_peers=False, identity=None, ordinary_count=0):
+def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 1), duplicate=False, settle_frames=300, functional=False, moving_peers=False, identity=None, ordinary_count=0, static_sources=False):
     if ordinary_count and (ordinary_count != 800 or not functional or action != "idle" or fault != "none" or identity or moving_peers):
         raise ValueError("Ordinary capture requires exactly 800 idle functional outputs without faults")
     if out.exists():
@@ -1036,6 +1038,8 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
         while out.exists():
             out = original.with_name(original.name + f"-attempt-{attempt}")
             attempt += 1
+    if static_sources and (fx.get("scene") != "empty" or action != "idle" or fault != "none" or identity or moving_peers):
+        raise ValueError("Static source extraction supports only unchanged EMPTY stationary idle inputs")
     source = Path(fx["source"])
     version = meta["version"]
     mobile = Path(fx["mobile_rom"])
@@ -1227,6 +1231,8 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
             "--trace-out", directory / "trace.jsonl.gz", "--input-events", directory / "input-events.jsonl",
             "--profile-out", directory / "profile.json", *([] if ordinary_count else ["--profile-window-start", total - 1000 if functional and enabled else profile]),
             "--pace-from", first if enabled else total, "--pace-multiplier", speed, "--adapter", int(enabled), "--acceptance", "1"]
+        if static_sources:
+            command += ["--static-intent-sources", directory / "static-sources.jsonl"]
         command += functional_horizon_options(functional, enabled, action)
         if functional and index == 0 and action in ("native-headbutt", "native-headbutt-held"):
             command += ["--native-headbutt-control", "1"]

@@ -927,7 +927,7 @@ int main(int argc, char** argv) {
             fail("Effect/native-scene observation does not support snapshot restore");
     for (int i = 5; i < argc; i += 2) {
         std::string key = argv[i];
-        if (key != "--ordinary-gate" && key != "--ordinary-stream" && key != "--ordinary-count" && key != "--ordinary-start" && key != "--frames" && key != "--input" && key != "--symbols" &&
+        if (key != "--static-intent-sources" && key != "--ordinary-gate" && key != "--ordinary-stream" && key != "--ordinary-count" && key != "--ordinary-start" && key != "--frames" && key != "--input" && key != "--symbols" &&
             key != "--rtc-in" && key != "--rtc-out" && key != "--ram-out" && key != "--state-out" && key != "--save-in" && key != "--save-out" &&
             key != "--adapter" && key != "--pace-from" && key != "--trace-out" &&
             key != "--checkpoint-dir" && key != "--profile-out" && key != "--profile-window-start" &&
@@ -936,6 +936,9 @@ int main(int argc, char** argv) {
             key != "--native-headbutt-control" && key != "--effect-video" && key != "--native-object-count" && key != "--effect-span" && key != "--effect-watch" && key != "--native-scene-field" && key != "--acceptance-menu-routine" && key != "--measurement-gate" && key != "--measurement-warmup" && key != "--functional-horizon" && key != "--acceptance") fail("Unknown option: " + key);
         arguments[key] = argv[i + 1];
     }
+    if (arguments.count("--static-intent-sources") && (!arguments.count("--profile-out") ||
+            !arguments.count("--symbols") || arguments.count("--snapshot-in")))
+        fail("Static intent source extraction requires acceptance/profile/symbols and no restore");
     if ((arguments.count("--ordinary-gate") || arguments.count("--ordinary-count") || arguments.count("--ordinary-start")) && !arguments.count("--ordinary-stream"))
         fail("Ordinary capture bounds require a stream");
     if (arguments.count("--frames")) {
@@ -1039,6 +1042,14 @@ int main(int argc, char** argv) {
     Metric composition_metric = reinterpret_cast<Metric>(dlsym(core, "mobile_profile_composition_metric"));
     auto native_graphics_wait = reinterpret_cast<uint64_t(*)()>(dlsym(core, "mobile_profile_native_graphics_wait"));
     auto native_wait_ly = reinterpret_cast<uint64_t(*)()>(dlsym(core, "mobile_profile_native_wait_ly"));
+    // Diagnostic extraction only. This option cannot award intent acceptance.
+    Metric static_status = nullptr;
+    uint64_t (*static_source)(uint64_t,unsigned,unsigned) = nullptr;
+    void (*static_release)(uint64_t) = nullptr;
+    unsigned (*static_enable)() = nullptr;
+    std::ofstream static_log;
+    uint64_t static_written = 0;
+    bool static_started = false;
     uint64_t previous_profile_cycles[5] = {};
     void (*profile_frame)() = nullptr;
     if (arguments.count("--profile-out")) {
@@ -1151,6 +1162,31 @@ int main(int argc, char** argv) {
                 effect_video_change = symbol<unsigned(*)(unsigned,unsigned)>(core, "acceptance_profile_video_change");
                 symbol<void(*)(unsigned)>(core, "acceptance_profile_video_enable")(1);
             }
+        }
+        if (arguments.count("--static-intent-sources")) {
+            if (!acceptance_enabled) fail("Static source extraction requires acceptance mode");
+            auto point = symbol<void(*)(unsigned,unsigned,unsigned)>(core, "acceptance_profile_static_point");
+            const char* anchors[] = {"InitSprites", native_addresses.count("MobileNativeBatch.InitSprite") ?
+                "MobileNativeBatch.InitSprite" : "InitSprites.InitSprite",
+                "_UpdateSprites.hide_unused_sprites", "NextOverworldFrame"};
+            for (unsigned i = 0; i < 4; ++i) {
+                if (!native_addresses.count(anchors[i])) fail(std::string("Missing static source anchor: ") + anchors[i]);
+                auto p = native_addresses.at(anchors[i]); point(i, p.first, p.second);
+            }
+            auto objects = native_addresses.at("wObjectStructs");
+            auto x = native_addresses.at("wPlayerBGMapOffsetX");
+            auto y = native_addresses.at("wPlayerBGMapOffsetY");
+            if (x.first != objects.first || y.first != objects.first || acceptance_word("AcceptanceObjectStride") != 34)
+                fail("Static source original-input layout mismatch");
+            symbol<void(*)(unsigned,unsigned,unsigned,unsigned)>(core, "acceptance_profile_static_inputs")(
+                objects.first, objects.second, x.second, y.second);
+            static_status = symbol<Metric>(core, "acceptance_profile_static_status");
+            static_source = symbol<uint64_t(*)(uint64_t,unsigned,unsigned)>(core, "acceptance_profile_static_source");
+            static_release = symbol<void(*)(uint64_t)>(core, "acceptance_profile_static_release");
+            static_enable = symbol<unsigned(*)()>(core, "acceptance_profile_static_enable");
+            if (static_status(0) != 1) fail("Static source ABI mismatch");
+            static_log.open(arguments.at("--static-intent-sources"));
+            if (!static_log) fail("Cannot open static source evidence");
         }
         if (!configured && bindings.count("wMobileOwner")) fail("MobileTick symbol missing");
         if (bindings.count("wMobileVirtualActorMode")) {
@@ -1471,6 +1507,16 @@ int main(int argc, char** argv) {
             auto offset = std::chrono::duration<double>((input_frame - pace_from) / (av_info.timing.fps * pace_multiplier));
             std::this_thread::sleep_until(paced_start + std::chrono::duration_cast<std::chrono::steady_clock::duration>(offset));
         }
+        if (static_status && !static_started) {
+            const auto live = capture(sram, sram_size);
+            const bool scene = effect_options["--native-scene-field"].empty()
+                ? acceptance_marker_count && acceptance_marker_count(0)
+                : symbol<unsigned(*)()>(core, "acceptance_profile_native_scene_ready")();
+            if (scene && metric && metric(21) && live.at("wMapStatus") == 2 && live.at("wScriptRunning") == 0) {
+                if (!static_enable()) fail("Static source enable failed");
+                static_started = true;
+            }
+        }
         // Check the idle scene on both sides of each captured execution. A
         // transient change wholly inside run() is not observable here.
         if (ordinary_gate && ordinary_armed && !ordinary_completed && !ordinary_ready())
@@ -1506,6 +1552,28 @@ int main(int argc, char** argv) {
             if (event_record(0, 33))
                 fail("Native effect evidence overflow: count=" + std::to_string(event_record(0, 32)) +
                      " overflow=" + std::to_string(event_record(0, 33)));
+        }
+        if (static_started) {
+            if (static_status(1)) fail("Independent static source observation failed");
+            while (static_written < static_status(2)) {
+                ++static_written;
+                // Keep bounded raw evidence from the first sixteen sources.
+                // Continue checking the observer and release only unreferenced IDs.
+                if (static_written <= 16) {
+                    static_log << "{\"source\":[";
+                    for (unsigned f = 0; f < 5; ++f) static_log << (f ? "," : "") << static_source(static_written, 0, f);
+                    static_log << "],\"inputs\":[";
+                    for (unsigned section = 1; section <= 3; ++section) {
+                        static_log << (section > 1 ? ",[" : "[");
+                        for (unsigned b = 0; b < 444; ++b) static_log << (b ? "," : "") << static_source(static_written, section, b);
+                        static_log << "]";
+                    }
+                    static_log << "]}\n"; static_log.flush();
+                    if (!static_log) fail("Static source evidence write failed");
+                }
+            }
+            const uint64_t live = static_status(4) ? std::min(static_status(3), static_status(4)) : static_status(3);
+            if (live > 1) static_release(live - 1);
         }
         if (!trace_enabled && conditional_actions.empty() && walk_waypoints.empty()) continue;
         auto values = capture(sram, sram_size);
@@ -1693,6 +1761,8 @@ int main(int argc, char** argv) {
     std::set<unsigned> colors;
     for (size_t i = 0; i + 2 < image.size(); i += 3)
         colors.insert((unsigned(image[i]) << 16) | (unsigned(image[i + 1]) << 8) | image[i + 2]);
+    if (static_status && (!static_started || !static_written || static_status(1)))
+        fail("Static source extraction incomplete or failed");
     if (ordinary_status) {
         if (ordinary_status(1) != 2 || ordinary_count != ordinary_status(2)) {
             symbol<void(*)()>(core, "acceptance_profile_ordinary_cancel")();
