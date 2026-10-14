@@ -60,6 +60,93 @@ int main() {
     assert(o.current.peers[2].x==0xabc && o.current.peers[2].y==0xdef);
     assert(o.current.peers[2].facing==15 && o.current.peers[2].avatar==2);
     assert(o.lobby==1 && o.capacity==4 && o.token[7]==21);
+    // Literal native130 accepted wire: unavailable upload is membership, not pose.
+    // Expected bank2 bytes are independently transcribed from protocol/ROM layout.
+    const Wire actual_welcome={80,67,1,17,0,1,0,15,0,1,0,1,0,1,120,117,72,189,3,32,194,193,4};
+    const Wire actual_empty={80,67,1,19,0,0,0,5,0,1,0,1,0};
+    const Wire actual_unavailable={80,67,1,19,0,0,0,22,0,1,0,1,1,0,2,0,1,0,2,0,0,0,0,0,0,0,0,0,0,0};
+    const Wire actual_available={80,67,1,19,0,0,0,22,0,1,0,1,1,0,2,0,1,0,3,11,23,133,224,0,1,9,0,64,1,1};
+    const Bytes20 unavailable_bytes={0,2,0,1,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+    const Bytes20 available_bytes={0,2,0,1,0,3,11,23,133,224,0,1,0,144,0,64,0,1,1,0};
+    Observer actual;
+    assert(actual.welcome(150784,actual_welcome.data(),actual_welcome.size()));
+    auto actual_tx=actual.capture(224515,actual_empty.data(),actual_empty.size());
+    assert(actual.commit(224540,actual_tx,actual_empty.data(),13,CommittedSlots{}));
+    actual_tx=actual.capture(3113396,actual_unavailable.data(),actual_unavailable.size());
+    CommittedSlots actual_slots{}; actual_slots[0]=unavailable_bytes;
+    assert(actual.commit(3113811,actual_tx,actual_unavailable.data(),13,actual_slots));
+    assert(actual.latest==2 && actual.current.count==1 && actual.current.peers[0].status==0);
+    assert(actual.get(2)->peers[0].expanded==unavailable_bytes);
+    actual_tx=actual.capture(3456360,actual_available.data(),actual_available.size());
+    // Synthetic due opportunity during capture/commit proves unchanged latch.
+    assert(actual.opportunity(3456500,254,3450559) && actual.latched.input==2);
+    actual_slots[0]=available_bytes;
+    unsigned actual_reads=0;
+    auto actual_bank_read=[&](unsigned bank,unsigned at) -> uint8_t {
+        assert(bank==2 && at>=0xd100 && at<0xd100+148); ++actual_reads;
+        return actual_slots[(at-0xd100)/64][(at-0xd100)%64];
+    };
+    assert(actual.commit_bank2(3456803,actual_tx,actual_available.data(),13,0xd100,actual_bank_read));
+    assert(actual_reads==60);
+    assert(actual.latest==3 && actual.current.peers[0].status==1 && actual.latched.input==2);
+    assert(actual.get(2)->peers[0].expanded==unavailable_bytes && actual.get(2)->peers[0].status==0);
+    assert(actual.get(3)->peers[0].expanded==available_bytes);
+    assert(actual.opportunity(3456804,255,3456803) && actual.latched.input==3);
+    // Every committed byte remains authoritative during the initializing change.
+    for (unsigned field=0;field<20;++field) {
+        Observer bad; assert(bad.welcome(1,actual_welcome.data(),actual_welcome.size()));
+        accept(bad,actual_unavailable);
+        auto t=bad.capture(4,actual_available.data(),actual_available.size());
+        auto corrupt=actual_slots; corrupt[0][field]^=1;
+        assert(!bad.commit(5,t,actual_available.data(),13,corrupt));
+        assert(bad.failure==Failure::committed_input && bad.current.peers[0].status==0);
+    }
+    // Status bit is authority: nonzero unavailable snapshots cannot initialize;
+    // status1 with otherwise zero fields does initialize and cannot be a bypass.
+    for (unsigned kind: {19u,24u}) {
+        auto first=fresh(); auto unavailable=roster(1); unavailable[28]&=0xfe;
+        accept(first,unavailable); assert(first.current.peers[0].status==0);
+        auto changed=unavailable; changed[3]=kind; changed[25]^=1; changed[29]=3;
+        accept(first,changed); assert(first.current.peers[0].status==0 && first.latest==2);
+        changed[28]|=1; accept(first,changed); assert(first.current.peers[0].status==1);
+        auto revision=changed; put(revision,17,12); accept(first,revision);
+        for (unsigned byte=19;byte<30;++byte) {
+            auto bad=first; auto unsupported=revision; unsupported[byte]^=1;
+            auto t=bad.capture(bad.instruction+1,unsupported.data(),unsupported.size()); assert(t);
+            assert(!bad.commit(bad.instruction+1,t,unsupported.data(),13,slots(unsupported)));
+            assert(bad.failure==Failure::static_transition && bad.latest==4);
+        }
+        auto zero=fresh(); auto placeholder=roster(1);
+        for (unsigned byte=19;byte<30;++byte) placeholder[byte]=0;
+        placeholder[28]=1; accept(zero,placeholder);
+        assert(zero.current.peers[0].status==1);
+        placeholder[3]=kind; placeholder[25]=1;
+        auto t=zero.capture(zero.instruction+1,placeholder.data(),placeholder.size()); assert(t);
+        assert(!zero.commit(zero.instruction+1,t,placeholder.data(),13,slots(placeholder)));
+        assert(zero.failure==Failure::static_transition);
+    }
+    // Availability follows accepted identity across roster order, not a physical slot.
+    auto reordered=fresh(); auto pair=roster(2); pair[28]&=0xfe; accept(reordered,pair);
+    auto swapped=pair;
+    std::copy(pair.begin()+30,pair.begin()+47,swapped.begin()+13);
+    std::copy(pair.begin()+13,pair.begin()+30,swapped.begin()+30);
+    swapped[45]|=1; swapped[42]^=1; accept(reordered,swapped);
+    assert(reordered.current.peers[0].id==2 && reordered.current.peers[0].status==1);
+    assert(reordered.current.peers[1].id==1 && reordered.current.peers[1].status==1);
+    // Removal ends ownership of the static pose; a new generation can join
+    // only after removal. A retained generation replacement still fails strictly.
+    auto rejoin=fresh(); accept(rejoin,roster(1)); accept(rejoin,roster(0));
+    auto joined=roster(1); put(joined,15,8); joined[28]&=0xfe;
+    accept(rejoin,joined); assert(rejoin.current.peers[0].status==0);
+    joined[25]^=1; joined[28]|=1; accept(rejoin,joined);
+    assert(rejoin.current.peers[0].status==1);
+    for (unsigned kind: {19u,24u}) {
+        auto bad=fresh(); auto unavailable=roster(1); unavailable[28]&=0xfe; accept(bad,unavailable);
+        unavailable[3]=kind; put(unavailable,15,8); unavailable[28]|=1;
+        auto t=bad.capture(bad.instruction+1,unavailable.data(),unavailable.size()); assert(t);
+        assert(!bad.commit(bad.instruction+1,t,unavailable.data(),13,slots(unavailable)));
+        assert(bad.failure==Failure::identity_transition && !bad.latest && bad.current.count==0);
+    }
     // Trainer IDs have no input field and cannot collapse three identities.
     assert(o.current.peers[0].id!=o.current.peers[1].id && o.current.count==3);
     // The pending candidate spans arbitrary decode phases, without publication.

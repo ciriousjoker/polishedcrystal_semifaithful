@@ -175,7 +175,12 @@ struct Observer {
                 if (current.peers[old].generation != p.generation) {
                     retire_membership(Failure::identity_transition); return false;
                 }
-                if (!static_equal(current.peers[old], p)) { fail(Failure::static_transition); return false; }
+                // Unavailable uploads are still exact accepted membership/input.
+                // They cannot establish a visible static pose. Once status 1
+                // establishes it, retain every existing static transition guard.
+                if (current.peers[old].status == 1 && !static_equal(current.peers[old], p)) {
+                    fail(Failure::static_transition); return false;
+                }
                 if (delta) next.peers[old] = p;
             }
         }
