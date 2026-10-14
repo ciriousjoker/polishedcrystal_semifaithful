@@ -59,6 +59,7 @@ static unsigned (*ordinary_effect_display_matches)(const void*) = nullptr;
 static unsigned (*ordinary_effect_video_row)(unsigned,unsigned) = nullptr;
 static unsigned (*ordinary_effect_video_change)(unsigned,unsigned) = nullptr;
 static unsigned (*ordinary_status)(unsigned) = nullptr;
+static unsigned (*ordinary_failure)(unsigned) = nullptr;
 static unsigned (*ordinary_callback)(const void*) = nullptr;
 static int ordinary_fd = -1;
 static unsigned ordinary_start = 0, ordinary_count = 0;
@@ -111,6 +112,14 @@ static const std::map<std::string, unsigned> buttons = {
 };
 
 static void fail(const std::string& message) {
+    if (ordinary_failure) {
+        std::cerr << "ordinary_first_failure_v1 runner_host=" << input_frame
+                  << " stream_ordinal=" << ordinary_count << " snapshot=";
+        for (unsigned i = 0; i < 27; ++i) std::cerr << (i ? "," : "") << ordinary_failure(i);
+        std::cerr << " request_commit=";
+        for (unsigned i = 5; i < 10; ++i) std::cerr << (i == 5 ? "" : ",") << ordinary_status(i);
+        std::cerr << '\n';
+    }
     std::cerr << message << '\n';
     std::exit(1);
 }
@@ -1366,6 +1375,7 @@ int main(int argc, char** argv) {
         struct stat info;
         if (ordinary_fd < 0 || fstat(ordinary_fd, &info) || !S_ISFIFO(info.st_mode)) fail("Ordinary stream requires a FIFO with a live reader");
         ordinary_status = symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_ordinary_status");
+        ordinary_failure = symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_ordinary_failure");
         if (ordinary_status(0) != 1) fail("Ordinary capture ABI mismatch");
         ordinary_callback = symbol<unsigned(*)(const void*)>(core, "acceptance_profile_ordinary_callback");
         ordinary_effect_video_byte = symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_video_byte");
@@ -1379,6 +1389,8 @@ int main(int argc, char** argv) {
     }
     const bool ordinary_gate = arguments.count("--ordinary-gate");
     bool ordinary_armed = false, ordinary_announced = false, ordinary_completed = false;
+    bool ordinary_requested = false, ordinary_commit_reported = false;
+    unsigned ordinary_request_frame = 0;
     if (ordinary_gate && (arguments.count("--ordinary-start") || !acceptance_enabled || !profile_frame || !arguments.count("--state-out")))
         fail("Ordinary gate requires acceptance readiness and excludes a fixed start");
     auto ordinary_ready = [&]() {
@@ -1425,6 +1437,8 @@ int main(int argc, char** argv) {
             // Keep pumping until all clients are ready. Freezing an earlier
             // client here would expire its wall-clock server presence lease.
         }
+        if (ordinary_requested && ordinary_status && ordinary_status(5) && input_frame - ordinary_request_frame >= 4)
+            fail("Ordinary capture request did not reach a genuine row zero");
         if (ordinary_gate && !ordinary_armed) {
             const bool ready = ordinary_ready();
             if (ready && !ordinary_announced) {
@@ -1433,8 +1447,8 @@ int main(int argc, char** argv) {
             }
             if (std::ifstream(arguments.at("--ordinary-gate")).good()) {
                 if (!ready) fail("Ordinary gate released without current actual readiness");
-                // Finish a real raster before arming, preserving the first full
-                // cold output. No alignment occurs inside the capture window.
+                // Align before requesting. The next genuine render row zero
+                // commits capture, since this alignment already rendered row zero.
                 if (raster_state() != 0x100) {
                     raster_alignment_lines = align_raster();
                     if (!raster_alignment_lines || raster_state() != 0x100)
@@ -1444,11 +1458,13 @@ int main(int argc, char** argv) {
                 const unsigned count = arguments.count("--ordinary-count") ? std::stoul(arguments.at("--ordinary-count")) : 800;
                 if (!symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_ordinary_arm")(count)) fail("Ordinary capture arm failed");
                 ordinary_armed = true;
+                ordinary_requested = true; ordinary_request_frame = input_frame;
             }
         }
         if (ordinary_status && !ordinary_gate && input_frame == ordinary_start) {
             const unsigned count = arguments.count("--ordinary-count") ? std::stoul(arguments.at("--ordinary-count")) : 800;
             if (!symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_ordinary_arm")(count)) fail("Ordinary capture arm failed");
+            ordinary_requested = true; ordinary_request_frame = input_frame;
         }
         if (input_frame == pace_from) paced_start = std::chrono::steady_clock::now();
         if (input_frame >= pace_from) {
@@ -1467,6 +1483,15 @@ int main(int argc, char** argv) {
         if (raster_aligned && input_frame >= measurement_start && input_frame < measurement_start + 800 &&
                 (raster_before != 0x100 || raster_after != 0x100)) raster_boundary_failures++;
         if (profile_frame) profile_frame();
+        if (ordinary_requested && !ordinary_commit_reported && ordinary_status &&
+                !ordinary_status(5) && (ordinary_status(1) == 1 || ordinary_status(1) == 2)) {
+            std::cerr << "ordinary_arm_v1 request_frame=" << ordinary_status(6)
+                      << " request_ly=" << ordinary_status(8)
+                      << " commit_frame=" << ordinary_status(7)
+                      << " commit_ly=" << ordinary_status(9)
+                      << " commit_ordinal=0 observed_stream_ordinal=" << ordinary_count << '\n';
+            ordinary_commit_reported = true;
+        }
         if (ordinary_gate && !ordinary_completed && ordinary_status(1) == 2) {
             if (!ordinary_ready()) fail("Ordinary capture completed outside live readiness");
             const unsigned count = arguments.count("--ordinary-count") ? std::stoul(arguments.at("--ordinary-count")) : 800;

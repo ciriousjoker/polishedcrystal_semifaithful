@@ -48,22 +48,31 @@ class OrdinaryProcesses:
         self.stop = threading.Event()
         self.lock = threading.Lock()
         self.children = []
+        self.runners = []
 
-    def spawn(self, command, **kwargs):
+    def spawn(self, command, runner=False, **kwargs):
         with self.lock:
             if self.stop.is_set():
                 raise RuntimeError("Ordinary capture cancelled")
             child = subprocess.Popen(list(map(str, command)), **kwargs)
             self.children.append(child)
+            if runner:
+                self.runners.append(child)
             return child
 
-    def close(self):
+    def cancel(self):
         self.stop.set()
         with self.lock:
-            children = list(self.children)
-        for child in children:
+            runners = list(self.runners)
+        for child in runners:
             if child.poll() is None:
                 child.terminate()
+
+    def close(self):
+        self.cancel()
+        with self.lock:
+            children = list(self.children)
+        # run() closes its keeper and drains the reader after the writer exits.
         for child in children:
             try:
                 child.wait(timeout=3)
@@ -73,26 +82,34 @@ class OrdinaryProcesses:
 
     def run(self, command, cwd, log, directory, timeout=100):
         fifo = directory / "ordinary.fifo"
-        os.mkfifo(fifo)
-        read_fd = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
-        keeper = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
-        os.set_blocking(read_fd, True)
-        lines = []
+        read_fd = keeper = -1
+        reader = runner = drainer = None
+        progress = {"records": 0, "last": "", "drained_eof": False}
+        failure = None
+        success = False
+        cancelled = False
         def drain(pipe):
-            count, last = 0, ""
             with pipe:
                 for line in pipe:
-                    count, last = count + 1, line.strip()
-            lines.extend((count, last))
+                    line = line.strip()
+                    # Count only complete, actually drained validation records.
+                    if re.fullmatch(r"\d+ \d+ \d+ [0-9a-f]{8} pixels=23040 physical=PASS intent=UNPROVEN", line):
+                        progress["records"] += 1
+                        progress["last"] = line
+            progress["drained_eof"] = True
         try:
+            os.mkfifo(fifo)
+            read_fd = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
+            keeper = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
+            os.set_blocking(read_fd, True)
             with (directory / "ordinary-reader-errors.log").open("w") as errors, Path(log).open("w") as output:
                 reader = self.spawn([self.reader, self.count], stdin=read_fd, stdout=subprocess.PIPE,
                                     stderr=errors, text=True)
-                drainer = threading.Thread(target=drain, args=(reader.stdout,), daemon=True)
+                drainer = threading.Thread(target=drain, args=(reader.stdout,))
                 drainer.start()
                 os.close(read_fd)
                 read_fd = -1
-                runner = self.spawn(command, cwd=cwd, stdout=output, stderr=subprocess.STDOUT)
+                runner = self.spawn(command, runner=True, cwd=cwd, stdout=output, stderr=subprocess.STDOUT)
                 deadline = time.monotonic() + timeout
                 while runner.poll() is None:
                     if keeper >= 0 and (directory / "state.json.ordinary-complete").exists():
@@ -110,19 +127,44 @@ class OrdinaryProcesses:
                     raise subprocess.CalledProcessError(runner.returncode, command)
                 reader.wait(timeout=5)
                 drainer.join(timeout=2)
-                if reader.returncode or len(lines) != 2 or lines[0] != self.count:
+                if reader.returncode or not progress["drained_eof"] or progress["records"] != self.count:
                     raise RuntimeError("Ordinary reader lacks exact records/footer/EOF")
-                (directory / "ordinary-reader.json").write_text(json.dumps({
-                    "records": lines[0], "last": lines[1], "footer_eof": True,
-                    "physical": "PASS", "intent": "UNPROVEN"}))
-        except BaseException:
-            self.close()
+                success = True
+        except BaseException as error:
+            failure = error
+            cancelled = self.stop.is_set()
+            self.cancel()
             raise
         finally:
+            # Stop writers first, then release the keeper, allowing the reader to
+            # consume all buffered PASS records and report truncated footer/EOF.
+            if runner is not None and runner.poll() is None:
+                runner.terminate()
+                try:
+                    runner.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    runner.kill()
+                    runner.wait()
             if read_fd >= 0:
                 os.close(read_fd)
             if keeper >= 0:
                 os.close(keeper)
+            if reader is not None:
+                try:
+                    reader.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    reader.kill()
+                    reader.wait()
+            if drainer is not None:
+                drainer.join()
+            summary = {**progress, "footer_eof": bool(success),
+                "physical": "PASS" if success else "INCOMPLETE", "intent": "UNPROVEN",
+                "status": "complete" if success else "cancelled" if cancelled else "failed",
+                "failure": None if failure is None else type(failure).__name__ + ": " + str(failure),
+                "cancelled": cancelled, "cancellation_requested": self.stop.is_set(),
+                "reader_returncode": None if reader is None else reader.returncode,
+                "runner_returncode": None if runner is None else runner.returncode}
+            (directory / "ordinary-reader.json").write_text(json.dumps(summary))
             fifo.unlink(missing_ok=True)
 
 

@@ -255,50 +255,102 @@ static unsigned acceptance_palette_config[5] = {};
 static bool acceptance_palette_render_started = false;
 extern "C" void acceptance_profile_palette_current();
 // Ordinary capture has no effect span or source-intent dependency.
-// State: 0 idle, 1 armed, 2 complete, 3 failed, 4 cancelled incomplete.
+// State: 0 idle (including a pending row-zero request), 1 armed, 2 complete,
+// 3 failed, 4 cancelled incomplete. Status field5 distinguishes pending idle.
 static unsigned acceptance_ordinary_state = 0, acceptance_ordinary_limit = 0;
 static unsigned acceptance_ordinary_count = 0, acceptance_ordinary_pending = 0;
 static const void* acceptance_ordinary_buffer = nullptr;
 static bool acceptance_ordinary_rows_started = false;
 static unsigned acceptance_ordinary_render_consumed = 0;
+static bool acceptance_ordinary_requested = false;
+static unsigned acceptance_ordinary_request_frame = 0, acceptance_ordinary_commit_frame = 0;
+static unsigned acceptance_ordinary_request_ly = ~0u, acceptance_ordinary_commit_ly = ~0u;
+// Diagnostic ABI v1: immutable first failure, scalar fields only. Reason IDs are
+// stable; combined predicates retain their original evaluation order.
+// 1 LCD-off direct output; 2 null row buffer; 3 row before callback;
+// 4 row range; 5 incomplete prior raster; 6 unconsumed prior raster;
+// 7 missing row zero; 8 row order; 9 row buffer change;
+// 10 display before callback; 11 display without rows; 12 display buffer;
+// 13 display without raster; 14 stale display; 15 incomplete display rows;
+// 16 raster flags; 17 callback without display; 18 callback buffer;
+// 19 negative window line; 20 restore boundary.
+static unsigned acceptance_display_output = 0;
+static const void* acceptance_display_buffer = nullptr;
+static unsigned acceptance_ordinary_failure[27] = {};
+static void acceptance_ordinary_fail(unsigned reason, unsigned line = ~0u,
+        int window_line = 0, const void* buffer = nullptr) {
+    if (acceptance_ordinary_state != 1 && !acceptance_ordinary_requested) return;
+    const unsigned values[] = {1, reason, mobile_observed_frames, line, unsigned(window_line),
+        acceptance_ordinary_state, acceptance_ordinary_rows_started,
+        acceptance_video_meta[0], acceptance_video_meta[1], acceptance_video_meta[2],
+        acceptance_video_meta[5], acceptance_video_meta[6], acceptance_video_meta[7],
+        acceptance_ordinary_render_consumed, acceptance_ordinary_count, acceptance_ordinary_limit,
+        acceptance_ordinary_pending, acceptance_display_output, buffer != nullptr,
+        buffer == acceptance_ordinary_buffer, buffer == acceptance_display_buffer,
+        acceptance_game_context != nullptr,
+        acceptance_game_context ? acceptance_game_context->get_cpu()->read(0xff44) : ~0u,
+        acceptance_game_context ? acceptance_game_context->get_cpu()->read(0xff40) : ~0u,
+        acceptance_observation_invalid, acceptance_video_enabled, 27};
+    std::copy_n(values, 27, acceptance_ordinary_failure);
+    acceptance_ordinary_state = 3;
+}
+extern "C" unsigned acceptance_profile_ordinary_failure(unsigned field) {
+    return field < 27 ? acceptance_ordinary_failure[field] : ~0u;
+}
 extern "C" unsigned acceptance_profile_ordinary_status(unsigned field) {
     const unsigned values[] = {1, acceptance_ordinary_state, acceptance_ordinary_limit,
-        acceptance_ordinary_count, acceptance_ordinary_pending};
-    return field < 5 ? values[field] : ~0u;
+        acceptance_ordinary_count, acceptance_ordinary_pending, acceptance_ordinary_requested,
+        acceptance_ordinary_request_frame, acceptance_ordinary_commit_frame,
+        acceptance_ordinary_request_ly, acceptance_ordinary_commit_ly};
+    return field < 10 ? values[field] : ~0u;
 }
 extern "C" unsigned acceptance_profile_ordinary_arm(unsigned count) {
-    if (!count || count > 800 || acceptance_ordinary_state == 1) return 0;
-    acceptance_ordinary_state = 1; acceptance_ordinary_limit = count;
+    if (!count || count > 800 || acceptance_ordinary_state == 1 || acceptance_ordinary_requested) return 0;
+    std::fill_n(acceptance_ordinary_failure, 27, 0);
+    // Request only. The native display of the preceding raster happens before
+    // render row zero, so activation here would incorrectly reject that output.
+    acceptance_ordinary_requested = true;
+    acceptance_ordinary_request_frame = mobile_observed_frames;
+    acceptance_ordinary_request_ly = acceptance_game_context ? acceptance_game_context->get_cpu()->read(0xff44) : ~0u;
+    acceptance_ordinary_commit_frame = 0; acceptance_ordinary_commit_ly = ~0u;
+    acceptance_ordinary_state = 0; acceptance_ordinary_limit = count;
     acceptance_ordinary_count = acceptance_ordinary_pending = 0;
-    acceptance_ordinary_rows_started = false; acceptance_ordinary_buffer = nullptr;
-    acceptance_ordinary_render_consumed = 0;
     acceptance_video_enabled = true;
     return 1;
 }
 extern "C" void acceptance_profile_ordinary_cancel() {
-    if (acceptance_ordinary_state == 1) acceptance_ordinary_state = 4;
+    if (acceptance_ordinary_state == 1 || acceptance_ordinary_requested) acceptance_ordinary_state = 4;
+    acceptance_ordinary_requested = false;
 }
 // Called from both pinned native LCD-off clear paths before they modify vframe.
 // Pointer identity cannot associate those direct writes with a captured LCD raster.
 extern "C" void acceptance_profile_ordinary_unsupported_output() {
-    if (acceptance_ordinary_state == 1) acceptance_ordinary_state = 3;
+    if (acceptance_ordinary_state == 1) acceptance_ordinary_fail(1);
 }
 extern "C" void acceptance_profile_render_buffer(const void* buffer, unsigned line) {
-    if (acceptance_ordinary_state != 1) return;
-    if (!buffer || acceptance_ordinary_pending || line >= 144 ||
-        (line == 0 && acceptance_ordinary_rows_started &&
-            (acceptance_video_meta[5] != 144 || acceptance_ordinary_render_consumed != acceptance_video_meta[1])) ||
-        (line != 0 && (!acceptance_ordinary_rows_started ||
-            acceptance_video_meta[5] != line || buffer != acceptance_ordinary_buffer))) {
-        acceptance_ordinary_state = 3; return;
+    if (acceptance_ordinary_requested && line == 0) {
+        // This is the genuine lcd::render entry, before either row observer.
+        // No previously rendered row or output contributes capture credit.
+        acceptance_ordinary_requested = false;
+        acceptance_ordinary_state = 1;
+        acceptance_ordinary_rows_started = false; acceptance_ordinary_buffer = nullptr;
+        acceptance_ordinary_render_consumed = 0;
+        acceptance_ordinary_commit_frame = mobile_observed_frames;
+        acceptance_ordinary_commit_ly = acceptance_game_context ? acceptance_game_context->get_cpu()->read(0xff44) : ~0u;
     }
+    if (acceptance_ordinary_state != 1) return;
+    unsigned reason = !buffer ? 2 : acceptance_ordinary_pending ? 3 : line >= 144 ? 4 :
+        (line == 0 && acceptance_ordinary_rows_started) ?
+            (acceptance_video_meta[5] != 144 ? 5 :
+             acceptance_ordinary_render_consumed != acceptance_video_meta[1] ? 6 : 0) :
+        line != 0 ? (!acceptance_ordinary_rows_started ? 7 :
+            acceptance_video_meta[5] != line ? 8 : buffer != acceptance_ordinary_buffer ? 9 : 0) : 0;
+    if (reason) { acceptance_ordinary_fail(reason, line, 0, buffer); return; }
     if (line == 0) {
         acceptance_ordinary_buffer = buffer; acceptance_ordinary_rows_started = true;
     }
 }
 static unsigned acceptance_display_metadata[24] = {};
-static unsigned acceptance_display_output = 0;
-static const void* acceptance_display_buffer = nullptr;
 static unsigned acceptance_float_bits(float value) {
     static_assert(sizeof(float) == sizeof(unsigned), "binary32 metadata required");
     unsigned bits; std::memcpy(&bits, &value, sizeof(bits)); return bits;
@@ -322,12 +374,11 @@ extern "C" void acceptance_profile_display_begin(const void* buffer, unsigned wi
     float factor, unsigned parity, unsigned gbc, unsigned dmg_gbc, unsigned upscale, unsigned blur) {
     if (!acceptance_video_enabled || acceptance_observation_invalid) return;
     if (acceptance_ordinary_state == 1) {
-        if (acceptance_ordinary_pending || !acceptance_ordinary_rows_started ||
-            buffer != acceptance_ordinary_buffer || !acceptance_video_meta[0] ||
-            acceptance_ordinary_render_consumed == acceptance_video_meta[1] ||
-            acceptance_video_meta[5] != 144 || acceptance_video_meta[6]) {
-            acceptance_ordinary_state = 3; return;
-        }
+        const unsigned reason = acceptance_ordinary_pending ? 10 : !acceptance_ordinary_rows_started ? 11 :
+            buffer != acceptance_ordinary_buffer ? 12 : !acceptance_video_meta[0] ? 13 :
+            acceptance_ordinary_render_consumed == acceptance_video_meta[1] ? 14 :
+            acceptance_video_meta[5] != 144 ? 15 : acceptance_video_meta[6] ? 16 : 0;
+        if (reason) { acceptance_ordinary_fail(reason, ~0u, 0, buffer); return; }
         acceptance_ordinary_pending = acceptance_display_output + 1;
         acceptance_ordinary_render_consumed = acceptance_video_meta[1];
     }
@@ -346,10 +397,10 @@ extern "C" unsigned acceptance_profile_ordinary_callback(const void* buffer) {
     if (acceptance_ordinary_state != 1) return 0;
     if (!acceptance_ordinary_pending) {
         if (acceptance_ordinary_count && buffer == acceptance_display_buffer) return 0;
-        acceptance_ordinary_state = 3; return 0;
+        acceptance_ordinary_fail(17, ~0u, 0, buffer); return 0;
     }
     if (buffer != acceptance_display_buffer || buffer != acceptance_ordinary_buffer) {
-        acceptance_ordinary_state = 3; return 0;
+        acceptance_ordinary_fail(18, ~0u, 0, buffer); return 0;
     }
     acceptance_ordinary_pending = 0;
     if (++acceptance_ordinary_count == acceptance_ordinary_limit) acceptance_ordinary_state = 2;
@@ -381,7 +432,7 @@ static void acceptance_video_hardware(gb* game, unsigned char* data) {
 }
 extern "C" void acceptance_profile_render_line(gb* game, unsigned line, int window_line = 1) {
     if (!acceptance_video_enabled || acceptance_observation_invalid || line >= 144) return;
-    if (acceptance_ordinary_state == 1 && window_line < 0) { acceptance_ordinary_state = 3; return; }
+    if (acceptance_ordinary_state == 1 && window_line < 0) { acceptance_ordinary_fail(19, line, window_line); return; }
     // The real renderer getter observes final cartridge/configuration state,
     // including private RGB565 state, before first-row latching. Prior mapped
     // caches still require independent exact raw-to-mapped proof.
@@ -575,6 +626,10 @@ extern "C" void acceptance_profile_effect_reset() {
     acceptance_effect_sequence = acceptance_effect_overflow = acceptance_native_scene_ready = 0;
     acceptance_native_world_completed = false;
     acceptance_video_frame = acceptance_video_until = 0;
+    std::fill_n(acceptance_ordinary_failure, 27, 0);
+    acceptance_ordinary_requested = false;
+    acceptance_ordinary_request_frame = acceptance_ordinary_commit_frame = 0;
+    acceptance_ordinary_request_ly = acceptance_ordinary_commit_ly = ~0u;
     acceptance_ordinary_state = acceptance_ordinary_limit = acceptance_ordinary_count = acceptance_ordinary_pending = 0;
     acceptance_ordinary_rows_started = false; acceptance_ordinary_buffer = nullptr;
     acceptance_ordinary_render_consumed = 0;
@@ -596,7 +651,10 @@ extern "C" void acceptance_profile_effect_reset() {
 
 // Host observation is not serialized. Restored CPU state cannot prove missed entries.
 extern "C" void acceptance_profile_restore_boundary() {
-    if (acceptance_ordinary_state == 1) acceptance_ordinary_state = 3;
+    if (acceptance_ordinary_state == 1 || acceptance_ordinary_requested) {
+        acceptance_ordinary_fail(20);
+        acceptance_ordinary_requested = false;
+    }
     if (!acceptance_effect_enabled && !acceptance_native_scene_count) return;
     acceptance_observation_invalid = true;
     ++acceptance_effect_overflow;

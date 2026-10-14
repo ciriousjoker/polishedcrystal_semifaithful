@@ -14,7 +14,7 @@ class OrdinaryOrchestration(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
             reader=root/'reader.py'
-            reader.write_text("#!/usr/bin/env python3\nimport sys\nassert sys.stdin.buffer.read()==b'complete'\nfor i in range(int(sys.argv[1])): print(i)\n")
+            reader.write_text("#!/usr/bin/env python3\nimport sys\nassert sys.stdin.buffer.read()==b'complete'\nfor i in range(int(sys.argv[1])): print(f'{i+1} {i+1} {i+1} 00000000 pixels=23040 physical=PASS intent=UNPROVEN')\n")
             reader.chmod(0o755)
             runner=root/'runner.py'
             runner.write_text("import pathlib,sys,time\np=pathlib.Path(sys.argv[1])\nwith (p/'ordinary.fifo').open('wb',buffering=0) as pipe:\n (p/'ready').touch()\n while not (p.parent/'gate').exists(): time.sleep(.002)\n pipe.write(b'complete')\n(p/'state.json.ordinary-complete').touch()\nwhile not (p.parent/'release').exists(): time.sleep(.002)\n")
@@ -65,7 +65,120 @@ class OrdinaryOrchestration(unittest.TestCase):
                         owned.run(['python3','-c',script,directory],root,directory/'process.log',directory,timeout)
                     self.assertTrue(all(p.poll() is not None for p in owned.children))
                     self.assertFalse((directory/'ordinary.fifo').exists())
+                    summary=json.loads((directory/'ordinary-reader.json').read_text())
+                    self.assertFalse(summary['footer_eof'])
+                    self.assertEqual(summary['status'],'failed')
+                    self.assertIsNotNone(summary['failure'])
                 finally:owned.close()
+
+    def test_four_failure_summaries_retain_drained_validated_records(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            reader=root/'reader.py'
+            reader.write_text("#!/usr/bin/env python3\nimport sys\nfor line in sys.stdin:\n print(line.strip(),flush=True)\nraise SystemExit(2)\n")
+            reader.chmod(0o755)
+            owned=runtime.OrdinaryProcesses(reader,800)
+            dirs=[root/str(i) for i in range(4)]
+            for d in dirs:d.mkdir()
+            script="import pathlib,sys,time; p=pathlib.Path(sys.argv[1]); f=(p/'ordinary.fifo').open('w'); f.write(''.join(f'{i+1} {i+1} {i+1} 00000000 pixels=23040 physical=PASS intent=UNPROVEN\\n' for i in range(7))); f.flush(); time.sleep(.3); raise SystemExit(9)"
+            try:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+                    jobs=[pool.submit(owned.run,['python3','-c',script,d],root,d/'process.log',d,3) for d in dirs]
+                    for job in jobs:
+                        with self.assertRaises((subprocess.CalledProcessError,TimeoutError,RuntimeError)):job.result()
+                for d in dirs:
+                    summary=json.loads((d/'ordinary-reader.json').read_text())
+                    self.assertEqual(summary['records'],7)
+                    self.assertTrue(summary['last'].startswith('7 7 7 '))
+                    self.assertFalse(summary['footer_eof'])
+                    self.assertEqual(summary['physical'],'INCOMPLETE')
+                    self.assertIn(summary['status'],('failed','cancelled'))
+                    self.assertIsNotNone(summary['reader_returncode'])
+                    self.assertIsNotNone(summary['runner_returncode'])
+                    self.assertTrue(summary['drained_eof'])
+                owned.close()
+                self.assertTrue(all(child.poll() is not None for child in owned.children))
+            finally:owned.close()
+
+    def test_explicit_cancellation_persists_owned_exit_summary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory=Path(tmp)
+            reader=directory/'reader.py'
+            reader.write_text("#!/usr/bin/env python3\nimport sys\nsys.stdin.buffer.read()\nraise SystemExit(2)\n")
+            reader.chmod(0o755)
+            owned=runtime.OrdinaryProcesses(reader,800)
+            try:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    job=pool.submit(owned.run,['python3','-c','import time;time.sleep(30)'],directory,directory/'process.log',directory,5)
+                    deadline=time.monotonic()+2
+                    while len(owned.children)<2 and time.monotonic()<deadline:time.sleep(.002)
+                    self.assertEqual(len(owned.children),2)
+                    owned.close()
+                    with self.assertRaises((subprocess.CalledProcessError,TimeoutError)):job.result()
+                summary=json.loads((directory/'ordinary-reader.json').read_text())
+                self.assertTrue(summary['cancelled'])
+                self.assertFalse(summary['footer_eof'])
+                self.assertEqual(summary['records'],0)
+                self.assertTrue(summary['drained_eof'])
+                self.assertTrue(all(child.poll() is not None for child in owned.children))
+            finally:owned.close()
+
+    def test_immediate_runner_failure_reports_latched_scalars(self):
+        source=(runtime.ROOT/'mobile_adapter/tools/smoke_libretro.cpp').read_text()
+        failure=source[source.index('static void fail('):source.index('// OUTF v1:')]
+        harness=r'''#include <iostream>
+#include <string>
+#include <cstdlib>
+static unsigned input_frame=23,ordinary_count=7;
+static unsigned field(unsigned i){return i==1?19:i;}
+static auto ordinary_failure=field;static auto ordinary_status=field;
+FAIL
+int main(){fail("original failure");}
+'''.replace('FAIL',failure)
+        with tempfile.TemporaryDirectory() as tmp:
+            cpp=Path(tmp)/'failure.cpp';binary=Path(tmp)/'failure'
+            cpp.write_text(harness)
+            subprocess.run(['c++','-std=c++17',cpp,'-o',binary],check=True)
+            result=subprocess.run([binary],text=True,capture_output=True,timeout=3)
+            self.assertEqual(result.returncode,1)
+            self.assertIn('ordinary_first_failure_v1 runner_host=23 stream_ordinal=7 snapshot=0,19,2,3,4,',result.stderr)
+            self.assertIn('request_commit=5,6,7,8,9',result.stderr)
+            self.assertTrue(result.stderr.endswith('original failure\n'))
+
+    def test_pinned_boundary_order_and_pending_deadline(self):
+        # Check the actual pinned gb::run ordering used by the faithful observer
+        # sequence in test_ordinary_capture.cpp, including both renderer paths.
+        core=runtime.CACHE/'mbc30-ef247c6/doublecherryGB-libretro-ef247c6'
+        gb=(core/'gb_core/gb.cpp').read_text()
+        body=gb[gb.index('void gb::run()'):]
+        advance=body.index('regs.LY=(regs.LY+1)%154;')
+        display=body.index('m_renderer->render_screen((byte*)vframe,160,144,16);',advance)
+        clear=body.index('m_lcd->clear_win_count();',display)
+        render=body.index('m_lcd->render(vframe,regs.LY);',clear)
+        self.assertLess(advance,display)
+        self.assertLess(display,clear)
+        self.assertLess(clear,render)
+        injection=Path(runtime.__file__).read_text()
+        self.assertIn('acceptance_profile_render_buffer(buf, scanline);\\n    acceptance_profile_render_line(ref_gb, scanline, now_win_line);',injection)
+        source=(runtime.ROOT/'mobile_adapter/tools/smoke_libretro.cpp').read_text()
+        start=source.index('        if (ordinary_requested && ordinary_status && ordinary_status(5)')
+        guard=source[start:source.index('        if (ordinary_gate && !ordinary_armed)',start)]
+        harness=r'''#include <cassert>
+#include <stdexcept>
+#include <string>
+static void fail(const std::string& s){throw std::runtime_error(s);}
+int main(){ bool ordinary_requested=true; unsigned ordinary_request_frame=10,input_frame=13;
+bool pending=true; auto query=[&](unsigned){return unsigned(pending);}; auto ordinary_status=&query;
+// Use the real production guard with a callable pointer replacement.
+auto tick=[&](){GUARD}; tick(); input_frame=14;
+bool failed=false;try{tick();}catch(const std::runtime_error&){failed=true;}assert(failed);
+pending=false;tick();ordinary_requested=false;pending=true;tick();}
+'''.replace('GUARD',guard.replace('ordinary_status(5)','(*ordinary_status)(5)'))
+        with tempfile.TemporaryDirectory() as tmp:
+            cpp=Path(tmp)/'pending.cpp'; binary=Path(tmp)/'pending'
+            cpp.write_text(harness)
+            subprocess.run(['c++','-std=c++17',cpp,'-o',binary],check=True)
+            subprocess.run([binary],check=True,timeout=3)
 
     def test_extracted_gate_revalidates_and_never_rearms(self):
         source=(runtime.ROOT/'mobile_adapter/tools/smoke_libretro.cpp').read_text()
@@ -80,6 +193,7 @@ class OrdinaryOrchestration(unittest.TestCase):
 #include <stdexcept>
 #include <cassert>
 #include <type_traits>
+#include <iostream>
 using Values=std::map<std::string,unsigned>;
 static bool live=true,scene=true,changes=false;
 static unsigned arms=0,aligns=0,raster=7;
@@ -150,6 +264,7 @@ SETUP
 #include <stdexcept>
 #include <string>
 #include <type_traits>
+#include <iostream>
 #include <vector>
 using Values=std::map<std::string,unsigned>;
 static unsigned loss=0,loss_during_run=0,loss_during_profile=0,status=0,records=0,arms=0,runs=0;
