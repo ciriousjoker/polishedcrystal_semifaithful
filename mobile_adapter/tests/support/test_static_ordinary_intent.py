@@ -8,6 +8,13 @@ SUPPORT = Path(__file__).resolve().parent
 
 
 class StaticOrdinaryIntentTests(unittest.TestCase):
+    def test_actual_unwindowed_world_return_readiness(self):
+        with tempfile.TemporaryDirectory() as directory:
+            exe = Path(directory) / "observer"
+            subprocess.run(["c++", "-std=c++17", "-O0", "-I", str(SUPPORT),
+                            str(SUPPORT / "test_effect_observer.cpp"), "-o", str(exe)], check=True)
+            subprocess.run([str(exe)], check=True)
+
     def test_source_return_closure_and_bounded_retention(self):
         source = r'''
 #include "static_ordinary_intent.hpp"

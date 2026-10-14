@@ -180,6 +180,53 @@ static void acceptance_effect_emit(gb* game, const cpu_regs& regs, unsigned id, 
 // Opt-in independent source observer. Existing physical and Head paths do not enable it.
 #include "static_ordinary_intent.hpp"
 static static_ordinary_intent::Observer acceptance_static_intent;
+// Static diagnostics have their own unwindowed completed-world provenance.
+// No profiling metric or rendering permission participates in this latch.
+static unsigned acceptance_static_world_fields[4][2] = {};
+static unsigned acceptance_static_world_map[2] = {}, acceptance_static_world_call_map[2] = {};
+static unsigned acceptance_static_world_sp = 0, acceptance_static_world_pc = 0, acceptance_static_world_bank = 0;
+static bool acceptance_static_world_configured = false, acceptance_static_world_active = false;
+static bool acceptance_static_world_ready = false;
+static uint64_t acceptance_static_world_returns = 0;
+extern "C" void acceptance_profile_static_world_field(unsigned index, unsigned bank, unsigned address) {
+    if (index >= 4 || bank > 7 || address < 0xc000 || address > 0xffff) {
+        acceptance_static_intent.fail(10); return;
+    }
+    acceptance_static_world_fields[index][0] = bank;
+    acceptance_static_world_fields[index][1] = address;
+    acceptance_static_world_configured = true;
+    for (const auto& field : acceptance_static_world_fields)
+        acceptance_static_world_configured &= field[1] != 0;
+    acceptance_static_world_active = acceptance_static_world_ready = false;
+}
+static unsigned acceptance_static_world_value(gb* game, unsigned index) {
+    const auto* field = acceptance_static_world_fields[index];
+    return acceptance_effect_read(game, field[0], field[1]);
+}
+static bool acceptance_static_world_matches(gb* game, const unsigned* map) {
+    return acceptance_static_world_value(game, 0) == map[0] &&
+        acceptance_static_world_value(game, 1) == map[1] &&
+        acceptance_static_world_value(game, 2) == 2 && acceptance_static_world_value(game, 3) == 0;
+}
+static void acceptance_static_world_before(gb* game, const cpu_regs& regs) {
+    if (!acceptance_static_world_configured) return;
+    if (acceptance_static_world_ready && !acceptance_static_world_matches(game, acceptance_static_world_map)) {
+        acceptance_static_world_ready = false;
+        if (acceptance_static_intent.enabled) acceptance_static_intent.fail(11);
+    }
+    if (acceptance_static_world_active && !acceptance_static_world_matches(game, acceptance_static_world_call_map))
+        acceptance_static_world_active = false;
+    if (acceptance_simulation_entry && regs.PC == acceptance_simulation_entry &&
+            acceptance_effect_bank(game, regs.PC) == acceptance_simulation_bank) {
+        for (unsigned i = 0; i < 2; ++i)
+            acceptance_static_world_call_map[i] = acceptance_static_world_value(game, i);
+        acceptance_static_world_active = acceptance_static_world_matches(game, acceptance_static_world_call_map);
+        acceptance_static_world_sp = regs.SP;
+        acceptance_static_world_pc = game->get_cpu()->read(regs.SP) | game->get_cpu()->read((regs.SP + 1) & 0xffff) << 8;
+        acceptance_static_world_bank = acceptance_effect_bank(game, acceptance_static_world_pc);
+    }
+}
+
 extern "C" void acceptance_profile_static_point(unsigned index, unsigned bank, unsigned pc) {
     if (index >= 4 || !pc || pc >= 0x8000 || (pc < 0x4000 ? bank != 0 : !bank)) {
         acceptance_static_intent.fail(10); return;
@@ -197,18 +244,35 @@ extern "C" void acceptance_profile_static_inputs(unsigned bank, unsigned objects
 extern "C" unsigned acceptance_profile_static_enable() {
     for (const auto& point : acceptance_static_intent.points)
         if (!point.pc) acceptance_static_intent.fail(10);
-    if (!acceptance_static_intent.objects) acceptance_static_intent.fail(10);
+    if (!acceptance_static_intent.objects || !acceptance_static_world_configured) acceptance_static_intent.fail(10);
+    if (!acceptance_static_world_ready || acceptance_observation_invalid) return 0;
     acceptance_static_intent.enabled = !acceptance_static_intent.failure;
     return acceptance_static_intent.enabled;
 }
+// Additive status fields: 0 ABI, 1 first failure, 2 count, 3 latest, 4 opportunity,
+// 5 instruction, 6 world readiness, 7 genuine world returns, 8 world call active,
+// 9 enabled, 10 started, 11 producer active, 12 returned/unclosed, 13..15 pending
+// entry/return/close, 16..19 pre-SP/call-SP/return-PC/bank, 20 restore invalid,
+// 21..22 completed map group/number, 23 world predicate configuration complete.
 extern "C" uint64_t acceptance_profile_static_status(unsigned field) {
     const uint64_t values[] = {1, acceptance_static_intent.failure, acceptance_static_intent.next_id,
-        acceptance_static_intent.latest, acceptance_static_intent.opportunity, acceptance_static_intent.instruction};
-    return field < 6 ? values[field] : ~uint64_t(0);
+        acceptance_static_intent.latest, acceptance_static_intent.opportunity, acceptance_static_intent.instruction,
+        acceptance_static_world_ready, acceptance_static_world_returns, acceptance_static_world_active,
+        acceptance_static_intent.enabled, acceptance_static_intent.started, acceptance_static_intent.active,
+        acceptance_static_intent.has_return, acceptance_static_intent.pending.entry,
+        acceptance_static_intent.pending.returned, acceptance_static_intent.pending.closed,
+        acceptance_static_intent.pre_sp, acceptance_static_intent.call_sp, acceptance_static_intent.return_pc,
+        acceptance_static_intent.return_bank, acceptance_observation_invalid,
+        acceptance_static_world_map[0], acceptance_static_world_map[1], acceptance_static_world_configured};
+    return field < 24 ? values[field] : ~uint64_t(0);
 }
 extern "C" uint64_t acceptance_profile_static_source(uint64_t id, unsigned section, unsigned field) {
-    const auto* source = acceptance_static_intent.get(id);
-    if (!source) return ~uint64_t(0);
+    // Diagnostic getters never fail or release a source as a side effect.
+    const auto& observer = acceptance_static_intent;
+    if (!id || id <= observer.released || id > observer.next_id ||
+            observer.next_id - id >= static_ordinary_intent::source_capacity) return ~uint64_t(0);
+    const auto* source = &observer.sources[(id - 1) % static_ordinary_intent::source_capacity];
+    if (source->id != id) return ~uint64_t(0);
     if (section == 0) {
         const uint64_t values[] = {source->id, source->entry, source->returned, source->closed, source->emitted};
         return field < 5 ? values[field] : ~uint64_t(0);
@@ -536,6 +600,16 @@ static void acceptance_profile_after(gb* game, const cpu_regs& regs, unsigned op
         ((opcode & 0xe7) == 0xc0 && cycles == 20);
     acceptance_static_intent.after(acceptance_effect_bank(game, regs.PC), regs.PC, regs.SP, returned,
         [game](unsigned bank, unsigned address) { return bank == 8 ? game->get_cpu()->read(address) : acceptance_effect_read(game, bank, address); });
+    if (returned && acceptance_static_world_active && acceptance_instruction_sp == acceptance_static_world_sp &&
+            regs.SP == ((acceptance_static_world_sp + 2) & 0xffff) && regs.PC == acceptance_static_world_pc &&
+            acceptance_effect_bank(game, regs.PC) == acceptance_static_world_bank) {
+        acceptance_static_world_active = false;
+        if (acceptance_static_world_matches(game, acceptance_static_world_call_map)) {
+            std::copy_n(acceptance_static_world_call_map, 2, acceptance_static_world_map);
+            acceptance_static_world_ready = true;
+            ++acceptance_static_world_returns;
+        }
+    }
     if (!returned) return;
     // Observe completed native world updates before readiness. The memory
     // predicates alone can match during partially initialized map setup.
@@ -588,6 +662,7 @@ static void acceptance_profile_before(gb* game, const cpu_regs& regs) {
     if (acceptance_observation_invalid) return;
     acceptance_game_context = game;
     acceptance_instruction_sp = regs.SP;
+    acceptance_static_world_before(game, regs);
     acceptance_static_intent.before(acceptance_effect_bank(game, regs.PC), regs.PC, regs.SP, regs.BC.w,
         [game](unsigned bank, unsigned address) { return bank == 8 ? game->get_cpu()->read(address) : acceptance_effect_read(game, bank, address); });
     acceptance_effect_before(game, regs);
@@ -665,6 +740,9 @@ static void acceptance_profile_before(gb* game, const cpu_regs& regs) {
 
 extern "C" void acceptance_profile_effect_reset() {
     acceptance_static_intent.reset();
+    acceptance_static_world_active = acceptance_static_world_ready = false;
+    acceptance_static_world_returns = 0;
+    std::fill_n(acceptance_static_world_map, 2, 0);
     acceptance_observation_invalid = false;
     acceptance_game_context = nullptr;
     acceptance_effect_records.clear(); acceptance_effect_calls.clear();
@@ -697,11 +775,13 @@ extern "C" void acceptance_profile_effect_reset() {
 
 // Host observation is not serialized. Restored CPU state cannot prove missed entries.
 extern "C" void acceptance_profile_restore_boundary() {
+    acceptance_static_world_active = acceptance_static_world_ready = false;
+    if (acceptance_static_world_configured) acceptance_static_intent.fail(12);
     if (acceptance_ordinary_state == 1 || acceptance_ordinary_requested) {
         acceptance_ordinary_fail(20);
         acceptance_ordinary_requested = false;
     }
-    if (!acceptance_effect_enabled && !acceptance_native_scene_count) return;
+    if (!acceptance_effect_enabled && !acceptance_native_scene_count && !acceptance_static_world_configured) return;
     acceptance_observation_invalid = true;
     ++acceptance_effect_overflow;
     acceptance_effect_calls.clear();

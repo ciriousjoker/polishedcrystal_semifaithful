@@ -273,6 +273,66 @@ int main(){
  r.PC=0x740;acceptance_profile_before(&g,r);
  acceptance_profile_effect_io_write(&g,0xff46,0xc1);
  assert(acceptance_oam_dma_producer==live_index);
+ // Static EMPTY diagnostics require genuine unwindowed returns with live provenance.
+ acceptance_profile_effect_reset();acceptance_profile_native_scene_enable(0);
+ acceptance_profile_simulation(2,0x4400,1,0xc000,34,1,10);
+ for(unsigned j=0;j<4;++j)acceptance_profile_static_world_field(j,0,0xc300+j);
+ g.cpu.memory[0xc300]=7;g.cpu.memory[0xc301]=9;
+ g.cpu.memory[0xc302]=2;g.cpu.memory[0xc303]=0;
+ auto static_entry=[&](){g.mbc.mapping=g.rom.data+0x4000;r.PC=0x4400;r.SP=0xc100;
+   stack(g,r.SP,0x4700);acceptance_profile_before(&g,r);};
+ auto static_ret=[&](unsigned opcode=0xc9,unsigned cycles=16){
+   r.PC=0x4410;r.SP=0xc100;acceptance_profile_before(&g,r);
+   r.PC=0x4700;r.SP=0xc102;acceptance_profile_after(&g,r,opcode,cycles);};
+ acceptance_profile_before(&g,r);assert(!acceptance_profile_static_status(6));
+ static_entry();static_ret(0,16);assert(!acceptance_profile_static_status(6));
+ // Exact pre-SP, post-SP, return PC, bank and taken-return opcode are required.
+ for(unsigned bad=0;bad<5;++bad){
+   acceptance_profile_effect_reset();static_entry();
+   r.PC=0x4410;r.SP=bad==0?0xc0fe:0xc100;acceptance_profile_before(&g,r);
+   r.PC=bad==1?0x4701:0x4700;r.SP=bad==2?0xc104:0xc102;
+   if(bad==3)g.mbc.mapping=g.rom.data+0x8000;
+   acceptance_profile_after(&g,r,bad==4?0xc0:0xc9,bad==4?8:16);
+   assert(!acceptance_profile_static_status(6)&&!acceptance_profile_static_status(7));
+ }
+ acceptance_profile_effect_reset();static_entry();static_ret(0xc0,20);
+ assert(acceptance_profile_static_status(6)&&acceptance_profile_static_status(7)==1);
+ assert(!acceptance_profile_native_scene_ready()); // EMPTY never changes Head readiness.
+ for(unsigned changed=0;changed<4;++changed){
+   acceptance_profile_effect_reset();static_entry();static_ret();
+   const unsigned previous=g.cpu.memory[0xc300+changed];
+   g.cpu.memory[0xc300+changed]=previous+1;acceptance_profile_before(&g,r);
+   assert(!acceptance_profile_static_status(6));
+   g.cpu.memory[0xc300+changed]=previous;acceptance_profile_before(&g,r);
+   assert(!acceptance_profile_static_status(6)); // Repairing RAM cannot relatch.
+   static_entry();static_ret();assert(acceptance_profile_static_status(6));
+ }
+ // A map transition inside the call cannot seed a completed return.
+ acceptance_profile_effect_reset();static_entry();g.cpu.memory[0xc301]++;
+ static_ret();assert(!acceptance_profile_static_status(6));g.cpu.memory[0xc301]--;
+ acceptance_profile_before(&g,r);assert(!acceptance_profile_static_status(6));
+ static_entry();static_ret(0xd9,16);assert(acceptance_profile_static_status(6));
+ // Enabling is tied to completion; an invalidated live scene freezes first failure.
+ acceptance_profile_static_inputs(1,0xd000,0xd200,0xd201);
+ for(unsigned j=0;j<4;++j)acceptance_profile_static_point(j,2,0x5000+j);
+ acceptance_profile_effect_reset();assert(!acceptance_profile_static_enable());
+ static_entry();static_ret();assert(acceptance_profile_static_enable());
+ g.cpu.memory[0xc303]=1;acceptance_profile_before(&g,r);
+ assert(acceptance_profile_static_status(1)==11&&!acceptance_profile_static_status(6));
+ g.cpu.memory[0xc303]=0;static_entry();static_ret();
+ assert(acceptance_profile_static_status(1)==11);
+ acceptance_profile_restore_boundary();assert(acceptance_profile_static_status(1)==11);
+ acceptance_profile_effect_reset();static_entry();static_ret();
+ // Diagnostics are pure even for an invalid token or unsupported status index.
+ const auto before_status=acceptance_profile_static_status(1);
+ assert(acceptance_profile_static_source(999,0,0)==~uint64_t(0));
+ assert(acceptance_profile_static_status(999)==~uint64_t(0));
+ assert(acceptance_profile_static_status(1)==before_status);
+ acceptance_profile_restore_boundary();assert(!acceptance_profile_static_status(6));
+ assert(acceptance_profile_static_status(1)==12);
+ acceptance_static_intent.fail(99);assert(acceptance_profile_static_status(1)==12);
+ acceptance_profile_effect_reset();assert(!acceptance_profile_static_status(6)&&!acceptance_profile_static_status(7));
+ assert(!acceptance_profile_static_status(1));
  std::puts("PASS immediate RET/IRQ/GDMA chronology, return registers/fence, RETI, conditional RET, recursive/nested calls, ROM0/ROMX, arguments, native readiness, legacy hooks, restores, reset, overflow and actual display binding");
  return 0;
 }

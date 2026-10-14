@@ -1047,7 +1047,7 @@ int main(int argc, char** argv) {
     uint64_t (*static_source)(uint64_t,unsigned,unsigned) = nullptr;
     void (*static_release)(uint64_t) = nullptr;
     unsigned (*static_enable)() = nullptr;
-    std::ofstream static_log;
+    std::ofstream static_log, static_status_log;
     uint64_t static_written = 0;
     bool static_started = false;
     uint64_t previous_profile_cycles[5] = {};
@@ -1180,6 +1180,11 @@ int main(int argc, char** argv) {
                 fail("Static source original-input layout mismatch");
             symbol<void(*)(unsigned,unsigned,unsigned,unsigned)>(core, "acceptance_profile_static_inputs")(
                 objects.first, objects.second, x.second, y.second);
+            const char* world_fields[] = {"wMapGroup", "wMapNumber", "wMapStatus", "wScriptRunning"};
+            auto world_field = symbol<void(*)(unsigned,unsigned,unsigned)>(core, "acceptance_profile_static_world_field");
+            for (unsigned i = 0; i < 4; ++i) {
+                const auto p = native_addresses.at(world_fields[i]); world_field(i, p.first, p.second);
+            }
             static_status = symbol<Metric>(core, "acceptance_profile_static_status");
             static_source = symbol<uint64_t(*)(uint64_t,unsigned,unsigned)>(core, "acceptance_profile_static_source");
             static_release = symbol<void(*)(uint64_t)>(core, "acceptance_profile_static_release");
@@ -1187,6 +1192,8 @@ int main(int argc, char** argv) {
             if (static_status(0) != 1) fail("Static source ABI mismatch");
             static_log.open(arguments.at("--static-intent-sources"));
             if (!static_log) fail("Cannot open static source evidence");
+            static_status_log.open(arguments.at("--static-intent-sources") + ".status.jsonl");
+            if (!static_status_log) fail("Cannot open static status evidence");
         }
         if (!configured && bindings.count("wMobileOwner")) fail("MobileTick symbol missing");
         if (bindings.count("wMobileVirtualActorMode")) {
@@ -1334,6 +1341,26 @@ int main(int argc, char** argv) {
     updated = true;
     auto* sram = static_cast<unsigned char*>(symbol<void*(*)(unsigned)>(core, "retro_get_memory_data")(RETRO_MEMORY_SAVE_RAM));
     size_t sram_size = symbol<size_t(*)(unsigned)>(core, "retro_get_memory_size")(RETRO_MEMORY_SAVE_RAM);
+    // At most activation, first failure and final status: bounded diagnostic evidence.
+    unsigned static_snapshots = 0;
+    auto static_snapshot = [&](const char* event) {
+        if (!static_status || static_snapshots >= 3) return;
+        ++static_snapshots;
+        const auto live = capture(sram, sram_size);
+        static_status_log << "{\"static_status\":\"" << event << "\",\"frame\":" << input_frame
+            << ",\"profile_window_start\":" << (arguments.count("--profile-window-start") ? std::stoul(arguments.at("--profile-window-start")) : 3600)
+            << ",\"profile_world_updates\":" << (metric ? metric(21) : 0)
+            << ",\"scene_marker\":" << symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_marker_count")(0)
+            << ",\"native_scene_ready\":" << symbol<unsigned(*)()>(core, "acceptance_profile_native_scene_ready")()
+            << ",\"started\":" << static_started << ",\"written\":" << static_written << ",\"observer\":[";
+        for (unsigned i = 0; i < 24; ++i) static_status_log << (i ? "," : "") << static_status(i);
+        static_status_log << "],\"predicates\":{";
+        const char* names[] = {"wMapGroup", "wMapNumber", "wMapStatus", "wScriptRunning"};
+        for (unsigned i = 0; i < 4; ++i)
+            static_status_log << (i ? "," : "") << '\"' << names[i] << "\":" << live.at(names[i]);
+        static_status_log << "}}\n"; static_status_log.flush();
+        if (!static_status_log) fail("Static status evidence write failed");
+    };
     if (acceptance_enabled && !arguments.count("--save-in") && !arguments.count("--snapshot-in")) {
         // A fresh erased battery image gives both controls identical unused
         // bytes. Some cores allocate SRAM without initializing its contents.
@@ -1512,9 +1539,10 @@ int main(int argc, char** argv) {
             const bool scene = effect_options["--native-scene-field"].empty()
                 ? acceptance_marker_count && acceptance_marker_count(0)
                 : symbol<unsigned(*)()>(core, "acceptance_profile_native_scene_ready")();
-            if (scene && metric && metric(21) && live.at("wMapStatus") == 2 && live.at("wScriptRunning") == 0) {
-                if (!static_enable()) fail("Static source enable failed");
+            if (scene && static_status(6) && live.at("wMapStatus") == 2 && live.at("wScriptRunning") == 0) {
+                if (!static_enable()) { static_snapshot("enable_failed"); fail("Static source enable failed; see static status snapshot"); }
                 static_started = true;
+                static_snapshot("activated");
             }
         }
         // Check the idle scene on both sides of each captured execution. A
@@ -1554,7 +1582,11 @@ int main(int argc, char** argv) {
                      " overflow=" + std::to_string(event_record(0, 33)));
         }
         if (static_started) {
-            if (static_status(1)) fail("Independent static source observation failed");
+            if (static_status(1)) {
+                static_snapshot("observer_failed");
+                fail("Independent static source observation failed: reason=" + std::to_string(static_status(1)) +
+                    " active=" + std::to_string(static_status(11)) + " returned_unclosed=" + std::to_string(static_status(12)));
+            }
             while (static_written < static_status(2)) {
                 ++static_written;
                 // Keep bounded raw evidence from the first sixteen sources.
@@ -1761,8 +1793,13 @@ int main(int argc, char** argv) {
     std::set<unsigned> colors;
     for (size_t i = 0; i + 2 < image.size(); i += 3)
         colors.insert((unsigned(image[i]) << 16) | (unsigned(image[i + 1]) << 8) | image[i + 2]);
+    if (static_status) static_snapshot(static_started ? "final" : "never_armed");
     if (static_status && (!static_started || !static_written || static_status(1)))
-        fail("Static source extraction incomplete or failed");
+        fail("Static source extraction incomplete: started=" + std::to_string(static_started) +
+            " written=" + std::to_string(static_written) + " readiness=" + std::to_string(static_status(6)) +
+            " world_returns=" + std::to_string(static_status(7)) + " reason=" + std::to_string(static_status(1)) +
+            " active=" + std::to_string(static_status(11)) + " returned_unclosed=" + std::to_string(static_status(12)) +
+            " frame=" + std::to_string(input_frame) + " profile_world_updates=" + std::to_string(metric ? metric(21) : 0));
     if (ordinary_status) {
         if (ordinary_status(1) != 2 || ordinary_count != ordinary_status(2)) {
             symbol<void(*)()>(core, "acceptance_profile_ordinary_cancel")();
