@@ -14,6 +14,9 @@ struct gb { LCD lcd; LCD* get_lcd(){return &lcd;} CPU cpu; ROM rom; MBC mbc; gb(
 static unsigned mobile_observed_frames=17,mobile_native_object_address=0xc000,mobile_native_descriptor_address=0;
 static unsigned char mobile_native_descriptors[104]={};
 #include "profile_native.hpp"
+#ifndef ACCEPTANCE_REAL_PALETTE_GETTER
+extern "C" void acceptance_profile_palette_current() { acceptance_profile_palette_config(11,2,0.0f); }
+#endif
 static void stack(gb& g,unsigned sp,unsigned pc) {g.cpu.memory[sp]=pc&255;g.cpu.memory[sp+1]=pc>>8;}
 int main(){
  gb g; cpu_regs r; r.SP=0xc100;r.PC=0x100;r.AF.w=0x1234;r.BC.w=0x5678;r.DE.w=0x86d0;r.HL.w=0x8610;
@@ -156,11 +159,37 @@ int main(){
  assert(acceptance_oam_dma_bank==7 && acceptance_oam_dma_source[0]==32);
  r.PC=0x100;r.SP=0xc100;stack(g,r.SP,0x200);acceptance_profile_before(&g,r);
  g.cpu.oam[0]=32;g.cpu.vram[0x2000]=77;g.lcd.palette[0][1]=0x1234;g.lcd.mapped[8][2]=0xabcd;
+ // Startup maps DMG initialization before cartridge detection. Only observed
+ // pre-render transitions are allowed; every selected raw/mapped color is
+ // independently checked by the oracle after render starts.
+ acceptance_profile_palette_config(8,2,0.0f);
+ acceptance_profile_palette_config(11,2,0.0f);
+ assert(acceptance_palette_config[4]==0);
  for(unsigned line=0;line<144;line++) acceptance_profile_render_line(&g,line);
  assert(acceptance_profile_video_field(0)==1 && acceptance_profile_video_field(5)==144 && acceptance_profile_video_field(6)==0);
  assert(acceptance_profile_video_byte(0)==32 && acceptance_profile_video_byte(160+0x2000)==77);
  assert(acceptance_profile_video_byte(160+0x4000+2)==0x34);
  assert(acceptance_profile_video_byte(160+0x4000+128+8*8+4)==0xcd);
+
+ // Actual invocation snapshots pre-toggle parity and binds the exact buffer.
+ unsigned short output[160*144]={};
+ acceptance_profile_palette_config(11,2,0.0f);
+ const unsigned render_id=acceptance_profile_video_field(1);
+ acceptance_profile_display_begin(output,160,144,16,320,1,1,1.02f,0,1,0,1,0);
+ assert(acceptance_profile_display_field(0)==1 && acceptance_profile_display_field(23)==24);
+ assert(acceptance_profile_display_field(2)==render_id && acceptance_profile_display_field(4)==144);
+ assert(acceptance_profile_display_field(11)==0x3f828f5c && acceptance_profile_display_field(12)==0);
+ assert(acceptance_profile_display_matches(output) && !acceptance_profile_display_matches(output+1));
+ ++mobile_observed_frames; // Callback follows VBlank, preserving prior hardware ID.
+ assert(acceptance_profile_display_field(3)==17 && acceptance_profile_display_field(12)==0);
+ acceptance_profile_render_line(&g,0);
+ assert(acceptance_profile_display_field(2)==render_id); // Next render cannot rewrite snapshot.
+ acceptance_profile_display_begin(output,160,144,16,320,1,1,1.02f,1,1,0,1,0);
+ assert(acceptance_profile_display_field(1)==2 && acceptance_profile_display_field(4)==1);
+ assert(acceptance_profile_video_field(5)==1); // Invocation supplies no synthetic row credit.
+ acceptance_profile_palette_config(11,1,0.0f);
+ acceptance_profile_display_begin(output,160,144,16,320,1,1,1.02f,1,1,0,1,0);
+ assert(acceptance_profile_display_field(21)==1); // Changed cache config is rejected.
  g.cpu.oam[0]=99;assert(acceptance_profile_video_byte(0)==32);
  acceptance_profile_render_line(&g,0);g.cpu.vram[3]=42;acceptance_profile_render_line(&g,2);
  assert(acceptance_profile_video_field(6)==1);
@@ -195,7 +224,9 @@ int main(){
  assert(acceptance_profile_video_field(6)&8);
  assert(acceptance_profile_effect_record(0,33)>0 && acceptance_profile_video_change(0,2)==65536);
  acceptance_profile_effect_reset();assert(acceptance_profile_video_field(0)==0);
+ assert(acceptance_profile_display_field(0)==0 && !acceptance_profile_display_matches(output));
  acceptance_profile_video_enable(0);acceptance_profile_render_line(&g,0);
  assert(acceptance_profile_video_field(0)==0);
- std::puts("PASS immediate RET/IRQ/GDMA chronology, return registers/fence, RETI, conditional RET, recursive/nested calls, ROM0/ROMX, arguments, native readiness, legacy hooks, restores, reset and overflow");
+ std::puts("PASS immediate RET/IRQ/GDMA chronology, return registers/fence, RETI, conditional RET, recursive/nested calls, ROM0/ROMX, arguments, native readiness, legacy hooks, restores, reset, overflow and actual display binding");
+ return 0;
 }

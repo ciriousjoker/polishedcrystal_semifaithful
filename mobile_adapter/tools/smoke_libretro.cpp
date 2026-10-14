@@ -10,6 +10,7 @@
 #include <cstdarg>
 #include <cstdint>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -42,11 +43,14 @@ static unsigned char video_oam[160] = {};
 static unsigned (*effect_serial_status)(unsigned) = nullptr;
 static unsigned (*effect_video_byte)(unsigned) = nullptr;
 static unsigned (*effect_video_field)(unsigned) = nullptr;
+static unsigned (*effect_display_field)(unsigned) = nullptr;
+static unsigned (*effect_display_matches)(const void*) = nullptr;
+static unsigned effect_display_last = 0;
 static unsigned (*effect_video_row)(unsigned,unsigned) = nullptr;
 static unsigned (*effect_video_change)(unsigned,unsigned) = nullptr;
 struct EffectVideoFrame {
     unsigned host_frame, video_frame, width, height, format, private_page, private_bank;
-    unsigned metadata[14];
+    unsigned metadata[14], display[24];
     std::vector<unsigned char> hardware, pixels;
     std::vector<unsigned> rows, changes;
 };
@@ -642,6 +646,18 @@ static void video(const void* data, unsigned w, unsigned h, size_t pitch) {
             frame.width = w; frame.height = h; frame.format = pixel_format;
             frame.private_page = effect_private_oam_page; frame.private_bank = effect_private_oam_bank;
             for (unsigned i = 0; i < 14; ++i) frame.metadata[i] = effect_video_field(i);
+            for (unsigned i = 0; i < 24; ++i) frame.display[i] = effect_display_field(i);
+            const auto* d = frame.display;
+            float display_factor; std::memcpy(&display_factor, &d[11], sizeof(display_factor));
+            if (d[0] != 1 || d[23] != 24 || d[1] <= effect_display_last ||
+                d[2] != frame.metadata[1] || d[3] != frame.metadata[2] || d[4] != 144 ||
+                d[5] != w || d[6] != h || d[7] != 16 || d[8] != pitch ||
+                d[9] > 1 || d[10] > 1 || d[12] > 1 || d[13] != 1 || d[14] != 0 ||
+                d[15] != 1 || d[16] != 0 || d[17] != 1 || d[18] != 11 ||
+                (d[19] != 1 && d[19] != 2) || !std::isfinite(display_factor) || display_factor < 1.0f || display_factor > 2.0f || d[20] != 0 || d[21] || d[22] ||
+                (d[9] && !d[10]) || !effect_display_matches(data))
+                fail("Missing, stale or unsupported actual display metadata/callback binding");
+            effect_display_last = d[1];
             frame.hardware.resize(160 + 0x4000 + 128 + 128 + 6 + 160);
             for (unsigned i = 0; i < frame.hardware.size(); ++i) frame.hardware[i] = effect_video_byte(i);
             for (unsigned row = 0; row < 144; ++row) for (unsigned f = 0; f < 16; ++f)
@@ -966,6 +982,8 @@ int main(int argc, char** argv) {
                 }
                 effect_video_byte = symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_video_byte");
                 effect_video_field = symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_video_field");
+                effect_display_field = symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_display_field");
+                effect_display_matches = symbol<unsigned(*)(const void*)>(core, "acceptance_profile_display_matches");
                 effect_video_row = symbol<unsigned(*)(unsigned,unsigned)>(core, "acceptance_profile_video_row");
                 effect_video_change = symbol<unsigned(*)(unsigned,unsigned)>(core, "acceptance_profile_video_change");
                 symbol<void(*)(unsigned)>(core, "acceptance_profile_video_enable")(1);
@@ -1617,6 +1635,8 @@ int main(int argc, char** argv) {
                             << ",\"width\":" << frame.width << ",\"height\":" << frame.height
                             << ",\"format\":" << frame.format << ",\"render_metadata\":[";
                     for (unsigned f = 0; f < 14; ++f) { if (f) profile << ','; profile << frame.metadata[f]; }
+                    profile << "],\"display_metadata\":[";
+                    for (unsigned f = 0; f < 24; ++f) { if (f) profile << ','; profile << frame.display[f]; }
                     profile << "],\"hardware\":"; bytes(frame.hardware);
                     profile << ",\"private_oam_page\":" << frame.private_page << ",\"private_oam_bank\":" << frame.private_bank;
                     profile << ",\"rows\":"; bytes(frame.rows);

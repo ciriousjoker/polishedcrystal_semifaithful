@@ -129,6 +129,45 @@ def extend_profile(profile_source):
         lcd_text = lcd_text.replace(include, include + "\n" + declaration)
     lcd_text = inject_unique(lcd_text, "void lcd::render(void *buf,int scanline)\n{",
         "void lcd::render(void *buf,int scanline)\n{\n    acceptance_profile_render_line(ref_gb, scanline, now_win_line);")
+    # Observe actual renderer globals at the conversion and output calls. All
+    # anchors are checked before any source is written.
+    renderer = profile_source / "libretro/dmy_renderer.cpp"
+    renderer_text = renderer.read_text()
+    declarations = ('extern "C" void acceptance_profile_palette_config(unsigned, unsigned, float);',
+                    'extern "C" void acceptance_profile_display_begin(const void*, unsigned, unsigned, unsigned, unsigned, unsigned, unsigned, float, unsigned, unsigned, unsigned, unsigned, unsigned);')
+    for declaration in declarations:
+        if renderer_text.count(declaration) > 1:
+            raise RuntimeError("Duplicate display observer declaration")
+        if declaration not in renderer_text:
+            renderer_text = declaration + "\n" + renderer_text
+    renderer_text = inject_unique(renderer_text, "word dmy_renderer::map_color(word gb_col)\n{",
+        "word dmy_renderer::map_color(word gb_col)\n{\n    acceptance_observe_palette_config(); // Observe actual palette mapping call.")
+    renderer_text = inject_unique(renderer_text,
+        "void dmy_renderer::apply_all_gb_effects_and_render(byte* buf, int width, int height, int depth, int pitch)\n{",
+        "void dmy_renderer::apply_all_gb_effects_and_render(byte* buf, int width, int height, int depth, int pitch)\n{\n    acceptance_profile_display_begin(buf, width, height, depth, pitch, (is_gbc_rom || useGbcLCDforDmG) && gbc_lcd_interlacing_enabled, gbc_lcd_interfacing_fast, gbc_lcd_interlacing_brightness, is_odd_frame, is_gbc_rom, useGbcLCDforDmG, gbc_rgbSubpixel_upscale_factor, gbc_lcd_blur_effect_enabled);")
+    renderer_header = profile_source / "libretro/dmy_renderer.h"
+    renderer_header_text = renderer_header.read_text()
+    renderer_header_text = inject_unique(renderer_header_text,
+        "virtual word map_color(word gb_col);",
+        "virtual word map_color(word gb_col);\n    static void acceptance_observe_palette_config();")
+    getter = ('void dmy_renderer::acceptance_observe_palette_config() {\n'
+              '    acceptance_profile_palette_config(unsigned(is_gbc_rom) | unsigned(gbc_color_correction_enabled) << 1 | unsigned(detect_as_gba) << 2 | unsigned(rgb565) << 3, unsigned(gbc_cc_mode), light_temperature);\n'
+              '}\nextern "C" void acceptance_profile_palette_current() {\n'
+              '    dmy_renderer::acceptance_observe_palette_config();\n}\n')
+    # Put the getter immediately before map_color. Its complete placement must
+    # survive reruns; an orphaned, moved or duplicate getter fails closed.
+    anchor = "word dmy_renderer::map_color(word gb_col)\n{"
+    if getter in renderer_text:
+        if renderer_text.count(getter) != 1 or getter + anchor not in renderer_text:
+            raise RuntimeError("Duplicate or misplaced actual palette getter")
+    else:
+        if "acceptance_profile_palette_current" in renderer_text or "void dmy_renderer::acceptance_observe_palette_config" in renderer_text:
+            raise RuntimeError("Partial actual palette getter")
+        if renderer_text.count(anchor) != 1:
+            raise RuntimeError("Missing actual palette getter anchor")
+        renderer_text = renderer_text.replace(anchor, getter + anchor)
+    renderer_header.write_text(renderer_header_text)
+    renderer.write_text(renderer_text)
     lcd_source.write_text(lcd_text)
     header.write_text(text)
     cpu.write_text(cpu_text)

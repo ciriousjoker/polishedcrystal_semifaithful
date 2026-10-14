@@ -1762,6 +1762,95 @@ fn headbutt_lifecycle(e: &Value) {
     }), "Native graphics release did not complete after the actual effect");
 }
 
+// The supported palette conversion is independently evaluated from raw RGB15.
+// Configuration comes from actual map_color calls, never option defaults.
+fn effect_logical_color(raw: u16, display: &[u64]) -> u16 {
+    assert_eq!(display[17], 1, "Missing actual palette conversion observation");
+    assert_eq!(display[18], 11, "Only actual GBC RGB565 correction without GBA is supported");
+    assert_eq!(display[20], 0, "Non-neutral actual light temperature is unsupported");
+    assert_eq!(display[21], 0, "Changed cached palette configuration is unsupported");
+    let r = u32::from(raw & 31); let g = u32::from((raw >> 5) & 31); let b = u32::from((raw >> 10) & 31);
+    let (r, g, b) = match display[19] {
+        1 => (((r * 13 + g * 2 + b) >> 4), ((g * 3 + b) >> 2), ((r * 3 + g * 2 + b * 11) >> 4)),
+        2 => {
+            let inv = 1.0f32 / 31.0f32;
+            let gamma = 2.2f32 - 0.5f32;
+            let rr = (r as f32 * inv).powf(gamma);
+            let gg = (g as f32 * inv).powf(gamma);
+            let bb = (b as f32 * inv).powf(gamma);
+            let channel = |v: f32| -> u32 {
+                ((v.clamp(0.0, 1.0).powf(1.0f32 / 2.2f32).clamp(0.0, 1.0) * 31.0 + 0.5) as u32) & 31
+            };
+            (channel(0.94f32 * ((0.82f32 * rr) + (0.24f32 * gg) + (-0.06f32 * bb))),
+             channel(0.94f32 * ((0.125f32 * rr) + (0.665f32 * gg) + (0.21f32 * bb))),
+             channel(0.94f32 * ((0.195f32 * rr) + (0.075f32 * gg) + (0.73f32 * bb))))
+        },
+        _ => panic!("Unsupported actual palette correction mode"),
+    };
+    ((r << 11) | (g << 6) | b) as u16
+}
+fn effect_display_metadata(frame: &Value) -> Vec<u64> {
+    let d: Vec<_> = frame["display_metadata"].as_array().expect("Missing actual display metadata")
+        .iter().map(|v| v.as_u64().expect("Invalid display metadata integer")).collect();
+    assert_eq!(d.len(), 24, "Display ABI field count"); assert_eq!(d[0], 1); assert_eq!(d[23], 24);
+    assert!(d[1] > 0, "Missing actual output invocation");
+    assert_eq!(d[2], frame["render_metadata"][1].as_u64().unwrap(), "Stale output/render binding");
+    assert_eq!(d[3], frame["render_metadata"][2].as_u64().unwrap(), "Stale hardware source binding");
+    assert_eq!(d[4], 144, "Display call cannot invent rendered rows");
+    assert_eq!(&d[5..9], &[160, 144, 16, 320]);
+    assert!(d[9] <= 1 && d[10] <= 1 && d[12] <= 1);
+    assert_eq!(&d[13..17], &[1, 0, 1, 0], "Unsupported actual display pipeline");
+    assert_eq!(d[22], 0, "Invalid actual row observation");
+    let factor = f32::from_bits(u32::try_from(d[11]).unwrap());
+    assert!(factor.is_finite() && (1.0..=2.0).contains(&factor), "Unsupported interlacing factor");
+    if d[9] != 0 { assert_eq!(d[10], 1, "Linear interlacing is unsupported"); }
+    d
+}
+fn effect_physical_color(logical: u16, y: usize, display: &[u64]) -> u16 {
+    if display[9] == 0 || y % 2 != display[12] as usize { return logical; }
+    let factor = f32::from_bits(u32::try_from(display[11]).unwrap());
+    let channel = |v: u16, max: u16| ((v as f32 * factor) as u16).min(max);
+    (channel((logical >> 11) & 31, 31) << 11) |
+        (channel((logical >> 5) & 63, 63) << 5) | channel(logical & 31, 31)
+}
+fn effect_exact_pixel(raw: u16, mapped: u16, physical: u16, y: usize, display: &[u64]) {
+    assert_eq!(mapped, effect_logical_color(raw, display), "Raw intended logical color differs from actual mapped palette");
+    assert_eq!(physical, effect_physical_color(mapped, y, display), "Exact final physical RGB565 differs");
+}
+
+#[test]
+fn actual_display_exact_full_background_and_corruption_regressions() {
+    use serde_json::json;
+    // Independently specified source bytes and final pixels, not oracle outputs.
+    let frame = json!({"render_metadata": [1, 7, 12], "display_metadata":
+        [1, 9, 7, 12, 144, 160, 144, 16, 320, 1, 1, 1065520988u32, 0, 1, 0, 1, 0, 1, 11, 2, 0, 0, 0, 24]});
+    let display = effect_display_metadata(&frame);
+    let mut vram = vec![0u8; 0x4000];
+    vram[0x1800..0x1c00].fill(1); vram[0x3800..0x3c00].fill(2);
+    let palette_raw = [246u8, 43]; let palette_mapped = [209u8, 206];
+    let mut checked = 0;
+    for y in 0..144 { for x in 0..160 {
+        let address = 0x1800 + y / 8 * 32 + x / 8;
+        assert_eq!(vram[0x2000 + address], 2);
+        let color = effect_tile_pixel(&vram, 256 + vram[address] as usize, 0, x % 8, y % 8);
+        assert_eq!(color, 0);
+        let physical = if y % 2 == 0 { 52977 } else { 52945 };
+        effect_exact_pixel(u16::from_le_bytes(palette_raw), u16::from_le_bytes(palette_mapped), physical, y, &display);
+        checked += 1;
+    }}
+    assert_eq!(checked, 23040);
+    let rejected = |raw, mapped, pixel, y, d: &[u64]| assert!(std::panic::catch_unwind(|| effect_exact_pixel(raw, mapped, pixel, y, d)).is_err());
+    rejected(0, 0, 52977, 0, &display); // Changed raw and matching mapped, original pixels.
+    rejected(0, 52945, 52977, 0, &display); // Raw-only corruption.
+    rejected(11254, 47050, 47050, 0, &display); // Stale startup fallback cache, final Accurate configuration.
+    let mut parity = display.clone(); parity[12] = 1; rejected(11254, 52945, 52977, 0, &parity);
+    let mut factor = display.clone(); factor[11] = u64::from(1.0f32.to_bits()); rejected(11254, 52945, 52977, 0, &factor);
+    rejected(11254, 52945, 52976, 0, &display);
+    let mut missing = frame.clone(); missing.as_object_mut().unwrap().remove("display_metadata");
+    assert!(std::panic::catch_unwind(|| effect_display_metadata(&missing)).is_err());
+    let mut stale = frame.clone(); stale["display_metadata"][2] = json!(8);
+    assert!(std::panic::catch_unwind(|| effect_display_metadata(&stale)).is_err());
+}
 fn effect_tile_pixel(vram: &[u8], tile: usize, bank: usize, x: usize, y: usize) -> u8 {
     let at = bank * 0x2000 + tile * 16 + y * 2;
     ((vram[at] >> (7 - x)) & 1) | (((vram[at + 1] >> (7 - x)) & 1) << 1)
@@ -1832,6 +1921,7 @@ fn headbutt_pixels(e: &Value) {
         assert!(!video.is_empty());
         let mut previous_frame = None;
         let mut previous_host = None;
+        let mut previous_output = None;
         for frame in video {
             let frame_meta = frame["render_metadata"].as_array().unwrap();
             let number = frame_meta[1].as_u64().unwrap();
@@ -1841,6 +1931,9 @@ fn headbutt_pixels(e: &Value) {
             assert_eq!(frame_meta[5], 144, "Every actual visible line required");
             assert_eq!(frame_meta[6], 0, "Actual per-line capture continuity/overflow failed");
             assert_eq!(n(frame, "width"), 160); assert_eq!(n(frame, "height"), 144); assert_eq!(n(frame, "format"), 2);
+            let display = effect_display_metadata(frame);
+            assert!(previous_output.map_or(true, |p| display[1] > p), "Repeated/stale actual output invocation");
+            previous_output = Some(display[1]);
             let mut h = effect_bytes(&frame["hardware"]);
             let pixels = effect_bytes(&frame["pixels"]);
             assert_eq!(h.len(), 16966); assert_eq!(pixels.len(), 160 * 144 * 2);
@@ -1975,6 +2068,9 @@ fn headbutt_pixels(e: &Value) {
                     }}
                     let at = (palette * 4 + color) * 2;
                     let expected = u16::from_le_bytes([mapped[at], mapped[at + 1]]);
+                    let raw = u16::from_le_bytes([h[16544 + at], h[16544 + at + 1]]);
+                    assert_eq!(expected, effect_logical_color(raw, &display), "Raw selected logical color at {x},{y}");
+                    let expected = effect_physical_color(expected, y as usize, &display);
                     let at = (y as usize * 160 + x as usize) * 2;
                     assert_eq!(u16::from_le_bytes([pixels[at], pixels[at + 1]]), expected, "Intended selected effect pixel or independently decoded BG/OBJ/window pixel at {x},{y}, host {}", frame["host_frame"]);
                     if std::ptr::eq(run, mobile) && proved_effect { visible += 1; }

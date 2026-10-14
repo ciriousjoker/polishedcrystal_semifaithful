@@ -150,6 +150,81 @@ int main(int argc, char** argv) {
                 run(1, 1, 138)
 
 
+class ActualDisplayExport(unittest.TestCase):
+    def test_production_callback_and_serializer_bind_actual_output(self):
+        import subprocess
+        import json
+        frontend = Path(__file__).resolve().parents[2] / "tools/smoke_libretro.cpp"
+        source = frontend.read_text()
+        begin = source.index('    if (effect_video_field && effect_video_field(0)')
+        end = source.index('    if (!data) return;', begin)
+        callback = source[begin:end]
+        begin = source.index('                for (unsigned i = 0; i < effect_video_frames.size(); ++i) {')
+        end = source.index("                profile << ']';", begin)
+        serializer = source[begin:end]
+        struct_begin = source.index('struct EffectVideoFrame {')
+        struct_end = source.index('\n};', struct_begin) + 3
+        harness = r"""
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <sstream>
+#include <stdexcept>
+#include <iostream>
+#include <vector>
+static void fail(const char* message) { throw std::runtime_error(message); }
+static unsigned meta[14]={1,7,12,1,0,144,0,143,0,0,0,0,0,7};
+static unsigned display[24]={1,9,7,12,144,160,144,16,320,1,1,0x3f828f5c,0,1,0,1,0,1,11,2,0,0,0,24};
+static unsigned short pixels[160*144]={};
+static auto effect_video_field = +[](unsigned i){return meta[i];};
+static auto effect_display_field = +[](unsigned i){return display[i];};
+static auto effect_display_matches = +[](const void* p)->unsigned{return p==pixels;};
+static auto effect_video_byte = +[](unsigned){return 0u;};
+static auto effect_video_row = +[](unsigned,unsigned){return 0u;};
+static auto effect_video_change = +[](unsigned,unsigned){return 0u;};
+STRUCT
+static std::vector<EffectVideoFrame> effect_video_frames;
+static unsigned effect_video_last=0,effect_video_overflow=0,effect_display_last=0;
+static unsigned input_frame=13,video_frames=13,effect_private_oam_page=0xd8,effect_private_oam_bank=7;
+static unsigned pixel_format=2;
+static constexpr unsigned RETRO_PIXEL_FORMAT_RGB565=2;
+void capture(const void* data,unsigned w=160,unsigned h=144,unsigned pitch=320) {
+CALLBACK
+}
+int main(int argc,char** argv) {
+ unsigned mode=argc>1?std::atoi(argv[1]):0;
+ if(mode==1)display[2]=8;
+ if(mode==2)display[23]=23;
+ if(mode==3)display[4]=1;
+ if(mode==4)display[12]=2;
+ if(mode==5)display[15]=3;
+ if(mode==6)display[16]=1;
+ if(mode==7)display[21]=1;
+ if(mode==8)display[17]=0;
+ if(mode==9)display[11]=0x7fc00000;
+ try { capture(mode==10?pixels+1:pixels); } catch(const std::runtime_error&) {return 2;}
+ if(effect_video_frames.size()!=1)return 3;
+ if(mode==11){effect_video_last=0;try{capture(pixels);}catch(const std::runtime_error&){return 2;}return 3;}
+ std::ostringstream profile;
+ auto bytes=[&](const auto& data){profile<<'[';for(unsigned i=0;i<data.size();++i){if(i)profile<<',';profile<<unsigned(data[i]);}profile<<']';};
+SERIALIZER
+ std::cout<<profile.str();
+}
+"""
+        harness = harness.replace('STRUCT', source[struct_begin:struct_end]).replace('CALLBACK', callback).replace('SERIALIZER', serializer)
+        with tempfile.TemporaryDirectory() as tmp:
+            cpp=Path(tmp)/"display-export.cpp"; binary=Path(tmp)/"display-export"
+            cpp.write_text(harness)
+            subprocess.run(["c++","-std=c++17","-O2",str(cpp),"-o",str(binary)],check=True)
+            frame=json.loads(subprocess.check_output([str(binary)],text=True))
+            self.assertEqual(frame["display_metadata"],[1,9,7,12,144,160,144,16,320,1,1,0x3f828f5c,0,1,0,1,0,1,11,2,0,0,0,24])
+            self.assertEqual(frame["render_metadata"][1:3],[7,12])
+            self.assertEqual(len(frame["pixels"]),23040*2)
+            for mode in range(1,12):
+                self.assertEqual(subprocess.run([str(binary),str(mode)],capture_output=True).returncode,2,mode)
+
+
 class ObserverHooks(unittest.TestCase):
     def test_compiled_effect_observer_boundaries(self):
         import subprocess
@@ -172,6 +247,11 @@ class ObserverHooks(unittest.TestCase):
             "void retro_reset(void)\n{\n}\n"
             "bool retro_unserialize(const void *data, size_t size)\n{\n        return true;\n}\n")
 
+        (root / "libretro/dmy_renderer.h").write_text("virtual word map_color(word gb_col);\n")
+        (root / "libretro/dmy_renderer.cpp").write_text(
+            "word dmy_renderer::map_color(word gb_col)\n{\n}\n"
+            "void dmy_renderer::apply_all_gb_effects_and_render(byte* buf, int width, int height, int depth, int pitch)\n{\n}\n")
+
     def test_supported_hooks_are_idempotent_and_missing_anchors_fail_before_write(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -190,6 +270,26 @@ class ObserverHooks(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "unique observer source anchor"):
                 runtime.extend_profile(root)
             self.assertEqual(before, {p: p.read_bytes() for p in before})
+
+    def test_missing_display_anchor_rejects_before_any_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); self.source(root)
+            renderer=root / "libretro/dmy_renderer.cpp"
+            renderer.write_text(renderer.read_text().replace("word dmy_renderer::map_color", "word changed::map_color"))
+            before={p:p.read_bytes() for p in root.rglob("*") if p.is_file()}
+            with self.assertRaisesRegex(RuntimeError,"unique observer source anchor"):
+                runtime.extend_profile(root)
+            self.assertEqual(before,{p:p.read_bytes() for p in before})
+
+    def test_missing_actual_getter_header_anchor_rejects_before_any_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); self.source(root)
+            header=root / "libretro/dmy_renderer.h"
+            header.write_text("virtual word changed_color(word gb_col);\n")
+            before={p:p.read_bytes() for p in root.rglob("*") if p.is_file()}
+            with self.assertRaisesRegex(RuntimeError,"unique observer source anchor"):
+                runtime.extend_profile(root)
+            self.assertEqual(before,{p:p.read_bytes() for p in before})
 
     def test_duplicate_and_misplaced_anchors_fail(self):
         with self.assertRaises(RuntimeError):

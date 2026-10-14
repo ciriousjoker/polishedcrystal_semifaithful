@@ -18,13 +18,16 @@ fn fixture() -> Value {
     // without calling any oracle pixel, priority or tile-decoding helper.
     for row in 0..8 { hardware[160 + 256 + row * 2] = 255; }
     hardware[16800..16806].copy_from_slice(&[0x93, 0, 0, 0, 0, 0xc0]);
-    hardware[16672 + 15 * 8 + 2..16672 + 15 * 8 + 4].copy_from_slice(&[0x34, 0x12]);
+    // Simple correction preserves grayscale RGB5(2,2,2): raw0x0842 -> RGB5650x1082.
+    hardware[16544 + 15 * 8 + 2..16544 + 15 * 8 + 4].copy_from_slice(&[0x42, 0x08]);
+    hardware[16672 + 15 * 8 + 2..16672 + 15 * 8 + 4].copy_from_slice(&[0x82, 0x10]);
     let mut pixels = vec![0u8; 160 * 144 * 2];
     for y in 16..24 { for x in (16..24).chain(40..48) {
-        pixels[(y * 160 + x) * 2..(y * 160 + x) * 2 + 2].copy_from_slice(&[0x34, 0x12]);
+        pixels[(y * 160 + x) * 2..(y * 160 + x) * 2 + 2].copy_from_slice(&[0x82, 0x10]);
     }}
     let video: Vec<_> = (1..=2).map(|step| json!({
         "render_metadata": [1, step, step, 1, step, 144, 0, 143, step, step, step, 0, 0, 7],
+        "display_metadata": [1, step+1, step, step, 144, 160, 144, 16, 320, 0, 1, 1065353216u32, 0, 1, 0, 1, 0, 1, 11, 1, 0, 0, 0, 24],
         "hardware": hardware, "pixels": pixels, "rows": rows(step,step,1), "changes": [], "private_oam_page": 0xd8, "private_oam_bank": 7, "host_frame": step, "width": 160, "height": 144, "format": 2
     })).collect();
     let run = json!({"state": {"vAcceptanceHeadbuttTileStart": 0x8100, "vAcceptanceHeadbuttTileEnd": 0x8110},
@@ -78,7 +81,8 @@ fn headbutt_pixel_control_rejects_intended_slot_rgb_changes() {
         for event in run["profile"]["native_effect_events"].as_array_mut().unwrap() { event["watches"]["0"][3] = json!(6); }
         for frame in run["profile"]["native_effect_video_frames"].as_array_mut().unwrap() {
             frame["hardware"][3] = json!(6); frame["hardware"][16809] = json!(6);
-            frame["hardware"][16672 + 14 * 8 + 2] = json!(0x34); frame["hardware"][16672 + 14 * 8 + 3] = json!(0x12);
+            frame["hardware"][16544 + 14 * 8 + 2] = json!(0x42); frame["hardware"][16544 + 14 * 8 + 3] = json!(0x08);
+            frame["hardware"][16672 + 14 * 8 + 2] = json!(0x82); frame["hardware"][16672 + 14 * 8 + 3] = json!(0x10);
         }
     }
     headbutt_pixels(&e);
@@ -96,6 +100,7 @@ fn headbutt_pixel_control_allows_tile_reuse_only_after_actual_release_and_return
         let mut frame = run["profile"]["native_effect_video_frames"][1].clone();
         frame["render_metadata"] = json!([1, 3, 5, 1, 5, 144, 0, 143, 5, 5, 5, 0, 0, 7]);
         frame["rows"] = json!(rows(5,5,2));
+        frame["display_metadata"][1]=json!(4); frame["display_metadata"][2]=json!(3); frame["display_metadata"][3]=json!(5);
         if name == "mobile" { frame["hardware"][16805] = json!(0xd8); for y in 0..144 {frame["rows"][y*16+5]=json!(7);frame["rows"][y*16+6]=json!(7);} }
         // Reused peer tile has palette6 and one actual rectangle.
         for y in 16..24 { for x in (16..24).chain(40..48) {frame["pixels"][(y*160+x)*2]=json!(0);frame["pixels"][(y*160+x)*2+1]=json!(0);} }
@@ -163,15 +168,16 @@ fn headbutt_pixel_rows_accept_midline_palette_change_and_reject_stale_pixels() {
     let mut e = fixture();
     for name in ["mobile", "single"] {
         for frame in e["clients"][0][name]["profile"]["native_effect_video_frames"].as_array_mut().unwrap() {
-            frame["changes"] = json!([16672 + 15*8 + 2, 0x78, 16672 + 15*8 + 3, 0x56]);
-            for y in 20..144 {frame["rows"][y*16+9] = json!(2);}
+            // Grayscale RGB5(4,4,4): raw0x1084 -> mapped0x2104.
+            frame["changes"] = json!([16544 + 15*8 + 2, 0x84, 16544 + 15*8 + 3, 0x10, 16672 + 15*8 + 2, 0x04, 16672 + 15*8 + 3, 0x21]);
+            for y in 20..144 {frame["rows"][y*16+9] = json!(4);}
             for y in 20..24 {for x in (16..24).chain(40..48) {
-                frame["pixels"][(y*160+x)*2]=json!(0x78);frame["pixels"][(y*160+x)*2+1]=json!(0x56);
+                frame["pixels"][(y*160+x)*2]=json!(0x04);frame["pixels"][(y*160+x)*2+1]=json!(0x21);
             }}
         }
     }
     headbutt_pixels(&e);
-    e["clients"][0]["mobile"]["profile"]["native_effect_video_frames"][0]["pixels"][(20*160+16)*2] = json!(0x34);
+    e["clients"][0]["mobile"]["profile"]["native_effect_video_frames"][0]["pixels"][(20*160+16)*2] = json!(0x42);
     rejects(&e, "Intended selected effect pixel");
 }
 #[test]
@@ -194,12 +200,14 @@ fn headbutt_pixel_rows_cover_pre_animation_previous_oam_and_native_owned_tail() 
         let run = &mut e["clients"][0][name];
         let mut before = run["profile"]["native_effect_video_frames"][0].clone();
         before["rows"] = json!(rows(0,0,0)); before["render_metadata"][1]=json!(0);
+        before["display_metadata"][1]=json!(1); before["display_metadata"][2]=json!(0);
         for y in 0..144 {before["rows"][y*16+4]=json!(1);}
         run["profile"]["native_effect_video_frames"].as_array_mut().unwrap().insert(0,before);
         let source = super::effect_bytes(&run["profile"]["native_effect_events"][0]["watches"]["0"]);
         run["profile"]["native_effect_events"].as_array_mut().unwrap().extend([event(3,0,&source),event(4,5,&source)]);
         let mut tail = run["profile"]["native_effect_video_frames"][2].clone();
         tail["rows"] = json!(rows(4,4,2)); tail["render_metadata"][1]=json!(3);
+        tail["display_metadata"][1]=json!(4); tail["display_metadata"][2]=json!(3);
         run["profile"]["native_effect_video_frames"].as_array_mut().unwrap().push(tail);
     }
     // Normal previous OAM and native-owned post-effect graphics remain fully
@@ -222,7 +230,9 @@ fn window_fixture(reset: bool) -> Value {
                 frame["hardware"][160+16+tile_row*2]=json!(255); // solid color1
                 frame["hardware"][160+32+tile_row*2+1]=json!(255); // solid color2
             }
-            for (color,bytes) in [(1,[0x11,0x11]),(2,[0x22,0x22])] {
+            // Independently fixed grayscale colors1 and2.
+            for (color,bytes,raw) in [(1,[0x41,0x08],[0x21,0x04]),(2,[0x82,0x10],[0x42,0x08])] {
+                frame["hardware"][16544+color*2]=json!(raw[0]); frame["hardware"][16544+color*2+1]=json!(raw[1]);
                 frame["hardware"][16672+color*2]=json!(bytes[0]); frame["hardware"][16672+color*2+1]=json!(bytes[1]);
             }
             // Independent fixed stripes: row0 uses tile1, row1 tile2.
@@ -230,8 +240,8 @@ fn window_fixture(reset: bool) -> Value {
             if reset {for col in 0..32 {frame["hardware"][160+0x1bc0+col]=json!(1);}}
             for y in first_y..144 {
                 frame["rows"][y*16+8]=json!(if reset {0} else {9+y-64});
-                let byte = if reset || (y-64)/8%2==0 {0x11} else {0x22};
-                for x in 0..160 {frame["pixels"][(y*160+x)*2]=json!(byte);frame["pixels"][(y*160+x)*2+1]=json!(byte);}
+                let bytes = if reset || (y-64)/8%2==0 {[0x41,0x08]} else {[0x82,0x10]};
+                for x in 0..160 {frame["pixels"][(y*160+x)*2]=json!(bytes[0]);frame["pixels"][(y*160+x)*2+1]=json!(bytes[1]);}
             }
         }
     }
@@ -244,8 +254,8 @@ fn headbutt_pixel_window_accepts_pinned_rows_and_rejects_unbiased_map() {
     // hardware and entry9. They do not match the pinned core's window output.
     for name in ["mobile","single"] {
         for frame in e["clients"][0][name]["profile"]["native_effect_video_frames"].as_array_mut().unwrap() {
-            for y in 64..144 {let byte=if (y-64)/8%2==0 {0x22} else {0x11};for x in 0..160 {
-                frame["pixels"][(y*160+x)*2]=json!(byte);frame["pixels"][(y*160+x)*2+1]=json!(byte);
+            for y in 64..144 {let bytes=if (y-64)/8%2==0 {[0x82,0x10]} else {[0x41,0x08]};for x in 0..160 {
+                frame["pixels"][(y*160+x)*2]=json!(bytes[0]);frame["pixels"][(y*160+x)*2+1]=json!(bytes[1]);
             }}
         }
     }
