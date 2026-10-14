@@ -377,3 +377,72 @@ charmap tile `$fb`), defined by `home/text.asm` TextBoxCharacters and emitted by
 TextboxBorder. The left label delimiter accepts that actual native border as well
 as blank/row-edge; the complete label and decimal ID plus right blank/row-edge
 remain mandatory.
+
+The focused `native_headbutt_lifecycle_and_selected_pixels` and
+`native_headbutt_held_exit_and_movement` contracts use four real native clients
+and four same-source disabled controls on original Route29. They require a
+legitimate native party producer, completed HandleMapObjects readiness, the
+physical TryHeadbuttOW and interpreted Ask/Auto paths, one actual effect,
+native transfer/register/fence evidence, and physical movement after recovery.
+The held case keeps Select+B down for 160 frames during ShakeHeadbuttTree,
+retains the declared two-frame exit deadline, checks local suppression and
+healthy siblings, and requires a later explicit join.
+
+Effect video is captured at the real LCD render boundary. The callback occurs
+after VBlank and cannot supply matching previous-frame hardware by itself.
+One 16,966-byte hardware base includes both VRAM banks, actual OAM and the
+before-FF46 DMA source, raw BG/OBJ palettes, mapped colors and LCD registers.
+Ordered sparse changes reconstruct the exact hardware at each of 144 rows,
+with a hard limit of 65,536 changed bytes per frame. Sixteen metadata words
+per row retain actual DMA sequence/frame/count/WBK/bank, source return, layers,
+the named LCD `now_win_line` entry value and instruction-derived native phase.
+Missing/reordered frames or rows, exhausted storage and restores hard-fail.
+Mid-frame hardware changes remain fully eligible. The disabled hook returns
+immediately and does not alter emulated state or timing.
+
+Span 5 binds the actual returns of both `DoNextFrameForAllSprites_OW` and
+initial `DoNextFrameForAllSprites`; the latest completed return before actual
+DMA provides complete native demand. The independent oracle decodes every
+framebuffer pixel from reconstructed row bytes, including first-ten selection,
+transparency, OBJ overlap, BG priority, window internal row and exact mapped
+colors. Controls match actual animation return step and LCD row, checking full
+source multiplicity, tile bytes and raw/mapped palettes. Pre-animation previous
+OAM and native-owned post-effect tails are decoded as actual native phases.
+Post-effect private-page selection, resolved from `wMobileVirtualOutput` and
+its bank, requires a preceding real cleared graphics release.
+
+Native initial text and YES selection use the actual Ask script and native
+DoMenuJoypadLoop/cursor. Recovery branches are explicitly optional because
+text and wild-battle outcomes differ; effect completion and physical movement
+remain required. In the native wild menu, B selects the bottom-right Run cursor
+and A confirms it. Checked A pulses require the actual menu source, cursor (2, 2)
+and at least 16 frames of released input. Native escape outcomes remain intact. The native automatic-use flag is transient across Continue,
+so the consumer answers the original question without forcing the flag.
+These functional 400% contracts do not prove P1 or latency: disabled Route29
+controls contain three fewer avatar actors. Run the complete unchanged suite
+only after all focused M2 gates pass.
+
+Conditional input scripts accept `CHECKED_AFTER DELAY CONDITIONS BUTTON DURATION`
+(and an `OPTIONAL` prefix). Its timer begins at the first matching completed-frame
+sample and resets on any mismatching or missing condition. After DELAY frames of
+continuous sampled readiness, the current sample must still match before queuing
+physical input for the next frame. Delay zero queues immediately on a matching
+sample. The held input then lasts DURATION frames and fires only once, even if
+readiness changes during the hold. This observes frame boundaries, not every
+internal CPU poll. Legacy `AFTER` retains its original single anchor and does not
+recheck conditions when its delay expires; `ON` retains its absolute minimum-frame
+meaning. Required untriggered actions fail the run; optional recovery branches
+may remain untriggered. Malformed conditions, numbers and trailing tokens fail
+cleanly. `python3 -m unittest test_runtime.ConditionalInputs` from
+`mobile_adapter/tests/support` compiles and runs the production parser and
+scheduler without a game or core build. Native Headbutt recovery uses checked
+delays and holds the physical YES A input for eight frames.
+
+Headbutt functional consumers request a bounded 3200-frame completion horizon
+after measurement start. The default for other cases stays 1000 and the measured
+window stays 800 frames. `--functional-horizon` strictly accepts 1000..4000 only
+with gated acceptance profiling, and rejects release arithmetic above 100000
+frames. Disabled controls replay the actual enabled frame count and input rows.
+This extends functional recovery coverage; it does not change command deadlines,
+exit limits, rendering rhythm or wall-clock performance criteria. These contracts
+remain acceptance tests to satisfy, not a statement that M2 has passed.

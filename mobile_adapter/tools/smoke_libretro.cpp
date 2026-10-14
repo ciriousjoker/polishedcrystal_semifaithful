@@ -38,6 +38,20 @@ static uint64_t audio_samples = 0, audio_batches = 0;
 static retro_pixel_format pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
 static std::vector<unsigned char> image;
 static unsigned char video_oam[160] = {};
+static unsigned (*effect_serial_status)(unsigned) = nullptr;
+static unsigned (*effect_video_byte)(unsigned) = nullptr;
+static unsigned (*effect_video_field)(unsigned) = nullptr;
+static unsigned (*effect_video_row)(unsigned,unsigned) = nullptr;
+static unsigned (*effect_video_change)(unsigned,unsigned) = nullptr;
+struct EffectVideoFrame {
+    unsigned host_frame, video_frame, width, height, format, private_page, private_bank;
+    unsigned metadata[14];
+    std::vector<unsigned char> hardware, pixels;
+    std::vector<unsigned> rows, changes;
+};
+static std::vector<EffectVideoFrame> effect_video_frames;
+static unsigned effect_video_overflow = 0, effect_video_last = 0;
+static unsigned effect_private_oam_page = ~0u, effect_private_oam_bank = ~0u;
 static unsigned (*native_oam_byte)(unsigned) = nullptr;
 static unsigned (*native_figure_byte)(unsigned) = nullptr;
 static unsigned video_native_source_count[13] = {}, video_native_complete[13] = {};
@@ -55,16 +69,8 @@ static std::ofstream input_events;
 static std::set<std::pair<unsigned, unsigned>> logged_inputs;
 static std::vector<retro_memory_descriptor> memory_maps;
 static unsigned restoring_native_slots[3] = {};
-struct InputAction { unsigned first, end, button; };
+#include "conditional_input.hpp"
 static std::vector<InputAction> input_actions = {{700, 710, RETRO_DEVICE_ID_JOYPAD_START}};
-struct ConditionalAction {
-    unsigned earliest, button, duration;
-    std::map<std::string, unsigned> conditions;
-    bool fired = false;
-    bool relative = false;
-    unsigned anchor = 0;
-    bool anchored = false;
-};
 static std::vector<ConditionalAction> conditional_actions;
 struct WalkWaypoint { unsigned earliest, x, y, timeout, started = 0; };
 static std::vector<WalkWaypoint> walk_waypoints;
@@ -119,7 +125,7 @@ static void load_bindings(const std::string& path) {
     const std::set<std::string> watched = {
         "hROMBank", "hJoypadDown", "hJoyPressed", "hCGB", "hCrashCode", "hVBlankCounter", "hDelayFrameLY", "hInMenu", "wJumptableIndex",
         "hNbTilesToCopy", "hRequested1bpp", "hRequested2bpp", "hHours", "hMinutes", "wTimeOfDay",
-        "wInputFlags", "wGameLogicPaused",
+        "hScriptBank", "hScriptPos", "wMenuCursorY", "wInputFlags", "wGameLogicPaused", "wBattleMode", "wBattleMenuFlags", "wBattleMenuCursorBuffer",
         "wSaveFileExists", "wMapGroup", "wMapNumber", "wXCoord", "wYCoord",
         "wPlayerMapX", "wPlayerMapY", "wPlayerSpriteX", "wPlayerSpriteY",
         "wPlayerSpriteXOffset", "wPlayerSpriteYOffset", "wPlayerFacing", "wPlayerDirection",
@@ -160,7 +166,7 @@ static void load_bindings(const std::string& path) {
 }
 
 static std::map<std::string, unsigned> capture(const unsigned char* sram, size_t sram_size) {
-    const std::set<std::string> words = {"sChecksum", "wMobileRemaining", "wMobileTxPointer",
+    const std::set<std::string> words = {"hScriptPos", "sChecksum", "wMobileRemaining", "wMobileTxPointer",
         "wMobileRxPointer", "wMobileSequence", "wMobileAttemptTicks", "wMobileIRQCount",
         "wMobilePresenceCount", "wMobileMapEpoch", "wMobilePeer1DrawX", "wMobilePeer1DrawY",
         "wMobilePeer2DrawX", "wMobilePeer2DrawY", "wMobilePeer3DrawX", "wMobilePeer3DrawY"};
@@ -624,6 +630,32 @@ static void video(const void* data, unsigned w, unsigned h, size_t pitch) {
         std::memcpy(video_native_tiles, vram, sizeof(video_native_tiles));
     }
     capture_video_figures();
+    if (effect_video_field && effect_video_field(0) && effect_video_field(1) != effect_video_last) {
+        effect_video_last = effect_video_field(1);
+        if (effect_video_frames.size() >= 256) ++effect_video_overflow;
+        else {
+            EffectVideoFrame frame;
+            frame.host_frame = input_frame; frame.video_frame = video_frames;
+            frame.width = w; frame.height = h; frame.format = pixel_format;
+            frame.private_page = effect_private_oam_page; frame.private_bank = effect_private_oam_bank;
+            for (unsigned i = 0; i < 14; ++i) frame.metadata[i] = effect_video_field(i);
+            frame.hardware.resize(160 + 0x4000 + 128 + 128 + 6 + 160);
+            for (unsigned i = 0; i < frame.hardware.size(); ++i) frame.hardware[i] = effect_video_byte(i);
+            for (unsigned row = 0; row < 144; ++row) for (unsigned f = 0; f < 16; ++f)
+                frame.rows.push_back(effect_video_row(row, f));
+            const unsigned changes = effect_video_change(0, 2);
+            if (changes > 65536) fail("Native row change capacity exceeded");
+            for (unsigned i = 0; i < changes; ++i) for (unsigned f = 0; f < 2; ++f)
+                frame.changes.push_back(effect_video_change(i, f));
+            if (data && w == 160 && h == 144 && pixel_format == RETRO_PIXEL_FORMAT_RGB565) {
+                frame.pixels.resize(w * h * 2);
+                for (unsigned y = 0; y < h; ++y)
+                    std::memcpy(frame.pixels.data() + y * w * 2,
+                        static_cast<const unsigned char*>(data) + y * pitch, w * 2);
+            }
+            effect_video_frames.push_back(std::move(frame));
+        }
+    }
     if (!data) return;
     width = w;
     height = h;
@@ -697,8 +729,9 @@ int main(int argc, char** argv) {
                      "Options: --frames N --input SCRIPT --symbols SYM --state-out JSON\n"
                      "         --save-in SAV --save-out SAV --adapter 0|1 --pace-from FRAME --trace-out JSONL\n"
                      "         --checkpoint-dir EXISTING_DIRECTORY --profile-out JSON --pace-multiplier 1|2|3|4\n"
+                     "         --functional-horizon 1000..4000 (gated acceptance completion only)\n"
                      "         --snapshot-out STATE --snapshot-in STATE (manual-play preparation only)\n"
-                     "Input: FRAME BUTTON DURATION, ON MIN_FRAME SYMBOL=VALUE[,SYMBOL=VALUE] BUTTON DURATION, or WALK MIN_FRAME X Y TIMEOUT\n";
+                     "Input: FRAME BUTTON DURATION, ON MIN_FRAME SYMBOL=VALUE[,SYMBOL=VALUE] BUTTON DURATION, AFTER/CHECKED_AFTER DELAY CONDITIONS BUTTON DURATION, or WALK MIN_FRAME X Y TIMEOUT\n";
         return 1;
     }
     unsigned frame_limit = 1200;
@@ -723,7 +756,7 @@ int main(int argc, char** argv) {
             key != "--checkpoint-dir" && key != "--profile-out" && key != "--profile-window-start" &&
             key != "--snapshot-out" && key != "--test-snapshot-out" && key != "--snapshot-in" && key != "--input-events" &&
             key != "--finish-barrier" && key != "--pace-multiplier" && key != "--expected-peers" && key != "--expected-online" &&
-            key != "--effect-span" && key != "--effect-watch" && key != "--native-scene-field" && key != "--acceptance-menu-routine" && key != "--measurement-gate" && key != "--measurement-warmup" && key != "--acceptance") fail("Unknown option: " + key);
+            key != "--effect-video" && key != "--native-object-count" && key != "--effect-span" && key != "--effect-watch" && key != "--native-scene-field" && key != "--acceptance-menu-routine" && key != "--measurement-gate" && key != "--measurement-warmup" && key != "--functional-horizon" && key != "--acceptance") fail("Unknown option: " + key);
         arguments[key] = argv[i + 1];
     }
     if (arguments.count("--frames")) {
@@ -735,11 +768,24 @@ int main(int argc, char** argv) {
         if (arguments.at("--adapter") != "0" && arguments.at("--adapter") != "1") fail("Invalid adapter flag");
         adapter_enabled = arguments.at("--adapter") == "1";
     }
+    if (arguments.count("--effect-video") && (!effect_enabled || arguments.at("--effect-video") != "1"))
+        fail("Effect video requires configured native spans and value 1");
     if (effect_enabled && (!arguments.count("--profile-out") || !arguments.count("--symbols")))
         fail("Effect observation requires profile output and symbols");
     if (arguments.count("--symbols")) load_bindings(arguments.at("--symbols"));
     acceptance_enabled = arguments.count("--acceptance") && arguments.at("--acceptance") == "1";
-    const bool mobile_menu_instruction = arguments.count("--acceptance-menu-routine");
+    unsigned functional_horizon = 1000;
+    if (arguments.count("--functional-horizon")) {
+        if (!acceptance_enabled || !arguments.count("--measurement-gate") || !arguments.count("--profile-out"))
+            fail("Functional horizon requires gated acceptance profiling");
+        try { functional_horizon = parse_functional_horizon(arguments.at("--functional-horizon")); }
+        catch (const std::exception& error) { fail(error.what()); }
+    }
+    const bool menu_observer_requested = arguments.count("--acceptance-menu-routine");
+    const bool mobile_menu_instruction = menu_observer_requested && arguments.at("--acceptance-menu-routine") == "MobileMenuInput";
+    if (menu_observer_requested && arguments.at("--acceptance-menu-routine") != "MobileMenuInput" &&
+            arguments.at("--acceptance-menu-routine") != "DoMenuJoypadLoop")
+        fail("Unsupported native menu observation routine");
     if (mobile_menu_instruction && (arguments.at("--acceptance-menu-routine") != "MobileMenuInput" ||
             !acceptance_enabled || !adapter_enabled || !arguments.count("--profile-out")))
         fail("Mobile menu instruction observation requires enabled acceptance profiling");
@@ -757,6 +803,10 @@ int main(int argc, char** argv) {
         input_actions.clear();
         std::string line;
         while (std::getline(script, line)) {
+            // Optional actions are bounded branches of native recovery. The
+            // effect completion and physical movement remain required actions.
+            const bool optional = line.rfind("OPTIONAL ", 0) == 0;
+            if (optional) line = line.substr(9);
             std::istringstream row(line.substr(0, line.find('#')));
             if (line.substr(0, 5) == "WALK ") {
                 std::string tag;
@@ -769,25 +819,15 @@ int main(int argc, char** argv) {
                 walk_waypoints.push_back(waypoint);
                 continue;
             }
-            if (line.substr(0, 3) == "ON " || line.substr(0, 6) == "AFTER ") {
-                std::string on, conditions, button;
-                unsigned earliest, duration;
-                if (!(row >> on >> earliest >> conditions >> button >> duration) ||
-                    !buttons.count(button) || !duration || earliest >= frame_limit)
-                    fail("Invalid conditional input action");
-                ConditionalAction action = {earliest, buttons.at(button), duration, {}, false};
-                action.relative = on == "AFTER";
-                std::istringstream list(conditions);
-                std::string condition;
-                while (std::getline(list, condition, ',')) {
-                    auto equals = condition.find('=');
-                    if (equals == std::string::npos || (!bindings.count(condition.substr(0, equals)) &&
-                        !(acceptance_enabled && condition.substr(0, equals).rfind("vAcceptance", 0) == 0)))
-                        fail("Conditional input references unknown symbol");
-                    action.conditions[condition.substr(0, equals)] = std::stoul(condition.substr(equals + 1));
-                }
-                if (action.conditions.empty()) fail("Conditional input requires a condition");
-                conditional_actions.push_back(action);
+            if (line.substr(0, 3) == "ON " || line.substr(0, 6) == "AFTER " ||
+                    line.substr(0, 14) == "CHECKED_AFTER ") {
+                try {
+                    conditional_actions.push_back(parse_conditional_action(
+                        row, optional, frame_limit, buttons, [](const std::string& name) {
+                            return bindings.count(name) ||
+                                (acceptance_enabled && name.rfind("vAcceptance", 0) == 0);
+                        }));
+                } catch (const std::exception& error) { fail(error.what()); }
                 continue;
             }
             unsigned first, duration;
@@ -863,6 +903,11 @@ int main(int argc, char** argv) {
                     fail("Invalid or missing effect span: " + value);
                 const auto point = native_addresses.at(fields[1]);
                 symbol<void(*)(unsigned,unsigned,unsigned)>(core, "acceptance_profile_effect_span")(id, point.first, point.second);
+                if (id == 5 && fields[1] == "DoNextFrameForAllSprites_OW") {
+                    if (!native_addresses.count("DoNextFrameForAllSprites")) fail("Missing initial native animation routine");
+                    const auto alias = native_addresses.at("DoNextFrameForAllSprites");
+                    symbol<void(*)(unsigned,unsigned,unsigned)>(core, "acceptance_profile_effect_alias")(id, alias.first, alias.second);
+                }
                 effect_span_ids.push_back(id);
             }
             for (const auto& value : effect_options["--effect-watch"]) {
@@ -895,6 +940,18 @@ int main(int argc, char** argv) {
             symbol<unsigned(*)(unsigned,unsigned)>(core, "acceptance_profile_effect_record");
             symbol<unsigned(*)(unsigned,unsigned,unsigned)>(core, "acceptance_profile_effect_sample");
             symbol<unsigned(*)()>(core, "acceptance_profile_native_scene_ready");
+            effect_serial_status = symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_serial_status");
+            if (arguments.count("--effect-video")) {
+                const auto private_oam = native_addresses.find("wMobileVirtualOutput");
+                if (private_oam != native_addresses.end()) {
+                    effect_private_oam_page = private_oam->second.second >> 8; effect_private_oam_bank = private_oam->second.first;
+                }
+                effect_video_byte = symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_video_byte");
+                effect_video_field = symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_video_field");
+                effect_video_row = symbol<unsigned(*)(unsigned,unsigned)>(core, "acceptance_profile_video_row");
+                effect_video_change = symbol<unsigned(*)(unsigned,unsigned)>(core, "acceptance_profile_video_change");
+                symbol<void(*)(unsigned)>(core, "acceptance_profile_video_enable")(1);
+            }
         }
         if (!configured && bindings.count("wMobileOwner")) fail("MobileTick symbol missing");
         if (bindings.count("wMobileVirtualActorMode")) {
@@ -930,6 +987,11 @@ int main(int argc, char** argv) {
             }
         }
         if (acceptance_enabled) {
+            if (arguments.count("--native-object-count")) {
+                if (effect_options["--native-scene-field"].size() != 8) fail("Original object count requires native scene predicates");
+                acceptance_original_objects = std::stoul(arguments.at("--native-object-count"));
+                if (acceptance_original_objects > 12) fail("Original object count exceeds native pool");
+            }
             const char* markers[] = {"AcceptanceReadyMark", "AcceptanceDialogMark", "AcceptanceContinue.loaded", "AcceptanceContinue.failed", "LinkCommunications"};
             for (unsigned i = 0; i < 5; ++i) {
                 auto mark = native_addresses.at(markers[i]);
@@ -949,7 +1011,7 @@ int main(int argc, char** argv) {
                 object_update.first, object_update.second, native_addresses.at("wObjectStructs").first,
                 native_addresses.at("wObjectStructs").second, acceptance_word("AcceptanceObjectStride"),
                 acceptance_word("AcceptanceObjectMap"),
-                acceptance_data("AcceptanceScenarioCounts", acceptance_data("AcceptanceScenarioID")));
+                (acceptance_original_objects == ~0u ? acceptance_data("AcceptanceScenarioCounts", acceptance_data("AcceptanceScenarioID")) : acceptance_original_objects));
             auto simulation_field = symbol<void(*)(unsigned,unsigned)>(core, "acceptance_profile_simulation_field");
             const unsigned simulation_fields = acceptance_symbols.at("AcceptanceSimulationFieldsEnd").address -
                                                acceptance_symbols.at("AcceptanceSimulationFields").address;
@@ -959,7 +1021,7 @@ int main(int argc, char** argv) {
             auto save_start = native_addresses.at("wPlayerData");
             auto save_routine = native_addresses.at("SaveGameData");
             symbol<void(*)(unsigned,unsigned)>(core,"acceptance_profile_save_routine")(save_routine.first,save_routine.second);
-            auto menu_routine = native_addresses.at(mobile_menu_instruction ? "MobileMenuInput" : "StartMenu");
+            auto menu_routine = native_addresses.at(menu_observer_requested ? arguments.at("--acceptance-menu-routine") : "StartMenu");
             acceptance_menu_source_bank = menu_routine.first;
             acceptance_menu_source_pc = menu_routine.second;
             symbol<void(*)(unsigned,unsigned)>(core,"acceptance_profile_menu_routine")(menu_routine.first,menu_routine.second);
@@ -1157,6 +1219,11 @@ int main(int argc, char** argv) {
         values.insert(video_figure_values.begin(), video_figure_values.end());
         if (effect_enabled) {
             const auto record = symbol<unsigned(*)(unsigned,unsigned)>(core, "acceptance_profile_effect_record");
+            values["vAcceptanceSerialSC"] = effect_serial_status(0);
+            values["vAcceptanceSerialIE"] = effect_serial_status(1);
+            values["vAcceptanceHeadbuttAsked"] = symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_effect_returns")(6) != 0;
+            values["vAcceptanceHeadbuttFinished"] = symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_effect_returns")(0);
+            values["vAcceptanceHeadbuttAnimationStarted"] = symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_effect_returns")(5) != 0;
             values["vAcceptanceEffectCount"] = record(0, 32);
             values["vAcceptanceEffectOverflow"] = record(0, 33);
             values["vAcceptanceNativeSceneReady"] = symbol<unsigned(*)()>(core, "acceptance_profile_native_scene_ready")();
@@ -1178,7 +1245,7 @@ int main(int argc, char** argv) {
             for (unsigned i = 0; i < 5; ++i) values[marker_names[i]] = acceptance_marker_count ? acceptance_marker_count(i) : 0;
             values["vProfileWorldUpdates"] = metric ? metric(21) : 0;
         }
-        if (acceptance_enabled && profile_frame && !raster_aligned && values.at("vAcceptanceReady") &&
+        if (acceptance_enabled && profile_frame && !raster_aligned && (effect_options["--native-scene-field"].empty() ? values.at("vAcceptanceReady") : values.at("vAcceptanceNativeSceneReady")) &&
                 values.at("wMapStatus") == 2 && values.at("wScriptRunning") == 0 &&
                 (raster_state() & 0x100) &&
                 (!bindings.count("wMobileOwner") ||
@@ -1195,7 +1262,8 @@ int main(int argc, char** argv) {
         if (measurement_gate) {
             // These files coordinate host processes only. Never alter game RAM,
             // CPU registers or the game's normal initialization/connection path.
-            if (!measurement_ready && values.at("vAcceptanceReady") &&
+            if (!measurement_ready && (effect_options["--native-scene-field"].empty() ? values.at("vAcceptanceReady") : values.at("vAcceptanceNativeSceneReady")) &&
+                (effect_options["--native-scene-field"].empty() || values.at("vProfileWorldUpdates") > 0) &&
                 values.at("wMobileOnline") == (arguments.count("--expected-online") ? std::stoul(arguments.at("--expected-online")) : 1) &&
                 values.at("wMobilePeerCount") == (arguments.count("--expected-peers") ? std::stoul(arguments.at("--expected-peers")) : 3)) {
                 std::ofstream(arguments.at("--state-out") + ".measurement-ready") << input_frame << '\n';
@@ -1203,8 +1271,9 @@ int main(int argc, char** argv) {
             }
             if (!measurement_released && std::ifstream(arguments.at("--measurement-gate")).good()) {
                 if (!measurement_ready) fail("Measurement released before actual lobby readiness");
-                measurement_start = input_frame + 1 + measurement_warmup;
-                frame_limit = measurement_start + 1000;
+                try { frame_limit = functional_frame_limit(input_frame, measurement_warmup, functional_horizon); }
+                catch (const std::exception& error) { fail(error.what()); }
+                measurement_start = frame_limit - functional_horizon;
                 symbol<void(*)(unsigned)>(core, "mobile_profile_window")(measurement_start);
                 measurement_released = true;
             }
@@ -1255,19 +1324,11 @@ int main(int argc, char** argv) {
         }
         values["vWalkReachedWaypoints"] = unsigned(walk_index);
         for (auto& action : conditional_actions) {
-            if (action.fired || (!action.relative && input_frame < action.earliest)) continue;
-            bool matches = true;
-            for (const auto& condition : action.conditions)
-                if (!values.count(condition.first) || values.at(condition.first) != condition.second) matches = false;
-            if (action.relative) {
-                if (!action.anchored && matches) { action.anchor = input_frame; action.anchored = true; }
-                matches = action.anchored && input_frame - action.anchor >= action.earliest;
-            }
-            if (matches) {
-                if (action.duration >= frame_limit - input_frame) fail("Conditional action exceeds frame limit");
-                action.fired = true;
-                input_actions.push_back({input_frame + 1, input_frame + 1 + action.duration, action.button});
-            }
+            try {
+                InputAction delivered;
+                if (schedule_conditional_action(action, input_frame, frame_limit, values, delivered))
+                    input_actions.push_back(delivered);
+            } catch (const std::exception& error) { fail(error.what()); }
         }
         std::map<std::string, unsigned> progress;
         for (const auto& entry : values)
@@ -1324,7 +1385,7 @@ int main(int argc, char** argv) {
     trace.close();
     bool missing_input = false;
     for (const auto& action : conditional_actions) {
-        if (action.fired) continue;
+        if (!conditional_action_required_missing(action)) continue;
         std::cerr << "Conditional input not reached: earliest=" << action.earliest
                   << " button=" << action.button << '\n';
         missing_input = true;
@@ -1489,7 +1550,15 @@ int main(int argc, char** argv) {
             const unsigned count = record(0, 32), overflow = record(0, 33);
             profile << ",\"native_effect_event_count\":" << count
                     << ",\"native_effect_event_overflow\":" << overflow
-                    << ",\"native_effect_events\":[";
+                    << ",\"native_effect_script_bindings\":{";
+            bool script_first = true;
+            for (const char* name : {"AskHeadbuttScript", "AutoHeadbuttScript"}) {
+                if (!script_first) profile << ',';
+                script_first = false;
+                const auto point = acceptance_symbols.at(name);
+                profile << '\"' << name << "\":[" << point.bank << ',' << point.address << ']';
+            }
+            profile << "},\"native_effect_events\":[";
             for (unsigned i = 0; i < count; ++i) {
                 if (i) profile << ',';
                 profile << "{\"fields\":[";
@@ -1512,6 +1581,30 @@ int main(int argc, char** argv) {
             }
             profile << ']';
             if (overflow) fail("Native effect evidence overflow");
+            if (effect_video_field) {
+                profile << ",\"native_effect_video_overflow\":" << effect_video_overflow
+                        << ",\"native_effect_video_frames\":[";
+                auto bytes = [&](const auto& data) {
+                    profile << '[';
+                    for (unsigned i = 0; i < data.size(); ++i) { if (i) profile << ','; profile << unsigned(data[i]); }
+                    profile << ']';
+                };
+                for (unsigned i = 0; i < effect_video_frames.size(); ++i) {
+                    if (i) profile << ',';
+                    const auto& frame = effect_video_frames[i];
+                    profile << "{\"host_frame\":" << frame.host_frame << ",\"video_frame\":" << frame.video_frame
+                            << ",\"width\":" << frame.width << ",\"height\":" << frame.height
+                            << ",\"format\":" << frame.format << ",\"render_metadata\":[";
+                    for (unsigned f = 0; f < 14; ++f) { if (f) profile << ','; profile << frame.metadata[f]; }
+                    profile << "],\"hardware\":"; bytes(frame.hardware);
+                    profile << ",\"private_oam_page\":" << frame.private_page << ",\"private_oam_bank\":" << frame.private_bank;
+                    profile << ",\"rows\":"; bytes(frame.rows);
+                    profile << ",\"changes\":"; bytes(frame.changes);
+                    profile << ",\"pixels\":"; bytes(frame.pixels); profile << '}';
+                }
+                profile << ']';
+                if (effect_video_overflow) fail("Native effect video evidence overflow");
+            }
         }
         profile << ",\"raster_alignment_lines\":" << raster_alignment_lines
                 << ",\"raster_alignment_frame\":" << raster_alignment_frame
@@ -1572,6 +1665,11 @@ int main(int argc, char** argv) {
         values.insert(video_figure_values.begin(), video_figure_values.end());
         if (effect_enabled) {
             const auto record = symbol<unsigned(*)(unsigned,unsigned)>(core, "acceptance_profile_effect_record");
+            values["vAcceptanceSerialSC"] = effect_serial_status(0);
+            values["vAcceptanceSerialIE"] = effect_serial_status(1);
+            values["vAcceptanceHeadbuttAsked"] = symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_effect_returns")(6) != 0;
+            values["vAcceptanceHeadbuttFinished"] = symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_effect_returns")(0);
+            values["vAcceptanceHeadbuttAnimationStarted"] = symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_effect_returns")(5) != 0;
             values["vAcceptanceEffectCount"] = record(0, 32);
             values["vAcceptanceEffectOverflow"] = record(0, 33);
             values["vAcceptanceNativeSceneReady"] = symbol<unsigned(*)()>(core, "acceptance_profile_native_scene_ready")();

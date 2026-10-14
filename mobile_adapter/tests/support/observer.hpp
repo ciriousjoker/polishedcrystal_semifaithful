@@ -2,6 +2,7 @@
 static std::map<std::string, Binding> acceptance_symbols;
 static uint64_t acceptance_audio_previous = 0;
 static std::vector<unsigned char> acceptance_rom;
+static unsigned acceptance_original_objects = ~0u;
 
 static unsigned acceptance_data(const std::string& name, unsigned offset = 0) {
     const auto binding = acceptance_symbols.at(name);
@@ -57,6 +58,33 @@ static void acceptance_capture(std::map<std::string, unsigned>& values,
             result = (result ^ observe(first.bank, at, sram, sram_size)) * 16777619u;
         return result;
     };
+    auto party = [&](const char* name, unsigned offset = 0) {
+        const auto field = acceptance_symbols.at(name);
+        return observe(field.bank, field.address + offset, sram, sram_size);
+    };
+    const auto ask = acceptance_symbols.at("AskHeadbuttScript");
+    const auto ask_end = acceptance_symbols.at("RockSmashFunction");
+    const auto script_bank = acceptance_symbols.at("hScriptBank"), script_pos = acceptance_symbols.at("hScriptPos");
+    const unsigned position = observe(script_pos.bank, script_pos.address, sram, sram_size) |
+        observe(script_pos.bank, script_pos.address + 1, sram, sram_size) << 8;
+    values["vAcceptanceHeadbuttAskScript"] = observe(script_bank.bank, script_bank.address, sram, sram_size) == ask.bank &&
+        position >= ask.address && position < ask_end.address;
+    const auto use = acceptance_symbols.at("HeadbuttScript"), automatic = acceptance_symbols.at("AutoHeadbuttScript");
+    values["vAcceptanceHeadbuttUseScript"] = observe(script_bank.bank, script_bank.address, sram, sram_size) == use.bank &&
+        position >= use.address && position < automatic.address;
+    values["vAcceptanceHeadbuttTileStart"] = acceptance_word("AcceptanceHeadbuttTileStart");
+    values["vAcceptanceHeadbuttTileEnd"] = acceptance_word("AcceptanceHeadbuttTileEnd");
+    values["vAcceptanceHeadbuttTileCount"] = acceptance_word("AcceptanceHeadbuttTileCount");
+    values["vAcceptancePartyCount"] = party("wPartyCount");
+    values["vAcceptancePartySpecies"] = party("wPartyMon1Species");
+    values["vAcceptancePartyForm"] = party("wPartyMon1Form") & 31;
+    values["vAcceptancePartyEgg"] = (party("wPartyMon1Personality", 1) >> 6) & 1;
+    values["vAcceptancePartyLevel"] = party("wPartyMon1Level");
+    values["vAcceptancePartyMove"] = party("wPartyMon1Moves");
+    values["vAcceptancePartyItem"] = party("wPartyMon1Item");
+    values["vAcceptancePartyStatus"] = party("wPartyMon1Status");
+    values["vAcceptancePartyHP"] = party("wPartyMon1HP") << 8 | party("wPartyMon1HP", 1);
+    values["vAcceptanceHeadbuttFlag"] = (party("wOWState") >> 5) & 1;
     values["vAcceptancePartyHash"] = hash_span("wPartyCount", "wPokemonDataEnd");
     values["vAcceptanceInventoryHash"] = hash_span("wNumItems", "wItemsEnd");
     const auto trainer = acceptance_symbols.at("wPlayerID");
@@ -69,7 +97,7 @@ static void acceptance_capture(std::map<std::string, unsigned>& values,
     if (count < 13 || end.address - objects.address != count * stride) fail("Native pool cannot represent the required twelve ordinary objects plus player");
     const unsigned scenario = acceptance_data("AcceptanceScenarioID");
     if (scenario >= acceptance_data("AcceptanceScenarioTotal")) fail("Unknown scenario in launcher configuration");
-    const unsigned original = acceptance_data("AcceptanceScenarioCounts", scenario);
+    const unsigned original = acceptance_original_objects == ~0u ? acceptance_data("AcceptanceScenarioCounts", scenario) : acceptance_original_objects;
     unsigned hash = 2166136261u, occupied = 0;
     for (unsigned slot = 0; slot < 13; ++slot) {
         const unsigned start = objects.address + slot * stride;

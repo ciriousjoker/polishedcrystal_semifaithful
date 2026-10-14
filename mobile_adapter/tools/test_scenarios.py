@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Generate all acceptance event tables for a single optional MBC30 ROM pair."""
 import argparse
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -22,7 +23,7 @@ def rom_offset(binding):
     bank, address = binding
     return bank * 0x4000 + address - (0x4000 if address >= 0x4000 else 0)
 
-def floor_area(source, name):
+def collision_area(source, name):
     # Current map order and collision source are queried, not frozen numeric IDs.
     import sys
     sys.path.insert(0, str(Path(__file__).parent))
@@ -40,9 +41,22 @@ def floor_area(source, name):
     blocks = (source / f"maps/{name}.ablk").read_bytes()
     width, height = record["width"] * cells, record["height"] * cells
     record["collision_cells_per_block_axis"] = cells
-    def floor(x, y):
+    def collision(x, y):
+        if not 0 <= x < width or not 0 <= y < height:
+            raise RuntimeError(f"Native collision coordinate outside {name}: {(x, y)}")
         block = blocks[(y // cells) * record["width"] + x // cells]
-        return collisions[block][(y % cells) * cells + x % cells] == "FLOOR"
+        return collisions[block][(y % cells) * cells + x % cells]
+    record["tileset"] = tileset
+    return record, collision
+
+
+def floor_area(source, name):
+    record, collision = collision_area(source, name)
+    record.pop("tileset")
+    cells = record["collision_cells_per_block_axis"]
+    width, height = record["width"] * cells, record["height"] * cells
+    def floor(x, y):
+        return collision(x, y) == "FLOOR"
     candidates = []
     for row in range(2, height - 2):
         for x in range(1, width - 7):
@@ -90,6 +104,69 @@ def palette_choices(meta):
         raise RuntimeError("Declared palette-table prerequisite failed: fewer than seven distinct non-avatar day palettes")
     return [{"name": name, "encoded_day_colors": list(encoded)} for encoded, name in list(unique.items())[:7]]
 
+
+
+def native_headbutt(source, baseline, producer):
+    """Original-map metadata only: no synthetic header or ready callback."""
+    record, collision = collision_area(source, "Route29")
+    primary, peers, tree = (46, 8), [(44, 8), (45, 8), (48, 8)], (46, 7)
+    for point in [primary, *peers]:
+        if collision(*point) != "FLOOR":
+            raise RuntimeError(f"Native Headbutt standing collision changed: {point}")
+    if collision(*tree) != "HEADBUTT_TREE":
+        raise RuntimeError("Native Headbutt target is no longer a tree")
+    # Count every original header record, including hidden and offscreen objects.
+    header = (source / "maps/Route29.asm").read_text().split("\tdef_object_events", 1)[1].split("\tobject_const_def", 1)[0]
+    events = re.findall(r"^\s*(object_event|cuttree_event|fruittree_event|itemball_event)\s+(\d+),\s*(\d+)", header, re.M)
+    from audit_independent_maps import objects
+    from audit_map_slots import read_symbols
+    _, compiled = objects(baseline.read_bytes(), read_symbols(baseline.with_suffix(".sym")), "Route29")
+    if len(events) != len(compiled) or len(events) != 10:
+        raise RuntimeError("Original Route29 object header count changed")
+    if any((row[2] - 4, row[1] - 4) != (int(x), int(y))
+           for row, (_, x, y) in zip(compiled, events)):
+        raise RuntimeError("Original Route29 compiled object coordinates differ from source")
+    spawn_source = (source / "engine/overworld/spawn_points.asm").read_text().split("EnterMapSpawnPoint:", 1)[1]
+    record["spawn_fields"] = re.findall(r"ld \[(wMapGroup|wMapNumber|wXCoord|wYCoord)\], a", spawn_source)[:4]
+    if record["spawn_fields"] != producer["map"]["spawn_fields"]:
+        raise RuntimeError("Native producer and consumer spawn loader order differs")
+    inputs = ["maps/Route29.asm", "maps/Route29.ablk", "data/maps/maps.asm",
+              "constants/map_constants.asm", f"data/tilesets/{record['tileset']}_collision.asm",
+              "engine/overworld/spawn_points.asm"]
+    return {
+        "scene": "native-headbutt", "scene_id": 0, "scene_type": "original-map",
+        "native_map_events": True, "map": record, "primary": primary, "peers": peers,
+        "ordinary_objects": len(events), "original_header": "Route29_MapScriptHeader",
+        "native_object_positions": [(int(x), int(y)) for _, x, y in events],
+        "equal_actor_load": False,
+        "limitation": "The disabled original map has three fewer native avatar actors; this comparison cannot establish equal-load P1.",
+        "clock_input": "native clock", "palettes": [],
+        "producer": {"scene": "save", "scene_id": producer["scene_id"], "scene_type": "synthetic",
+                     "map": producer["map"], "primary": producer["primary"], "peers": producer["peers"],
+                     "npc_position": [producer["primary"][0], producer["primary"][1] + 1],
+                     "config": {"AcceptanceSeedProfile": 1},
+                     "predicate": "AcceptanceHeadbuttSeedPredicate",
+                     "party": {"count": 1, "species": "HERACROSS", "form": "PLAIN_FORM", "level": 30,
+                               "item": "NO_ITEM", "ball": "POKE_BALL", "move": "HEADBUTT",
+                               "healthy": True, "egg": False},
+                     "flags": ["ENGINE_HEADBUTT_ACTIVE"],
+                     "constant_bindings": {"species": "AcceptanceHeadbuttSpecies", "form": "AcceptanceHeadbuttForm",
+                                           "move": "AcceptanceHeadbuttMove", "flag": "AcceptanceHeadbuttFlag"},
+                     "save_hooks": ["SaveGameData", "SaveCurrentVersion"]},
+        "consumer_config": {"AcceptanceScenarioLoad": 1, "AcceptanceSeedProfile": 0},
+        "readiness": {"mode": "native-map", "marker": None,
+                      "map_bindings": ["wMapGroup", "wMapNumber", "wMapStatus", "wScriptRunning", "hInMenu"],
+                      "local_bindings": ["wXCoord", "wYCoord", "wPlayerObject", "wObjectStructs", "wMapObjects"],
+                      "party_bindings": ["wPartyCount", "wPartyMon1Species", "wPartyMon1Form", "wPartyMon1Level",
+                                         "wPartyMon1Item", "wPartyMon1Moves", "wPartyMon1HP", "wPartyMon1Status"],
+                      "stable": {"wMapStatus": 2, "wScriptRunning": 0, "hInMenu": 0}},
+        "effect": {"entry": "ShakeHeadbuttTree", "physical_trigger": ["UP", "A"],
+                   "standing": primary, "facing": "UP", "facing_constant": "FACE_UP", "target": tree,
+                   "target_collision": "HEADBUTT_TREE", "required_peers": 3,
+                   "constant_bindings": {"facing": "AcceptanceHeadbuttFacing", "animation": "AcceptanceHeadbuttAnimation"},
+                   "native_paths": ["TryHeadbuttOW", "AskHeadbuttScript", "AutoHeadbuttScript"],
+                   "tile_start": 0x8610, "tile_end": 0x86d0, "tile_count": 12, "vram_bank": 0},
+        "source_sha256": {name: hashlib.sha256((source / name).read_bytes()).hexdigest() for name in inputs}}
 
 
 def generate(source, baseline, output):
@@ -142,7 +219,11 @@ def generate(source, baseline, output):
         if scene == "private-save":
             text += "\tcallasm AcceptanceApplyInteractionFault\n\tcallasm AcceptanceSave\n"
         elif scene == "save":
-            text += "\tcallasm AcceptanceSave\n"
+            text += (f"\tcallasm AcceptanceHeadbuttSeedPredicate\n\tiffalsefwd {prefix}_OrdinarySave\n"
+                     "\tgivepoke HERACROSS, PLAIN_FORM, 30, NO_ITEM, POKE_BALL, HEADBUTT\n"
+                     f"\tifnotequal 1, {prefix}_SeedFailed\n"
+                     "\tsetflag ENGINE_HEADBUTT_ACTIVE\n"
+                     f"{prefix}_OrdinarySave:\n\tcallasm AcceptanceSave\n")
         elif scene == "link":
             text += "\tcallasm AcceptanceLink\n"
         elif scene == "script":
@@ -154,6 +235,8 @@ def generate(source, baseline, output):
         text += f"\tsetevent EVENT_TEMPORARY_UNTIL_MAP_RELOAD_1\n\tcallasm AcceptanceDialogMark\n\tend\n{prefix}_Text:\n\ttext \"TEST\"\n\tdone\n"
         if scene == "npc-movement":
             text += f"{prefix}_Movement:\nrept 64\n\tstep_right\n\tstep_left\nendr\n\tstep_end\n"
+        if scene == "save":
+            text += f"{prefix}_SeedFailed:\n\tend\n"
         scenarios[scene] = {"scene_id": scene_id, "scene": scene, "map": record, "primary": primary,
             "peers": peers, "ordinary_objects": count, "equal_actor_load": equal,
             "native_object_positions": points[:count], "palettes": palette_data,
@@ -165,6 +248,7 @@ def generate(source, baseline, output):
     text += "AcceptanceScenarioCounts:\n\tdb " + ", ".join(map(str, counts)) + "\n"
     text += "AcceptanceScenarioControls:\n\tdb " + ", ".join(map(str, controls)) + "\n"
     text += 'AcceptanceEmptyDestination:\n\tdef_scene_scripts\n\tdef_callbacks\n\tdef_warp_events\n\tdef_coord_events\n\tdef_bg_events\n\tdef_object_events\n'
+    scenarios["native-headbutt"] = native_headbutt(source, baseline, scenarios["save"])
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(text)
     output.with_suffix('.json').write_text(json.dumps(scenarios, indent=2))

@@ -10,6 +10,16 @@ import runtime
 from storage import active_run, ensure_free_space
 
 
+class ConditionalInputs(unittest.TestCase):
+    def test_compiled_parser_and_delivery_regressions(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as tmp:
+            binary = Path(tmp) / "conditional-input"
+            source = Path(__file__).with_name("test_conditional_input.cpp")
+            subprocess.run(["c++", "-std=c++17", "-O2", str(source), "-o", str(binary)], check=True)
+            subprocess.run([str(binary)], check=True)
+
+
 class ObserverHooks(unittest.TestCase):
     def test_compiled_effect_observer_boundaries(self):
         import subprocess
@@ -26,6 +36,7 @@ class ObserverHooks(unittest.TestCase):
             "void cpu::io_write(word adr,byte dat)\n{\n}\n"
             "mobile_profile_before_instruction(ref_gb, regs, total_clock);\n"
             "mobile_profile_after_instruction(ref_gb, regs, total_clock, observed_opcode, tmp_clocks);\n")
+        (root / "gb_core/lcd.cpp").write_text('#include "gb.h"\nvoid lcd::render(void *buf,int scanline)\n{\n}\n')
         (root / "libretro/libretro.cpp").write_text(
             "bool retro_load_game(const struct retro_game_info *info)\n{\n}\n"
             "void retro_reset(void)\n{\n}\n"

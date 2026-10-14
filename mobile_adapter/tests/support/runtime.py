@@ -47,6 +47,7 @@ def sha(path):
 
 def observer_fingerprint():
     paths = [ROOT / "mobile_adapter/tools/smoke_libretro.cpp", ROOT / "mobile_adapter/tools/profile_core.h",
+             ROOT / "mobile_adapter/tools/conditional_input.hpp",
              TESTS / "support/profile_native.hpp", TESTS / "support/observer.hpp", Path(__file__)]
     return hashlib.sha256("".join(sha(path) for path in paths).encode()).hexdigest()
 
@@ -113,6 +114,22 @@ def extend_profile(profile_source):
     body = inject_unique(body, "        return true;",
         "        acceptance_profile_restore_boundary();\n        return true;")
     libretro_text = libretro_text[:start] + body + libretro_text[end:]
+    lcd_source = profile_source / "gb_core/lcd.cpp"
+    lcd_text = lcd_source.read_text(encoding="utf-8-sig")
+    if ('acceptance_profile_render_line(gb*, unsigned);' in lcd_text or
+            'acceptance_profile_render_line(ref_gb, scanline);' in lcd_text):
+        raise RuntimeError("Incompatible prior LCD observer hook; rebuild from original pinned core source")
+    declaration = 'extern "C" void acceptance_profile_render_line(gb*, unsigned, int);'
+    if lcd_text.count(declaration) > 1:
+        raise RuntimeError("Duplicate LCD observer declaration")
+    if declaration not in lcd_text:
+        include = '#include "gb.h"'
+        if lcd_text.count(include) != 1:
+            raise RuntimeError("Expected unique LCD include anchor")
+        lcd_text = lcd_text.replace(include, include + "\n" + declaration)
+    lcd_text = inject_unique(lcd_text, "void lcd::render(void *buf,int scanline)\n{",
+        "void lcd::render(void *buf,int scanline)\n{\n    acceptance_profile_render_line(ref_gb, scanline, now_win_line);")
+    lcd_source.write_text(lcd_text)
     header.write_text(text)
     cpu.write_text(cpu_text)
     libretro.write_text(libretro_text)
@@ -224,7 +241,7 @@ def patch_data(rom, names, values, destination):
              "AcceptanceHour": 1, "AcceptanceInitialFault": 1, "AcceptanceScenarioLoad": 1,
              "AcceptanceInteractionFault": 1, "AcceptanceLighting": 1, "AcceptanceNPCOverride": 1,
              "AcceptanceNPCPosition": 2, "AcceptanceSpawn": 4, "AcceptanceControlPeers": 9,
-             "MobileEndpoint": 6}
+             "MobileEndpoint": 6, "AcceptanceSeedProfile": 1}
     first, last = rom_offset(names["AcceptanceConfig"]), rom_offset(names["AcceptanceConfigEnd"])
     for name, value in values.items():
         if name not in sizes or len(value) != sizes[name]:
@@ -403,11 +420,15 @@ def fixture(meta, out, scene):
         shared["scenario_headers_match"] = all(
             single_names["Acceptance_" + name.replace("-", "_") + "_Header"] ==
             mobile_names["Acceptance_" + name.replace("-", "_") + "_Header"]
-            for name in scenarios)
+            for name, row in scenarios.items() if row.get("scene_type") != "original-map")
+        original = scenarios["native-headbutt"]["original_header"]
+        shared["original_map_header_matches"] = single_names[original] == mobile_names[original]
+        if (source / "maps/Route29.asm").read_bytes() != (Path(meta["source"]) / "maps/Route29.asm").read_bytes():
+            raise RuntimeError("Original Route29 events changed during fixture preparation")
         shared["save_event_addresses_match"] = all(
             single_names[f"Acceptance_{name}_{suffix}"] == mobile_names[f"Acceptance_{name}_{suffix}"]
             for name in ("save", "private_save") for suffix in ("NPC", "Ready", "Text"))
-        if not shared["scenario_headers_match"] or not shared["save_event_addresses_match"]:
+        if not shared["scenario_headers_match"] or not shared["save_event_addresses_match"] or not shared["original_map_header_matches"]:
             raise RuntimeError("Paired native save/event addresses must match before testing")
         retain_rom_outputs(source)
         manifest_path.write_text(json.dumps(shared, indent=2))
@@ -557,7 +578,7 @@ def projected(directory):
         "vAcceptanceOAMHash", "vAcceptanceLocalComplete", "vAcceptanceFrameAudio", "vAcceptanceSaveCount",
         "vAcceptanceLocalPaletteHash", "vAcceptanceLocalTileHash", "vAcceptancePaletteDemand", "vAcceptanceSaveActive", "vAcceptanceMenuActive", "vAcceptanceLinkEntered",
         "vAcceptanceSaveBytes", "vAcceptanceSaveMain", "vAcceptanceSaveBackup", "vAcceptanceTrainerID",
-        "vAcceptanceEffectCount", "vAcceptanceEffectOverflow", "vAcceptanceNativeSceneReady",
+        "vAcceptanceEffectCount", "vAcceptanceEffectOverflow", "vAcceptanceNativeSceneReady", "vAcceptanceHeadbuttFinished", "vAcceptanceHeadbuttAnimationStarted", "vAcceptanceHeadbuttAsked", "vAcceptanceHeadbuttAskScript", "vAcceptanceHeadbuttUseScript", "hScriptBank", "hScriptPos", "wMenuCursorX", "wMenuCursorY", "wBattleMode", "wBattleMenuFlags", "wBattleMenuCursorBuffer", "wMobileKeyLatch", "wMobileTransferActive", "wMobileSavedSerialIE", "vAcceptanceSerialSC", "vAcceptanceSerialIE",
         *(f"vAcceptanceEffectActive{i}" for i in range(8)))
     frames = []
     with gzip.open(directory / "trace.jsonl.gz", "rt") as stream:
@@ -600,32 +621,50 @@ def seed_saves(meta, session, fx, hour):
     source = Path(seed_fx["source"])
     native = Path(seed_fx["single_rom"])
     names = symbols(native.with_suffix(".sym"))
+    producer = fx.get("producer", fx)
+    native_headbutt = "producer" in fx
     def produce(index, position):
         directory = session / f"seed-{hour}-{index}"
         if not (directory / "result.sav").exists():
             directory.mkdir(exist_ok=True)
-            values = {"wMapGroup": fx["map"]["group"], "wMapNumber": fx["map"]["number"],
+            values = {"wMapGroup": producer["map"]["group"], "wMapNumber": producer["map"]["number"],
                       "wXCoord": position[0], "wYCoord": position[1]}
             patch_data(native, names, {"AcceptanceAvatar": bytes([index]),
                 "AcceptanceTrainerID": (10001 + index).to_bytes(2,"big"), "AcceptanceHour": bytes([hour]),
                 "AcceptanceScenarioID": bytes([seed_fx["scene_id"]]),
-                "AcceptanceSpawn": bytes(values[name] for name in fx["map"]["spawn_fields"]),
+                "AcceptanceSpawn": bytes(values[name] for name in producer["map"]["spawn_fields"]),
                 "AcceptanceNPCOverride": bytes([1]),
+                "AcceptanceSeedProfile": bytes([int(native_headbutt)]),
                 "AcceptanceNPCPosition": bytes([position[1]+5,position[0]+4])}, directory / "fixture.gbc")
             (directory / "input.txt").write_text("AFTER 0 vAcceptanceReady=1,wMapStatus=2,wScriptRunning=0 A 8\nAFTER 90 vAcceptanceReady=1,wMapStatus=2,wScriptRunning=0 A 8\n")
+            seed_observer = ["--effect-span", "0:GiveANickname_YesNo", "--effect-span", "1:DoMenuJoypadLoop"] if native_headbutt else []
+            if native_headbutt:
+                (directory / "input.txt").write_text("AFTER 0 vAcceptanceReady=1,wMapStatus=2,wScriptRunning=0 A 8\nAFTER 90 vAcceptanceReady=1,wMapStatus=2,wScriptRunning=0 A 8\nON 0 vAcceptanceEffectActive0=1 B 8\nAFTER 60 vAcceptanceEffectActive0=1 B 8\nON 0 vAcceptanceEffectActive0=1,vAcceptanceEffectActive1=1,wMenuCursorY=1 B 8\n")
             run([meta["runner"], meta["core"], directory / "fixture.gbc", directory / "screen.ppm", directory,
                 "--frames", "1800", "--symbols", native.with_suffix(".sym"), "--input", directory / "input.txt",
                 "--state-out", directory / "state.json", "--ram-out", directory / "wram.bin", "--save-out", directory / "result.sav",
                 "--trace-out", directory / "trace.jsonl.gz", "--input-events", directory / "input-events.jsonl",
                 "--profile-out", directory / "profile.json", "--profile-window-start", "600",
-                "--adapter", "0", "--acceptance", "1"], source, directory / "process.log")
+                "--adapter", "0", "--acceptance", "1", *seed_observer], source, directory / "process.log")
         state = json.loads((directory / "state.json").read_text())["symbols"]
         profile = json.loads((directory / "profile.json").read_text())
         if state["vAcceptanceDialogDone"] != 1 or profile["save_copy_count"] < 4:
             raise RuntimeError("Native seed producer did not reach its post-initialization main/backup save")
+        if native_headbutt:
+            expected = producer["party"]
+            data = native.read_bytes()
+            def constant(name):
+                at = rom_offset(names[name])
+                return int.from_bytes(data[at:at+2], "little")
+            assertions = {"vAcceptancePartyCount": 1, "vAcceptancePartySpecies": constant("AcceptanceHeadbuttSpecies"),
+                          "vAcceptancePartyForm": constant("AcceptanceHeadbuttForm"), "vAcceptancePartyLevel": expected["level"],
+                          "vAcceptancePartyMove": constant("AcceptanceHeadbuttMove"), "vAcceptancePartyItem": 0,
+                          "vAcceptancePartyStatus": 0, "vAcceptancePartyEgg": 0, "vAcceptanceHeadbuttFlag": 1}
+            if any(state.get(key) != value for key, value in assertions.items()) or not state.get("vAcceptancePartyHP", 0):
+                raise RuntimeError("Native Headbutt producer party/flag assertions failed: " + repr({key: state.get(key) for key in assertions}))
         return directory / "result.sav"
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-        return list(pool.map(produce, range(4), [fx["primary"], *fx["peers"]]))
+        return list(pool.map(produce, range(4), [producer["primary"], *producer["peers"]]))
 
 
 def mobile_menu_inputs(action):
@@ -671,6 +710,60 @@ def mobile_menu_inputs(action):
     return text
 
 
+HEADBUTT_FUNCTIONAL_HORIZON = 3200
+HEADBUTT_RECOVERY_WINDOW = 2800
+
+
+def functional_horizon_options(functional, enabled, action):
+    """Extend only gated Headbutt clients, including their healthy siblings."""
+    if functional and enabled and action in ("native-headbutt", "native-headbutt-held"):
+        return ["--functional-horizon", str(HEADBUTT_FUNCTIONAL_HORIZON)]
+    return []
+
+
+def native_headbutt_recovery_inputs(rom, names):
+    """Advance native text, select Run with B, then confirm it physically with A."""
+    # Derive the suspended script position from this build's linked data.
+    # startbattle consumes its opcode before StartBattle runs synchronously.
+    macros = (ROOT / "macros/scripts/events.asm").read_text()
+    commands = re.findall(r"^\s*const (\w+_command)\s*$", macros, re.M)
+    if len(re.findall(r"^\s*const_def\s*$", macros, re.M)) != 1 or re.search(
+            r"^\s*const_(?:skip|next)\b", macros, re.M):
+        raise RuntimeError("Script command numbering requires a new explicit binding")
+    tail = bytes(commands.index(name + "_command") for name in
+                 ("randomwildmon", "startbattle", "reloadmapafterbattle", "end"))
+    bank, end = names["AutoHeadbuttScript.no_battle"]
+    begin_bank, begin = names["AutoHeadbuttScript"]
+    if bank != begin_bank or end - begin < len(tail):
+        raise RuntimeError("Native Headbutt encounter script binding changed")
+    data = Path(rom).read_bytes()
+    at = rom_offset((bank, end - len(tail)))
+    if data[at:at + len(tail)] != tail:
+        raise RuntimeError("Native Headbutt encounter script tail changed")
+    battle_position = end - 2
+    phase = (f"vAcceptanceHeadbuttFinished=1,wScriptRunning=255,wBattleMode=1,"
+             f"hScriptBank={bank},hScriptPos={battle_position}")
+    menu_bank, menu_pc = names["DoMenuJoypadLoop"]
+    menu = (f"{phase},vAcceptanceMenuActive=1,"
+            f"vAcceptanceMenuSourceBank={menu_bank},vAcceptanceMenuSourcePC={menu_pc},"
+            "wBattleMenuFlags=7")
+    text = ""
+    # hInMenu is zero at the observed tree encounter intro. Actual menu-loop
+    # ownership distinguishes text from the later battle menu, not hInMenu.
+    # Keep native escape failure/retry behavior within the existing horizon.
+    for offset in range(0, HEADBUTT_RECOVERY_WINDOW, 40):
+        text += f"OPTIONAL CHECKED_AFTER {offset} {phase},vAcceptanceMenuActive=0 B 8\n"
+        # QUICK_B moves the cursor to Run but the $87 battle-menu filter only
+        # accepts A. Stop selecting once B has moved the cursor off the top row.
+        text += f"OPTIONAL CHECKED_AFTER {offset} {menu},wMenuCursorY=1 B 8\n"
+        # A may confirm only the actual bottom-right Run cursor. Require a
+        # continuous physical release before each pulse, including after failed
+        # native escape attempts; stale readiness cannot carry across text.
+        text += (f"OPTIONAL CHECKED_AFTER {offset + 16} {menu},"
+                 "wMenuCursorX=2,wMenuCursorY=2,hJoypadDown=0 A 8\n")
+    return text
+
+
 def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 1), duplicate=False, settle_frames=300, functional=False, moving_peers=False, identity=None):
     if out.exists():
         original = out
@@ -708,6 +801,7 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
 
     def client(index, enabled, original_actors=False):
         speed = speeds[index]
+        ready = "vAcceptanceNativeSceneReady" if fx.get("native_map_events") else "vAcceptanceReady"
         replay = None
         # Native initialization is complete before frame 500. The explicit join
         # starts at 600; retain five real seconds for join/assets before measuring
@@ -827,6 +921,28 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
                     continue
                 button_name = {0: "B", 2: "SELECT", 3: "START", 4: "UP", 5: "DOWN", 6: "LEFT", 7: "RIGHT", 8: "A"}[event["button"]]
                 text += f"{event['frame']} {button_name} {event['duration']}\n"
+        if fx.get("native_map_events"):
+            text = text.replace("vAcceptanceReady", ready)
+            if index == 0 and enabled:
+                peer_gate = ",".join(f"vAcceptancePeer{peer}Complete=1,wMobilePeer{peer}NativeStage=7" for peer in range(1,4))
+                text += f"CHECKED_AFTER 50 vAcceptanceMeasuring=1,wXCoord=46,wYCoord=8,wScriptRunning=0,{peer_gate} UP 8\n"
+                text += f"CHECKED_AFTER 75 vAcceptanceMeasuring=1,wXCoord=46,wYCoord=8,wScriptRunning=0,wPlayerDirection=4,{peer_gate} A 8\n"
+                # Continue restores the native party, while the native transient
+                # automatic-use flag resets. Answer the genuine first question.
+                for offset in range(0, 500, 40):
+                    text += f"OPTIONAL CHECKED_AFTER {offset} vAcceptanceHeadbuttAsked=1,vAcceptanceHeadbuttAskScript=1,vAcceptanceMenuActive=0,vAcceptanceHeadbuttFinished=0 B 1\n"
+                    text += f"OPTIONAL CHECKED_AFTER {offset} vAcceptanceHeadbuttAsked=1,vAcceptanceHeadbuttUseScript=1,vAcceptanceMenuActive=0,wBattleMode=0,vAcceptanceHeadbuttFinished=0 B 1\n"
+                text += "ON 0 vAcceptanceHeadbuttAsked=1,vAcceptanceHeadbuttAskScript=1,vAcceptanceMenuActive=1,wMenuCursorY=1 A 8\n"
+                # Physical B only while a completed effect still owns a native
+                # script/text state. It cannot invoke the tree a second time.
+                for offset in range(0, 400, 40):
+                    text += f"OPTIONAL CHECKED_AFTER {offset} vAcceptanceHeadbuttFinished=1,wScriptRunning=255,wBattleMode=0 B 8\n"
+                text += native_headbutt_recovery_inputs(mobile, mobile_symbols)
+                if action == "native-headbutt-held":
+                    for button in ("SELECT", "B"):
+                        text += f"ON 0 vAcceptanceEffectActive0=1,vAcceptanceHeadbuttAnimationStarted=1 {button} 160\n"
+                        text += f"CHECKED_AFTER 240 vAcceptanceHeadbuttAnimationStarted=1,wScriptRunning=0,wMobileWanted=0 {button} 8\n"
+                text += "ON 0 vAcceptanceHeadbuttFinished=1,wScriptRunning=0,wBattleMode=0 LEFT 12\n"
         script = directory / "input.txt"
         script.write_text(text)
         command = [meta["runner"], meta["core"], rom, directory / "screen.ppm", directory,
@@ -836,6 +952,28 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
             "--trace-out", directory / "trace.jsonl.gz", "--input-events", directory / "input-events.jsonl",
             "--profile-out", directory / "profile.json", "--profile-window-start", total - 1000 if functional and enabled else profile,
             "--pace-from", first if enabled else total, "--pace-multiplier", speed, "--adapter", int(enabled), "--acceptance", "1"]
+        command += functional_horizon_options(functional, enabled, action)
+        if fx.get("native_map_events"):
+            command += ["--native-object-count", fx["ordinary_objects"], "--acceptance-menu-routine", "DoMenuJoypadLoop"]
+            predicates = [("wMapGroup", fx["map"]["group"]), ("wMapNumber", fx["map"]["number"]),
+                          ("wMapStatus", 2), ("wScriptRunning", 0), ("wPlayerObject", 0),
+                          ("wPlayerSprite", "nonzero"), ("wPlayerObject + 1", 0), ("wPartyCount", "nonzero")]
+            # The native map object's sprite is the first byte; the struct map index is a separate emitted binding.
+            predicates[6] = ("wPlayerMapObjectIndex", 0)
+            for field, (name, expected) in enumerate(predicates):
+                command += ["--native-scene-field", f"{field}:{name}:{expected}:255"]
+            spans = ["ShakeHeadbuttTree", "WriteVCopyRegistersToHRAM", "MobileNativeGraphicsRequest", "MobileNativeGraphicsRelease", "MobileVirtualCommitPose.dma", "DoNextFrameForAllSprites_OW", "TryHeadbuttOW", "RunScriptCommand"]
+            for number, name in enumerate(spans):
+                if enabled or number not in (2,3,4):
+                    command += ["--effect-span", f"{number}:{name}"]
+            watches = [("wShadowOAM",160),("hInMenu",1),("wScriptRunning",1),("hRequested2bpp",7),("wSpriteAnimationStructs",160)]
+            if enabled: watches.append(("wMobileNativeGraphicsFence",1))
+            else: watches.append(("hInMenu",1))
+            watches.append(("hScriptBank",3))
+            for number,(name,length) in enumerate(watches):
+                command += ["--effect-watch", f"{number}:{name}:{length}"]
+        if fx.get("native_map_events") and index == 0:
+            command += ["--effect-video", "1"]
         if enabled and index == 0 and action.startswith("mobile-menu-"):
             command += ["--acceptance-menu-routine", "MobileMenuInput"]
         if functional and enabled:
@@ -1000,7 +1138,11 @@ def main():
     else:
         fault = args.case.removeprefix("fault-") if args.case.startswith("fault-") else "none"
         scene = args.case if args.case in ("scanline", "pool", "palettes", "interaction", "script", "link", "save", "warp", "npc-movement", "night", "dark") else "empty"
+        if args.case in ("native-headbutt", "native-headbutt-held"):
+            scene = "native-headbutt"
         action = args.case if args.case in ("interaction", "script", "link", "save", "warp", "menu", "exit", "exit-menu", "exit-script", "exit-save", "night", "dark", "resume", "clear-conflict", "npc-movement") else "idle"
+        if args.case.startswith("native-headbutt"):
+            action = args.case
         if args.case.startswith("mobile-menu-"):
             action = args.case
         if args.case.startswith("fault-") and fault not in ("reconnect", "reconnect-one"):

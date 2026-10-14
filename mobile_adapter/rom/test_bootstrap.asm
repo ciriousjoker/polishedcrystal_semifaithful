@@ -119,11 +119,21 @@ AcceptanceSpawn::
 	map_id GOLDENROD_GAME_CORNER
 	db 3, 3 ; native spawn order X/Y, replaced by source-derived launcher data
 AcceptanceControlPeers:: ds 9, 0 ; sprite/Y/X triples
+AcceptanceSeedProfile:: db 0 ; 0: ordinary seed, 1: native Headbutt producer
 AcceptanceConfigEnd::
 AcceptanceDarkLighting:: db PALETTE_NITE | IN_DARKNESS
 AcceptanceAutoLighting:: db PALETTE_AUTO
 AcceptanceFigures:: db SPRITE_CHRIS, SPRITE_KRIS, SPRITE_CRYS, SPRITE_BETA
 ; Derived values are emitted by the same assembler as the current game.
+AcceptanceHeadbuttSpecies:: dw HERACROSS
+AcceptanceHeadbuttForm:: dw PLAIN_FORM
+AcceptanceHeadbuttMove:: dw HEADBUTT
+AcceptanceHeadbuttFlag:: dw ENGINE_HEADBUTT_ACTIVE
+AcceptanceHeadbuttFacing:: dw FACE_UP
+AcceptanceHeadbuttAnimation:: dw SPRITE_ANIM_INDEX_HEADBUTT
+AcceptanceHeadbuttTileStart:: dw vTiles0 tile $61
+AcceptanceHeadbuttTileCount:: dw 12
+AcceptanceHeadbuttTileEnd:: dw vTiles0 tile ($61 + 12)
 AcceptanceObjectCount:: dw NUM_OBJECT_STRUCTS
 AcceptanceObjectStride:: dw OBJECT_LENGTH
 AcceptanceObjectSprite:: dw OBJECT_SPRITE
@@ -139,6 +149,22 @@ AcceptanceSimulationFields::
 AcceptanceSimulationFieldsEnd::
 AcceptanceName: db "TEST@"
 	ds NAME_LENGTH - 5, 0
+
+; Return a native script predicate. Only the explicit fresh producer can grant
+; a party member. The producer requires an empty party and consumer profile 0;
+; a repeated conversation with the granted party cannot repeat it.
+AcceptanceHeadbuttSeedPredicate::
+	xor a
+	ldh [hScriptVar], a
+	ld a, [AcceptanceSeedProfile]
+	cp 1
+	ret nz
+	ld a, [wPartyCount]
+	and a
+	ret nz
+	ld a, 1
+	ldh [hScriptVar], a
+	ret
 
 AcceptanceSave::
 	farcall SaveGameData

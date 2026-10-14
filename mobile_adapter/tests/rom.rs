@@ -1690,3 +1690,337 @@ fn native_identity_schema_rejected_independently() {
 fn native_identity_held_rejection_remains_physically_escapable() {
     native_identity_rejection("digest-held");
 }
+
+fn effect_events(run: &Value) -> &[Value] {
+    assert_eq!(n(&run["profile"], "native_effect_event_overflow"), 0);
+    run["profile"]["native_effect_events"].as_array().expect("Native instruction events")
+}
+fn effect_field(event: &Value, field: usize) -> u64 {
+    event["fields"][field].as_u64().expect("Native event field")
+}
+fn effect_calls(run: &Value, span: u64, kind: u64) -> Vec<&Value> {
+    effect_events(run).iter().filter(|e| effect_field(e, 2) == span && effect_field(e, 3) == kind).collect()
+}
+fn effect_bytes(value: &Value) -> Vec<u8> {
+    value.as_array().expect("Captured bytes").iter().map(|b| u8::try_from(b.as_u64().unwrap()).unwrap()).collect()
+}
+fn headbutt_lifecycle(e: &Value) {
+    assert_eq!(clients(e).len(), 4);
+    let mut ids = BTreeSet::new();
+    for (i, client) in clients(e).iter().enumerate() {
+        let m = &client["mobile"];
+        ids.insert(n(&m["state"], "wMobilePlayerId"));
+        assert_eq!(n(&m["state"], "hCrashCode"), 0);
+        assert_eq!(n(&m["state"], "wMobileOnline"), 1);
+        assert_eq!(n(&m["state"], "wMobilePeerCount"), 3);
+        assert_eq!(n(&m["state"], "vAcceptanceNativeSceneReady"), 1);
+        assert!(n(&m["state"], "vProfileWorldUpdates") > 0);
+        for run in [&client["mobile"], &client["single"]] {
+            assert_eq!(n(&run["state"], "vAcceptancePartyCount"), 1);
+            assert_eq!(n(&run["state"], "vAcceptancePartyMove"), 29);
+            assert_eq!(effect_calls(run, 0, 1).len(), usize::from(i == 0));
+            assert_eq!(effect_calls(run, 0, 2).len(), usize::from(i == 0));
+            assert_eq!(n(&run["profile"], "completed_native_update_overflow"), 0);
+            assert!(!run["profile"]["completed_native_updates"].as_array().unwrap().is_empty());
+        }
+    }
+    assert_eq!(ids.len(), 4, "Four genuine independent native clients required");
+    for run in [&clients(e)[0]["mobile"], &clients(e)[0]["single"]] {
+        assert_eq!(effect_calls(run, 6, 1).len(), 1, "Physical native TryHeadbuttOW path");
+        for path in ["AskHeadbuttScript", "AutoHeadbuttScript"] {
+            let point = &run["profile"]["native_effect_script_bindings"][path];
+            assert!(effect_calls(run, 7, 1).iter().any(|event| {
+                let watch = effect_bytes(&event["watches"]["6"]);
+                u64::from(watch[0]) == point[0].as_u64().unwrap()
+                    && u64::from(u16::from_le_bytes([watch[1], watch[2]])) == point[1].as_u64().unwrap()
+            }), "Interpreter did not execute {path}");
+        }
+    }
+    let run = &clients(e)[0]["mobile"];
+    let start = n(&run["state"], "vAcceptanceHeadbuttTileStart");
+    let count = n(&run["state"], "vAcceptanceHeadbuttTileCount");
+    let requests: Vec<_> = effect_calls(run, 2, 1).into_iter().filter(|event| effect_field(event, 10) == start).collect();
+    assert_eq!(requests.len(), 1, "One native effect graphics transfer required");
+    for entry in requests {
+        assert_eq!(effect_field(entry, 8) & 255, count);
+        assert_eq!(effect_field(entry, 11) & 1, 0);
+        let ret = effect_calls(run, 2, 2).into_iter().find(|r| effect_field(r, 0) > effect_field(entry, 0)).unwrap();
+        for field in 7..13 { assert_eq!(effect_field(entry, field), effect_field(ret, field), "Native return register/selector {field}"); }
+        assert_eq!(effect_bytes(&ret["watches"]["5"]), [1]);
+    }
+    for event in effect_events(run) {
+        if effect_field(event, 2) == 4 && effect_field(event, 3) == 3
+            && effect_field(event, 16) & 128 == 0 && effect_field(event, 21) & 128 != 0 {
+            assert_eq!(effect_bytes(&event["watches"]["5"]), [0], "Private GDMA during native graphics ownership");
+        }
+    }
+    assert!(effect_calls(run, 3, 2).iter().any(|event| {
+        effect_bytes(&event["watches"]["5"]) == [0]
+            && effect_bytes(&event["watches"]["1"]) == [0]
+            && effect_bytes(&event["watches"]["2"]) == [0]
+            && effect_bytes(&event["watches"]["4"]).iter().all(|b| *b == 0)
+    }), "Native graphics release did not complete after the actual effect");
+}
+
+fn effect_tile_pixel(vram: &[u8], tile: usize, bank: usize, x: usize, y: usize) -> u8 {
+    let at = bank * 0x2000 + tile * 16 + y * 2;
+    ((vram[at] >> (7 - x)) & 1) | (((vram[at + 1] >> (7 - x)) & 1) << 1)
+}
+fn effect_obj_pixel(oam: &[u8], vram: &[u8], q: usize, x: i32, y: i32, height: i32) -> u8 {
+    let mut dx = x - (i32::from(oam[q * 4 + 1]) - 8);
+    let mut dy = y - (i32::from(oam[q * 4]) - 16);
+    if !(0..8).contains(&dx) || !(0..height).contains(&dy) { return 0; }
+    let flags = oam[q * 4 + 3];
+    if flags & 32 != 0 { dx = 7 - dx; }
+    if flags & 64 != 0 { dy = height - 1 - dy; }
+    let tile = if height == 16 { (oam[q * 4 + 2] & 254) as usize + dy as usize / 8 } else { oam[q * 4 + 2] as usize };
+    effect_tile_pixel(vram, tile, ((flags >> 3) & 1) as usize, dx as usize, dy as usize % 8)
+}
+fn headbutt_row(frame: &Value, y: usize, hardware: &mut [u8], cursor: &mut usize) -> Value {
+    let rows = frame["rows"].as_array().expect("Actual per-line provenance");
+    let changes = frame["changes"].as_array().expect("Ordered sparse hardware changes");
+    assert_eq!(rows.len(), 144 * 16); assert_eq!(changes.len() % 2, 0);
+    assert!(changes.len() <= 65536 * 2);
+    let row = &rows[y * 16..(y + 1) * 16];
+    let end = row[9].as_u64().unwrap() as usize;
+    assert!(end >= *cursor && end <= changes.len() / 2, "Row change order/bounds");
+    let mut previous = None;
+    while *cursor < end {
+        let at = changes[*cursor * 2].as_u64().unwrap() as usize;
+        let value = u8::try_from(changes[*cursor * 2 + 1].as_u64().unwrap()).unwrap();
+        assert!(at < hardware.len());
+        assert!(previous.map_or(true, |p| at > p), "Duplicate/unordered row byte mutation");
+        assert_ne!(hardware[at], value, "Sparse change must change actual row hardware");
+        hardware[at] = value; previous = Some(at); *cursor += 1;
+    }
+    if y == 143 { assert_eq!(end, changes.len() / 2, "Unconsumed row changes"); }
+    let mut meta = frame["render_metadata"].clone();
+    for (dest, src) in [(3,0),(4,1),(8,2),(9,3),(10,4),(11,5),(12,6),(13,7),(2,10)] { meta[dest] = row[src].clone(); }
+    serde_json::json!({"render_metadata":meta,"window_line":row[8],"phase":row[12]})
+}
+fn headbutt_video_step(run: &Value, frame: &Value) -> Option<usize> {
+    let index = frame["render_metadata"][4].as_u64().unwrap() as usize;
+    if index == 0 { return None; }
+    let events = effect_events(run);
+    assert!(index <= events.len());
+    let source = &events[index - 1];
+    assert_eq!(effect_field(source, 2), 5);
+    assert!(effect_field(source, 0) <= frame["render_metadata"][8].as_u64().unwrap(), "Animation source must precede the actual DMA");
+    assert_eq!(effect_field(source, 3), 2);
+    assert!(effect_field(source, 1) <= frame["render_metadata"][2].as_u64().unwrap());
+    if effect_calls(run, 0, 2).iter().any(|completed|
+        effect_field(completed, 0) <= frame["render_metadata"][8].as_u64().unwrap()) { return None; }
+    Some(events[..index].iter().filter(|e| effect_field(e, 2) == 5 && effect_field(e, 3) == 2).count())
+}
+fn headbutt_pixels(e: &Value) {
+    let mobile = &clients(e)[0]["mobile"];
+    let native = &clients(e)[0]["single"];
+    let first = (n(&mobile["state"], "vAcceptanceHeadbuttTileStart") - 0x8000) as usize / 16;
+    let end = (n(&mobile["state"], "vAcceptanceHeadbuttTileEnd") - 0x8000) as usize / 16;
+    let mut controls = BTreeMap::new();
+    for frame in native["profile"]["native_effect_video_frames"].as_array().unwrap() {
+        let mut hardware = effect_bytes(&frame["hardware"]); let mut cursor = 0;
+        for y in 0..144 { let row = headbutt_row(frame, y, &mut hardware, &mut cursor);
+            if let Some(step) = headbutt_video_step(native, &row) { controls.entry((step,y)).or_insert(frame); }
+        }
+    }
+    let mut visible = 0usize;
+    let mut steps = BTreeSet::new();
+    for run in [mobile, native] {
+        assert_eq!(n(&run["profile"], "native_effect_video_overflow"), 0);
+        let video = run["profile"]["native_effect_video_frames"].as_array().expect("Bounded actual framebuffer capture");
+        assert!(!video.is_empty());
+        let mut previous_frame = None;
+        let mut previous_host = None;
+        for frame in video {
+            let frame_meta = frame["render_metadata"].as_array().unwrap();
+            let number = frame_meta[1].as_u64().unwrap();
+            assert!(previous_frame.map_or(true, |p| number == p + 1), "Missing/reordered actual rendered frame");
+            assert!(previous_host.map_or(true, |p| n(frame,"host_frame") >= p), "Reordered host capture");
+            previous_frame = Some(number); previous_host = Some(n(frame,"host_frame"));
+            assert_eq!(frame_meta[5], 144, "Every actual visible line required");
+            assert_eq!(frame_meta[6], 0, "Actual per-line capture continuity/overflow failed");
+            assert_eq!(n(frame, "width"), 160); assert_eq!(n(frame, "height"), 144); assert_eq!(n(frame, "format"), 2);
+            let mut h = effect_bytes(&frame["hardware"]);
+            let pixels = effect_bytes(&frame["pixels"]);
+            assert_eq!(h.len(), 16966); assert_eq!(pixels.len(), 160 * 144 * 2);
+            let mut cursor = 0;
+            for y in 0..144i32 {
+            let row = headbutt_row(frame, y as usize, &mut h, &mut cursor);
+            let meta = row["render_metadata"].as_array().unwrap();
+            let oam = &h[..160]; let vram = &h[160..16544]; let mapped = &h[16672..16800]; let r = &h[16800..16806];
+            assert_eq!(oam, &h[16806..], "Actual DMA source differs from rendered OAM");
+            assert!(meta[10].as_u64().unwrap() > 0, "Missing actual OAM DMA provenance");
+            let page = r[5];
+            if (0xd0..0xe0).contains(&page) {
+                let raw = meta[11].as_u64().unwrap() & 7;
+                assert_eq!(meta[12].as_u64().unwrap(), if raw == 0 { 1 } else { raw });
+            }
+            let source_index = meta[4].as_u64().unwrap() as usize;
+            let latest = effect_events(run).iter().enumerate().rev().find(|(_,event)|
+                effect_field(event,2)==5 && effect_field(event,3)==2 && effect_field(event,0)<=meta[8].as_u64().unwrap()).map_or(0,|(i,_)|i+1);
+            assert_eq!(source_index,latest,"Latest native animation return before actual DMA required");
+            let sequence = frame["rows"][y as usize*16+11].as_u64().unwrap();
+            let phase = if effect_calls(run,0,2).iter().any(|event|effect_field(event,0)<=sequence) {2} else if source_index>0 {1} else {0};
+            assert_eq!(n(&row,"phase"),phase,"Actual native phase provenance");
+            let step = headbutt_video_step(run, &row);
+            let source = if source_index > 0 {
+                effect_bytes(&effect_events(run)[source_index - 1]["watches"]["0"])
+            } else { vec![0; 160] };
+            assert_eq!(source.len(), 160, "Complete returned native ShadowOAM required");
+            // Establish demand from the disabled native source before filtering
+            // visible hardware targets. Hidden demand and duplicate tuples count.
+            let demand = |bytes: &[u8]| {
+                let mut quads: Vec<_> = bytes.chunks_exact(4)
+                    .filter(|q| (first..end).contains(&(q[2] as usize)) && q[3] & 8 == 0)
+                    .map(|q| q.to_vec()).collect();
+                quads.sort(); quads
+            };
+            let mut intended = demand(&source);
+            if let Some(step) = step {
+                if std::ptr::eq(run, mobile) {
+                    let control = controls.get(&(step,y as usize)).expect("No same-source control at matched actual animation step");
+                    let mut c = effect_bytes(&control["hardware"]); let mut cc = 0;
+                    let mut cr = Value::Null;
+                    for cy in 0..=y as usize { cr = headbutt_row(control, cy, &mut c, &mut cc); }
+                    let ci = cr["render_metadata"][4].as_u64().unwrap() as usize - 1;
+                    let control_source = effect_bytes(&effect_events(native)[ci]["watches"]["0"]);
+                    assert_eq!(control_source.len(), 160);
+                    assert_eq!(effect_events(run)[source_index - 1]["watches"]["4"], effect_events(native)[ci]["watches"]["4"], "Control animation state is not the same native step");
+                    // Identical Route29/player-pose inputs require identical
+                    // screen geometry. No tuple-derived coordinate realignment.
+                    assert_eq!(&r[..5], &c[16800..16805], "Actual native view geometry differs");
+                    let native_demand = demand(&control_source);
+                    assert_eq!(intended, native_demand, "Complete disabled native effect source geometry/tile/attributes/palette/multiplicity differs");
+                    assert_eq!(&h[160 + first * 16..160 + end * 16], &c[160 + first * 16..160 + end * 16], "Actual native animation tiles differ");
+                    for quad in &native_demand {
+                        let slot = 8 + usize::from(quad[3] & 7);
+                        assert_eq!(&h[16544 + slot * 8..16544 + (slot + 1) * 8], &c[16544 + slot * 8..16544 + (slot + 1) * 8], "Actual intended OBJ palette RGB differs at slot {slot}");
+                        assert_eq!(&h[16672 + slot * 8..16672 + (slot + 1) * 8], &c[16672 + slot * 8..16672 + (slot + 1) * 8], "Actual intended mapped OBJ colors differ at slot {slot}");
+                    }
+                    if !native_demand.is_empty() { steps.insert(step); }
+                }
+            } else if source_index > 0 {
+                // Native Shake return and cleared animation end native demand.
+                // The enabled addon must additionally release graphics ownership
+                // before private peers may reuse those native effect tiles.
+                let completed = effect_calls(run, 0, 2).into_iter().rev().find(|event|
+                    effect_field(event, 0) <= meta[8].as_u64().unwrap())
+                    .expect("Idle source has no actual completed native effect before DMA");
+                assert!(effect_bytes(&completed["watches"]["4"]).iter().all(|b| *b == 0), "Effect returned with live animation demand");
+                assert!(effect_bytes(&effect_events(run)[source_index - 1]["watches"]["4"]).iter().all(|b| *b == 0), "Post-effect source has unsupported live native animation");
+                if std::ptr::eq(run, mobile) && u64::from(page) == n(frame, "private_oam_page") && meta[12].as_u64().unwrap() == n(frame, "private_oam_bank") {
+                    assert!(effect_calls(run, 3, 2).iter().any(|release| {
+                        effect_field(release, 0) <= meta[8].as_u64().unwrap()
+                            && effect_bytes(&release["watches"]["5"]) == [0]
+                            && effect_bytes(&release["watches"]["1"]) == [0]
+                            && effect_bytes(&release["watches"]["2"]) == [0]
+                            && effect_bytes(&release["watches"]["4"]).iter().all(|b| *b == 0)
+                    }), "Completed effect has no preceding actual native graphics release");
+                }
+                intended.clear();
+            } else {
+                assert_eq!(row["phase"], 0, "Missing source is only valid before actual animation");
+                assert_eq!(source_index, 0);
+                // Pre-animation hardware is its actual previous native/private
+                // OAM baseline. Tile numbers alone cannot invent effect demand.
+            }
+            if step.is_some() {
+                assert_eq!(demand(oam), intended, "Every source-bound native effect quad, preserving multiplicity");
+            }
+            let targets: Vec<_> = (0..40).filter(|q| step.is_some() && (first..end).contains(&(oam[q * 4 + 2] as usize)) && oam[q * 4 + 3] & 8 == 0 && (1..160).contains(&oam[q * 4])).collect();
+            if !targets.is_empty() {
+                assert_eq!(meta[13], 7, "All actual native LCD layers must be enabled");
+                assert_eq!(r[0] & 0x82, 0x82, "LCD and OBJ must be enabled for intended pixels");
+                assert!(step.is_some(), "Animation has no native return source binding");
+            }
+            let height = if r[0] & 4 != 0 { 16 } else { 8 };
+                // X-hidden sprites still consume the hardware's first-ten list.
+                let selected: Vec<_> = (0..40).filter(|q| {
+                    let top = i32::from(oam[q * 4]) - 16; (top..top + height).contains(&y)
+                }).take(10).collect();
+                for x in 0..160i32 {
+                    let winner = selected.iter().find(|q| effect_obj_pixel(oam, vram, **q, x, y, height) != 0);
+                    assert_eq!(meta[13], 7, "Full rendered row requires all LCD layers");
+                    assert_ne!(r[0] & 128, 0, "Captured native LCD must be enabled");
+                    let window = r[0] & 32 != 0 && i32::from(r[3]) < y + 1 && r[4] <= 166 && x >= i32::from(r[4]) - 7;
+                    let (bx, by, base, map_row) = if window {
+                        let entry = i32::try_from(n(&row,"window_line")).expect("Actual window counter outside signed range");
+                        let wy = entry.checked_sub(1).expect("Actual window row underflow");
+                        // Pinned lcd::win_render_color starts its map pointer
+                        // one tile row before y>>3. Reset entry0 means y=-1;
+                        // clear_win_count entry9 means y=8, map row0.
+                        ((x - (i32::from(r[4]) - 7)) as usize, (wy & 7) as usize,
+                            if r[0] & 64 != 0 {0x1c00i64} else {0x1800i64}, i64::from((wy >> 3) - 1))
+                    } else {
+                        let by = ((y + i32::from(r[1])) & 255) as usize;
+                        (((x + i32::from(r[2])) & 255) as usize, by,
+                            if r[0] & 8 != 0 {0x1c00i64} else {0x1800i64}, (by / 8) as i64)
+                    };
+                    let address = base + map_row * 32 + (bx / 8) as i64;
+                    assert!((0..0x2000).contains(&address), "Actual window/BG map address outside captured VRAM bank");
+                    let at = address as usize; let attr = vram[0x2000 + at];
+                    let tile = if r[0] & 16 != 0 { vram[at] as usize } else { (256i32 + i32::from(vram[at] as i8)) as usize };
+                    let px = if attr & 32 != 0 { 7 - bx % 8 } else { bx % 8 }; let py = if attr & 64 != 0 { 7 - by % 8 } else { by % 8 };
+                    let bg = effect_tile_pixel(vram, tile, ((attr >> 3) & 1) as usize, px, py);
+                    let mut palette = usize::from(attr & 7); let mut color = usize::from(bg);
+                    let mut proved_effect = false;
+                    if r[0] & 2 != 0 { if let Some(&q) = winner {
+                        let flags = oam[q * 4 + 3];
+                        if r[0] & 1 == 0 || bg == 0 || (attr & 128 == 0 && flags & 128 == 0) {
+                            palette = 8 + usize::from(flags & 7);
+                            color = usize::from(effect_obj_pixel(oam, vram, q, x, y, height));
+                            proved_effect = targets.contains(&q);
+                        }
+                    }}
+                    let at = (palette * 4 + color) * 2;
+                    let expected = u16::from_le_bytes([mapped[at], mapped[at + 1]]);
+                    let at = (y as usize * 160 + x as usize) * 2;
+                    assert_eq!(u16::from_le_bytes([pixels[at], pixels[at + 1]]), expected, "Intended selected effect pixel or independently decoded BG/OBJ/window pixel at {x},{y}, host {}", frame["host_frame"]);
+                    if std::ptr::eq(run, mobile) && proved_effect { visible += 1; }
+                }
+            }
+        }
+    }
+    assert!(steps.len() >= 2, "No actual animation progression");
+    assert!(visible > 0, "No nontransparent intended framebuffer pixels proved");
+}
+fn headbutt_movement(run: &Value) {
+    let event = run["events"].as_array().unwrap().iter().find(|e| n(e, "button") == 6).expect("Physical post-effect movement absent");
+    let before = &frames(run).iter().find(|r| n(r, "frame") + 1 == n(event, "frame")).unwrap()["state"];
+    assert_eq!(n(before, "vAcceptanceHeadbuttFinished"), 1);
+    assert_eq!(n(before, "wScriptRunning"), 0);
+    assert!(frames(run).iter().filter(|r| n(r, "frame") >= n(event, "frame")).any(|r| r["state"]["wXCoord"] != before["wXCoord"] || r["state"]["wYCoord"] != before["wYCoord"]), "Physical movement did not change native coordinates");
+}
+#[test]
+fn native_headbutt_lifecycle_and_selected_pixels() {
+    let e = evidence("native-headbutt");
+    headbutt_lifecycle(&e); headbutt_pixels(&e); headbutt_movement(&clients(&e)[0]["mobile"]);
+}
+#[test]
+fn native_headbutt_held_exit_and_movement() {
+    let e = evidence("native-headbutt-held");
+    headbutt_lifecycle(&e); headbutt_pixels(&e);
+    let run = &clients(&e)[0]["mobile"];
+    let selects: Vec<_> = run["events"].as_array().unwrap().iter().filter(|e| n(e, "button") == 2).collect();
+    let held = selects.iter().find(|e| n(e, "duration") == 160).expect("Actual held Select+B160 absent");
+    assert!(run["events"].as_array().unwrap().iter().any(|b| n(b, "button") == 0 && n(b, "frame") == n(held, "frame") && n(b, "duration") == 160));
+    let before = &frames(run).iter().find(|f| n(f, "frame") + 1 == n(held, "frame")).unwrap()["state"];
+    assert_eq!(n(before, "vAcceptanceEffectActive0"), 1, "Held exit missed actual active ShakeHeadbuttTree");
+    let rejoin = n(selects.last().unwrap(), "frame");
+    assert!(rejoin > n(held, "frame") + 160, "Later explicit join must follow held release");
+    let suppressed: Vec<_> = frames(run).iter().filter(|f| n(f, "frame") >= n(held, "frame") + limit("exit_frames") && n(f, "frame") < rejoin).collect();
+    assert!(!suppressed.is_empty());
+    for row in suppressed {
+        assert_eq!(n(&row["state"], "vAcceptanceSerialSC") & 128, 0, "Actual serial transfer remained active after local exit");
+        assert_eq!(n(&row["state"], "vAcceptanceSerialIE") & 8, n(before, "wMobileSavedSerialIE") & 8, "Serial interrupt ownership was not restored after local exit");
+        assert_eq!(n(&row["state"], "wMobileTransferActive"), 0);
+        for key in ["wMobileWanted", "wMobileOwner", "wMobileOnline", "wMobilePeerCount"] { assert_eq!(n(&row["state"], key), 0, "Held exit suppression {key}, frame {}", row["frame"]); } }
+    for client in &clients(&e)[1..] {
+        assert!(frames(&client["mobile"]).iter().filter(|f| n(f, "frame") >= n(held, "frame")).all(|f| n(&f["state"], "wMobileOnline") == 1 && n(&f["state"], "hCrashCode") == 0), "Sibling lost its native session");
+    }
+    headbutt_movement(run);
+}
+
+#[path = "support/headbutt_pixel_regressions.rs"]
+mod headbutt_pixel_regressions;
