@@ -84,6 +84,15 @@ wMobileNativeGraphicsFence:: db
 wMobileResidentEnd::
 ASSERT wMobileResidentEnd - wMobileResidentStart <= 128
 
+; Last actually transferred page and its world-frame counter, including native
+; and menu pages. Publication and a suppressed PushOAM never update this stamp.
+SECTION "Mobile Actual OAM DMA", WRAM0[$cf39]
+wMobileActualOAMPage:: db
+wMobileActualOAMFrame:: db
+wMobileActualOAMEnd::
+ASSERT wMobileResidentEnd <= wMobileActualOAMPage
+ASSERT wMobileActualOAMEnd <= $cf44
+
 ; Native palette scans need a normal object view without swapping live records.
 ; This unbanked view stays outside the original game's serialized WRAM span.
 SECTION "Mobile Native Object Views", WRAM0[$cf44]

@@ -379,7 +379,7 @@ MobileVirtualAlignedNativeDescriptor:
 	ld d, HIGH(wMobileVirtualOutput)
 	xor a ; carry plus zero selects direct immutable-descriptor input
 	scf
-	call MobileNativeRectangleTrampoline
+	mobile_native_rectangle_call
 	ld hl, wMobileVirtualLength
 	ld a, [hl]
 	add 16

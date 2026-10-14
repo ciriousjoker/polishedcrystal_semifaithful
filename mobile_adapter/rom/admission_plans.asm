@@ -1041,7 +1041,7 @@ if actor == 0
 	ld h, a
 	xor a
 	scf
-	call MobileNativeRectangleTrampoline
+	mobile_native_rectangle_call
 else
 	call MobilePlanNativeShape{d:actor}
 	jp c, .busy
@@ -1140,7 +1140,7 @@ endc
 	ld h, a
 	xor a
 	scf
-	call MobileNativeRectangleTrampoline
+	mobile_native_rectangle_call
 ; Normalize the just-produced exact quads. Coordinates are added afresh on hit,
 ; so walking, camera scrolling and byte wrapping cannot freeze a cached actor.
 	ld a, e

@@ -536,6 +536,7 @@ endr
 .ordinary
 	ld a, HIGH(wShadowOAM)
 .dma
+	mobile_actual_oam_dma_latch b
 	lb bc, 40 + 1, LOW(rDMA)
 	call hPushOAM
 	pop af
@@ -832,7 +833,7 @@ endr
 	and a
 	jr z, .ordinary_transform
 	scf
-	call MobileNativeRectangleTrampoline
+	mobile_native_rectangle_call
 	jr .transform_ready
 .ordinary_transform
 	call MobileVirtualWriteNativeQuads

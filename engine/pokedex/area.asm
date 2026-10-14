@@ -923,6 +923,9 @@ PHB_AreaSwitchTileMode2:
 	ldh [rWBK], a
 	lb bc, 41, LOW(rDMA)
 	ld a, HIGH(wDexAreaShadowOAM)
+if DEF(MOBILE_ADAPTER)
+	mobile_actual_oam_dma_latch
+endc
 	call hPushOAM
 	pop af
 	ldh [rWBK], a

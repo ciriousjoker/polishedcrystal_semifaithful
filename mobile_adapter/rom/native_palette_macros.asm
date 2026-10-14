@@ -1,3 +1,30 @@
+MACRO mobile_actual_oam_dma_latch
+; A is the final actual DMA page. All known callers run before interrupt EI or
+; in LCD interrupt code, so both resident bytes belong to this transfer. An
+; optional register is caller-owned scratch that is overwritten before DMA;
+; without it, preserve all registers and flags for the direct menu DMA caller.
+	if _NARG
+	ld \1, a
+	else
+	push af
+	endc
+	ld [wMobileActualOAMPage], a
+	ldh a, [hVBlankCounter]
+	ld [wMobileActualOAMFrame], a
+	if _NARG
+	ld a, \1
+	else
+	pop af
+	endc
+ENDM
+
+MACRO mobile_actual_native_oam_setup
+; BC has the same final native values; B is scratch only before this load.
+	ld a, HIGH(wShadowOAM)
+	mobile_actual_oam_dma_latch b
+	lb bc, 40 + 1, LOW(rDMA)
+ENDM
+
 MACRO mobile_virtual_capture_kind
 ; Classify physical world-object sprites without changing their simulation.
 ; Character and unknown sprites retain NPC priority. The renderer, not maps,
@@ -219,11 +246,18 @@ ENDM
 ; This resident integration avoids the general farcall's stack work
 ; for a validated rectangle. Carry selects private output, otherwise native.
 ; Both upper programs return via Bankswitch.
-MACRO mobile_native_rectangle_trampoline
-MobileNativeRectangleTrampoline::
+MACRO mobile_native_rectangle_call
+; Keep the caller-bank preparation in addon ROMX. The resident bridge must
+; execute the bank switch and following jump together, outside switched ROMX.
+; All prefix instructions preserve carry, which selects the output page.
 	ldh a, [hROMBank]
 	ld [wMobileVirtualRectangleReturnBank], a
 	ld a, BANK(MobileVirtualWriteRectangleDispatch)
+	call MobileNativeRectangleTrampoline
+ENDM
+
+MACRO mobile_native_rectangle_trampoline
+MobileNativeRectangleTrampoline::
 	rst Bankswitch
 	jp MobileVirtualWriteRectangleDispatch
 ENDM

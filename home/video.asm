@@ -11,9 +11,11 @@ if DEF(MOBILE_ADAPTER)
 	jr z, .ordinary
 	farjp MobileVirtualPushOAM
 .ordinary
-endc
+	mobile_actual_native_oam_setup
+else
 	lb bc, 40 + 1, LOW(rDMA)
 	ld a, HIGH(wShadowOAM)
+endc
 	jmp hPushOAM
 
 if DEF(MOBILE_ADAPTER)
