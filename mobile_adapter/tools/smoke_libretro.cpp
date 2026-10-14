@@ -1724,6 +1724,11 @@ int main(int argc, char** argv) {
     // Independent operands, including those skipped by the unchanged arm gate.
     auto timing_prearm_snapshot = [&]() {
         const auto live = capture(sram,sram_size);
+        // Disabled symbols omit adapter fields; absence differs from a valid zero.
+        auto optional_adapter_value = [&](const char* name) {
+            const auto found = live.find(name);
+            return found == live.end() ? std::string("null") : std::to_string(found->second);
+        };
         std::ostringstream out;
         out << "{\"host_frame\":" << input_frame
             << ",\"profile_window_start\":" << measurement_start
@@ -1733,7 +1738,7 @@ int main(int argc, char** argv) {
             << ",\"map_status\":" << live.at("wMapStatus") << ",\"script_running\":" << live.at("wScriptRunning")
             << ",\"adapter_enabled\":" << adapter_enabled << ",\"measurement_gate\":" << measurement_gate
             << ",\"measurement_released\":" << measurement_released << ",\"measurement_ready\":" << measurement_ready
-            << ",\"online\":" << live.at("wMobileOnline") << ",\"peers\":" << live.at("wMobilePeerCount")
+            << ",\"online\":" << optional_adapter_value("wMobileOnline") << ",\"peers\":" << optional_adapter_value("wMobilePeerCount")
             << ",\"live_scene_status\":[";
         for (unsigned f=0;f<15;++f) out << (f ? "," : "") << scene_diagnostic(f);
         out << "],\"live_fields\":[";

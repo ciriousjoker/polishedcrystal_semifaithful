@@ -245,6 +245,9 @@ int main(int argc,char** argv){
  adapter_enabled=true;assert(!gate());measurement_released=true;assert(!gate());measurement_ready=true;
  assert(gate());values["wMobileOnline"]=0;assert(!gate());values["wMobileOnline"]=1;
  values["wMobilePeerCount"]=2;assert(!gate());values["wMobilePeerCount"]=3;
+ // Disabled capture contains only native symbols, as in the real disabled SYM.
+ adapter_enabled=false;values.erase("wMobileOnline");values.erase("wMobilePeerCount");
+ assert(gate());
  // Never armed output still contains the independent false metric operand.
  metric21=0;scene_ready=0;adapter_enabled=false;
  bool timing_requested=true,timing_armed=false;
@@ -260,6 +263,18 @@ int main(int argc,char** argv){
  void* sram=nullptr;size_t sram_size=0;
  auto capture=[&](void*,size_t){return values;};
 """ + snapshot + r"""
+ std::ofstream cases(std::string(argv[1])+".cases.json");
+ cases << "[" << timing_prearm_snapshot();
+ adapter_enabled=true;values["wMobileOnline"]=1;values["wMobilePeerCount"]=3;
+ cases << "," << timing_prearm_snapshot();
+ values["wMobileOnline"]=0;values["wMobilePeerCount"]=0;
+ cases << "," << timing_prearm_snapshot() << "]";cases.close();
+ for(const auto* name : {"wMapStatus","wScriptRunning"}) {
+   const auto saved=values.at(name);values.erase(name);bool rejected=false;
+   try {timing_prearm_snapshot();} catch(const std::out_of_range&) {rejected=true;}
+   assert(rejected);values[name]=saved;
+ }
+ adapter_enabled=false;values.erase("wMobileOnline");values.erase("wMobilePeerCount");
  try {
 """ + export + r"""
  assert(false);
@@ -269,7 +284,7 @@ int main(int argc,char** argv){
 }
 """
         scratch = os.environ.get("TMPDIR", "/Volumes/Storage/tmp")
-        with tempfile.TemporaryDirectory(prefix="prearm-json-135-", dir=scratch) as directory:
+        with tempfile.TemporaryDirectory(prefix="prearm-json-139-", dir=scratch) as directory:
             cpp = Path(directory) / "runner.cpp"
             cpp.write_text(harness)
             binary = Path(directory) / "runner"
@@ -279,6 +294,14 @@ int main(int argc,char** argv){
             result = subprocess.run([str(binary),str(output)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             data = json.loads(output.read_text())
+            cases = json.loads(Path(str(output) + ".cases.json").read_text())
+            for key in ("online", "peers"):
+                self.assertIsNone(cases[0][key])
+                self.assertEqual(cases[2][key], 0)
+                self.assertIsNone(data["prearm"]["after_load"][key])
+                self.assertIsNone(data["prearm"]["final_live"][key])
+            self.assertEqual(cases[1]["online"], 1)
+            self.assertEqual(cases[1]["peers"], 3)
             self.assertEqual(data["status"], [1]+[0]*12)
             self.assertEqual(data["events"], [])
             self.assertEqual(data["first_failure_sample"], [0]*17)
