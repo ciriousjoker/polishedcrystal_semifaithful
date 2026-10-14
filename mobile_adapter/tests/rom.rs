@@ -1,3 +1,6 @@
+#[path = "support/actual_picture.rs"]
+mod actual_picture;
+use actual_picture::{effect_logical_color, effect_physical_color, effect_tile_pixel};
 use mobile_acceptance::evidence;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -1764,31 +1767,7 @@ fn headbutt_lifecycle(e: &Value) {
 
 // The supported palette conversion is independently evaluated from raw RGB15.
 // Configuration comes from actual map_color calls, never option defaults.
-fn effect_logical_color(raw: u16, display: &[u64]) -> u16 {
-    assert_eq!(display[17], 1, "Missing actual palette conversion observation");
-    assert_eq!(display[18], 11, "Only actual GBC RGB565 correction without GBA is supported");
-    assert_eq!(display[20], 0, "Non-neutral actual light temperature is unsupported");
-    assert_eq!(display[21], 0, "Changed cached palette configuration is unsupported");
-    let r = u32::from(raw & 31); let g = u32::from((raw >> 5) & 31); let b = u32::from((raw >> 10) & 31);
-    let (r, g, b) = match display[19] {
-        1 => (((r * 13 + g * 2 + b) >> 4), ((g * 3 + b) >> 2), ((r * 3 + g * 2 + b * 11) >> 4)),
-        2 => {
-            let inv = 1.0f32 / 31.0f32;
-            let gamma = 2.2f32 - 0.5f32;
-            let rr = (r as f32 * inv).powf(gamma);
-            let gg = (g as f32 * inv).powf(gamma);
-            let bb = (b as f32 * inv).powf(gamma);
-            let channel = |v: f32| -> u32 {
-                ((v.clamp(0.0, 1.0).powf(1.0f32 / 2.2f32).clamp(0.0, 1.0) * 31.0 + 0.5) as u32) & 31
-            };
-            (channel(0.94f32 * ((0.82f32 * rr) + (0.24f32 * gg) + (-0.06f32 * bb))),
-             channel(0.94f32 * ((0.125f32 * rr) + (0.665f32 * gg) + (0.21f32 * bb))),
-             channel(0.94f32 * ((0.195f32 * rr) + (0.075f32 * gg) + (0.73f32 * bb))))
-        },
-        _ => panic!("Unsupported actual palette correction mode"),
-    };
-    ((r << 11) | (g << 6) | b) as u16
-}
+
 fn effect_display_metadata(frame: &Value) -> Vec<u64> {
     let d: Vec<_> = frame["display_metadata"].as_array().expect("Missing actual display metadata")
         .iter().map(|v| v.as_u64().expect("Invalid display metadata integer")).collect();
@@ -1806,13 +1785,7 @@ fn effect_display_metadata(frame: &Value) -> Vec<u64> {
     if d[9] != 0 { assert_eq!(d[10], 1, "Linear interlacing is unsupported"); }
     d
 }
-fn effect_physical_color(logical: u16, y: usize, display: &[u64]) -> u16 {
-    if display[9] == 0 || y % 2 != display[12] as usize { return logical; }
-    let factor = f32::from_bits(u32::try_from(display[11]).unwrap());
-    let channel = |v: u16, max: u16| ((v as f32 * factor) as u16).min(max);
-    (channel((logical >> 11) & 31, 31) << 11) |
-        (channel((logical >> 5) & 63, 63) << 5) | channel(logical & 31, 31)
-}
+
 fn effect_exact_pixel(raw: u16, mapped: u16, physical: u16, y: usize, display: &[u64]) {
     assert_eq!(mapped, effect_logical_color(raw, display), "Raw intended logical color differs from actual mapped palette");
     assert_eq!(physical, effect_physical_color(mapped, y, display), "Exact final physical RGB565 differs");
@@ -1851,20 +1824,8 @@ fn actual_display_exact_full_background_and_corruption_regressions() {
     let mut stale = frame.clone(); stale["display_metadata"][2] = json!(8);
     assert!(std::panic::catch_unwind(|| effect_display_metadata(&stale)).is_err());
 }
-fn effect_tile_pixel(vram: &[u8], tile: usize, bank: usize, x: usize, y: usize) -> u8 {
-    let at = bank * 0x2000 + tile * 16 + y * 2;
-    ((vram[at] >> (7 - x)) & 1) | (((vram[at + 1] >> (7 - x)) & 1) << 1)
-}
-fn effect_obj_pixel(oam: &[u8], vram: &[u8], q: usize, x: i32, y: i32, height: i32) -> u8 {
-    let mut dx = x - (i32::from(oam[q * 4 + 1]) - 8);
-    let mut dy = y - (i32::from(oam[q * 4]) - 16);
-    if !(0..8).contains(&dx) || !(0..height).contains(&dy) { return 0; }
-    let flags = oam[q * 4 + 3];
-    if flags & 32 != 0 { dx = 7 - dx; }
-    if flags & 64 != 0 { dy = height - 1 - dy; }
-    let tile = if height == 16 { (oam[q * 4 + 2] & 254) as usize + dy as usize / 8 } else { oam[q * 4 + 2] as usize };
-    effect_tile_pixel(vram, tile, ((flags >> 3) & 1) as usize, dx as usize, dy as usize % 8)
-}
+
+
 fn headbutt_row(frame: &Value, y: usize, hardware: &mut [u8], cursor: &mut usize) -> Value {
     let rows = frame["rows"].as_array().expect("Actual per-line provenance");
     let changes = frame["changes"].as_array().expect("Ordered sparse hardware changes");
@@ -1872,16 +1833,9 @@ fn headbutt_row(frame: &Value, y: usize, hardware: &mut [u8], cursor: &mut usize
     assert!(changes.len() <= 65536 * 2);
     let row = &rows[y * 16..(y + 1) * 16];
     let end = row[9].as_u64().unwrap() as usize;
-    assert!(end >= *cursor && end <= changes.len() / 2, "Row change order/bounds");
-    let mut previous = None;
-    while *cursor < end {
-        let at = changes[*cursor * 2].as_u64().unwrap() as usize;
-        let value = u8::try_from(changes[*cursor * 2 + 1].as_u64().unwrap()).unwrap();
-        assert!(at < hardware.len());
-        assert!(previous.map_or(true, |p| at > p), "Duplicate/unordered row byte mutation");
-        assert_ne!(hardware[at], value, "Sparse change must change actual row hardware");
-        hardware[at] = value; previous = Some(at); *cursor += 1;
-    }
+    actual_picture::apply_changes_by(hardware, changes.len() / 2, end, cursor, |i| (
+        usize::try_from(changes[i * 2].as_u64().unwrap()).unwrap(),
+        u8::try_from(changes[i * 2 + 1].as_u64().unwrap()).unwrap()));
     if y == 143 { assert_eq!(end, changes.len() / 2, "Unconsumed row changes"); }
     let mut meta = frame["render_metadata"].clone();
     for (dest, src) in [(3,0),(4,1),(8,2),(9,3),(10,4),(11,5),(12,6),(13,7),(2,10)] { meta[dest] = row[src].clone(); }
@@ -2026,7 +1980,7 @@ fn headbutt_pixels(e: &Value) {
             for y in 0..144i32 {
             let row = headbutt_row(frame, y as usize, &mut h, &mut cursor);
             let meta = row["render_metadata"].as_array().unwrap();
-            let oam = &h[..160]; let vram = &h[160..16544]; let mapped = &h[16672..16800]; let r = &h[16800..16806];
+            let oam = &h[..160]; let r = &h[16800..16806];
             assert_eq!(oam, &h[16806..], "Actual DMA source differs from rendered OAM");
             assert!(meta[10].as_u64().unwrap() > 0, "Missing actual OAM DMA provenance");
             let page = r[5];
@@ -2150,52 +2104,11 @@ fn headbutt_pixels(e: &Value) {
                 assert_eq!(r[0] & 0x82, 0x82, "LCD and OBJ must be enabled for intended pixels");
                 assert!(step.is_some(), "Animation has no native return source binding");
             }
-            let height = if r[0] & 4 != 0 { 16 } else { 8 };
-                // X-hidden sprites still consume the hardware's first-ten list.
-                let selected: Vec<_> = (0..40).filter(|q| {
-                    let top = i32::from(oam[q * 4]) - 16; (top..top + height).contains(&y)
-                }).take(10).collect();
                 for x in 0..160i32 {
-                    let winner = selected.iter().find(|q| effect_obj_pixel(oam, vram, **q, x, y, height) != 0);
-                    assert_eq!(meta[13], 7, "Full rendered row requires all LCD layers");
-                    assert_ne!(r[0] & 128, 0, "Captured native LCD must be enabled");
-                    let window = r[0] & 32 != 0 && i32::from(r[3]) < y + 1 && r[4] <= 166 && x >= i32::from(r[4]) - 7;
-                    let (bx, by, base, map_row) = if window {
-                        let entry = i32::try_from(n(&row,"window_line")).expect("Actual window counter outside signed range");
-                        let wy = entry.checked_sub(1).expect("Actual window row underflow");
-                        // Pinned lcd::win_render_color starts its map pointer
-                        // one tile row before y>>3. Reset entry0 means y=-1;
-                        // clear_win_count entry9 means y=8, map row0.
-                        ((x - (i32::from(r[4]) - 7)) as usize, (wy & 7) as usize,
-                            if r[0] & 64 != 0 {0x1c00i64} else {0x1800i64}, i64::from((wy >> 3) - 1))
-                    } else {
-                        let by = ((y + i32::from(r[1])) & 255) as usize;
-                        (((x + i32::from(r[2])) & 255) as usize, by,
-                            if r[0] & 8 != 0 {0x1c00i64} else {0x1800i64}, (by / 8) as i64)
-                    };
-                    let address = base + map_row * 32 + (bx / 8) as i64;
-                    assert!((0..0x2000).contains(&address), "Actual window/BG map address outside captured VRAM bank");
-                    let at = address as usize; let attr = vram[0x2000 + at];
-                    let tile = if r[0] & 16 != 0 { vram[at] as usize } else { (256i32 + i32::from(vram[at] as i8)) as usize };
-                    let px = if attr & 32 != 0 { 7 - bx % 8 } else { bx % 8 }; let py = if attr & 64 != 0 { 7 - by % 8 } else { by % 8 };
-                    let bg = effect_tile_pixel(vram, tile, ((attr >> 3) & 1) as usize, px, py);
-                    let mut palette = usize::from(attr & 7); let mut color = usize::from(bg);
-                    let mut proved_effect = false;
-                    if r[0] & 2 != 0 { if let Some(&q) = winner {
-                        let flags = oam[q * 4 + 3];
-                        if r[0] & 1 == 0 || bg == 0 || (attr & 128 == 0 && flags & 128 == 0) {
-                            palette = 8 + usize::from(flags & 7);
-                            color = usize::from(effect_obj_pixel(oam, vram, q, x, y, height));
-                            proved_effect = targets.contains(&q);
-                        }
-                    }}
-                    let at = (palette * 4 + color) * 2;
-                    let expected = u16::from_le_bytes([mapped[at], mapped[at + 1]]);
-                    let raw = u16::from_le_bytes([h[16544 + at], h[16544 + at + 1]]);
-                    assert_eq!(expected, effect_logical_color(raw, &display), "Raw selected logical color at {x},{y}");
-                    let expected = effect_physical_color(expected, y as usize, &display);
+                    let pixel = actual_picture::pixel(&h, n(&row,"window_line"), meta[13].as_u64().unwrap(), &display, x, y);
                     let at = (y as usize * 160 + x as usize) * 2;
-                    assert_eq!(u16::from_le_bytes([pixels[at], pixels[at + 1]]), expected, "Intended selected effect pixel or independently decoded BG/OBJ/window pixel at {x},{y}, host {}", frame["host_frame"]);
+                    assert_eq!(u16::from_le_bytes([pixels[at], pixels[at + 1]]), pixel.physical, "Intended selected effect pixel or independently decoded BG/OBJ/window pixel at {x},{y}, host {}", frame["host_frame"]);
+                    let proved_effect = pixel.object.map_or(false, |q| targets.contains(&q));
                     if std::ptr::eq(run, mobile) && proved_effect { visible += 1; }
                 }
             }
