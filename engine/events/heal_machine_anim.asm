@@ -3,6 +3,9 @@ HealMachineAnim:
 	ld a, [wPartyCount]
 	and a
 	ret z
+if DEF(MOBILE_ADAPTER)
+	farcall MobilePalettePrewriteBlack
+endc
 	; The location of the healing machine relative to the player is stored in hScriptVar.
 	; 0: Up and left (Pokemon Center)
 	; 1: Left (Elm's Lab)

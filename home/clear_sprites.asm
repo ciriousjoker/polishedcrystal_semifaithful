@@ -1,4 +1,7 @@
 ClearSprites::
+if DEF(MOBILE_ADAPTER)
+	farcall MobileInvalidateNormalSource
+endc
 ; Erase OAM data
 	ld hl, wShadowOAM
 	ld bc, wShadowOAMEnd - wShadowOAM
@@ -7,6 +10,9 @@ ClearSprites::
 	ret
 
 ClearNormalSprites::
+if DEF(MOBILE_ADAPTER)
+	farcall MobileInvalidateNormalSource
+endc
 	ldh a, [hUsedOAMIndex]
 	ld c, a
 	; a = OAM_SIZE - a
@@ -24,6 +30,9 @@ HideSprites::
 	ld hl, wShadowOAM
 	ld b, OAM_COUNT
 HideSpritesInRange::
+if DEF(MOBILE_ADAPTER)
+	farcall MobileInvalidateNormalSource
+endc
 	ld de, OBJ_SIZE
 	ld a, OAM_YCOORD_HIDDEN
 .loop
@@ -71,6 +80,9 @@ BackupSprites::
 	ret
 
 RestoreSprites::
+if DEF(MOBILE_ADAPTER)
+	farcall MobileInvalidateNormalSource
+endc
 	; Copy wShadowOAMBackup to wShadowOAM
 	ldh a, [rWBK]
 	push af

@@ -47,219 +47,93 @@ ENDM
 ASSERT LOW(wMobileVirtualDescriptors) + NUM_OBJECT_STRUCTS * 8 <= $100
 
 MACRO mobile_virtual_capture
-; Immutable render metadata only. Reuse the native ShadowOAM group whenever
-; it fits; a ROM template is retained for actors beyond vanilla OAM capacity.
-	ld a, [wMobileVirtualStage]
-	and a
-	jp z, .capture_done\@
-; The emitted facing contract proves every ordinary four-quad figure is a
-; rectangle. Its completed native OAM needs only a count and start offset.
-; Preserve BC/DE directly instead of constructing the general template path.
-	ldh a, [hUsedSpriteTile]
-	cp 4
-	jr nz, .general\@
-	ld a, c
-	cp OAM_SIZE - OBJ_SIZE + 1
-	if _NARG >= 3
-	jr nc, .rectangle_template\@
-	else
-	jr nc, .general\@
-	endc
-	cp 3 * OBJ_SIZE
-	if _NARG >= 3
-	jr c, .rectangle_template\@
-	else
-	jr c, .general\@
-	endc
-	push hl
-	ld a, [wMobileVirtualIndex]
-	add a
-	add a
-	add a
-	add LOW(wMobileVirtualDescriptors + 6)
-	ld l, a
-	ld h, HIGH(wMobileVirtualDescriptors)
-	ld a, [wMobileVirtualCaptureClass]
-	or $44 ; pending native rectangle, four quads
-	ld [hl], a
-	inc hl
-	ld a, c
-	sub 3 * OBJ_SIZE
-	ld [hl], a
-	dec hl
-	dec hl
-	ld [hl], $80 ; unused raw byte 5, impossible ROM template high byte
-	pop hl
-	if _NARG >= 2
-	jp \2 ; the captured four-quad bounds are already proved
-	else
-	jr .capture_done\@
-	endc
-	if _NARG >= 3
-.rectangle_template\@
-; Four quads cannot fit the native page. Capture their immutable header once
-; and return directly to native overflow handling, without testing it again.
-	push hl
-	push bc
-	ld a, [wMobileVirtualIndex]
-	add a
-	add a
-	add a
-	add LOW(wMobileVirtualDescriptors)
-	ld l, a
-	ld h, HIGH(wMobileVirtualDescriptors)
-	ldh a, [hCurSpriteXPixel]
-	ld [hli], a
-	ldh a, [hCurSpriteYPixel]
-	ld [hli], a
-	ldh a, [hCurSpriteTile]
-	ld [hli], a
-	ld a, d
-	ld [hli], a
-	ld d, h
-	ld e, l
-	ld hl, sp + 2
-	ld a, [hli]
-	ld h, [hl]
-	ld l, a
-	ld bc, MobileCopiedFacingStepDown0 - \1
-	add hl, bc
-	ld a, l
-	ld [de], a
-	inc e
-	ld a, h
-	ld [de], a
-	inc e
-	ld a, [wMobileVirtualCaptureClass]
-	or $44
-	ld [de], a
-	inc e
-	ldh a, [hCurSpriteOAMFlags]
-	ld [de], a
-	pop bc
-	pop hl
-	jp \3
-	endc
-.general\@
-	push bc
-	push de
-	push hl
-	ld a, c
-	ld [wMobileVirtualHeaderOAM], a
-	ld a, [wMobileVirtualIndex]
-	add a
-	add a
-	add a
-	add LOW(wMobileVirtualDescriptors + 6)
-	ld l, a
-	ld h, HIGH(wMobileVirtualDescriptors)
-	ldh a, [hUsedSpriteTile]
-	ld b, a
-; All native four-quad facings are canonical two-column rectangles. The host
-; contract checks the emitted facing data, including every future addition.
-	ld a, b
-	cp 4
-	jr z, .rectangle\@
-	xor a
-	ld [wMobileVirtualFastAdmission], a
-	jr .shape_ready\@
-.rectangle\@
-	set 6, b
-.shape_ready\@
-	ld a, [wMobileVirtualCaptureClass]
-	or b
-	ld b, a
-
-	ld a, b
-	and $1f
-	add a
-	add a
-	sub OBJ_SIZE
-	ld c, a
-	ld a, [wMobileVirtualHeaderOAM]
-	cp OAM_SIZE - OBJ_SIZE + 1
-	jr nc, .template\@
-	cp c
-	jr c, .template\@
-	sub c
-	ld c, a
-	ld [hl], b ; intention only until the final native tuple is stored
-	inc hl
-	ld [hl], c
-	dec hl
-	dec hl
-	ld [hl], $80 ; unused raw byte 5, never a template pointer
-	jr .restore\@
-.template\@
-	ld [hl], b
-	inc hl
-	ldh a, [hCurSpriteOAMFlags]
-	ld [hl], a
-; Only a group that does not fit native OAM needs the materialization template.
-; Raw groups retain just their current count and ShadowOAM offset.
-	ld de, -7
-	add hl, de
-	ldh a, [hCurSpriteXPixel]
-	ld [hli], a
-	ldh a, [hCurSpriteYPixel]
-	ld [hli], a
-	ldh a, [hCurSpriteTile]
-	ld [hli], a
-	ld d, h
-	ld e, l
-	ld hl, sp + 3 ; saved native D contains the complete palette/bank flags
-	ld a, [hl]
-	ld [de], a
-	inc de
-	ld hl, sp + 0 ; saved native HL is the original facing ROM template
-	ld a, [hli]
-	ld h, [hl]
-	ld l, a
-	if _NARG
-	ld bc, MobileCopiedFacingStepDown0 - \1
-	else
-	ld bc, MobileCopiedFacingStepDown0 - FacingStepDown0
-	endc
-	add hl, bc
-	ld a, l
-	ld [de], a
-	inc de
-	ld a, h
-	ld [de], a
-
+; Unified immutable eight-byte producer ABI. Explicit $ff overflow sentinel.
+; Capture authorization is separate from composition.
+ ld a, [wMobileNativeCaptureActive]
+ cp 1
+ jp nz, .capture_done\@
+ push bc
+ push hl
+ ld a, [wMobileVirtualIndex]
+ add a
+ add a
+ add a
+ add LOW(wMobileVirtualDescriptors)
+ ld l, a
+ ld h, HIGH(wMobileVirtualDescriptors)
+ ldh a, [hCurSpriteXPixel]
+ ld [hli], a
+ ldh a, [hCurSpriteYPixel]
+ ld [hli], a
+ ldh a, [hCurSpriteTile]
+ ld [hli], a
+ ld [hl], d
+ inc hl
+ inc hl ; bounded facingID stored at the native validation site
+ ldh a, [hCurSpriteOAMFlags]
+ ld [hli], a
+ ldh a, [hUsedSpriteTile]
+ and a
+ jr z, .bad_count\@
+ cp 32
+ jr nc, .bad_count\@
+ ld b, a
+ cp 4
+ jr nz, .class\@
+ set 6, b
+.class\@
+ ld a, [wMobileVirtualCaptureClass]
+ or b
+ ld [hli], a ; pending, bit7 clear
+ ld [hl], $ff
+ if \1
+; Native mobile_native_oam_bounds has already proved raw capacity.
+ ldh a, [hUsedSpriteTile]
+ add a
+ add a
+ sub OBJ_SIZE
+ ld b, a
+ ld a, c
+ sub b
+ ld [hl], a
+ else
+; Native overflow edge still requires immutable source count validation above.
+ dec hl
+ set 7, [hl]
+ endc
+ jr .restore\@
+.bad_count\@
+ ld [hl], 0
+ inc hl
+ ld [hl], $ff
 .restore\@
-	pop hl
-	pop de
-	pop bc
+ pop hl
+ pop bc
 .capture_done\@
-	ldh a, [hUsedSpriteTile]
+ ldh a, [hUsedSpriteTile]
 ENDM
 
 MACRO mobile_virtual_complete_capture
-; Both native paths meet after all tuple stores. Raw byte 5 distinguishes a
-; pending raw group from old templates whose bytes 4/5 remain ROM pointers.
-; Resident descriptors need no WRAM bank switch. Preserve producer state.
-	push af
-	ld a, [wMobileVirtualStage]
-	and a
-	jr z, .done\@
-	push hl
-	ld a, [wMobileVirtualIndex]
-	add a
-	add a
-	add a
-	add LOW(wMobileVirtualDescriptors + 5)
-	ld l, a
-	ld h, HIGH(wMobileVirtualDescriptors)
-	ld a, [hl]
-	cp $80
-	jr nz, .restore\@
-	inc hl
-	set 7, [hl]
+ ld a, [wMobileNativeCaptureActive]
+ cp 1
+ jr nz, .done\@
+ push hl
+ ld a, [wMobileVirtualIndex]
+ add a
+ add a
+ add a
+ add LOW(wMobileVirtualDescriptors + 7)
+ ld l, a
+ ld h, HIGH(wMobileVirtualDescriptors)
+ ld a, [hl]
+ cp $ff
+ jr z, .restore\@
+ dec hl
+ farcall MobileOwnCompletedNativeTuple
+ set 7, [hl]
 .restore\@
-	pop hl
+ pop hl
 .done\@
-	pop af
 ENDM
 
 MACRO mobile_virtual_bin_coordinate
@@ -342,7 +216,7 @@ MACRO mobile_virtual_gather_peer
 	ld a, MOBILE_BACKUP_BANK
 	ldh [rWBK], a
 	xor a
-	ld [wMobileVirtualPlanGatherValid], a
+	ld [wMobileVirtualPeerGatherValid], a
 	ld a, b
 ; A pool index, cache and colors validated in bounded background work.
 	ld [wMobileBudgetIndex], a
@@ -491,24 +365,12 @@ endc
 	ret nz
 	ld a, e
 	ld [wMobileVirtualWindow], a
-	ld a, [wMobileAvatarTile]
-	ld b, a
-	rrca
-	and 1
-	ld e, a
-	ld hl, wMobileVirtualNativeColors
-	add hl, de
-	ld a, [hl]
-	bit 0, b
-	jr z, .source_nibble
-	swap a
-.source_nibble
-	and $f
+	ld a, $ff
 	ld [wMobileAvatarPalette], a
 	ld a, MOBILE_BACKUP_BANK
 	ldh [rWBK], a
 	ld a, 1
-	ld [wMobileVirtualPlanGatherValid], a
+	ld [wMobileVirtualPeerGatherValid], a
 	ret
 
 ENDM
@@ -668,10 +530,7 @@ MACRO mobile_virtual_choose_private_palette
 	or b
 	cp 255
 	jr nz, .free_color_table
-	ld a, [wMobileVirtualBaseReady]
-	and a
 	ld a, b
-	jr nz, .free_color_table
 	cp 255
 	jr z, .color_full
 	ld a, [wMobileVirtualPaletteRotation]
@@ -834,6 +693,9 @@ ENDM
 
 ; Commit identical palette ownership and one-shot DMA tokens in either bank.
 MACRO mobile_virtual_publish_page
+	ld a, [wMobileStableSourceValid]
+	cp 1
+	jp nz, \1
 	ld b, 141
 	ld a, [wMobileVirtualLength]
 	cp OAM_SIZE
@@ -880,37 +742,25 @@ for quad, OAM_COUNT
 endr
 .suffix40
 	xor a
-	ld [wMobileVirtualPlanMode], a
-	ld hl, wMobileVirtualBindings
-	ld de, wMobilePrivatePalBindings
-rept 8
-	ld a, [hli]
-	ld [de], a
-	inc e
+for hardware_color, 8
+ ld a, [wMobileVirtualBindings + hardware_color]
+ and a
+ jr nz, .peer_source{d:hardware_color}
+ ld a, hardware_color
+ jr .source_ready{d:hardware_color}
+.peer_source{d:hardware_color}
+ add 7
+.source_ready{d:hardware_color}
+ ld [wMobilePrivatePalBindings + hardware_color], a
 endr
 	xor a
 	ld [wMobileVirtualStage], a
 	ldh a, [hVBlankCounter]
 	ld [wMobileVirtualHeaderOAM], a
 	ld a, 1
+	ld [wMobileStablePendingValid], a
 	ld [wMobileVirtualPreviousOAM], a
 	ld [wMobileVirtualPublished], a
-	ld a, [wMobileVirtualPhase]
-	inc a
-	cp MOBILE_PEERS
-	jr c, .next_phase
-	xor a
-.next_phase
-	ld [wMobileVirtualPhase], a
-	ld a, [wMobileVirtualNativeNext]
-	cp 255
-	jr z, .ground_rotation
-	ld [wMobileVirtualNativeRotation], a
-.ground_rotation
-	ld a, [wMobileVirtualGroundNext]
-	cp 255
-	ret z
-	ld [wMobileVirtualGroundRotation], a
 	ret
 
 .suffix_table

@@ -188,8 +188,11 @@ DmgToCgbObjPal1::
 	jmp PopAFBCDEHL
 
 CopyPals::
+if DEF(MOBILE_ADAPTER)
+	farcall MobilePalettePrewriteCopyPals
+endc
 ; copy c palettes in order b from de to hl
-
+.palette
 	push bc
 	ld c, 4 ; PAL_COLORS
 .loop
@@ -233,7 +236,11 @@ CopyPals::
 ; how many more pals?
 	pop bc
 	dec c
+if DEF(MOBILE_ADAPTER)
+	jr nz, .palette
+else
 	jr nz, CopyPals
+endc
 	ret
 
 ClearVBank1::
@@ -265,6 +272,9 @@ Special_ReloadSpritesNoPalettes::
 	jmp DelayFrame
 
 SetBlackObjectPals::
+if DEF(MOBILE_ADAPTER)
+	farcall MobilePalettePrewriteBlack
+endc
 	ldh a, [rWBK]
 	push af
 	ld a, BANK(wOBPals2)

@@ -5,7 +5,8 @@ MobileNativePaletteCodeStart::
 MobileEmergencyInput::
 	call MobileEmergencyKeys
 	call MobileNativePaletteFadeDirty
-	jp MobileVirtualCommitPose
+	call MobileVirtualCommitPose
+	jp MobileVirtualChooseOutput
 
 ; VBlank already saved all registers and keeps IME disabled. Read physical
 ; buttons before any native input lock can filter them. No packet or cache data
@@ -273,89 +274,74 @@ MobileNativePaletteFadeDirty:
 	ret
 
 MobileNativeClearPaletteBinding:
-; Preserve the caller's selected WRAM bank and invalidate only this pool entry.
-	ldh a, [rWBK]
-	push af
-	ld a, MOBILE_BACKUP_BANK
-	ldh [rWBK], a
-	ld a, [wMobileBudgetIndex]
-	inc a
-	ld c, a
-	ld b, 8
-	ld hl, wMobilePrivatePalBindings
-.loop
-	ld a, [hl]
-	cp c
-	jr nz, .next
-	ld [hl], 0
-	ld a, TRUE
-	ldh [hCGBPalUpdate], a
-.next
-	inc hl
-	dec b
-	jr nz, .loop
-	pop af
-	ldh [rWBK], a
-	ret
+ call MobileInvalidateNormalSource
+ ret
 
 MobileNativeUpdateOBPalettes::
-	ldh a, [hInMenu]
-	and a
-	jp nz, .virtual_ordinary
-	ld a, [wMobileLocalValid]
-	and a
-	jp z, .virtual_ordinary
-	ld a, [wMobileOnline]
-	and a
-	jp z, .virtual_ordinary
-	ld a, [wMobileWanted]
-	and a
-	jp z, .virtual_ordinary
-	push hl
-	call MobileVirtualFrameValid
-	pop hl
-	jp z, .virtual_ordinary
-	ld a, [wMobileVirtualHasPrivateColors]
-	and a
-	jp z, .virtual_ordinary
-; Keep immutable private RGB and OAM together. Selecting eight bounded
-; sources here avoids rebuilding all 64 native color bytes in idle time.
-	ld c, LOW(rOBPD)
+ ld a, [wMobileStableFinalDecision]
+ and $7f
+ cp 3
+ jp z, .retain
+ cp 2
+ jp nz, .native
+ ; Lock the shared choice before the first private hardware RGB store.
+ ld a, $82
+ ld [wMobileStableFinalDecision], a
+ ld c, LOW(rOBPD)
 for hardware_color, 8
-	ld hl, wOBPals2 + hardware_color palettes
-	ld a, [wMobilePrivatePalBindings + hardware_color]
-	and a
-	jr z, .frame_color{d:hardware_color}
-	cp MOBILE_PEERS + 1
-	jr nc, .frame_color{d:hardware_color}
-	dec a
-	add a
-	add a
-	add a
-	add LOW(wMobileVirtualFrameColors)
-	ld l, a
-	adc HIGH(wMobileVirtualFrameColors)
-	sub l
-	ld h, a
-.frame_color{d:hardware_color}
-rept 1 palettes
-	ld a, [hli]
-	ldh [c], a
+ ld a, [wMobilePrivatePalBindings + hardware_color]
+ cp 8
+ jr nc, .peer{d:hardware_color}
+ add a
+ add a
+ add a
+ add LOW(wMobileStableNativeRGB)
+ ld l, a
+ adc HIGH(wMobileStableNativeRGB)
+ sub l
+ ld h, a
+ jr .source{d:hardware_color}
+.peer{d:hardware_color}
+ sub 8
+ add a
+ add a
+ add a
+ add LOW(wMobileVirtualFrameColors)
+ ld l, a
+ adc HIGH(wMobileVirtualFrameColors)
+ sub l
+ ld h, a
+.source{d:hardware_color}
+ rept 1 palettes
+ ld a, [hli]
+ ldh [c], a
+ endr
 endr
-endr
-	ld hl, wOBPals2 + 8 palettes
-	ld b, 0
-	ret
-.virtual_ordinary
-	lb bc, 4, LOW(rOBPD)
-.virtual_upload
-rept 2 palettes
-	ld a, [hli]
-	ldh [c], a
-endr
-	dec b
-	jr nz, .virtual_upload
-	ret
+ ld a, 2
+ ld [wMobileStableHardwarePaletteProvenance], a
+ jr .done
+.native
+ ; The shared decision restores all actual current native RGB before native DMA.
+ ld hl, wOBPals2
+ lb bc, 4, LOW(rOBPD)
+.upload
+ rept 2 palettes
+ ld a, [hli]
+ ldh [c], a
+ endr
+ dec b
+ jr nz, .upload
+ ld a, 1
+ ld [wMobileStableHardwarePaletteProvenance], a
+ jr .done
+.retain
+ ; DMA suppression retains the current physical page and its OBJ colors.
+ xor a
+ ld [wMobileStableHardwarePaletteProvenance], a
+.done
+ ld hl, wOBPals2 + 8 palettes
+ ld b, 0
+ ret
 MobileNativePaletteGuard::
 ; Native palette scratch also lies inside wPlayerData. Preserve it across our
 ; ordinary allocator call, including failed allocations and cached palettes.

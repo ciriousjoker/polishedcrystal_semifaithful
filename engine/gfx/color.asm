@@ -267,6 +267,9 @@ LoadPalettes:
 	push af
 	ld a, BANK("GBC Video")
 	ldh [rWBK], a
+if DEF(MOBILE_ADAPTER)
+	farcall MobilePalettePrewriteLoad
+endc
 .loop
 	ld a, [hli]
 	ld [de], a
@@ -282,6 +285,10 @@ LoadPalette_White_Col1_Col2_Black:
 	push af
 	ld a, $5
 	ldh [rWBK], a
+
+if DEF(MOBILE_ADAPTER)
+	farcall MobilePalettePrewriteWhite
+endc
 
 if !DEF(MONOCHROME)
 	ld a, $ff ; RGB 31,31,31
@@ -412,6 +419,9 @@ ApplyPals:
 	ld hl, wBGPals1
 	ld de, wBGPals2
 	ld bc, 16 palettes
+if DEF(MOBILE_ADAPTER)
+	farcall MobilePalettePrewriteFixedCopy
+endc
 	jmp FarCopyColorWRAM
 
 ApplyAttrMap:

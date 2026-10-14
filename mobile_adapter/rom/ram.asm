@@ -333,7 +333,7 @@ wMobileVirtualMapNumber:: db
 wMobileVirtualHasPrivateColors:: db
 wMobileVirtualPlannedPrivateColors:: db
 wMobileVirtualSerialSlice:: db
-wMobileVirtualBaseReady:: db
+wMobileNativeCaptureActive:: db
 wMobileVirtualDroppedSlot:: db
 wMobileVirtualForceFull:: db
 wMobileVirtualCoarseTrial:: db
@@ -369,44 +369,81 @@ wMobileVirtualOrderNativeRotation:: db
 wMobileVirtualOrderGroundRotation:: db
 ASSERT @ <= $dd00
 
-; Admission plans reuse only the obsolete private tile reservation. No native
-; game RAM, actor structure, save field or additional resident byte is allocated.
-DEF wMobileVirtualPlanMode EQU $d620 ; 0=ordinary, 1=resource collection, 2=fresh emission
-DEF wMobileVirtualPlanGatherValid EQU $d621
-DEF wMobileVirtualPlanCount EQU $d622
-DEF wMobileVirtualPlanEmitCursor EQU $d623
-DEF wMobileVirtualPlanAllNPC EQU $d627
-DEF wMobileVirtualPlanLiveRotation EQU $d628
-EXPORT wMobileVirtualPlanAllNPC, wMobileVirtualPlanLiveRotation
-DEF wMobileVirtualPlanSlot EQU $d624
-DEF wMobileVirtualPlanEntriesUsed EQU $d626
-EXPORT wMobileVirtualPlanEntriesUsed
-DEF wMobileVirtualPlanSignatureValid EQU $d625
-DEF wMobileVirtualPlanPreviousSignature EQU $d680
-DEF wMobileVirtualPlanExpandedValid EQU $d629
-DEF wMobileVirtualPlanExpandedKey EQU $d62b
-DEF wMobileVirtualPlanVictims EQU $d6d0 ; one bounded replacement toggle per bucket
-EXPORT wMobileVirtualPlanExpandedValid, wMobileVirtualPlanExpandedKey, wMobileVirtualPlanVictims
-DEF wMobileVirtualPlanPending EQU $d6b0
-DEF wMobileVirtualPlanEntries EQU $d840
-EXPORT wMobileVirtualPlanMode, wMobileVirtualPlanGatherValid, wMobileVirtualPlanCount
-EXPORT wMobileVirtualPlanEmitCursor, wMobileVirtualPlanSlot, wMobileVirtualPlanSignatureValid
-EXPORT wMobileVirtualPlanPreviousSignature
-EXPORT wMobileVirtualPlanPending, wMobileVirtualPlanEntries
-ASSERT wMobileVirtualNativeRaw + NUM_OBJECT_STRUCTS * 4 <= wMobileVirtualPlanMode
-ASSERT wMobileVirtualPlanPreviousSignature + MOBILE_PLAN_SIGNATURE_SIZE <= wMobileVirtualPlanPending
-ASSERT wMobileVirtualPlanPending + MOBILE_PLAN_SIZE <= wMobileVirtualOutput
-ASSERT wMobileVirtualLines + SCREEN_HEIGHT_PX <= wMobileVirtualPlanEntries
-ASSERT wMobileVirtualPlanEntries + MOBILE_PLAN_COUNT * MOBILE_PLAN_CACHE_SIZE <= wMobilePrivatePalTemporary
+; Retained normal source. No executable admission cache may write this span.
+DEF wMobileStableOriginalYs EQU $d840
+EXPORT wMobileStableOriginalYs
+DEF wMobileStableOwners EQU $d868
+EXPORT wMobileStableOwners
+DEF wMobileStablePhases EQU $d890
+EXPORT wMobileStablePhases
+DEF wMobileStableBindingValid EQU $d8a0
+EXPORT wMobileStableBindingValid
+DEF wMobileStableEligible EQU $d8b0
+EXPORT wMobileStableEligible
+DEF wMobileStableContinuous EQU $d8b2
+EXPORT wMobileStableContinuous
+DEF wMobileStablePhaseMasks EQU $d8b4
+EXPORT wMobileStablePhaseMasks
+DEF wMobileStableLastActual EQU $d8b8
+EXPORT wMobileStableLastActual
+DEF wMobileStableLastEligible EQU $d8ba
+EXPORT wMobileStableLastEligible
+DEF wMobileStableDue EQU $d8bc
+EXPORT wMobileStableDue
+DEF wMobileStableNativeComplete EQU $d8be
+EXPORT wMobileStableNativeComplete
+DEF wMobileStablePendingNative EQU $d8c0
+EXPORT wMobileStablePendingNative
+DEF wMobileStablePendingPrivate EQU $d8c2
+EXPORT wMobileStablePendingPrivate
+DEF wMobileStableRetired EQU $d8c4
+EXPORT wMobileStableRetired
+DEF wMobileStableOutputOffsets EQU $d8c6
+EXPORT wMobileStableOutputOffsets
+DEF wMobileStablePhasePaletteBindings EQU $d8d6
+EXPORT wMobileStablePhasePaletteBindings
+DEF wMobileStableSourceValid EQU $d8e6
+EXPORT wMobileStableSourceValid
+DEF wMobileStableActorViewValid EQU $d8e7
+EXPORT wMobileStableActorViewValid
+DEF wMobileStableCapacityValid EQU $d8e8
+EXPORT wMobileStableCapacityValid
+DEF wMobileStablePendingValid EQU $d8e9
+EXPORT wMobileStablePendingValid
+DEF wMobileStableFinalDecision EQU $d8ea
+EXPORT wMobileStableFinalDecision
+DEF wMobileStableHardwarePaletteProvenance EQU $d8eb
+EXPORT wMobileStableHardwarePaletteProvenance
+DEF wMobileStableOutputPhase EQU $d8ec
+EXPORT wMobileStableOutputPhase
+DEF wMobileStableNativeCandidateValid EQU $d8ed
+EXPORT wMobileStableNativeCandidateValid
+DEF wMobileStableProducerActive EQU $d8ee
+EXPORT wMobileStableProducerActive
+DEF wMobileStableCurrentOwner EQU $d8ef
+EXPORT wMobileStableCurrentOwner
+DEF wMobileStableTransactionScratch EQU $d8f0
+EXPORT wMobileStableTransactionScratch
+DEF wMobileStableRemoteBindings EQU $d8fe
+EXPORT wMobileStableRemoteBindings
+DEF wMobileStableScratch EQU $d90a
+EXPORT wMobileStableScratch
+DEF wMobileStableRawXTileFlags EQU $d92a
+EXPORT wMobileStableRawXTileFlags
+DEF wMobileStableNativeRGB EQU wMobileVirtualMergedPalette
+EXPORT wMobileStableNativeRGB
+ASSERT wMobileStableNativeRGB == $db4b
+ASSERT wMobileStableNativeRGB + 64 <= wMobileVirtualScratchEnd
+; Small transient consumer state, outside the retained source.
+DEF wMobileVirtualPeerGatherValid EQU $d621
+EXPORT wMobileVirtualPeerGatherValid
+EXPORT wMobileNativeCaptureActive
 
-; Normalized native OAM shapes contain only offsets, tiles and attributes.
-; Live coordinates and native palette RGB are never cached here.
-DEF wMobileNativeShapeKeys EQU $d630 ; twelve five-field keys plus valid-last byte
-DEF wMobileNativeShapes EQU $dc40 ; twelve complete canonical four-quad shapes
-EXPORT wMobileNativeShapeKeys, wMobileNativeShapes
-ASSERT wMobileVirtualPlanExpandedKey + 5 <= wMobileNativeShapeKeys
-ASSERT wMobileVirtualPlanVictims + MOBILE_PLAN_COUNT / 2 <= wMobileVirtualOutput
-ASSERT LOW(wMobileVirtualPlanEntries) & 7 == 0
-ASSERT wMobileNativeShapeKeys + (NUM_OBJECT_STRUCTS - 1) * 6 <= wMobileVirtualPlanPreviousSignature
-ASSERT wMobileVirtualOrderGroundRotation + 1 <= wMobileNativeShapes
-ASSERT wMobileNativeShapes + (NUM_OBJECT_STRUCTS - 1) * 16 <= $dd00
+
+ASSERT wMobileVirtualGroup + 64 == wMobileVirtualBindings
+ASSERT wMobileVirtualTemplate + 80 == wMobileVirtualGroupLength
+ASSERT wMobileVirtualGroupPalette + 1 == wMobileStableNativeRGB
+DEF wMobileStableCameraX EQU wMobileStableTransactionScratch
+DEF wMobileStableCameraY EQU wMobileStableTransactionScratch + 2
+EXPORT wMobileStableCameraX, wMobileStableCameraY
+ASSERT wMobileStableCameraY + 2 <= wMobileStableRemoteBindings

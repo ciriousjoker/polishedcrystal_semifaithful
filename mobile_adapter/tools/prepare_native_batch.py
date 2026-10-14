@@ -26,13 +26,23 @@ def batch_source(engine, native, rectangle_source):
     # Near jumps need the same extended range as the previous inline capture.
     body = body.replace('\tjr z, .done', '\tjp z, .done').replace('\tjr nc, .done', '\tjp nc, .done')
     body = replace_once(body, '\tsub c\n\tcp LOW(wShadowOAM)\n\tjr c, .full',
-                        '\tmobile_virtual_capture MobileBatchFacingStepDown0, .draw_rectangle, .full\n'
                         '\tmobile_native_oam_bounds\n'
+                        '\tmobile_virtual_capture 1\n'
                         '\tldh a, [hUsedSpriteTile]\n\tcp 4\n\tjr nz, .addsprite\n'
                         '.draw_rectangle\n\tcall MobileBatchRectangleDispatch\n\tjr .sprite_done')
     body = replace_once(body, '\tld a, OBJ_SIZE * (OAM_COUNT - 1)\n',
                         '.sprite_done\n\tmobile_virtual_complete_capture\n'
                         '\tld a, OBJ_SIZE * (OAM_COUNT - 1)\n')
+    body = replace_once(body, '.full\n\tscf\n',
+                        '.full\n\tpush af\n\tmobile_virtual_capture 0\n\tpop af\n\tscf\n')
+    body = replace_once(body, '\tcp NUM_FACINGS\n\tjp nc, .done\n',
+                        '\tcp NUM_FACINGS\n\tjp nc, .done\n'
+                        '\tld b, a\n\tld a, [wMobileNativeCaptureActive]\n\tcp 1\n'
+                        '\tjr nz, .facing_store_done\n\tld a, [wMobileVirtualIndex]\n'
+                        '\tadd a\n\tadd a\n\tadd a\n'
+                        '\tadd LOW(wMobileVirtualDescriptors + 4)\n'
+                        '\tld l, a\n\tld h, HIGH(wMobileVirtualDescriptors)\n'
+                        '\tld [hl], b\n.facing_store_done\n\tld a, b\n')
     body = replace_once(body, '\tld bc, Facings\n', '\tld bc, MobileBatchFacings\n')
     # Contiguous native fields can be addressed incrementally without changing
     # byte arithmetic, including structures that cross a WRAM page boundary.

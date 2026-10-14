@@ -7,6 +7,9 @@ MobileVirtualCommitPose::
 	ld a, [wMobileNativeGraphicsFence]
 	and a
 	ret nz
+	ldh a, [hOAMUpdate]
+	and a
+	ret nz ; retain the physical page and its matching pose during suppressed DMA
 	ld a, [wMobileVirtualQueuedPeer]
 	and a
 	ret z
@@ -54,6 +57,7 @@ MobileVirtualCommitPose::
 	cp 148
 	jp nc, .restore ; preserve the ordinary OAM DMA's remaining VBlank window
 .safe_lcd
+	call MobileInvalidateNormalSource
 	ld a, [wMobileVirtualQueuedFrame]
 	cp 21
 	jp nc, .discard
@@ -176,7 +180,6 @@ endr
 	ld a, [wMobileVirtualQueuedMovement]
 	ld [hl], a
 	pop hl
-	call .patch_pose
 .discard
 	xor a
 	ld [wMobileVirtualQueuedPeer], a
@@ -203,89 +206,6 @@ endr
 	ldh [rVDMA_DEST_LOW], a
 	ld a, b
 	ldh [rVDMA_LEN], a ; complete GDMA, no request survives this return
-	ret
-
-.patch_pose
-; A previously published figure may still use the same window. Commit its
-; quadrant bank/flip attributes together with the tiles, before native OAM DMA.
-	push hl
-	call MobileVirtualFrameValid
-	pop hl
-	ret z
-	ld bc, MOBILE_PEER_OAM_START + 1
-	add hl, bc
-	ld a, [hl]
-	cp OAM_SIZE - 16 + 1
-	ret nc
-	ld l, a
-	ld h, HIGH(wMobileVirtualOutput)
-	ld a, MOBILE_BACKUP_BANK
-	ldh [rWBK], a
-	push hl
-	ld a, [wMobileVirtualQueuedWindow]
-	add a
-	add a
-	add $64
-	ld b, a
-	inc hl
-	inc hl
-	ld a, [wMobileVirtualQueuedWindow]
-	cp 2
-	ld a, [hli]
-	jr z, .third_window
-	sub b
-	cp 2
-	jr nc, .not_present
-	bit 3, [hl]
-	jr nz, .not_present
-	jr .pose_present
-.third_window
-	cp $6c
-	jr nz, .third_mirror
-	bit 3, [hl]
-	jr nz, .not_present
-	jr .pose_present
-.third_mirror
-	cp $3f
-	jr nz, .not_present
-	bit 3, [hl]
-	jr z, .not_present
-.pose_present
-	ld a, [hl]
-	and ~(OAM_XFLIP | OAM_BANK1)
-	ld c, a
-	ld a, [wMobileVirtualQueuedFacing]
-	call MobileVirtualFacingMirror
-	or c
-	ld c, a
-	and OAM_XFLIP
-	jr z, .columns
-	inc b
-.columns
-	pop hl
-	ld d, [hl]
-	inc hl
-	ld e, [hl]
-	dec hl
-	jp MobileVirtualWritePeerQuads
-.not_present
-	pop hl
-	ret
-
-MobileVirtualFacingMirror:
-	and $c
-	cp $c
-	jr z, .mirror
-	cp 8
-	ld a, 0
-	ret nc
-	ld a, [wMobileVirtualQueuedFacing]
-	and 3
-	cp 3
-	ld a, 0
-	ret nz
-.mirror
-	ld a, OAM_XFLIP
 	ret
 
 MobileVirtualGraphicsEnd::

@@ -123,6 +123,9 @@ CopySpritePalHandler::
 	pop hl
 	; fallthrough
 CopyObjectSpritePalHandler::
+if DEF(MOBILE_ADAPTER)
+	farcall MobilePalettePrewriteObjectHandler
+endc
 	; check if we are fading palettes
 	ldh a, [rWBK]
 	push af
@@ -413,12 +416,20 @@ ApplyWeatherPal:
 	ld hl, wOBPals1 palette PAL_OW_WEATHER
 	ld de, wOBPals2 palette PAL_OW_WEATHER
 	ld bc, 1 palettes
+if DEF(MOBILE_ADAPTER)
+	jp ApplyOBPals.copy
+else
 	jmp FarCopyColorWRAM
+endc
 
 ApplyOBPals:
 	ld hl, wOBPals1
 	ld de, wOBPals2
 	ld bc, 8 palettes
+.copy
+if DEF(MOBILE_ADAPTER)
+	farcall MobilePalettePrewriteFixedCopy
+endc
 	jmp FarCopyColorWRAM
 
 GetPalState:

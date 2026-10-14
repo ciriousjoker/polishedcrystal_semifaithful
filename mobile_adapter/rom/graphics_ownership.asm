@@ -62,6 +62,7 @@ endr
 	mobile_graphics_overlap $8ff0, $9000, .restore
 	jp .restore
 .invalidate
+	farcall MobileInvalidateNormalSource
 	ld a, 1
 	ld [wMobileNativeGraphicsFence], a
 	ld a, [wMobileVirtualHasPrivateColors]

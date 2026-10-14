@@ -75,6 +75,11 @@ MobileNativeWait::
 	and a
 	jr nz, .again
 .sleep
+	call MobileNativeLateIRQ
+; A rejected late drain can have observed the awaited VBlank during its checks.
+	ldh a, [hVBlankOccurred]
+	and a
+	jr nz, .done
 	halt
 	nop
 .done
@@ -87,6 +92,33 @@ MobileNativeWait::
 .return
 	pop bc
 	pop af
+	ret
+
+
+MobileNativeLateIRQ::
+; A completed byte may be pending while the composer owns the idle CPU. Drain
+; exactly that byte before HALT when its audited ISR plus return still fits.
+; The IRQ's existing LY136 guard prohibits chaining a new byte in this window.
+	ldh a, [hVBlankOccurred]
+	and a
+	ret nz
+	ld a, [wMobileOwner]
+	and a
+	ret z
+	ld a, [wMobileTransferActive]
+	and a
+	ret z
+	ldh a, [rIF]
+	bit B_IE_SERIAL, a
+	ret z
+	ldh a, [rLY]
+	cp 140
+	ret nc
+	ld a, 1
+	ld [wMobileVirtualSerialSlice], a
+	ldh a, [rIE]
+	or IE_SERIAL
+	ldh [rIE], a
 	ret
 
 
@@ -120,11 +152,18 @@ MobileNativeIdle::
 	jr z, .sample
 ; Every frame must advance the bounded transport state, including response
 ; parsing and command deadlines. A scene that cannot finish must not repeatedly
-; reserve its first idle slice and starve a live connection. Rendering uses the
-; remaining slices under its unchanged admission deadlines.
+; reserve its first idle slice and starve a live connection. Continue directly
+; to admitted rendering with serial IRQs still masked, rather than paying an
+; interrupt/context gap before the composer. Pending bytes drain before HALT.
 .first_transport
+; A byte carried from the preceding frame takes priority over new composition.
+; No byte has been launched by this frame's tick yet. The helper never waits.
+	call MobileNativeLateIRQ
+	ldh a, [rIE]
+	and ~IE_SERIAL
+	ldh [rIE], a
 	call MobileTick
-	jp .done
+	jp .sample
 .sample
 ; A dense native frame leaves a much smaller idle window. Once a complete
 ; guest exists, reserve three of four late windows for presentation; the fourth
@@ -343,23 +382,21 @@ MobileNativePrepareSpritesWork:
 	ld a, [wPanningAroundTinyMap]
 	and a
 	ret nz
-	call MobileStepProgress
-	ld c, d
-	ld b, 0
-	ld a, [wXCoord]
-	call MobileWorldPixel
-	ld a, l
+	ld a, MOBILE_BACKUP_BANK
+	ldh [rWBK], a
+	ld a, [wMobileStableSourceValid]
+	cp 1
+	ret nz
+	ld a, [wMobileStableActorViewValid]
+	cp 1
+	ret nz
+	ld a, [wMobileStableCameraX]
 	ld [wMobileCameraX], a
-	ld a, h
+	ld a, [wMobileStableCameraX + 1]
 	ld [wMobileCameraX + 1], a
-	call MobileStepProgress
-	ld c, e
-	ld b, 0
-	ld a, [wYCoord]
-	call MobileWorldPixel
-	ld a, l
+	ld a, [wMobileStableCameraY]
 	ld [wMobileCameraY], a
-	ld a, h
+	ld a, [wMobileStableCameraY + 1]
 	ld [wMobileCameraY + 1], a
 	ld a, MOBILE_WRAM_BANK
 	ldh [rWBK], a
@@ -558,14 +595,6 @@ MobileNativeUpload:
 	ld de, 18 - MOBILE_PEER_PALETTE
 	add hl, de
 	ld a, [hl]
-	call MobileVirtualExactPalette
-	jr c, .construct_color
-	push af
-	ld bc, 54 - 18
-	add hl, bc
-	ld [hl], 2 ; native palette uploads already keep this exact source current
-	pop af
-	jr .color_ready
 .construct_color
 	call MobileNativePaletteGuard
 	jp c, .return
@@ -738,88 +767,7 @@ MobileNativeUpload:
 	pop hl
 	ret
 
-MobileVirtualExactPalette:
-; A native base color, C last hardware slot. Revalidate an exact ordinary
-; source without rebuilding its private copy. Native palette metadata, fades and
-; glow state stay authoritative. A changed or unavailable source takes the full
-; isolated constructor path. Preserve the peer pointer and selected WRAM bank.
-	push af
-	push hl
-	push de
-	ld b, a
-	ldh a, [rWBK]
-	push af
-	ld a, 1
-	ldh [rWBK], a
-	ld a, c
-	cp 8
-	jr nc, .scan
-	call .check_slot
-	jr nc, .found
-.scan
-; Native palette slots can move as ordinary NPCs load. Find an existing exact
-; color before invoking the isolated constructor and copying a private cache.
-	ld c, 0
-.slot
-	call .check_slot
-	jr nc, .found
-	inc c
-	ld a, c
-	cp 8
-	jr c, .slot
-	jr .missing
-.found
-	pop af
-	ldh [rWBK], a
-	pop de
-	pop hl
-	pop af
-	ld a, c
-	and a
-	ret
-.check_slot
-	ld a, c
-	cp PAL_OW_WEATHER
-	jr nz, .ordinary_color
-	ld a, [wCurWeather]
-	ld d, a
-	ld a, [wOverworldWeatherCooldown]
-	or d
-	jr nz, .slot_missing
-.ordinary_color
-	ld d, 0
-	ld hl, wLoadedObjPal0
-	ld e, c
-	add hl, de
-	ld a, b
-	cp [hl]
-	jr nz, .slot_missing
-	ld hl, wLoadedObjPalGlows
-	add hl, de
-	ld a, [hl]
-	ld hl, wLoadedObjPalPrevGlows
-	add hl, de
-	or [hl]
-	jr nz, .slot_missing
-	ld hl, MobileVirtualPaletteBits
-	add hl, de
-	ld a, [wLoadedObjPalType]
-	and [hl]
-	jr nz, .slot_missing
-	and a
-	ret
-.slot_missing
-	scf
-	ret
-.missing
-	pop af
-	ldh [rWBK], a
-	pop de
-	pop hl
-	pop af
-	scf
-	ret
-
+; Palette sharing is decided by eight retained RGB bytes, never an ID.
 MobileProjectPeer:
 ; WBK=2; HL=peer. Map/instance/status checks precede interpolation and projection.
 	push hl
@@ -1040,6 +988,7 @@ MobileNativeResetLeases:
 ; clear only private presentation ownership, never ordinary NPC structures.
 	push af
 	push bc
+	push de
 	push hl
 	ld hl, wMobileVirtualWindowOwners
 	ld bc, NUM_OBJECT_STRUCTS
@@ -1051,20 +1000,21 @@ MobileNativeResetLeases:
 	push af
 	ld a, MOBILE_BACKUP_BANK
 	ldh [rWBK], a
-	xor a
-	ld [wMobileVirtualPlanSignatureValid], a
-for actor, 1, NUM_OBJECT_STRUCTS
-	ld [wMobileNativeShapeKeys + (actor - 1) * 6 + 5], a
-endr
-	ld [wMobileVirtualPlanMode], a
-	pop af
-	ldh [rWBK], a
-	xor a
-; Native ownership survives map reloads until Release verifies its lifetime.
-	ld [wMobileVirtualBaseReady], a
+ ; This entry is called only by actual map replacement, not ordinary refresh.
+ ; Retire native bindings before the map setup script clears associations.
+ xor a
+.retire_native
+ call MobileRetireNativeSlot
+ inc a
+ cp NUM_OBJECT_STRUCTS
+ jr c, .retire_native
+ call MobileRejectNormalSource
+ pop af
+ ldh [rWBK], a
 	ld a, $80
 	ld [wMobileVirtualNeedColorAudit], a
 	pop hl
+	pop de
 	pop bc
 	pop af
 	ret

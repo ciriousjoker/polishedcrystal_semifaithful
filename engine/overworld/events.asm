@@ -99,7 +99,14 @@ endc
 ; Not immediately entering a connected map will cause problems.
 	ld a, [wMapStatus]
 	cp MAPSTATUS_HANDLE
+if DEF(MOBILE_ADAPTER)
+	jr z, .native_frame
+	farcall MobileInvalidateNormalSource
+	ret
+.native_frame
+else
 	ret nz
+endc
 
 	call HandleMapObjects
 	call NextOverworldFrame

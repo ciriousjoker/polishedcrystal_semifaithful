@@ -264,6 +264,10 @@ FadePalettesStep:
 	; fallthrough
 
 FadePalettesStepLoop:
+if DEF(MOBILE_ADAPTER)
+	farcall MobilePalettePrewriteFade
+endc
+.color
 	push de
 	ld a, [hli]
 	ld e, a
@@ -345,7 +349,11 @@ FadePalettesStepLoop:
 	ld [hli], a
 	pop de
 	dec d
+if DEF(MOBILE_ADAPTER)
+	jr nz, .color
+else
 	jr nz, FadePalettesStepLoop
+endc
 	ret
 
 FadeColorGetGreen:

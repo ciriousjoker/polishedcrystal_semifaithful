@@ -150,6 +150,9 @@ ApplyDeletionToMapObject::
 	ld a, [hl]
 	cp UNASSOCIATED_MAPOBJECT
 	ret z ; already hidden
+if DEF(MOBILE_ADAPTER)
+	farcall MobileRetireNativeSlot
+endc
 	ld [hl], UNASSOCIATED_MAPOBJECT
 	push af
 	call .CheckStopFollow
@@ -333,6 +336,9 @@ FinishVolatileTiles::
 	ld [de], a
 	; fallthrough
 UpdateSprites::
+if DEF(MOBILE_ADAPTER)
+	farcall MobileBeginNormalAttempt
+endc
 	ld a, [wStateFlags]
 	bit SPRITE_UPDATES_DISABLED_F, a
 	ret z

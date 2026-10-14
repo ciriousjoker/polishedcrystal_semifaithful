@@ -7,6 +7,9 @@ DEF SANDSTORM_TILE  EQU WEATHER_TILE_1
 DEF CHERRYLEAF_TILE EQU WEATHER_TILE_1
 
 DoOverworldWeather:
+if DEF(MOBILE_ADAPTER)
+	farcall MobileBeginWeatherSource
+endc
 	push hl
 	push de
 	push bc
@@ -55,6 +58,9 @@ DoOverworldWeather:
 	; we are done, increment the weather delay rolling counter (0->255->0)
 	ld hl, wOverworldWeatherTimer
 	inc [hl]
+if DEF(MOBILE_ADAPTER)
+	farcall MobileCaptureNormalSource
+endc
 	; always check if we have exceeded the sprite limit
 	call WeatherSpriteLimitCheck
 	jmp PopBCDEHL
@@ -117,6 +123,9 @@ SpawnRandomWeatherCoords::
 	call .find_oam_and_randomize
 	ret c
 	ld a, SANDSTORM_TILE
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 	ld a, PAL_OW_WEATHER
 	ld [hld], a
@@ -133,6 +142,9 @@ SpawnRandomWeatherCoords::
 	call .find_oam_and_randomize
 	ret c
 	ld a, SNOWFLAKE_TILE
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 	ld a, PAL_OW_WEATHER
 	ld [hld], a
@@ -155,6 +167,9 @@ SpawnRandomWeatherCoords::
 	ccf
 	sbc a
 	add RAINSPLASH_TILE
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 	ld a, PAL_OW_WEATHER
 	ld [hld], a
@@ -175,9 +190,15 @@ SpawnRandomWeatherCoords::
 	; sprite coord is (RandomRange(0, b), RandomRange(0, c))
 	ld a, c
 	call RandomRange
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 	ld a, b
 	call RandomRange
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 	or 1
 	ret
@@ -256,6 +277,9 @@ DoSnowFall:
 	ld hl, OAMA_Y
 	add hl, de
 	cp OAM_YCOORD_HIDDEN
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hl], a
 	jr nc, .despawn
 
@@ -285,6 +309,9 @@ DoSnowFall:
 	ld hl, OAMA_X
 	add hl, de
 	sub 1 ; no-optimize a++|a-- (need to set carry)
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hl], a
 	jr c, .despawn
 .next
@@ -300,6 +327,9 @@ DoSnowFall:
 	ld hl, OAMA_Y
 	add hl, de
 	ld a, OAM_YCOORD_HIDDEN
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 	xor a
 	ld [hli], a
@@ -319,14 +349,23 @@ SpawnSnowFlake:
 
 	; sprite coord is (0, RandomRange(0, SCREEN_WIDTH_PX + 7) + TILE_WIDTH)
 	xor a
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 	ld a, SCREEN_WIDTH_PX + 7
 	call RandomRange
 	; x-coord less than TILE_WIDTH is offscreen, so add TILE_WIDTH
 	add TILE_WIDTH
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 .finish
 	ld a, SNOWFLAKE_TILE
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 	ld a, PAL_OW_WEATHER
 	ld [hld], a
@@ -343,6 +382,9 @@ SpawnSnowFlake:
 	; sprite coord is (SCREEN_WIDTH_PX + TILE_WIDTH, RandomRange(0, OAM_YCOORD_HIDDEN))
 	ld a, OAM_YCOORD_HIDDEN
 	call RandomRange
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 	ld a, SCREEN_WIDTH_PX + TILE_WIDTH
 	ld [hli], a
@@ -385,14 +427,23 @@ SpawnRainDrop:
 
 	; sprite coord is (0, RandomRange(0, SCREEN_WIDTH_PX + 7) + TILE_WIDTH)
 	xor a
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 	ld a, SCREEN_WIDTH_PX + 7
 	call RandomRange
 	; x-coord less than TILE_WIDTH is offscreen, so add TILE_WIDTH
 	add TILE_WIDTH
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 .finish
 	ld a, RAINDROP_TILE
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 	ld a, PAL_OW_WEATHER
 	ld [hld], a
@@ -409,6 +460,9 @@ SpawnRainDrop:
 	; sprite coord is (SCREEN_WIDTH_PX + TILE_WIDTH, RandomRange(0, OAM_YCOORD_HIDDEN))
 	ld a, OAM_YCOORD_HIDDEN
 	call RandomRange
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 	ld a, SCREEN_WIDTH_PX + TILE_WIDTH
 	ld [hli], a
@@ -467,6 +521,9 @@ ClearWeather:
 	ld h, d
 	ld l, e
 	ld a, OAM_YCOORD_HIDDEN
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 	xor a
 	ld [hli], a
@@ -570,6 +627,9 @@ DoRainFall:
 	ld hl, OAMA_Y
 	add hl, de
 	cp OAM_YCOORD_HIDDEN
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hl], a
 	jr nc, .despawn
 
@@ -599,6 +659,9 @@ DoRainFall:
 	; if the sprite goes offscreen, despawn it, otherwise update its x coord
 	ld hl, OAMA_X
 	add hl, de
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hl], a
 	jr c, .despawn
 .next
@@ -628,6 +691,9 @@ DoRainFall:
 	; hide the rain splash
 	ld hl, OAMA_Y
 	add hl, de
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hl], OAM_YCOORD_HIDDEN ; offscreen
 .splash_next
 	ld hl, OBJ_SIZE
@@ -642,6 +708,9 @@ DoRainFall:
 	ld hl, OAMA_Y
 	add hl, de
 	ld a, OAM_YCOORD_HIDDEN
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 	xor a
 	ld [hli], a
@@ -674,6 +743,9 @@ DoRainFall:
 	; if the sprite goes offscreen, despawn it, otherwise update its y coord
 	cp OAM_YCOORD_HIDDEN
 	jr nc, .despawn
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 
 	; double the player's step vector
@@ -691,6 +763,9 @@ DoRainFall:
 	; convert raindrop to splash
 	ld hl, OAMA_TILEID
 	add hl, de
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hl], RAINSPLASH_TILE
 	jr .next
 
@@ -765,6 +840,9 @@ DoSandFall:
 	ld hl, OAMA_Y
 	add hl, de
 	cp OAM_YCOORD_HIDDEN
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hl], a
 	jr nc, .despawn
 
@@ -794,6 +872,9 @@ DoSandFall:
 	; if the sprite goes offscreen, despawn it, otherwise update its x coord
 	ld hl, OAMA_X
 	add hl, de
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hl], a
 	jr c, .despawn
 .next
@@ -809,6 +890,9 @@ DoSandFall:
 	ld hl, OAMA_Y
 	add hl, de
 	ld a, OAM_YCOORD_HIDDEN
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 	xor a
 	ld [hli], a
@@ -824,13 +908,22 @@ SpawnSandDrop:
 
 	; sprite coord is (RandomRange(0, SCREEN_WIDTH_PX + 7) + TILE_WIDTH, SCREEN_HEIGHT_PX + TILE_WIDTH)
 	ld a, SCREEN_HEIGHT_PX + TILE_WIDTH
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 	ld a, SCREEN_WIDTH_PX + 7
 	call RandomRange
 	add TILE_WIDTH
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 .finish
 	ld a, SANDSTORM_TILE
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 	ld a, PAL_OW_WEATHER
 	ld [hld], a
@@ -847,6 +940,9 @@ SpawnSandDrop:
 	; sprite coord is (SCREEN_WIDTH_PX + TILE_WIDTH, RandomRange(0, OAM_YCOORD_HIDDEN))
 	ld a, OAM_YCOORD_HIDDEN
 	call RandomRange
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 	ld a, SCREEN_WIDTH_PX + TILE_WIDTH
 	ld [hli], a
@@ -913,6 +1009,9 @@ DoCherryBlossomFall:
 	ld hl, OAMA_Y
 	add hl, de
 	cp OAM_YCOORD_HIDDEN
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hl], a
 	jr nc, .despawn
 
@@ -942,6 +1041,9 @@ DoCherryBlossomFall:
 	ld hl, OAMA_X
 	add hl, de
 	sub 1 ; no-optimize a++|a-- (need to set carry)
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hl], a
 	jr c, .despawn
 .next
@@ -957,6 +1059,9 @@ DoCherryBlossomFall:
 	ld hl, OAMA_Y
 	add hl, de
 	ld a, OAM_YCOORD_HIDDEN
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 	xor a
 	ld [hli], a
@@ -1022,6 +1127,9 @@ SpawnCherryBlossom:
 	jr nc, .skip_store
 	ld c, a
 	inc a
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hl], a
 	ld hl, wWeatherScratch + 1
 	ld b, 0
@@ -1057,7 +1165,11 @@ SpawnCherryBlossom:
 	ldh [rWBK], a
 	ld a, [wWeatherScratch]
 	and a
+if DEF(MOBILE_ADAPTER)
+	jp z, .no_spawn
+else
 	jr z, .no_spawn
+endc
 	ld b, a
 	call RandomRange
 	ld c, a
@@ -1092,6 +1204,9 @@ SpawnCherryBlossom:
 	ld b, a ; stash original WRAM bank
 	pop hl
 	ld a, e
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a ; Y coord
 	ld a, d
 	ld [hli], a ; X coord
@@ -1117,10 +1232,16 @@ SpawnCherryBlossom:
 
 	; sprite coord is (0, RandomRange(0, SCREEN_WIDTH_PX + 7) + TILE_WIDTH)
 	xor a
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 	ld a, SCREEN_WIDTH_PX + 7
 	call RandomRange
 	add TILE_WIDTH
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 	jr .edge_finish
 
@@ -1128,12 +1249,18 @@ SpawnCherryBlossom:
 	; sprite coord is (RandomRange(0, OAM_YCOORD_HIDDEN), SCREEN_WIDTH_PX + TILE_WIDTH)
 	ld a, OAM_YCOORD_HIDDEN
 	call RandomRange
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a
 	ld a, SCREEN_WIDTH_PX + TILE_WIDTH
 	ld [hli], a
 
 .edge_finish
 	ld a, CHERRYLEAF_TILE
+if DEF(MOBILE_ADAPTER)
+	farcall MobileUnknownNativeWrite
+endc
 	ld [hli], a ; Tile ID
 	ld a, PAL_OW_WEATHER
 	ld [hli], a ; attributes

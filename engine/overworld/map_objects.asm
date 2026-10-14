@@ -1,6 +1,9 @@
 INCLUDE "data/sprites/facings.asm"
 
 DeleteMapObject::
+if DEF(MOBILE_ADAPTER)
+	farcall MobileRetireNativeObject
+endc
 	push bc
 	ld h, b
 	ld l, c
@@ -2168,6 +2171,9 @@ DespawnEmote:
 	ld a, [hl]
 	and a
 	jr z, .next
+IF DEF(MOBILE_ADAPTER)
+	farcall MobileRetireNativeObjectDE
+ENDC
 	push bc
 	xor a
 	ld bc, OBJECT_LENGTH
@@ -2188,7 +2194,11 @@ InitTempObject:
 	ret nc
 	ld d, h
 	ld e, l
+IF DEF(MOBILE_ADAPTER)
+	farjp MobileCopyTempObjectToObjectStruct
+ELSE
 	farjp CopyTempObjectToObjectStruct
+ENDC
 
 CopyTempObjectData:
 ; load into wTempObjectCopy:
@@ -2225,6 +2235,9 @@ CopyTempObjectData:
 	ret
 
 UpdateMapObjectDataAndSprites::
+if DEF(MOBILE_ADAPTER)
+	farcall MobileBeginNormalAttempt
+endc
 	ld a, [wStateFlags]
 	bit SPRITE_UPDATES_DISABLED_F, a
 	ret z
@@ -2719,6 +2732,9 @@ ResetObject:
 	db SPRITEMOVEDATA_STANDING_RIGHT
 
 _UpdateSprites::
+if DEF(MOBILE_ADAPTER)
+	farcall MobileBeginNormalAttempt
+endc
 	ld a, [wStateFlags]
 	bit SPRITE_UPDATES_DISABLED_F, a
 	ret z
@@ -2728,9 +2744,6 @@ _UpdateSprites::
 	push af
 	ld a, 1
 	ldh [hOAMUpdate], a
-if DEF(MOBILE_ADAPTER)
-	farcall MobileVirtualBeginSprites
-endc
 	call InitSprites
 	call .hide_unused_sprites
 	pop af

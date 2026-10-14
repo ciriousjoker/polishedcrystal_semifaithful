@@ -169,6 +169,9 @@ CopyMapObjectToObjectStruct:
 	ldh a, [hObjectStructIndexBuffer]
 	ld hl, MAPOBJECT_OBJECT_STRUCT_ID
 	add hl, bc
+if DEF(MOBILE_ADAPTER)
+	farcall MobileRetireNativeSlot
+endc
 	ld [hl], a
 
 	ldh a, [hMapObjectIndexBuffer]

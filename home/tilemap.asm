@@ -1,4 +1,7 @@
 ClearPalettes::
+if DEF(MOBILE_ADAPTER)
+	farcall MobilePalettePrewriteClear
+endc
 ; Make all palettes white
 	ldh a, [rWBK]
 	push af
