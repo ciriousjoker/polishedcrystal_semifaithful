@@ -89,39 +89,96 @@ def latency_results(args, states):
     samples = []
     totals = []
     local = [json.loads(line) for line in trace_text(args.output / "0/trace.jsonl").splitlines()]
+    def timestamp(row):
+        require("video_wall_us" in row and row["video_wall_us"] > 0,
+                "Missing native video callback timestamp")
+        return row["video_wall_us"]
+
+    def complete(row, prefix):
+        fields = row["symbols"]
+        require(all(prefix + suffix in fields for suffix in
+                    ("Complete", "Partial", "Coherent", "Quads", "Left", "TileHash", "PaletteHash", "Facing")),
+                "Missing current full-figure observation")
+        require(fields[prefix + "Complete"] == 1 and fields[prefix + "Partial"] == 0
+                and fields[prefix + "Coherent"] == 1 and 0 < fields[prefix + "Quads"] <= 16,
+                "Incomplete or incoherent hardware-selected latency figure")
+
+    references = set()
+    for row in local:
+        timestamp(row)
+        fields = row["symbols"]
+        if fields.get("vVideoLocalComplete") == 1 and fields.get("vVideoLocalCoherent") == 1:
+            references.add(tuple(fields["vVideoLocal" + suffix] for suffix in
+                                 ("Facing", "Quads", "TileHash", "PaletteHash")))
+    require(references, "Missing current native appearance references")
     for client in range(1, args.players):
         trace = [json.loads(line) for line in trace_text(args.output / str(client) / "trace.jsonl").splitlines()]
-        for event in events:
-            before = None
-            for candidate in reversed(trace):
-                if candidate["wall_us"] >= event["wall_us"]:
-                    continue
-                for index in range(1, args.players):
-                    if (candidate["symbols"][f"wMobilePeer{index}Id"] == player
-                            and 0 < candidate["symbols"][f"vMobilePeer{index}OAM0"] < 160):
-                        before, peer = candidate, str(index)
-                        break
-                if before is not None:
-                    break
-            require(before is not None and event["wall_us"] - before["wall_us"] < 200000,
+        for row in trace:
+            timestamp(row)
+        for event_index, event in enumerate(events):
+            end = events[event_index + 1]["wall_us"] if event_index + 1 < len(events) else float("inf")
+            # Use the immediately preceding callback. Searching backwards for a
+            # successful figure would hide missing or partial baseline samples.
+            before = next((row for row in reversed(trace) if timestamp(row) < event["wall_us"]), None)
+            require(before is not None and event["wall_us"] - timestamp(before) < 200000,
                     "Missing recent visible avatar baseline")
-            local_before = next(row for row in reversed(local) if row["wall_us"] < event["wall_us"])
-            require(before["symbols"][f"wMobilePeer{peer}DrawX"] == local_before["symbols"]["vMobileLocalX"],
+            matches = [str(index) for index in range(1, args.players)
+                       if before["symbols"].get(f"vVideoPeer{index}Id") == player]
+            require(len(matches) == 1, "Missing or ambiguous sender identity")
+            prefix = "vVideoPeer" + matches[0]
+            identity_keys = [prefix + suffix for suffix in
+                             ("Id", "Generation", "Instance", "Epoch", "MapGroup", "MapNumber")]
+            require(all(key in before["symbols"] for key in identity_keys), "Missing latency identity/map observation")
+            identity = tuple(before["symbols"][key] for key in identity_keys)
+
+            def valid(row):
+                complete(row, prefix)
+                fields = row["symbols"]
+                require(fields.get(prefix + "Ready") == 1, "Unready latency figure")
+                require(tuple(fields.get(key) for key in identity_keys) == identity,
+                        "Latency sender identity or map changed")
+                require(tuple(fields[prefix + suffix] for suffix in
+                              ("Facing", "Quads", "TileHash", "PaletteHash")) in references,
+                        "Latency pixels/colors do not match current native appearance")
+
+            valid(before)
+            local_before = next((row for row in reversed(local) if timestamp(row) < event["wall_us"]), None)
+            require(local_before is not None, "Missing local motion baseline")
+            complete(local_before, "vVideoLocal")
+            start = local_before["symbols"]["vVideoLocalX"]
+            require(before["symbols"][prefix + "DrawX"] == start and
+                    before["symbols"][prefix + "DrawY"] == local_before["symbols"]["vVideoLocalY"],
                     f"Unsettled remote baseline for client {client}, input frame {event['frame']}")
-            keys = [f"vMobilePeer{peer}OAM{index}" for index in range(16)]
-            def left_edge(row):
-                return min(row["symbols"][keys[index]] for index in (1, 5, 9, 13))
-            previous = left_edge(before)
-            changed = next((row for row in trace if row["wall_us"] >= event["wall_us"]
-                           and 0 < row["symbols"][keys[0]] < 160
-                           and (left_edge(row) - previous) * (1 if event["button"] == 7 else -1) > 0), None)
+            direction = 1 if event["button"] == 7 else -1
+            motion = None
+            for row in local:
+                if not event["wall_us"] <= timestamp(row) < end:
+                    continue
+                delta = row["symbols"]["vVideoLocalX"] - start
+                require(delta * direction >= 0, "Unrelated local directional motion")
+                if delta:
+                    complete(row, "vVideoLocal")
+                    motion = row
+                    break
+            require(motion is not None, "Missing local motion sample")
+            changed = None
+            for row in trace:
+                if not event["wall_us"] <= timestamp(row) < end:
+                    continue
+                valid(row)
+                delta = row["symbols"][prefix + "Left"] - before["symbols"][prefix + "Left"]
+                require(delta * direction >= 0, "Unrelated remote directional motion")
+                if delta:
+                    require((row["symbols"][prefix + "DrawX"] - start) * direction > 0,
+                            "Remote bounds changed without matching world motion")
+                    changed = row
+                    break
             require(changed is not None, f"No directional remote motion for client {client}, input frame {event['frame']}")
-            require(0 < changed["symbols"][keys[0]] < 160, "Latency sample was offscreen")
-            start = [row for row in local if row["wall_us"] < event["wall_us"]][-1]["symbols"]["vMobileLocalX"]
-            motion = next(row for row in local if row["wall_us"] >= event["wall_us"]
-                          and (row["symbols"]["vMobileLocalX"] - start) * (1 if event["button"] == 7 else -1) > 0)
-            samples.append((changed["wall_us"] - motion["wall_us"]) / 1000)
-            totals.append((changed["wall_us"] - event["wall_us"]) / 1000)
+            latency = (timestamp(changed) - timestamp(motion)) / 1000
+            require(latency >= 0, "Negative motion-to-visible latency sample")
+            samples.append(latency)
+            totals.append((timestamp(changed) - event["wall_us"]) / 1000)
+    require(args.players == 4 and len(samples) == 60, "Missing required 60 latency samples")
     samples.sort()
     totals.sort()
     return {"samples": len(samples), "p50_ms": samples[len(samples) // 2],
@@ -129,7 +186,7 @@ def latency_results(args, states):
             "added_client_server_rtt_ms": 2 * (args.test_one_way_delay_ms + args.declared_upstream_one_way_delay_ms),
             "input_to_remote_p95_ms": totals[math.ceil(len(totals) * .95) - 1],
             "input_to_remote_max_ms": totals[-1],
-            "measurement": "first captured local world motion to first directional position change of four-quad remote avatar bounds at native video callback; input-to-remote includes unchanged vanilla turn delay"}
+            "measurement": "first complete local world motion to first complete hardware-selected directional remote figure at actual video callback; current ROM facing geometry and native pixels/colors required; input event delay reported separately"}
 
 
 def run_client(args, index):

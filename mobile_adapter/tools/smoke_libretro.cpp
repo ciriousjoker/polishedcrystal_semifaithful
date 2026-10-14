@@ -31,6 +31,9 @@ static bool adapter_enabled = true;
 static unsigned input_frame = 0;
 static bool acceptance_enabled = false;
 static unsigned video_frames = 0, width = 0, height = 0;
+static uint64_t video_wall_us = 0;
+static std::map<std::string, unsigned> video_figure_values;
+static void capture_video_figures();
 static uint64_t audio_samples = 0, audio_batches = 0;
 static retro_pixel_format pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
 static std::vector<unsigned char> image;
@@ -523,6 +526,8 @@ static bool environment(unsigned command, void* data) {
 }
 
 static void video(const void* data, unsigned w, unsigned h, size_t pitch) {
+    video_wall_us = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
     ++video_frames;
     if (const auto* oam = descriptor(0xfe00)) std::memcpy(video_oam, oam, sizeof(video_oam));
     if (native_oam_byte) {
@@ -618,6 +623,7 @@ static void video(const void* data, unsigned w, unsigned h, size_t pitch) {
         // The pinned core's cpu::vram contains both physical 8 KiB banks.
         std::memcpy(video_native_tiles, vram, sizeof(video_native_tiles));
     }
+    capture_video_figures();
     if (!data) return;
     width = w;
     height = h;
@@ -719,7 +725,7 @@ int main(int argc, char** argv) {
     }
     if (arguments.count("--symbols")) load_bindings(arguments.at("--symbols"));
     acceptance_enabled = arguments.count("--acceptance") && arguments.at("--acceptance") == "1";
-    if (acceptance_enabled) acceptance_load_symbols(arguments.at("--symbols"), argv[2]);
+    if (arguments.count("--symbols")) acceptance_load_symbols(arguments.at("--symbols"), argv[2]);
     if (arguments.count("--input-events")) {
         input_events.open(arguments.at("--input-events"));
         if (!input_events) fail("Cannot write input timestamps");
@@ -1071,6 +1077,7 @@ int main(int argc, char** argv) {
         if (profile_frame) profile_frame();
         if (!trace_enabled && conditional_actions.empty() && walk_waypoints.empty()) continue;
         auto values = capture(sram, sram_size);
+        values.insert(video_figure_values.begin(), video_figure_values.end());
         if (acceptance_enabled) {
             acceptance_capture(values, sram, sram_size);
             values["vAcceptanceSaveCount"] = acceptance_save_metric ? acceptance_save_metric(0) : 0;
@@ -1196,7 +1203,7 @@ int main(int argc, char** argv) {
             auto wall_us = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now().time_since_epoch()).count();
             std::ostringstream record;
-            record << "{\"frame\":" << input_frame << ",\"wall_us\":" << wall_us << ",\"symbols\":";
+            record << "{\"frame\":" << input_frame << ",\"wall_us\":" << wall_us << ",\"video_wall_us\":" << video_wall_us << ",\"symbols\":";
             json_values(record, values);
             record << "}\n";
             const auto line = record.str();
@@ -1411,6 +1418,7 @@ int main(int argc, char** argv) {
         // Human-play fixtures stay offline. The explicit test option captures
         // live CPU/RAM state to verify recovery when peripheral sockets are lost.
         auto values = capture(sram, sram_size);
+        values.insert(video_figure_values.begin(), video_figure_values.end());
         if (!arguments.count("--test-snapshot-out"))
           for (const auto& expected : std::map<std::string, unsigned>{
                 {"hCGB", 1}, {"hCrashCode", 0}, {"hInMenu", 0},
@@ -1440,6 +1448,7 @@ int main(int argc, char** argv) {
         if (!hardware_oam) fail("Cannot preserve hardware OAM evidence");
         if (!arguments.count("--symbols")) fail("--state-out requires matching --symbols");
         auto values = capture(sram, sram_size);
+        values.insert(video_figure_values.begin(), video_figure_values.end());
         if (acceptance_enabled) {
             acceptance_capture(values, sram, sram_size);
             const char* marker_names[] = {"vAcceptanceReady", "vAcceptanceDialogDone", "vAcceptanceLoaded", "vAcceptanceLoadFailed", "vAcceptanceLinkEntered"};
