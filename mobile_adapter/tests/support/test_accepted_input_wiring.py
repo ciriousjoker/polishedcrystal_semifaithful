@@ -59,10 +59,11 @@ for(unsigned n:{0u,7u,9u}){bool rejected=false;try{check(a,n);}catch(const std::
 #include <cassert>
 #include <cstdint>
 #include <stdexcept>
-static unsigned calls=0;
+static unsigned calls=0,map_calls=0;
+static unsigned map_bind(unsigned i,unsigned b,unsigned a){assert(i==map_calls++&&b==(i<3?1u:0u)&&a==(i<3?0xd600+i:0xc800));return 1;}
 static unsigned bind(unsigned i,unsigned b,unsigned a){assert(i==calls++&&b==i%3&&a==0xd380+i);return 1;}
 static uint64_t values(uint64_t id,unsigned s,unsigned f){assert(id==7);return s*10+f;}
-template<class T>T symbol(void*,const char* name){return reinterpret_cast<T>(std::string(name)=="acceptance_profile_static_operand" ? reinterpret_cast<void*>(&bind):reinterpret_cast<void*>(&values));}
+template<class T>T symbol(void*,const char* name){return reinterpret_cast<T>(std::string(name)=="acceptance_profile_static_operand" ? reinterpret_cast<void*>(&bind):std::string(name)=="acceptance_profile_static_map_field" ? reinterpret_cast<void*>(&map_bind):reinterpret_cast<void*>(&values));}
 static void fail(const std::string& s){throw std::runtime_error(s);}
 int main(){
  void* core=nullptr;
@@ -71,8 +72,12 @@ int main(){
  for(unsigned i=0;i<6;++i)native_addresses[names[i]]={i%3,0xd380+i};
  uint64_t (*static_operands)(uint64_t,unsigned,unsigned)=nullptr;
  std::string static_operand_provenance;
+ uint64_t (*static_map_preimage)(uint64_t,unsigned,unsigned)=nullptr;
+ std::string static_map_provenance;
+ const char* map_names[]={"wMapWidth","wMapHeight","wMapTileset","wOverworldMapBlocks"};
+ for(unsigned i=0;i<4;++i)native_addresses[map_names[i]]={i<3?1u:0u,i<3?0xd600+i:0xc800};
 ''' + runner[start:end] + r'''
- assert(calls==6);
+ assert(calls==6&&map_calls==4);
  std::ostringstream static_log;const uint64_t static_written=7;
  auto static_source=&values;
 ''' + runner[export_start:export_end] + r'''
@@ -88,6 +93,8 @@ int main(){
             ['wXCoord','wYCoord','wPlayerStepFlags','wPlayerStepVectorX','wPlayerStepVectorY','wPlayerState'])])
         self.assertEqual(row['original_operands'],[[s*10+i for i in range(6)] for s in range(1,4)])
         self.assertEqual([len(s) for s in row['inputs']],[444,444,444])
+        self.assertEqual(row['original_map_fields'], [[name,1 if i<3 else 0,0xd600+i if i<3 else 0xc800] for i,name in enumerate(['wMapWidth','wMapHeight','wMapTileset','wOverworldMapBlocks'])])
+        self.assertEqual(row['original_map_preimage'], [[s*10+i for i in range(73)] for s in range(1,4)])
 
     def test_generated_lifecycle_and_original_instruction_wrappers(self):
         import runtime
@@ -165,6 +172,10 @@ static void slots(unsigned n,unsigned revision=1) {
   std::copy_n(p,20,g.cpu.ram+0x2400+i*64);
  }
 }
+static void map_memory(unsigned value) {
+ for(unsigned i=0;i<3;++i)g.cpu.ram[0x1600+i]=value+i;
+ for(unsigned y=0;y<7;++y)for(unsigned x=0;x<10;++x)g.cpu.memory[0xc800+51+y*16+x]=value+3+y*10+x;
+}
 static void arm(unsigned walking=255,unsigned duration=0) {
  retro_reset();assert(acceptance_profile_input_status(1));
  assert(!acceptance_profile_input_failure_context(0));
@@ -178,20 +189,40 @@ static void arm(unsigned walking=255,unsigned duration=0) {
  acceptance_profile_before(&g,r);r.PC=0x4700;r.SP=0xc102;acceptance_profile_after(&g,r,0xc9,16);
  assert(acceptance_profile_static_status(6));assert(acceptance_profile_static_enable());
  for(unsigned i=0;i<6;++i)g.cpu.ram[(i%2)*0x1000+0x380+i]=10+i;
+ map_memory(10);
  r.PC=0x4500;r.SP=0xc100;stack(g,r.SP,0x4520);
  acceptance_profile_before(&g,r);
  for(unsigned i=0;i<6;++i)g.cpu.ram[(i%2)*0x1000+0x380+i]=30+i;
+ map_memory(30);
  r.PC=0x4520;r.SP=0xc102;acceptance_profile_after(&g,r,0xc9,16);
  for(unsigned i=0;i<6;++i)g.cpu.ram[(i%2)*0x1000+0x380+i]=50+i;
- tick(0x4540);
+ map_memory(50);tick(0x4540);map_memory(70);
  for(unsigned i=0;i<6;++i)g.cpu.ram[(i%2)*0x1000+0x380+i]=70+i;
  for(unsigned section=1;section<=3;++section)for(unsigned i=0;i<6;++i)
   assert(acceptance_profile_static_operands(1,section,i)==10+20*(section-1)+i);
+ for(unsigned section=1;section<=3;++section)for(unsigned i=0;i<73;++i)
+  assert(acceptance_profile_static_map_preimage(1,section,i)==10+20*(section-1)+i);
  const auto before_getters=acceptance_static_intent.failure;
+ for(unsigned section:{0u,4u})assert(acceptance_profile_static_map_preimage(1,section,0)==~uint64_t(0));
+ assert(acceptance_profile_static_map_preimage(1,1,73)==~uint64_t(0));
+ assert(acceptance_profile_static_map_preimage(0,1,0)==~uint64_t(0));
+ assert(acceptance_profile_static_map_preimage(2,1,0)==~uint64_t(0));
  assert(acceptance_profile_static_operands(0,1,0)==~uint64_t(0));
  assert(acceptance_profile_static_operands(1,0,0)==~uint64_t(0));
  assert(acceptance_profile_static_operands(1,4,0)==~uint64_t(0));
  assert(acceptance_profile_static_operands(1,1,6)==~uint64_t(0));
+ {
+  const auto saved=acceptance_static_intent;
+  acceptance_static_intent.released=1;
+  assert(acceptance_profile_static_map_preimage(1,1,0)==~uint64_t(0));
+  acceptance_static_intent=saved;acceptance_static_intent.sources[0].id=9;
+  assert(acceptance_profile_static_map_preimage(1,1,0)==~uint64_t(0));
+  acceptance_static_intent=saved;acceptance_static_intent.next_id=9;
+  assert(acceptance_profile_static_map_preimage(1,1,0)==~uint64_t(0));
+  acceptance_static_intent=saved;acceptance_static_intent.sources[0].map_captured=false;
+  assert(acceptance_profile_static_map_preimage(1,1,0)==~uint64_t(0));
+  assert(acceptance_static_intent.failure==before_getters);acceptance_static_intent=saved;
+ }
  assert(acceptance_static_intent.failure==before_getters);
  if(walking!=255) {
   assert(!acceptance_profile_input_status(2));
@@ -278,7 +309,12 @@ int main() {
  assert(acceptance_profile_static_operands(1,1,0)==~uint64_t(0));
  for(unsigned i=0;i<6;++i)assert(acceptance_profile_static_operand(i,i%2,0xd380+i));
  assert(acceptance_static_intent.operands_configured);
+ assert(!acceptance_static_intent.map_configured);
+ assert(acceptance_profile_static_map_preimage(1,1,0)==~uint64_t(0));
+ for(unsigned i=0;i<4;++i)assert(acceptance_profile_static_map_field(i,i<3?1:0,i<3?0xd600+i:0xc800));
  assert(retro_load_game(nullptr));
+ assert(acceptance_static_intent.map_configured&&!acceptance_static_intent.pending.map_captured);
+ assert(acceptance_static_intent.map_fields[3].pc==0xc800);
  assert(acceptance_static_intent.operands_configured&&!acceptance_static_intent.enabled&&!acceptance_static_intent.failure);
  assert(!acceptance_static_intent.next_id&&!acceptance_static_intent.pending.operands_captured);
  assert(acceptance_profile_static_operands(1,1,0)==~uint64_t(0));
@@ -486,6 +522,23 @@ int main() {
  for(unsigned i=0;i<20;++i){tick(0x4580);commit(0);}
  assert(!acceptance_profile_input_status(3));
  // Supplemental declarations cannot be changed during an active observation.
+ assert(!acceptance_profile_static_map_field(0,1,0xd601));
+ assert(acceptance_static_intent.failure==10&&acceptance_static_intent.map_fields[0].pc==0xd600);
+ retro_reset();assert(acceptance_static_intent.map_configured&&!acceptance_static_intent.failure);
+ acceptance_static_intent.started=true;
+ assert(!acceptance_profile_static_map_field(0,1,0xd601));retro_reset();
+ for(const auto bad : std::array<std::array<unsigned,3>,10>{{
+  {{4,0,0xc800}},{{0,0,0xd600}},{{0,2,0xd600}},{{0,1,0xcfff}},{{0,1,0xe000}},
+  {{3,1,0xc800}},{{3,0,0xbfff}},{{3,0,0xcf64}},{{3,0,0xd000}},{{3,8,0xc800}}}}) {
+  assert(!acceptance_profile_static_map_field(bad[0],bad[1],bad[2]));
+  assert(acceptance_static_intent.failure==10);retro_reset();
+ }
+ assert(acceptance_profile_static_map_field(3,0,0xcf63));
+ assert(acceptance_profile_static_map_field(3,0,0xc800));
+ acceptance_static_intent.map_fields[3]={};acceptance_static_intent.map_configured=false;
+ assert(!acceptance_profile_static_enable()&&acceptance_static_intent.failure==10);retro_reset();
+ assert(acceptance_profile_static_map_field(3,0,0xc800));
+ arm();
  assert(!acceptance_profile_static_operand(0,1,0xd390));
  assert(acceptance_static_intent.failure==10);
  assert(acceptance_static_intent.operand_fields[0].pc==0xd380);

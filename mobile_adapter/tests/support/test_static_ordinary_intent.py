@@ -60,6 +60,50 @@ int main() {
             subprocess.run(["c++", "-std=c++17", "-Wall", "-Wextra", "-Werror", "-I", str(SUPPORT), str(cpp), "-o", str(exe)], check=True)
             subprocess.run([str(exe)], check=True)
 
+    def test_finite_map_stride_boundaries_and_default_off(self):
+        source = r'''#include "static_ordinary_intent.hpp"
+#include <cassert>
+int main(){
+ using namespace static_ordinary_intent;
+ Observer o;o.objects=0xd000;o.object_bank=2;o.camera_x=0xd300;o.camera_y=0xd301;
+ o.points={{{1,0x4000},{1,0x4100},{1,0x4200},{2,0x4300}}};
+ unsigned value=10,reads=0;
+ auto read=[&](unsigned bank,unsigned at)->unsigned {
+  if(bank==8)return at==0xc000?0x10:0x40;
+  if(bank==1&&at>=0xd600&&at<0xd603){++reads;return value+at-0xd600;}
+  if(at>=0xc800&&at<0xc900){
+   assert(bank==0&&at>=0xc833);unsigned d=at-0xc833;
+   assert(d/16<7&&d%16<10);++reads;return value+3+(d/16)*10+d%16;
+  }
+  return 0;
+ };
+ auto enter=[&]{o.before(1,0x4000,0xc000,0,read);};
+ auto ret=[&]{o.before(1,0x4011,0xc000,0,read);o.after(1,0x4010,0xc002,true,read);};
+ auto close=[&]{o.before(1,0x4200,0xc000,0,read);};
+ o.enabled=true;enter();ret();close();assert(reads==0&&!o.sources[0].map_captured);
+ for(unsigned i=0;i<4;++i)o.map_fields[i]={i<3?1u:0u,i<3?0xd600+i:0xc800};
+ o.map_configured=true;o.reset();assert(o.map_configured&&!o.enabled&&!o.pending.map_captured);
+ o.enabled=true;enter();assert(reads==73);value=30;
+ o.after(2,0x4010,0xc002,true,read);assert(reads==73&&o.active);
+ ret();assert(reads==146);value=50;close();assert(reads==219);value=70;
+ const auto first=o.sources[0];assert(first.map_captured&&first.entry<first.returned&&first.returned<first.closed);
+ for(unsigned i=0;i<73;++i){assert(first.map_entry[i]==10+i);assert(first.map_return[i]==30+i);assert(first.map_close[i]==50+i);}
+ for(unsigned n=0;n<7;++n){enter();ret();close();}
+ assert(o.sources[0].map_entry==first.map_entry&&o.sources[0].map_return==first.map_return&&o.sources[0].map_close==first.map_close);
+ enter();ret();close();assert(o.failure==6&&o.sources[0].map_entry==first.map_entry);
+ o.reset();assert(o.map_configured&&!o.next_id&&!o.pending.map_captured&&!o.sources[0].map_captured);
+ o.enabled=true;enter();ret();close();o.release(1);
+ for(unsigned n=0;n<8;++n){enter();ret();close();}
+ assert(!o.failure&&o.sources[0].id==9&&o.sources[0].map_entry[0]==70);
+}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            cpp=Path(directory)/"map.cpp"
+            exe=Path(directory)/"map"
+            cpp.write_text(source)
+            subprocess.run(["c++","-std=c++17","-Wall","-Wextra","-Werror","-I",str(SUPPORT),str(cpp),"-o",str(exe)],check=True)
+            subprocess.run([str(exe)],check=True)
+
     def test_source_return_closure_and_bounded_retention(self):
         source = r'''
 #include "static_ordinary_intent.hpp"

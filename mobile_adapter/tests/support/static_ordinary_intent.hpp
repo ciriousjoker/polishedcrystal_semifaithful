@@ -8,11 +8,14 @@ constexpr unsigned actor_count = 13, actor_stride = 34, source_capacity = 8;
 constexpr unsigned camera_bytes = 2, input_bytes = actor_count * actor_stride + camera_bytes;
 struct Point { unsigned bank = 0, pc = 0; };
 constexpr unsigned operand_bytes = 6; // X/Y coordinates, step flags/vector X/Y, player state
+constexpr unsigned map_bytes = 73; // width, height, tileset, fixed 7 by 10 interior
 struct Source {
     uint64_t id = 0, entry = 0, returned = 0, closed = 0;
     std::array<unsigned char, input_bytes> original{}, at_return{}, at_close{};
     std::array<unsigned char, operand_bytes> operands_entry{}, operands_return{}, operands_close{};
     bool operands_captured = false;
+    std::array<unsigned char, map_bytes> map_entry{}, map_return{}, map_close{};
+    bool map_captured = false;
     uint16_t emitted = 0;
 };
 // Each definition remains live until the consumer explicitly releases it. Ring
@@ -21,6 +24,8 @@ struct Observer {
     std::array<Point, 4> points{}; // producer, emitter, pre-limiter, outer opportunity
     std::array<Point, operand_bytes> operand_fields{}; // original WRAM bank/address declarations
     bool operands_configured = false;
+    std::array<Point, 4> map_fields{}; // width, height, tileset, block-buffer base
+    bool map_configured = false;
     unsigned objects = 0, object_bank = 0, camera_x = 0, camera_y = 0;
     uint64_t instruction = 0, next_id = 0, released = 0, latest = 0, opportunity = 0;
     unsigned failure = 0, pre_sp = 0, call_sp = 0, return_pc = 0, return_bank = 0;
@@ -34,10 +39,13 @@ struct Observer {
         const auto configured_x = camera_x, configured_y = camera_y;
         const auto configured_operands = operand_fields;
         const auto capture_operands = operands_configured;
+        const auto configured_map = map_fields;
+        const auto capture_map = map_configured;
         *this = Observer{};
         points = configured_points; objects = configured_objects; object_bank = configured_bank;
         camera_x = configured_x; camera_y = configured_y;
         operand_fields = configured_operands; operands_configured = capture_operands;
+        map_fields = configured_map; map_configured = capture_map;
     }
     template<class Read> std::array<unsigned char, input_bytes> capture(Read read) const {
         std::array<unsigned char, input_bytes> out{};
@@ -51,6 +59,14 @@ struct Observer {
         std::array<unsigned char, operand_bytes> out{};
         for (unsigned i = 0; i < operand_bytes; ++i)
             out[i] = read(operand_fields[i].bank, operand_fields[i].pc);
+        return out;
+    }
+    template<class Read> std::array<unsigned char, map_bytes> capture_map(Read read) const {
+        std::array<unsigned char, map_bytes> out{};
+        for (unsigned i = 0; i < 3; ++i) out[i] = read(map_fields[i].bank, map_fields[i].pc);
+        // Finite diagnostic capture ignores metadata values and retains mismatches.
+        for (unsigned y = 0; y < 7; ++y) for (unsigned x = 0; x < 10; ++x)
+            out[3 + y * 10 + x] = read(map_fields[3].bank, map_fields[3].pc + 3 + 3 * 16 + y * 16 + x);
         return out;
     }
     bool matches(unsigned i, unsigned bank, unsigned pc) const {
@@ -71,6 +87,8 @@ struct Observer {
             pending.original = capture(read);
             pending.operands_captured = operands_configured;
             if (pending.operands_captured) pending.operands_entry = capture_operands(read);
+            pending.map_captured = map_configured;
+            if (pending.map_captured) pending.map_entry = capture_map(read);
             call_sp = sp; return_pc = read(8, sp) | read(8, (sp + 1) & 0xffff) << 8;
             return_bank = return_pc < 0x4000 ? 0 : bank;
         }
@@ -86,6 +104,7 @@ struct Observer {
             if (next_id - released >= source_capacity) { fail(6); return; }
             pending.closed = instruction; pending.at_close = capture(read);
             if (pending.operands_captured) pending.operands_close = capture_operands(read);
+            if (pending.map_captured) pending.map_close = capture_map(read);
             pending.id = ++next_id; sources[(next_id - 1) % source_capacity] = pending;
             latest = next_id; has_return = false;
         }
@@ -106,6 +125,7 @@ struct Observer {
                 pc == return_pc && bank == return_bank) {
             pending.returned = instruction; pending.at_return = capture(read);
             if (pending.operands_captured) pending.operands_return = capture_operands(read);
+            if (pending.map_captured) pending.map_return = capture_map(read);
             active = false; has_return = true;
         }
     }

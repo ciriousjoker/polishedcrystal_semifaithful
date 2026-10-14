@@ -448,11 +448,35 @@ extern "C" uint64_t acceptance_profile_static_operands(uint64_t id, unsigned sec
     if (source.id != id || !source.operands_captured) return ~uint64_t(0);
     return section == 1 ? source.operands_entry[field] : section == 2 ? source.operands_return[field] : source.operands_close[field];
 }
+// Exact native WRAM declarations for the finite EMPTY map diagnostic only.
+extern "C" unsigned acceptance_profile_static_map_field(unsigned index, unsigned bank, unsigned address) {
+    auto& observer = acceptance_static_intent;
+    if (observer.enabled || observer.started || index >= 4 ||
+            (index < 3 ? (bank != 1 || address < 0xd000 || address >= 0xe000) :
+                (bank != 0 || address < 0xc000 || address > 0xcfff - (3 + 3 * 16 + 6 * 16 + 9)))) {
+        observer.fail(10); return 0;
+    }
+    observer.map_fields[index] = {bank, address};
+    observer.map_configured = true;
+    for (const auto& field : observer.map_fields) observer.map_configured &= field.pc != 0;
+    return 1;
+}
+extern "C" uint64_t acceptance_profile_static_map_preimage(uint64_t id, unsigned section, unsigned field) {
+    const auto& observer = acceptance_static_intent;
+    if (!id || id <= observer.released || id > observer.next_id ||
+            observer.next_id - id >= static_ordinary_intent::source_capacity ||
+            field >= static_ordinary_intent::map_bytes || section < 1 || section > 3) return ~uint64_t(0);
+    const auto& source = observer.sources[(id - 1) % static_ordinary_intent::source_capacity];
+    if (source.id != id || !source.map_captured) return ~uint64_t(0);
+    return section == 1 ? source.map_entry[field] : section == 2 ? source.map_return[field] : source.map_close[field];
+}
 extern "C" unsigned acceptance_profile_static_enable() {
     for (const auto& point : acceptance_static_intent.points)
         if (!point.pc) acceptance_static_intent.fail(10);
     for (const auto& field : acceptance_static_intent.operand_fields)
         if (field.pc && !acceptance_static_intent.operands_configured) acceptance_static_intent.fail(10);
+    for (const auto& field : acceptance_static_intent.map_fields)
+        if (field.pc && !acceptance_static_intent.map_configured) acceptance_static_intent.fail(10);
     if (!acceptance_static_intent.objects || !acceptance_static_world_configured) acceptance_static_intent.fail(10);
     if (!acceptance_static_world_ready || acceptance_observation_invalid) return 0;
     acceptance_static_intent.enabled = !acceptance_static_intent.failure;

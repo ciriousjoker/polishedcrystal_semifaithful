@@ -1125,6 +1125,8 @@ int main(int argc, char** argv) {
     uint64_t (*static_source)(uint64_t,unsigned,unsigned) = nullptr;
     uint64_t (*static_operands)(uint64_t,unsigned,unsigned) = nullptr;
     std::string static_operand_provenance;
+    uint64_t (*static_map_preimage)(uint64_t,unsigned,unsigned) = nullptr;
+    std::string static_map_provenance;
     void (*static_release)(uint64_t) = nullptr;
     unsigned (*static_enable)() = nullptr;
     std::ofstream static_log, static_status_log;
@@ -1382,6 +1384,18 @@ int main(int argc, char** argv) {
                     provenance << (i ? "," : "") << "[\"" << operands[i] << "\"," << p.first << ',' << p.second << ']';
                 }
                 provenance << "]"; static_operand_provenance = provenance.str();
+                auto map_field = symbol<unsigned(*)(unsigned,unsigned,unsigned)>(core, "acceptance_profile_static_map_field");
+                static_map_preimage = symbol<uint64_t(*)(uint64_t,unsigned,unsigned)>(core, "acceptance_profile_static_map_preimage");
+                const char* map_fields[] = {"wMapWidth", "wMapHeight", "wMapTileset", "wOverworldMapBlocks"};
+                std::ostringstream map_provenance;
+                map_provenance << "[";
+                for (unsigned i = 0; i < 4; ++i) {
+                    if (!native_addresses.count(map_fields[i])) fail(std::string("Missing original map field: ") + map_fields[i]);
+                    const auto p = native_addresses.at(map_fields[i]);
+                    if (!map_field(i, p.first, p.second)) fail("Invalid original map field binding");
+                    map_provenance << (i ? "," : "") << "[\"" << map_fields[i] << "\"," << p.first << ',' << p.second << ']';
+                }
+                map_provenance << "]"; static_map_provenance = map_provenance.str();
                 auto point = symbol<unsigned(*)(unsigned,unsigned,unsigned,unsigned)>(core,"acceptance_profile_input_point");
                 auto field = symbol<unsigned(*)(unsigned,unsigned,unsigned)>(core,"acceptance_profile_input_field");
                 std::ifstream source_rom(argv[2],std::ios::binary);
@@ -1958,6 +1972,15 @@ int main(int argc, char** argv) {
                         for (unsigned section = 1; section <= 3; ++section) {
                             static_log << (section > 1 ? ",[" : "[");
                             for (unsigned b = 0; b < 6; ++b) static_log << (b ? "," : "") << static_operands(static_written, section, b);
+                            static_log << "]";
+                        }
+                        static_log << "]";
+                    }
+                    if (static_map_preimage) {
+                        static_log << ",\"original_map_fields\":" << static_map_provenance << ",\"original_map_preimage\":[";
+                        for (unsigned section = 1; section <= 3; ++section) {
+                            static_log << (section > 1 ? ",[" : "[");
+                            for (unsigned b = 0; b < 73; ++b) static_log << (b ? "," : "") << static_map_preimage(static_written, section, b);
                             static_log << "]";
                         }
                         static_log << "]";
