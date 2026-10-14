@@ -311,8 +311,12 @@ static void load_bindings(const std::string& path) {
     };
     // Exported EQU aliases have no bank in RGBDS symbols. This exact private
     // bank-5 layout is audited against mobile_adapter/rom/ram.asm. NativeRGB
-    // owns 64 bytes at DB4B..DB8A; the other aliases occupy D840..D9FF.
+    // owns 64 bytes at DB4B..DB8A; the source-bound compact prefix metadata
+    // owns DB40..DB43. Other retained aliases occupy D840..D9FF.
     const std::map<std::string, unsigned> stable_aliases = {
+        {"wMobileCompactNativeLength", 0xdb40},
+        {"wMobileCompactNativeMask", 0xdb41},
+        {"wMobileCompactNativePalette", 0xdb43},
         {"wMobileStableOriginalYs", 0xd840},
         {"wMobileStableOwners", 0xd868},
         {"wMobileStablePhases", 0xd890},
@@ -346,6 +350,13 @@ static void load_bindings(const std::string& path) {
         {"wMobileStableNativeRGB", 0xdb4b},
         {"wMobileStableCameraX", 0xd8f0},
         {"wMobileStableCameraY", 0xd8f2},
+        {"wMobileStableUnknownCount", 0xd8f4},
+        {"wMobileStablePoseMask", 0xd8f5},
+        {"wMobileStablePoseToken", 0xd8f6},
+        {"wMobileStablePoseBatch", 0xd90a},
+        {"wMobileStablePoseGeneration", 0xd922},
+        {"wMobileStablePosePreparing", 0xd923},
+        {"wMobileStablePoseCanceled", 0xd924},
     };
     std::ifstream symbols(path);
     if (!symbols) fail("Cannot read matching symbols");
@@ -357,9 +368,9 @@ static void load_bindings(const std::string& path) {
         if (!watched.count(name) && name.rfind("wMobile", 0) != 0 && name.rfind("wLoadedObjPal", 0) != 0 &&
             name.rfind("wAcceptance", 0) != 0) continue;
         auto colon = location.find(':');
-        if (name.rfind("wMobileStable", 0) == 0) {
+        if (name.rfind("wMobileStable", 0) == 0 || name.rfind("wMobileCompact", 0) == 0) {
             const auto alias = stable_aliases.find(name);
-            if (alias == stable_aliases.end()) fail("Unknown retained-source alias");
+            if (alias == stable_aliases.end()) fail("Unknown retained-source alias: " + name);
             // Validate the complete location, rather than accepting a numeric
             // prefix or allowing a typed row to bypass the private-bank guard.
             const auto hex = [](const std::string& value) {
@@ -383,7 +394,10 @@ static void load_bindings(const std::string& path) {
             const bool resident_pose = (name.rfind("wMobileVirtualQueued", 0) == 0 ||
                                         name == "wMobileVirtualBackgroundFrame") &&
                                        address >= 0xcf0b && address <= 0xcf14;
-            if (!resident_pose && (address < 0xcf44 || address >= 0xdd00))
+            const bool resident_pose_batch =
+                (name == "wMobileVirtualPoseBatchMask" && address == 0xcf15) ||
+                (name == "wMobileVirtualPoseBatchIndex" && address == 0xcf16);
+            if (!resident_pose && !resident_pose_batch && (address < 0xcf44 || address >= 0xdd00))
                 fail("Virtual alias outside audited private WRAM");
             bindings[name] = {address < 0xd000 ? 0u : 5u, address};
             continue;
@@ -1008,8 +1022,12 @@ int main(int argc, char** argv) {
     if (initializer_requested) {
         for (const char* required : {"--accepted-ordinary-inputs", "--static-intent-sources", "--symbols", "--ordinary-stream", "--ordinary-count"})
             if (!arguments.count(required)) fail(std::string("Initializer diagnostic requires ") + required);
-        if (arguments.at("--ordinary-count") != "64" || arguments.count("--ordinary-start") || arguments.count("--ordinary-gate") || arguments.count("--cold-intent-boundaries"))
-            fail("Initializer diagnostic requires exactly64 startup outputs and its genuine native anchor");
+        const auto& capture_text = arguments.at("--ordinary-count");
+        const bool capture_decimal = !capture_text.empty() && capture_text.size() <= 3 &&
+            std::all_of(capture_text.begin(), capture_text.end(), [](char c) { return c >= '0' && c <= '9'; });
+        const auto capture_count = capture_decimal ? std::stoul(capture_text) : 0;
+        if (capture_count < 64 || capture_count > 800 || arguments.count("--ordinary-start") || arguments.count("--ordinary-gate") || arguments.count("--cold-intent-boundaries"))
+            fail("Initializer diagnostic requires64..800 startup outputs and its genuine native anchor");
     }
     const bool cold_requested = arguments.count("--cold-intent-boundaries");
     if (cold_requested) for (const char* required : {"--accepted-ordinary-inputs", "--static-intent-sources", "--symbols"})
@@ -1523,6 +1541,8 @@ int main(int argc, char** argv) {
                         if(!field(i,p.first,p.second))fail("Initializer field configuration failed");
                         initializer_log << (i?",":"") << "[\"" << fields[i] << "\"," << p.first << ',' << p.second << ']';
                     }
+                    if(!symbol<unsigned(*)(unsigned)>(core,"acceptance_profile_initializer_limit")(std::stoul(arguments.at("--ordinary-count"))))
+                        fail("Initializer capture capacity rejected");
                     const auto anchor=native_addresses.at("RefreshMapSprites");
                     if(!symbol<unsigned(*)(unsigned,unsigned,unsigned,unsigned)>(core,"acceptance_profile_initializer_config")(anchor.first,anchor.second,11,23))
                         fail("Initializer configuration failed");
@@ -2309,7 +2329,7 @@ int main(int argc, char** argv) {
         colors.insert((unsigned(image[i]) << 16) | (unsigned(image[i + 1]) << 8) | image[i + 2]);
     reference_snapshot("final");
     initializer_flush(true);
-    if(initializer_value && (initializer_value(0,0,6) || initializer_written!=64 || !initializer_value(0,0,3) || !initializer_value(0,0,13)))
+    if(initializer_value && (initializer_value(0,0,6) || initializer_written!=std::stoul(arguments.at("--ordinary-count")) || !initializer_value(0,0,3) || !initializer_value(0,0,13)))
         fail("Initializer diagnostic incomplete or failed; see retained raw startup evidence");
     cold_flush();
     if (cold_value && (!cold_log || !cold_value(0,0,2) || !cold_value(0,0,5)))

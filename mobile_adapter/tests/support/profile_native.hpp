@@ -547,6 +547,9 @@ static native_initializer::Probe acceptance_initializer;
 static void acceptance_initializer_activation() {
  if(acceptance_initializer.configured && !acceptance_initializer.activation)acceptance_initializer.activation=acceptance_initializer.order;
 }
+extern "C" unsigned acceptance_profile_initializer_limit(unsigned count) {
+ return acceptance_initializer.set_limit(count);
+}
 extern "C" unsigned acceptance_profile_initializer_config(unsigned bank,unsigned pc,unsigned group,unsigned number) {
  if(acceptance_initializer.configured || acceptance_static_intent.enabled || !acceptance_input_configured || !pc || bank>255 || !group || !number) return 0;
  auto& p=acceptance_initializer;p.configured=true;p.bank=bank;p.pc=pc;p.group=group;p.number=number;return 1;
@@ -1003,9 +1006,9 @@ extern "C" void acceptance_profile_ordinary_unsupported_output() {
     if (acceptance_ordinary_state == 1) acceptance_ordinary_fail(1);
 }
 extern "C" void acceptance_profile_render_buffer(const void* buffer, unsigned line) {
-    if(line==0 && acceptance_initializer.configured && acceptance_initializer.anchored && acceptance_ordinary_count<64) {
+    if(line==0 && acceptance_initializer.configured && acceptance_initializer.anchored && acceptance_ordinary_count<acceptance_initializer.limit) {
         auto& p=acceptance_initializer;
-        if(p.count==64)p.fail(6);
+        if(p.count==p.limit)p.fail(6);
         else {
             auto& r=p.rows[p.count++];r.order=p.order;r.host=mobile_observed_frames;
             r.ly=acceptance_game_context?acceptance_game_context->get_cpu()->read(0xff44):~0u;
@@ -1337,7 +1340,7 @@ static void acceptance_profile_before(gb* game, const cpu_regs& regs) {
         const unsigned b=acceptance_effect_bank(game,regs.PC);
         if(!p.anchored && b==p.bank && regs.PC==p.pc && acceptance_static_world_value(game,0)==p.group && acceptance_static_world_value(game,1)==p.number) {
             p.anchored=true;p.anchor=p.order;
-            if(!acceptance_profile_ordinary_arm(64))p.fail(1);
+            if(!acceptance_profile_ordinary_arm(p.limit))p.fail(1);
         }
         if(!p.first_source && acceptance_static_intent.matches(0,b,regs.PC))p.first_source=p.order;
         if(!p.first_outer && acceptance_static_intent.matches(3,b,regs.PC))p.first_outer=p.order;

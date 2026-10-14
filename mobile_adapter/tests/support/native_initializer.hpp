@@ -1,5 +1,6 @@
 // Finite startup diagnostic. All authority values are owned, never observer references.
 #pragma once
+#include <vector>
 #include "static_ordinary_intent.hpp"
 #include "accepted_ordinary_input.hpp"
 namespace native_initializer {
@@ -38,12 +39,17 @@ struct Probe {
  unsigned entry_bank=0, entry_pc=0, entry_sp=0, return_bank=0, return_pc=0, return_sp=0;
  Sample initializer{};
  Authority pending{};
- std::array<Raster,64> rows{};
+ unsigned limit=64;
+ std::vector<Raster> rows=std::vector<Raster>(64);
+ bool set_limit(unsigned value) {
+  if(configured || value<64 || value>800)return false;
+  limit=value; rows.resize(value); return true;
+ }
  void fail(unsigned why) { if(!failure) failure=why; }
  void reset() {
-  const auto b=bank,p=pc,g=group,n=number; const bool c=configured;
+  const auto b=bank,p=pc,g=group,n=number,capacity=limit; const bool c=configured;
   unsigned fields[24][2]; std::copy(&lighting_fields[0][0],&lighting_fields[0][0]+48,&fields[0][0]);
-  *this=Probe{}; configured=c; bank=b;pc=p;group=g;number=n;
+  *this=Probe{}; limit=capacity; rows.resize(capacity); configured=c; bank=b;pc=p;group=g;number=n;
   std::copy(&fields[0][0],&fields[0][0]+48,&lighting_fields[0][0]);
  }
  static uint64_t sample_value(const Sample& s,unsigned f) {
