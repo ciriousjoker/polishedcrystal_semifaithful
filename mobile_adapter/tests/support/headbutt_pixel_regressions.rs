@@ -159,7 +159,16 @@ fn headbutt_pixel_later_teardown_and_shake_return_cannot_excuse_earlier_disappea
     let mut e=teardown_fixture();let run=&mut e["clients"][0]["mobile"];
     run["profile"]["native_effect_events"][2]["fields"][0]=json!(32);
     run["profile"]["native_effect_events"].as_array_mut().unwrap().push(event(4,0,&vec![0;160]));
-    for y in 0..144{run["profile"]["native_effect_video_frames"][2]["rows"][y*16+1]=json!(2);}
+    for y in 0..144{run["profile"]["native_effect_video_frames"][2]["rows"][y*16+1]=json!(2);run["profile"]["native_effect_video_frames"][2]["rows"][y*16+3]=json!(2);}
+    // Supply a separate earlier live control occurrence so this corruption
+    // reaches complete source demand, rather than a missing counterpart gate.
+    let video = e["clients"][0]["single"]["profile"]["native_effect_video_frames"].as_array_mut().unwrap();
+    let live = video[1].clone(); video.insert(2, live);
+    for (i, frame) in video.iter_mut().enumerate() {
+        frame["render_metadata"][1] = json!(i+1);
+        frame["display_metadata"][1] = json!(i+2);
+        frame["display_metadata"][2] = json!(i+1);
+    }
     rejects(&e,"Every source-bound native effect quad");
     let mut stale=teardown_fixture();
     stale["clients"][0]["single"]["profile"]["native_effect_events"][2]["watches"]["4"][0]=json!(1);
@@ -312,8 +321,10 @@ fn headbutt_pixel_window_accepts_pinned_rows_and_rejects_unbiased_map() {
 #[test]
 fn headbutt_pixel_window_accepts_signed_reset_row_and_rejects_address_overflow() {
     let mut e = window_fixture(true); headbutt_pixels(&e);
-    for frame in e["clients"][0]["mobile"]["profile"]["native_effect_video_frames"].as_array_mut().unwrap() {
-        frame["rows"][143*16+8]=json!(1000);
+    for name in ["mobile", "single"] {
+        for frame in e["clients"][0][name]["profile"]["native_effect_video_frames"].as_array_mut().unwrap() {
+            frame["rows"][143*16+8]=json!(1000);
+        }
     }
     rejects(&e,"Actual window/BG map address outside captured VRAM bank");
 }
@@ -382,4 +393,213 @@ fn headbutt_pixel_unrelated_clear_cannot_waive_active_source_or_later_writes() {
     for y in 0..144 { frame["rows"][y*16+2] = json!(16); frame["rows"][y*16+11] = json!(16); }
     frame["hardware"][159] = json!(1); frame["hardware"][16965] = json!(1);
     rejects(&written, "Native ShadowOAM changed after producer binding");
+}
+
+fn presentation_fixture() -> Value {
+    let mut e = teardown_fixture();
+    for name in ["mobile", "single"] {
+        let run = &mut e["clients"][0][name];
+        let base = run["profile"]["native_effect_video_frames"][2].clone();
+        run["profile"]["native_effect_video_frames"].as_array_mut().unwrap().truncate(2);
+        for (ordinal, age) in [0,1,3,3,5,6,7].into_iter().enumerate() {
+            let mut f = base.clone();
+            let output = ordinal + 3;
+            f["render_metadata"][1] = json!(output);
+            f["render_metadata"][2] = json!(3 + age);
+            f["display_metadata"][1] = json!(output + 1);
+            f["display_metadata"][2] = json!(output);
+            f["display_metadata"][3] = json!(3 + age);
+            f["host_frame"] = json!(3 + ordinal);
+            f["rows"] = json!(rows(3, 3 + age, 1));
+            f["hardware"][16800] = json!(0xb3);
+            f["hardware"][16803] = json!(if age == 5 || age == 6 {0} else {144});
+            f["hardware"][16804] = json!(7);
+            for y in 0..144 { f["rows"][y*16+8] = json!(if age == 5 || age == 6 {9+y} else {9}); }
+            run["profile"]["native_effect_video_frames"].as_array_mut().unwrap().push(f);
+        }
+    }
+    e
+}
+#[test]
+fn headbutt_pixel_retained_source_matches_dma_progress_and_repeated_output() {
+    headbutt_pixels(&presentation_fixture());
+}
+#[test]
+fn headbutt_pixel_retained_source_rejects_stale_stage_and_wrong_same_stage_view() {
+    let mut e = presentation_fixture();
+    for y in 0..144 {
+        e["clients"][0]["mobile"]["profile"]["native_effect_video_frames"][6]["rows"][y*16+3] = json!(20);
+    }
+    rejects(&e, "No same-source control");
+    let mut stale = presentation_fixture();
+    // A stale delta0 candidate cannot substitute for the missing delta5 control.
+    stale["clients"][0]["single"]["profile"]["native_effect_video_frames"].as_array_mut().unwrap().remove(6);
+    rejects(&stale, "No same-source control");
+    for index in [6,7,8] {
+        let mut e = presentation_fixture();
+        e["clients"][0]["mobile"]["profile"]["native_effect_video_frames"][index]["hardware"][16803] = json!(if index == 8 {0} else {144});
+        rejects(&e, "Actual native view geometry differs");
+    }
+    let mut e = presentation_fixture();
+    e["clients"][0]["mobile"]["profile"]["native_effect_video_frames"][6]["rows"][8] = json!(10);
+    rejects(&e, "Actual native window line differs");
+}
+#[test]
+fn headbutt_pixel_retained_source_rejects_extra_or_missing_actual_output() {
+    for extra in [false,true] {
+        let mut e = presentation_fixture();
+        let video = e["clients"][0]["mobile"]["profile"]["native_effect_video_frames"].as_array_mut().unwrap();
+        if extra { let f = video[5].clone(); video.insert(6,f); } else { video.remove(5); }
+        for (i,f) in video.iter_mut().enumerate() {
+            f["render_metadata"][1] = json!(i+1);
+            f["display_metadata"][1] = json!(i+2);
+            f["display_metadata"][2] = json!(i+1);
+        }
+        rejects(&e, if extra {"No same-source control occurrence"} else {"Actual output source-stage progression or repeated-DMA multiplicity differs"});
+    }
+    let mut e = presentation_fixture();
+    e["clients"][0]["mobile"]["profile"]["native_effect_video_frames"][8]["display_metadata"][1] = json!(100);
+    rejects(&e, "Missing/discontinuous actual output invocation");
+}
+#[test]
+fn headbutt_pixel_retained_source_rejects_invalid_age_and_ambiguous_control() {
+    let mut e = presentation_fixture();
+    e["clients"][0]["mobile"]["profile"]["native_effect_video_frames"][2]["rows"][3] = json!(2);
+    rejects(&e, "Actual DMA precedes its native source frame");
+    let mut e = presentation_fixture();
+    e["clients"][0]["single"]["profile"]["native_effect_video_frames"][5]["hardware"][16803] = json!(0);
+    rejects(&e, "Actual native view geometry differs");
+}
+#[test]
+fn headbutt_pixel_progression_uses_separate_source_and_output_counter_domains() {
+    let mut e = presentation_fixture();
+    let run = &mut e["clients"][0]["single"];
+    for event in run["profile"]["native_effect_events"].as_array_mut().unwrap() {
+        event["fields"][1] = json!(event["fields"][1].as_u64().unwrap()+32);
+    }
+    for f in run["profile"]["native_effect_video_frames"].as_array_mut().unwrap() {
+        f["host_frame"] = json!(f["host_frame"].as_u64().unwrap()+32);
+        f["render_metadata"][1] = json!(f["render_metadata"][1].as_u64().unwrap()+900);
+        f["render_metadata"][2] = json!(f["render_metadata"][2].as_u64().unwrap()+32);
+        f["display_metadata"][1] = json!(f["display_metadata"][1].as_u64().unwrap()+500);
+        f["display_metadata"][2] = f["render_metadata"][1].clone();
+        f["display_metadata"][3] = f["render_metadata"][2].clone();
+        for y in 0..144 {for field in [3,10] {
+            f["rows"][y*16+field] = json!(f["rows"][y*16+field].as_u64().unwrap()+32);
+        }}
+    }
+    headbutt_pixels(&e);
+}
+
+// Two actual outputs share the same native source and actual DMA identity.
+// Their independent intended inputs may evolve between output invocations.
+fn repeated_live_fixture() -> Value {
+    let mut e = fixture();
+    for name in ["mobile", "single"] {
+        let video = e["clients"][0][name]["profile"]["native_effect_video_frames"].as_array_mut().unwrap();
+        let first = video[0].clone(); video.insert(1, first);
+        for (i, frame) in video.iter_mut().enumerate() {
+            frame["render_metadata"][1] = json!(i+1);
+            frame["display_metadata"][1] = json!(i+2);
+            frame["display_metadata"][2] = json!(i+1);
+        }
+    }
+    e
+}
+fn earlier_live_color(frame: &mut Value) {
+    // Fixed independent RGB5(4,4,4) -> RGB565(4,8,4), plus both full rectangles.
+    frame["hardware"][16544+15*8+2] = json!(0x84);
+    frame["hardware"][16544+15*8+3] = json!(0x10);
+    frame["hardware"][16672+15*8+2] = json!(0x04);
+    frame["hardware"][16672+15*8+3] = json!(0x21);
+    for y in 16..24 { for x in (16..24).chain(40..48) {
+        frame["pixels"][(y*160+x)*2] = json!(0x04);
+        frame["pixels"][(y*160+x)*2+1] = json!(0x21);
+    }}
+}
+#[test]
+fn headbutt_pixel_each_duplicate_occurrence_retains_intended_tile() {
+    let mut e = presentation_fixture();
+    // Earlier inactive effect tile differs, while its own pixels stay exact.
+    e["clients"][0]["single"]["profile"]["native_effect_video_frames"][4]["hardware"][160+256] = json!(0);
+    rejects(&e, "Actual native animation tiles differ");
+}
+#[test]
+fn headbutt_pixel_each_duplicate_occurrence_retains_live_rgb() {
+    let mut e = repeated_live_fixture();
+    earlier_live_color(&mut e["clients"][0]["single"]["profile"]["native_effect_video_frames"][0]);
+    rejects(&e, "Actual intended OBJ palette RGB differs at slot 15");
+}
+#[test]
+fn headbutt_pixel_duplicate_occurrences_allow_corresponding_native_input_changes() {
+    let mut e = repeated_live_fixture();
+    for name in ["mobile", "single"] {
+        let first = &mut e["clients"][0][name]["profile"]["native_effect_video_frames"][0];
+        earlier_live_color(first);
+        // Background is blank, so native SCX may change without repainting it.
+        first["hardware"][16802] = json!(8);
+    }
+    headbutt_pixels(&e);
+    let mut e = presentation_fixture();
+    for name in ["mobile", "single"] {
+        e["clients"][0][name]["profile"]["native_effect_video_frames"][4]["hardware"][160+256] = json!(0);
+    }
+    headbutt_pixels(&e);
+}
+#[test]
+fn headbutt_pixel_duplicate_occurrences_reject_wrong_first_or_second_pair() {
+    for wrong in [0,1] {
+        let mut e = repeated_live_fixture();
+        for name in ["mobile", "single"] {
+            earlier_live_color(&mut e["clients"][0][name]["profile"]["native_effect_video_frames"][0]);
+        }
+        let video = e["clients"][0]["mobile"]["profile"]["native_effect_video_frames"].as_array_mut().unwrap();
+        let replacement = video[1-wrong].clone();
+        for field in ["hardware", "pixels"] { video[wrong][field] = replacement[field].clone(); }
+        rejects(&e, "Actual intended OBJ palette RGB differs at slot 15");
+    }
+    let mut e = presentation_fixture();
+    e["clients"][0]["single"]["profile"]["native_effect_video_frames"][4]["rows"][77*16+8] = json!(10);
+    rejects(&e, "Actual native window line differs");
+}
+#[test]
+fn headbutt_pixel_repeated_output_dma_identity_and_source_sequence_stay_strict() {
+    let mut e = presentation_fixture();
+    e["clients"][0]["mobile"]["profile"]["native_effect_video_frames"][5]["rows"][77*16+4] = json!(100);
+    rejects(&e, "Actual output source-stage progression or repeated-DMA multiplicity differs");
+    let mut e = presentation_fixture();
+    e["clients"][0]["mobile"]["profile"]["native_effect_video_frames"][6]["rows"][77*16+2] = json!(29);
+    rejects(&e, "Latest native animation return before actual DMA required");
+}
+#[test]
+fn headbutt_pixel_unbound_first_output_cannot_match_genuine_native_initializer() {
+    let mut e = teardown_fixture();
+    for name in ["mobile", "single"] {
+        let run = &mut e["clients"][0][name];
+        let restored = super::effect_bytes(&run["profile"]["native_effect_events"][2]["watches"]["0"]);
+        let mut baseline = run["profile"]["native_effect_video_frames"][2].clone();
+        baseline["host_frame"] = json!(0);
+        baseline["render_metadata"][1] = json!(0);
+        baseline["render_metadata"][2] = json!(0);
+        baseline["display_metadata"][1] = json!(1);
+        baseline["display_metadata"][2] = json!(0);
+        baseline["display_metadata"][3] = json!(0);
+        baseline["rows"] = json!(rows(if name == "single" {1} else {0}, 0, 0));
+        for y in 0..144 { baseline["rows"][y*16+4] = json!(1); }
+        if name == "single" {
+            let mut initial = event(0, 8, &restored);
+            initial["fields"][14] = json!(0x47c1);
+            initial["fields"][15] = json!(35);
+            initial["fields"][16] = json!(2);
+            run["profile"]["native_effect_source_bindings"]["initial_return"] = json!([35,0x47c1]);
+            run["profile"]["native_effect_events"].as_array_mut().unwrap().insert(0, initial);
+            for frame in run["profile"]["native_effect_video_frames"].as_array_mut().unwrap() {
+                for y in 0..144 {
+                    frame["rows"][y*16+1] = json!(frame["rows"][y*16+1].as_u64().unwrap()+1);
+                }
+            }
+        }
+        run["profile"]["native_effect_video_frames"].as_array_mut().unwrap().insert(0, baseline);
+    }
+    rejects(&e, "Actual output source-stage progression or repeated-DMA multiplicity differs");
 }

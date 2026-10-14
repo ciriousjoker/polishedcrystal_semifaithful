@@ -1940,6 +1940,42 @@ fn headbutt_source_key(run: &Value, frame: &Value) -> Option<(u64, usize, Vec<u8
     }
     Some((kind, generation, animation))
 }
+// Source and DMA frames share the observer's host-frame domain. Output IDs do
+// not: retain their own ordered invocation chronology separately below.
+fn headbutt_presentation_key(run: &Value, row: &Value) -> Option<((u64, usize, Vec<u8>), u64)> {
+    headbutt_source_key(run, row).map(|key| {
+        let meta = &row["render_metadata"];
+        let source = &effect_events(run)[meta[4].as_u64().unwrap() as usize - 1];
+        let age = meta[9].as_u64().unwrap().checked_sub(effect_field(source, 1))
+            .expect("Actual DMA precedes its native source frame");
+        (key, age)
+    })
+}
+fn headbutt_output_progression(run: &Value) -> Vec<Vec<(Option<((u64, usize, Vec<u8>), u64)>, bool)>> {
+    let mut progression = Vec::new();
+    let mut previous_output: Option<u64> = None;
+    let mut previous_dma = vec![None; 144];
+    for frame in run["profile"]["native_effect_video_frames"].as_array().unwrap() {
+        let output = effect_display_metadata(frame)[1];
+        assert!(previous_output.map_or(true, |p| Some(output) == p.checked_add(1)),
+            "Missing/discontinuous actual output invocation");
+        previous_output = Some(output);
+        let mut hardware = effect_bytes(&frame["hardware"]); let mut cursor = 0;
+        let mut stage = Vec::new();
+        for y in 0..144 {
+            let row = headbutt_row(frame, y, &mut hardware, &mut cursor);
+            let meta = &row["render_metadata"];
+            let dma = (meta[8].as_u64().unwrap(), meta[9].as_u64().unwrap(), meta[10].as_u64().unwrap());
+            stage.push((headbutt_presentation_key(run, &row), previous_dma[y] == Some(dma)));
+            previous_dma[y] = Some(dma);
+        }
+        // Every actual output occupies an entry, including repeated actual DMA.
+        // Neither dictionary deduplication nor output/source-domain subtraction
+        // can erase a missing, extra or stretched presentation stage.
+        progression.push(stage);
+    }
+    progression
+}
 fn headbutt_video_step(run: &Value, frame: &Value) -> Option<usize> {
     headbutt_source_key(run, frame).and_then(|(kind, generation, _)|
         if kind == 5 || kind == 8 { Some(generation) } else { None })
@@ -1949,16 +1985,22 @@ fn headbutt_pixels(e: &Value) {
     let native = &clients(e)[0]["single"];
     let first = (n(&mobile["state"], "vAcceptanceHeadbuttTileStart") - 0x8000) as usize / 16;
     let end = (n(&mobile["state"], "vAcceptanceHeadbuttTileEnd") - 0x8000) as usize / 16;
-    let mut controls = BTreeMap::new();
+    let mut controls: BTreeMap<_, Vec<&Value>> = BTreeMap::new();
     for frame in native["profile"]["native_effect_video_frames"].as_array().unwrap() {
         let mut hardware = effect_bytes(&frame["hardware"]); let mut cursor = 0;
         for y in 0..144 { let row = headbutt_row(frame, y, &mut hardware, &mut cursor);
-            if let Some(key) = headbutt_source_key(native, &row) { controls.entry((key,y)).or_insert(frame); }
+            if let Some(key) = headbutt_presentation_key(native, &row) {
+                // Retain every actual output occurrence in chronological order.
+                // Native view, tile and palette changes at a repeated DMA stage
+                // belong to their own counterpart, never a later replacement.
+                controls.entry((key,y)).or_default().push(frame);
+            }
         }
     }
     let mut visible = 0usize;
     let mut steps = BTreeSet::new();
     for run in [mobile, native] {
+        let mut occurrences = BTreeMap::new();
         assert_eq!(n(&run["profile"], "native_effect_video_overflow"), 0);
         let video = run["profile"]["native_effect_video_frames"].as_array().expect("Bounded actual framebuffer capture");
         assert!(!video.is_empty());
@@ -2001,6 +2043,11 @@ fn headbutt_pixels(e: &Value) {
             assert_eq!(n(&row,"phase"),phase,"Actual native phase provenance");
             let key = headbutt_source_key(run, &row);
             let step = headbutt_video_step(run, &row);
+            let counterpart = headbutt_presentation_key(run, &row).map(|key| {
+                let index = occurrences.entry((key.clone(), y as usize)).or_insert(0usize);
+                let occurrence = *index; *index += 1;
+                ((key, y as usize), occurrence)
+            });
             let source = if source_index > 0 {
                 effect_bytes(&effect_events(run)[source_index - 1]["watches"]["0"])
             } else { vec![0; 160] };
@@ -2024,7 +2071,7 @@ fn headbutt_pixels(e: &Value) {
                 assert!(intended.is_empty(), "Genuine teardown source retained native effect tuples");
             }
             if key.as_ref().map(|k| k.0) == Some(0) && std::ptr::eq(run, mobile) {
-                let control = controls.get(&(key.clone().unwrap(), y as usize)).expect("No same-source native initialization control");
+                let control = controls.get(&counterpart.as_ref().unwrap().0).and_then(|frames| frames.get(counterpart.as_ref().unwrap().1)).expect("No same-source native initialization control occurrence");
                 let mut c = effect_bytes(&control["hardware"]); let mut cc = 0; let mut cr = Value::Null;
                 for cy in 0..=y as usize { cr = headbutt_row(control, cy, &mut c, &mut cc); }
                 let ci = cr["render_metadata"][4].as_u64().unwrap() as usize - 1;
@@ -2032,7 +2079,7 @@ fn headbutt_pixels(e: &Value) {
             }
             if let Some(step) = step {
                 if std::ptr::eq(run, mobile) {
-                    let control = controls.get(&(key.clone().unwrap(),y as usize)).expect("No same-source control at matched actual animation step");
+                    let control = controls.get(&counterpart.as_ref().unwrap().0).and_then(|frames| frames.get(counterpart.as_ref().unwrap().1)).expect("No same-source control occurrence at matched actual animation step");
                     let mut c = effect_bytes(&control["hardware"]); let mut cc = 0;
                     let mut cr = Value::Null;
                     for cy in 0..=y as usize { cr = headbutt_row(control, cy, &mut c, &mut cc); }
@@ -2046,6 +2093,7 @@ fn headbutt_pixels(e: &Value) {
                     // Identical Route29/player-pose inputs require identical
                     // screen geometry. No tuple-derived coordinate realignment.
                     assert_eq!(&r[..5], &c[16800..16805], "Actual native view geometry differs");
+                    assert_eq!(row["window_line"], cr["window_line"], "Actual native window line differs");
                     let native_demand = demand(&control_source);
                     assert_eq!(intended, native_demand, "Complete disabled native effect source geometry/tile/attributes/palette/multiplicity differs");
                     if !(released && key.as_ref().unwrap().0 == 8) {
@@ -2153,6 +2201,8 @@ fn headbutt_pixels(e: &Value) {
             }
         }
     }
+    assert_eq!(headbutt_output_progression(mobile), headbutt_output_progression(native),
+        "Actual output source-stage progression or repeated-DMA multiplicity differs");
     assert!(steps.len() >= 2, "No actual animation progression");
     assert!(visible > 0, "No nontransparent intended framebuffer pixels proved");
 }
