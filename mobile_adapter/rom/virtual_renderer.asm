@@ -24,283 +24,66 @@ MobileVirtualBeginRetainedComposition:
  ret
 
 MobileVirtualComposeStep::
-	ld a, [wMobileVirtualStage]
-	and a
-	ret z
-	ld a, [wMobileOnline]
-	and a
-	jr z, .abort
-	ld a, [wMobileWanted]
-	and a
-	jr z, .abort
-	ld a, MOBILE_BACKUP_BANK
-	ldh [rWBK], a
-	ld a, [wMobileStableSourceValid]
-	cp 1
-	jr nz, .abort
-	ld a, [wMobileVirtualStage]
-	cp 1
-	jr z, .start
-	cp 2
-	jp z, .local
-	cp 3
-	jp z, .urgent
-	cp 4
-	jp z, .native
-	cp 5
-	jp z, .remaining
-	cp 6
-	jp z, .weather
-	cp 7
-	jp z, .publish
-	cp 8
-	jp z, .abort
-	jp .abort
-.abort
-	xor a
-	ld [wMobileVirtualStage], a
-	ret
+ ld a, [wMobileVirtualStage]
+ and a
+ ret z
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, [wMobileOnline]
+ and a
+ jp z, .abort
+ ld a, [wMobileWanted]
+ and a
+ jp z, .abort
+ ld a, [wMobileStableSourceValid]
+ cp 1
+ jp nz, .abort
+ ld a, [wMobileVirtualStage]
+ cp 1
+ jr z, .start
+ cp 2
+ jp z, .native
+ cp 3
+ jp z, .peers
+ cp 6
+ jp z, .weather
+ cp 7
+ jp z, .publish
+ jp .abort
 .start
  call MobileNativePrepareSpritesWork
  ld a, MOBILE_BACKUP_BANK
  ldh [rWBK], a
- ; Retained-source conversion keeps the old failing selection strategy scoped.
- ; Resource-backed stable phases are the following slice.
  xor a
  ld [wMobileVirtualFastAdmission], a
  ld [wMobileVirtualPeerMask], a
  ld [wMobileVirtualForceFull], a
- ld a, MOBILE_PEERS
- ld [wMobileVirtualRemoteLimit], a
- call MobileVirtualBuildOrder
-
-.reset
-; Only row counters and ownership need zeroing. Admitted groups overwrite
-; their output bytes; the unused OAM suffix is hidden once, at publication.
-	ld a, [wMobileVirtualFastAdmission]
-	cp 2
-	jr nz, .ordinary_rows
-	ld a, [wMobileVirtualForceFull]
-	and a
-	jp nz, .rows_ready
-	ld hl, wMobileVirtualLines + 64
-	xor a
-rept 63
-	ld [hli], a
-endr
-	jp .rows_ready
-.ordinary_rows
-	ld hl, wMobileVirtualLines
-	xor a
-rept SCREEN_HEIGHT_PX
-	ld [hli], a
-endr
-.rows_ready
-	ld hl, wMobileVirtualLines + 16
-	xor a
-rept 11
-	ld [hli], a
-endr
-	xor a
-	ld hl, wMobileVirtualBindings
-rept 8
-	ld [hli], a
-endr
-	ld [wMobileVirtualLength], a
-	ld [wMobileVirtualPaletteUsed], a
-	ld [wMobileVirtualCursor], a
-	ld [wMobileVirtualRectangleCount], a
-	ld [wMobileRenderedCount], a
-	ld [wMobileVirtualPlannedPrivateColors], a
-	ld [wMobileVirtualCoarseTrial], a
-	ld a, [wMobileVirtualPhase]
-	cp MOBILE_PEERS
-	jr c, .phase_ready
-	xor a
-.phase_ready
-	ld [wMobileVirtualPhase], a
-
-.full_base
-	xor a
-	ld a, 6 ; compulsory retained unknown tuples are admitted first
-	ld [wMobileVirtualStage], a
-	ret
-.local
-	xor a
-	call MobileVirtualNativeGroup
-	ld a, 3
-	ld [wMobileVirtualStage], a
-	ret
-.urgent
-.ordinary_guests
-; Independent avatars precede ordinary figures only in presentation admission.
-; Native NPC state/simulation remains untouched when total OAM capacity is full.
-	ld a, [wMobileVirtualCursor]
-	cp MOBILE_PEERS
-	jr nc, .urgent_done
-	ld b, a
-	ld a, [wMobileRenderedCount]
-	ld c, a
-	ld a, [wMobileVirtualRemoteLimit]
-	cp c
-	jr z, .urgent_done
-	ld a, b
-	ld b, a
-	inc a
-	ld [wMobileVirtualCursor], a
-	ld a, [wMobileVirtualPhase]
-	add b
-	cp MOBILE_PEERS
-	jr c, .urgent_index
-	sub MOBILE_PEERS
-.urgent_index
-	call MobileVirtualPeerGroup
-	ld a, [wMobileVirtualStage]
-	cp 3
-	ret nz
-	ld a, [wMobileVirtualCursor]
-	cp MOBILE_PEERS
-	jr nc, .urgent_done
-	ld a, [wMobileRenderedCount]
-	ld c, a
-	ld a, [wMobileVirtualRemoteLimit]
-	cp c
-	jr z, .urgent_done ; a completed last guest needs no second large-job admission
-	ret
-.urgent_done
-	xor a
-	ld [wMobileVirtualCursor], a
-	ld a, 4
-	ld [wMobileVirtualStage], a
-	ret
-
-.native
-
-.native_capacity
-	ld a, [wMobileVirtualLength]
-	cp OAM_SIZE
-	jp nc, .native_raw_done
-	ld a, [wMobileVirtualCursor]
-	ld b, a
-	ld a, [wMobileVirtualOrderCount]
-	cp b
-	jp z, .native_raw_done
-.native_candidate
-	call MobileVirtualOrderedIndex
-	ld c, a
-	add a
-	add a
-	add a
-	add LOW(wMobileVirtualDescriptors + 6)
-	ld l, a
-	adc HIGH(wMobileVirtualDescriptors + 6)
-	sub l
-	ld h, a
-	ld a, [hl]
-	ld b, a
-.ordinary_source
-	and $1f
-	jr nz, .native_present
-.omitted_native_source
-	ld hl, wMobileVirtualCursor
-	inc [hl]
-	jr .native
-.native_present
-	push bc
-	push hl
-	ld a, [hl]
-	and $1f
-	add a
-	add a
-	ld b, a
-	ld a, [wMobileVirtualLength]
-	add b
-	jr c, .cheap_rejected
-	cp OAM_SIZE + 1
-	jr nc, .cheap_rejected
-	jr .cheap_ready
-
-.cheap_rejected
-	pop hl
-	pop bc
-	ld hl, wMobileVirtualCursor
-	inc [hl]
-	jp .native
-.cheap_ready
-	pop hl
-	pop bc
-	ld a, [hl]
-	and $1f
-	ld b, 110 ; retain the worst-case sixteen-quad construction/rollback bound
-	cp 5
-	jr nc, .native_shape_deadline
-	ld b, 131
-	ld a, [hl]
-	and $1f
-	ld b, 110
-	cp 5
-	jr nc, .native_shape_deadline
-	ld b, 131
-
-.native_shape_deadline
-	ldh a, [rLY]
-	cp b
-	ret nc ; retain the candidate for the next admitted idle slice
-	ld hl, wMobileVirtualCursor
-	inc [hl]
-	ld a, c
-	ld a, [wMobileVirtualLength]
-	push af
-	ld a, c
-	call MobileVirtualNativeGroup
-	pop bc
-	ld a, [wMobileVirtualLength]
-	cp b
-	call nz, MobileVirtualAdvanceNativeClass
-	jp .native
-.native_raw_done
-	xor a
-	ld [wMobileVirtualCursor], a
-	ld a, 5 ; remaining peers get unused resources
-	ld [wMobileVirtualStage], a
-	ret
-.remaining
-	ld a, [wMobileVirtualForceFull]
-	and a
-	jr nz, .remaining_done ; aligned proof permits one guest only
-	ld a, [wMobileVirtualLength]
-	cp OAM_SIZE - 16 + 1
-	jr nc, .remaining_done
-	ld a, [wMobileVirtualCursor]
-	cp MOBILE_PEERS
-	jr nc, .remaining_done
-	ld b, a
-	inc a
-	ld [wMobileVirtualCursor], a
-	ld a, [wMobileVirtualPhase]
-	add b
-	cp MOBILE_PEERS
-	jr c, .remaining_index
-	sub MOBILE_PEERS
-.remaining_index
-	ld b, a
-	ld e, a
-	ld d, 0
-	ld hl, MobileVirtualPaletteBits
-	add hl, de
-	ld a, [wMobileVirtualPeerMask]
-	and [hl]
-	jr nz, .remaining
-	ldh a, [rLY]
-	cp 138
-	jr nc, .remaining_done
-	ld a, b
-	call MobileVirtualPeerGroup
-	ret
-.remaining_done
-	ld a, 7
-	ld [wMobileVirtualStage], a
-	ret
+ ld [wMobileVirtualLength], a
+ ld [wMobileVirtualPaletteUsed], a
+ ld [wMobileVirtualNativeAvatarColors], a
+ ld [wMobileVirtualCursor], a
+ ld [wMobileRenderedCount], a
+ ld [wMobileVirtualPlannedPrivateColors], a
+ ld [wMobileStableCapacityValid], a
+ ld [wMobileStableEligible], a
+ ld [wMobileStableEligible + 1], a
+ ld [wMobileStablePendingPrivate], a
+ ld [wMobileStablePendingPrivate + 1], a
+ ld hl, wMobileVirtualLines
+ ld b, SCREEN_HEIGHT_PX
+.clear_rows
+ ld [hli], a
+ dec b
+ jr nz, .clear_rows
+ ld hl, wMobileVirtualBindings
+ ld b, 8
+.clear_bindings
+ ld [hli], a
+ dec b
+ jr nz, .clear_bindings
+ ld a, 6
+ ld [wMobileVirtualStage], a
+ ret
 .weather
  ld a, [wMobileVirtualCursor]
  cp OAM_COUNT
@@ -325,7 +108,7 @@ endr
  pop bc
  ld a, [wMobileVirtualLength]
  cp b
- jp z, .abort ; compulsory occupancy cannot be individually dropped
+ jp z, .abort
 .weather_next
  ld hl, wMobileVirtualCursor
  inc [hl]
@@ -336,10 +119,127 @@ endr
  ld a, 2
  ld [wMobileVirtualStage], a
  ret
-
-
+.native
+ ; Native exact colors reserve their slots before any private color is lent.
+ ; No admission-order rejection can silently remove an intended figure.
+ call MobileVirtualNativeDeadline
+ ret nc
+ ld a, [wMobileVirtualCursor]
+ cp NUM_OBJECT_STRUCTS
+ jr nc, .native_done
+ ld hl, wMobileVirtualCursor
+ inc [hl]
+ call MobileVirtualNativeGroup
+ ret
+.native_done
+ xor a
+ ld [wMobileVirtualCursor], a
+ ld a, 3
+ ld [wMobileVirtualStage], a
+ ret
+.peers
+ ld a, [wMobileVirtualCursor]
+ cp MOBILE_PEERS
+ jr nc, .peers_done
+ ld hl, wMobileVirtualCursor
+ inc [hl]
+ call MobilePhaseMarkVisiblePeer
+ call MobileVirtualPeerGroup
+ ret
+.peers_done
+ ld a, 7
+ ld [wMobileVirtualStage], a
+ ret
 .publish
-	mobile_virtual_publish_page MobileVirtualComposeStep.abort
+ ; Certify the entire all-fit transaction before its one final publication.
+ ld a, [wMobileStableEligible]
+ ld b, a
+ ld a, [wMobileStablePendingPrivate]
+ cp b
+ jp nz, .abort
+ ld a, [wMobileStableEligible + 1]
+ ld b, a
+ ld a, [wMobileStablePendingPrivate + 1]
+ cp b
+ jp nz, .abort
+ ld a, 1
+ ld [wMobileStableCapacityValid], a
+ mobile_virtual_publish_page MobileVirtualComposeStep.abort
+.abort
+ xor a
+ ld [wMobileStableCapacityValid], a
+ ld [wMobileVirtualStage], a
+ ret
+
+; The finite existing mask schema uses native slots 0..12, peers 13..15.
+; Marking preserves every caller register, including flags.
+MobilePhaseSetMaskBit:
+ push af
+ push bc
+ push de
+ push hl
+ ld b, a
+ and 7
+ ld c, a
+ ld a, b
+ cp 8
+ jr c, .low
+ inc hl
+.low
+ ld a, 1
+ inc c
+.shift
+ dec c
+ jr z, .store
+ add a
+ jr .shift
+.store
+ or [hl]
+ ld [hl], a
+ pop hl
+ pop de
+ pop bc
+ pop af
+ ret
+
+MobilePhaseMarkVisiblePeer:
+ ; Eligibility precedes cache/upload readiness. A cold figure is a failed
+ ; completion obligation, never an invented graphic-resource shortage.
+ push af
+ push bc
+ push de
+ push hl
+ ld b, a
+ ld a, [wMobilePeerCount]
+ cp b
+ jr z, .done
+ jr c, .done
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+ ld a, b
+ call MobileNativePeerPointer
+ ld de, MOBILE_PEER_VISIBLE
+ add hl, de
+ ld a, [hl]
+ and a
+ jr z, .done
+ ld a, [wMobileVirtualCursor]
+ dec a
+ add NUM_OBJECT_STRUCTS
+ ld hl, wMobileStableEligible
+ ld c, a
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, c
+ call MobilePhaseSetMaskBit
+.done
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ pop hl
+ pop de
+ pop bc
+ pop af
+ ret
 
 MobileVirtualBuildOrder:
 	mobile_virtual_build_order
@@ -640,6 +540,9 @@ MobileVirtualNativeGroup:
  call MobileVirtualScratchGroup
 	call MobileVirtualGroupVisible
 	ret z
+ ld a, [wMobileVirtualIndex]
+ ld hl, wMobileStableEligible
+ call MobilePhaseSetMaskBit
 ; Native palette ownership blocks private colors for exactly these presentations.
 	ld a, [wMobileVirtualGroupPointer]
 	ld l, a
@@ -670,7 +573,11 @@ MobileVirtualNativeGroup:
 	add hl, de
 	dec b
 	jr nz, .check_palette
-	jp MobileVirtualAdmitGroup
+ call MobileVirtualAdmitGroup
+ ret c
+ ld a, [wMobileVirtualIndex]
+ ld hl, wMobileStablePendingPrivate
+ jp MobilePhaseSetMaskBit
 
 MobileVirtualGatherPeer::
 	mobile_virtual_gather_peer MobileNativePeerPointer, MobileVirtualCheckExactRectangle
@@ -907,6 +814,12 @@ endr
 	ld a, [wMobileAvatarPalette]
 	ld [hl], a
 .count_peer
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, [wMobileBudgetIndex]
+ add NUM_OBJECT_STRUCTS
+ ld hl, wMobileStablePendingPrivate
+ call MobilePhaseSetMaskBit
 	ld hl, wMobileRenderedCount
 	inc [hl]
 	ret

@@ -299,12 +299,7 @@ MobileVirtualCanCompose:
 	jr z, .native_deadline
 	cp 2
 	jr nz, .start_deadline
-	ld a, [wMobileVirtualDescriptors + 6]
-	and $1f
-	cp 5
-	jr nc, .deadline
-	ld b, 139 ; bounded four-quad local figure, including exact row rollback
-	jr .deadline
+	jp MobileVirtualNativeDeadline
 .native_deadline
 ; Each native group applies its own shape deadline before doing expensive
 ; admission. Empty descriptors must not inherit the sixteen-quad deadline.
@@ -341,6 +336,31 @@ MobileVirtualCanCompose:
 	jr .deadline
 .weather_deadline
 	ld b, 140
+.deadline
+	ldh a, [rLY]
+	cp b
+	ret
+
+MobileVirtualNativeDeadline:
+; Both the idle caller and the step check the actual pending native slot.
+; Leave all transaction state intact when a complete figure must wait.
+	ld b, 140 ; cheap rejection/bookkeeping plus complete idle caller return
+	ld a, [wMobileVirtualCursor]
+	cp NUM_OBJECT_STRUCTS
+	jr nc, .deadline
+	add a
+	add a
+	add a
+	add LOW(wMobileVirtualDescriptors + 6)
+	ld l, a
+	ld h, HIGH(wMobileVirtualDescriptors + 6)
+	ld a, [hl]
+	and $1f
+	jr z, .deadline
+	ld b, 110 ; complete general figure, exact admission and rollback
+	cp 5
+	jr nc, .deadline
+	ld b, 131 ; complete four-quad caller plus return and scanline margin
 .deadline
 	ldh a, [rLY]
 	cp b
