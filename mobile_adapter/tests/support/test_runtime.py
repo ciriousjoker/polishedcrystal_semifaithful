@@ -226,6 +226,23 @@ SERIALIZER
 
 
 class ObserverHooks(unittest.TestCase):
+    def test_linked_native_teardown_source_validation(self):
+        names={"ShakeHeadbuttTree":(1,0x4000), "ShakeHeadbuttTree.got_gfx":(1,0x4010), "ShakeHeadbuttTree.copy_done_loop":(1,0x4100),
+               "ShakeHeadbuttTree.hide_loop":(1,0x4120), "ClearSpriteAnims":(0,0x300),
+               "DelayFrame":(0,0x400), "wSpriteAnimDict":(0,0xc1a0), "wSpriteAnimsEnd":(0,0xc263)}
+        data=bytearray(0x8000)
+        data[0x4000:0x4003]=bytes.fromhex("cd0003")
+        data[0x4100:0x4106]=bytes.fromhex("3a121b0d20fa")
+        data[0x4120:0x412b]=bytes.fromhex("77190d20fbcd0003cd0004")
+        data[0x300:0x309]=bytes.fromhex("af21a0c101c300efc9")
+        with tempfile.TemporaryDirectory() as tmp:
+            rom=Path(tmp)/"native.gbc";rom.write_bytes(data)
+            self.assertEqual(runtime.validate_native_effect_sources(rom,names),(1,0x4128))
+            self.assertEqual(runtime.validate_native_effect_sources(rom,names),(1,0x4128))
+            with self.assertRaises(RuntimeError): runtime.validate_native_effect_sources(rom,{})
+            data[0x4125]=0;rom.write_bytes(data)
+            with self.assertRaises(RuntimeError): runtime.validate_native_effect_sources(rom,names)
+
     def test_compiled_effect_observer_boundaries(self):
         import subprocess
         with tempfile.TemporaryDirectory() as tmp:

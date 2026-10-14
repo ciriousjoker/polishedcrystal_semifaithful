@@ -3,11 +3,11 @@ use super::{headbutt_pixels, Value};
 use serde_json::json;
 fn event(sequence: usize, span: usize, source: &[u8]) -> Value {
     let mut fields = vec![0; 22];
-    fields[0] = sequence; fields[1] = sequence; fields[2] = span; fields[3] = 2;
+    fields[0] = sequence * 10; fields[1] = sequence; fields[2] = span; fields[3] = 2;
     json!({"fields": fields, "watches": {"0": source, "4": vec![0; 160], "1": [0], "2": [0], "5": [0]}})
 }
 fn rows(index: usize, sequence: usize, phase: usize) -> Vec<usize> {
-    (0..144).flat_map(|_| [1,index,sequence,sequence,sequence,0,0,7,1,0,sequence,sequence,phase,0,0,0]).collect()
+    (0..144).flat_map(|_| [1,index,sequence*10+1,sequence,sequence,0,0,7,1,0,sequence,sequence*10+1,phase,0,0,0]).collect()
 }
 fn fixture() -> Value {
     let mut source = vec![0u8; 160];
@@ -91,39 +91,100 @@ fn headbutt_pixel_control_rejects_intended_slot_rgb_changes() {
     }
     rejects(&e, "Actual intended OBJ palette RGB differs at slot 14");
 }
-#[test]
-fn headbutt_pixel_control_allows_tile_reuse_only_after_actual_release_and_return() {
-    let mut e = fixture(); let mut peer = vec![0u8; 160]; peer[..4].copy_from_slice(&[32, 24, 16, 6]);
+fn teardown_fixture() -> Value {
+    let mut e = fixture();
     for name in ["mobile", "single"] {
         let run = &mut e["clients"][0][name];
-        run["profile"]["native_effect_events"].as_array_mut().unwrap().extend([event(3, 0, &peer), event(4, 3, &peer), event(5, 5, &peer)]);
+        let mut restored = vec![0u8; 160];
+        restored[144..148].copy_from_slice(&[32,24,1,0]);
+        let mut teardown = event(3,8,&restored);
+        teardown["fields"][14] = json!(0x4861); teardown["fields"][15] = json!(35); teardown["fields"][16] = json!(1);
+        run["profile"]["native_effect_source_bindings"] = json!({"teardown_return": [35,0x4861]});
+        run["profile"]["native_effect_events"].as_array_mut().unwrap().push(teardown);
         let mut frame = run["profile"]["native_effect_video_frames"][1].clone();
-        frame["render_metadata"] = json!([1, 3, 5, 1, 5, 144, 0, 143, 5, 5, 5, 0, 0, 7]);
-        frame["rows"] = json!(rows(5,5,2));
-        frame["display_metadata"][1]=json!(4); frame["display_metadata"][2]=json!(3); frame["display_metadata"][3]=json!(5);
-        if name == "mobile" { frame["hardware"][16805] = json!(0xd8); for y in 0..144 {frame["rows"][y*16+5]=json!(7);frame["rows"][y*16+6]=json!(7);} }
-        // Reused peer tile has palette6 and one actual rectangle.
-        for y in 16..24 { for x in (16..24).chain(40..48) {frame["pixels"][(y*160+x)*2]=json!(0);frame["pixels"][(y*160+x)*2+1]=json!(0);} }
-        for (i, byte) in peer.iter().enumerate() { frame["hardware"][i] = json!(byte); frame["hardware"][16806 + i] = json!(byte); }
+        frame["render_metadata"][1]=json!(3); frame["render_metadata"][2]=json!(3); frame["rows"]=json!(rows(3,3,1));
+        frame["display_metadata"][1]=json!(4);frame["display_metadata"][2]=json!(3);frame["display_metadata"][3]=json!(3);
+        frame["host_frame"]=json!(3);frame["pixels"]=json!(vec![0;160*144*2]);
+        frame["hardware"][16805]=json!(0xc1);
+        for (i,b) in restored.iter().enumerate() {frame["hardware"][i]=json!(b);frame["hardware"][16806+i]=json!(b);}
         run["profile"]["native_effect_video_frames"].as_array_mut().unwrap().push(frame);
     }
-    // Disabled ABI has no addon graphics-release span. Its actual native
-    // Shake return and cleared animation/source are the completion proof.
-    e["clients"][0]["single"]["profile"]["native_effect_events"].as_array_mut().unwrap().remove(3);
-    e["clients"][0]["single"]["profile"]["native_effect_video_frames"][2]["render_metadata"][4] = json!(4);
-    e["clients"][0]["single"]["profile"]["native_effect_video_frames"][2]["rows"] = json!(rows(4,5,2));
+    e
+}
+#[test]
+fn headbutt_pixel_teardown_restores_player_and_matches_same_step_control_semantically() {
+    let e=teardown_fixture(); headbutt_pixels(&e);
+    // The same animation generation has both live and teardown controls.
+    let run=&e["clients"][0]["single"];
+    let key=|i| {let f=&run["profile"]["native_effect_video_frames"][i]; let mut h=super::effect_bytes(&f["hardware"]);let mut c=0;super::headbutt_source_key(run,&super::headbutt_row(f,0,&mut h,&mut c)).unwrap()};
+    assert_eq!(key(1).1,key(2).1); assert_ne!(key(1).0,key(2).0);
+    let forward:std::collections::BTreeMap<_,_>=[(key(1),1),(key(2),2)].into_iter().collect();
+    let reverse:std::collections::BTreeMap<_,_>=[(key(2),2),(key(1),1)].into_iter().collect();
+    assert_eq!(forward,reverse);assert_eq!(reverse.get(&key(2)),Some(&2));
+}
+#[test]
+fn headbutt_pixel_native_initial_source_is_bound_before_animation() {
+    let mut e=teardown_fixture();
+    for name in ["mobile","single"] {
+        let run=&mut e["clients"][0][name];
+        let restored=super::effect_bytes(&run["profile"]["native_effect_events"][2]["watches"]["0"]);
+        let mut initial=event(0,8,&restored);initial["fields"][14]=json!(0x47c1);initial["fields"][15]=json!(35);initial["fields"][16]=json!(2);
+        run["profile"]["native_effect_source_bindings"]["initial_return"]=json!([35,0x47c1]);
+        run["profile"]["native_effect_events"].as_array_mut().unwrap().insert(0,initial);
+        for (i,f) in run["profile"]["native_effect_video_frames"].as_array_mut().unwrap().iter_mut().enumerate(){for y in 0..144{f["rows"][y*16+1]=json!(i+2);}}
+        let mut frame=run["profile"]["native_effect_video_frames"][2].clone();
+        frame["host_frame"]=json!(0);frame["rows"]=json!(rows(1,0,0));frame["render_metadata"][1]=json!(0);frame["render_metadata"][2]=json!(0);
+        frame["display_metadata"][1]=json!(1);frame["display_metadata"][2]=json!(0);frame["display_metadata"][3]=json!(0);
+        for y in 0..144{frame["rows"][y*16+4]=json!(1);}
+        run["profile"]["native_effect_video_frames"].as_array_mut().unwrap().insert(0,frame);
+    }
     headbutt_pixels(&e);
-    let mut absent_release = e.clone();
-    absent_release["clients"][0]["mobile"]["profile"]["native_effect_events"].as_array_mut().unwrap().remove(3);
-    absent_release["clients"][0]["mobile"]["profile"]["native_effect_video_frames"][2]["render_metadata"][4] = json!(4);
-    for y in 0..144 {absent_release["clients"][0]["mobile"]["profile"]["native_effect_video_frames"][2]["rows"][y*16+1]=json!(4);}
-    rejects(&absent_release, "Completed effect has no preceding actual native graphics release");
-    // A release recorded later cannot authorize an earlier actual DMA.
-    let mut late_release = absent_release;
-    late_release["clients"][0]["mobile"]["profile"]["native_effect_events"].as_array_mut().unwrap().push(event(6, 3, &peer));
-    rejects(&late_release, "Completed effect has no preceding actual native graphics release");
-    e["clients"][0]["mobile"]["profile"]["native_effect_events"][3]["watches"]["5"] = json!([1]);
-    rejects(&e, "Completed effect has no preceding actual native graphics release");
+}
+#[test]
+fn headbutt_pixel_teardown_rejects_missing_late_wrong_kind_and_leftovers() {
+    for mode in 0..5 {
+        let mut e=teardown_fixture();let run=&mut e["clients"][0]["mobile"];
+        match mode {
+            0 => {run["profile"]["native_effect_events"][2]["fields"][0]=json!(32);},
+            1 => {run["profile"]["native_effect_events"][2]["fields"][2]=json!(0);},
+            2 => {run["profile"]["native_effect_events"][2]["fields"][14]=json!(0x4862);},
+            3 => {for (i,b) in [32,24,16,7].iter().enumerate(){run["profile"]["native_effect_video_frames"][2]["hardware"][i]=json!(b);run["profile"]["native_effect_video_frames"][2]["hardware"][16806+i]=json!(b);}},
+            _ => {run["profile"]["native_effect_events"][2]["watches"]["0"]=json!([0]);}
+        }
+        assert!(std::panic::catch_unwind(||headbutt_pixels(&e)).is_err());
+    }
+}
+#[test]
+fn headbutt_pixel_later_teardown_and_shake_return_cannot_excuse_earlier_disappearance() {
+    let mut e=teardown_fixture();let run=&mut e["clients"][0]["mobile"];
+    run["profile"]["native_effect_events"][2]["fields"][0]=json!(32);
+    run["profile"]["native_effect_events"].as_array_mut().unwrap().push(event(4,0,&vec![0;160]));
+    for y in 0..144{run["profile"]["native_effect_video_frames"][2]["rows"][y*16+1]=json!(2);}
+    rejects(&e,"Every source-bound native effect quad");
+    let mut stale=teardown_fixture();
+    stale["clients"][0]["single"]["profile"]["native_effect_events"][2]["watches"]["4"][0]=json!(1);
+    assert!(std::panic::catch_unwind(||headbutt_pixels(&stale)).is_err());
+    let mut written=teardown_fixture();
+    for at in [144,16806+144]{written["clients"][0]["mobile"]["profile"]["native_effect_video_frames"][2]["hardware"][at]=json!(33);}
+    rejects(&written,"Native ShadowOAM changed after producer binding");
+}
+#[test]
+fn headbutt_pixel_control_allows_tile_reuse_only_after_actual_release_and_return() {
+    let mut e=teardown_fixture();
+    for name in ["mobile","single"] {
+        let run=&mut e["clients"][0][name];
+        let mut peer=vec![0u8;160];peer[..4].copy_from_slice(&[32,24,16,6]);
+        run["profile"]["native_effect_events"].as_array_mut().unwrap().extend([event(4,0,&peer),event(5,3,&peer),event(6,5,&peer)]);
+        let mut frame=run["profile"]["native_effect_video_frames"][2].clone();
+        frame["rows"]=json!(rows(6,6,2));frame["render_metadata"][1]=json!(4);frame["render_metadata"][2]=json!(6);
+        frame["display_metadata"][1]=json!(5);frame["display_metadata"][2]=json!(4);frame["display_metadata"][3]=json!(6);
+        if name=="mobile" {frame["hardware"][16805]=json!(0xd8);for y in 0..144{frame["rows"][y*16+5]=json!(7);frame["rows"][y*16+6]=json!(7);}}
+        for(i,b)in peer.iter().enumerate(){frame["hardware"][i]=json!(b);frame["hardware"][16806+i]=json!(b);}
+        run["profile"]["native_effect_video_frames"].as_array_mut().unwrap().push(frame);
+    }
+    headbutt_pixels(&e);
+    e["clients"][0]["mobile"]["profile"]["native_effect_events"][4]["watches"]["5"]=json!([1]);
+    rejects(&e,"Completed effect has no preceding actual native graphics release");
 }
 #[test]
 fn headbutt_pixel_control_keeps_hidden_and_duplicate_demand() {
@@ -195,28 +256,15 @@ fn headbutt_pixel_rows_reject_missing_unordered_and_late_source_provenance() {
 }
 #[test]
 fn headbutt_pixel_rows_cover_pre_animation_previous_oam_and_native_owned_tail() {
-    let mut e = fixture();
-    for name in ["mobile", "single"] {
-        let run = &mut e["clients"][0][name];
-        let mut before = run["profile"]["native_effect_video_frames"][0].clone();
-        before["rows"] = json!(rows(0,0,0)); before["render_metadata"][1]=json!(0);
-        before["display_metadata"][1]=json!(1); before["display_metadata"][2]=json!(0);
-        for y in 0..144 {before["rows"][y*16+4]=json!(1);}
+    let mut e=teardown_fixture();
+    for name in ["mobile","single"] {
+        let run=&mut e["clients"][0][name];let mut before=run["profile"]["native_effect_video_frames"][0].clone();
+        before["rows"]=json!(rows(0,0,0));before["render_metadata"][1]=json!(0);
+        before["display_metadata"][1]=json!(1);before["display_metadata"][2]=json!(0);
+        for y in 0..144 {before["rows"][y*16+4]=json!(1);before["rows"][y*16+2]=json!(0);before["rows"][y*16+11]=json!(0);}
         run["profile"]["native_effect_video_frames"].as_array_mut().unwrap().insert(0,before);
-        let source = super::effect_bytes(&run["profile"]["native_effect_events"][0]["watches"]["0"]);
-        run["profile"]["native_effect_events"].as_array_mut().unwrap().extend([event(3,0,&source),event(4,5,&source)]);
-        let mut tail = run["profile"]["native_effect_video_frames"][2].clone();
-        tail["rows"] = json!(rows(4,4,2)); tail["render_metadata"][1]=json!(3);
-        tail["display_metadata"][1]=json!(4); tail["display_metadata"][2]=json!(3);
-        run["profile"]["native_effect_video_frames"].as_array_mut().unwrap().push(tail);
     }
-    // Normal previous OAM and native-owned post-effect graphics remain fully
-    // decoded, even when their tile numbers overlap the animation range.
     headbutt_pixels(&e);
-    let frame = &mut e["clients"][0]["mobile"]["profile"]["native_effect_video_frames"][3];
-    frame["hardware"][16805]=json!(0xd8);
-    for y in 0..144 {frame["rows"][y*16+5]=json!(7);frame["rows"][y*16+6]=json!(7);}
-    rejects(&e, "Completed effect has no preceding actual native graphics release");
 }
 
 fn window_fixture(reset: bool) -> Value {
@@ -268,4 +316,70 @@ fn headbutt_pixel_window_accepts_signed_reset_row_and_rejects_address_overflow()
         frame["rows"][143*16+8]=json!(1000);
     }
     rejects(&e,"Actual window/BG map address outside captured VRAM bank");
+}
+
+#[test]
+fn headbutt_pixel_late_initializer_cannot_end_active_demand() {
+    // The independently found defect retains both matched controls, two live
+    // generations, complete restored OAM and exact pixels, without teardown.
+    let mut e = teardown_fixture();
+    for name in ["mobile", "single"] {
+        let run = &mut e["clients"][0][name];
+        run["profile"]["native_effect_source_bindings"]["initial_return"] = json!([35, 0x47c1]);
+        run["profile"]["native_effect_events"][2]["fields"][14] = json!(0x47c1);
+        run["profile"]["native_effect_events"][2]["fields"][16] = json!(2);
+        for y in 0..144 { run["profile"]["native_effect_video_frames"][2]["rows"][y*16+12] = json!(0); }
+    }
+    rejects(&e, "Native initialization cannot waive live effect demand");
+}
+
+#[test]
+fn headbutt_pixel_unrelated_clear_preserves_pre_effect_previous_native_baseline() {
+    let mut e = fixture();
+    for name in ["mobile", "single"] {
+        let run = &mut e["clients"][0][name];
+        let source = super::effect_bytes(&run["profile"]["native_effect_events"][0]["watches"]["0"]);
+        run["profile"]["native_effect_events"].as_array_mut().unwrap().insert(0, event(0, 8, &source));
+        for (i, frame) in run["profile"]["native_effect_video_frames"].as_array_mut().unwrap().iter_mut().enumerate() {
+            for y in 0..144 { frame["rows"][y*16+1] = json!(i+2); }
+        }
+        let mut before = run["profile"]["native_effect_video_frames"][0].clone();
+        before["rows"] = json!(rows(0, 0, 0)); before["render_metadata"][1] = json!(0);
+        before["display_metadata"][1] = json!(1); before["display_metadata"][2] = json!(0);
+        before["hardware"][16805] = json!(0xc1);
+        // Normal native writes after unrelated Clear are an honest previous
+        // OAM baseline, not a completed effect publication. Tile1 is blank.
+        for (i, b) in [33, 24, 1, 0].iter().enumerate() {
+            before["hardware"][144+i] = json!(b); before["hardware"][16806+144+i] = json!(b);
+        }
+        for y in 0..144 { before["rows"][y*16+4] = json!(1); }
+        run["profile"]["native_effect_video_frames"].as_array_mut().unwrap().insert(0, before);
+    }
+    headbutt_pixels(&e);
+    // Explicitly labelling this unrelated snapshot as intent must reject.
+    for y in 0..144 { e["clients"][0]["mobile"]["profile"]["native_effect_video_frames"][0]["rows"][y*16+1] = json!(1); }
+    rejects(&e, "Latest native animation return before actual DMA required");
+}
+
+#[test]
+fn headbutt_pixel_unrelated_clear_cannot_waive_active_source_or_later_writes() {
+    let mut e = teardown_fixture();
+    for name in ["mobile", "single"] {
+        let run = &mut e["clients"][0][name];
+        run["profile"]["native_effect_events"][2]["fields"][16] = json!(0);
+        for y in 0..144 { run["profile"]["native_effect_video_frames"][2]["rows"][y*16+1] = json!(2); }
+    }
+    rejects(&e, "Every source-bound native effect quad");
+    let mut written = fixture();
+    let run = &mut written["clients"][0]["mobile"];
+    let source = super::effect_bytes(&run["profile"]["native_effect_events"][0]["watches"]["0"]);
+    let mut clear = event(1, 8, &source); clear["fields"][0] = json!(15);
+    run["profile"]["native_effect_events"].as_array_mut().unwrap().insert(1, clear);
+    for y in 0..144 { run["profile"]["native_effect_video_frames"][1]["rows"][y*16+1] = json!(3); }
+    let frame = &mut run["profile"]["native_effect_video_frames"][0];
+    frame["hardware"][16805] = json!(0xc1);
+    // First DMA now follows the unrelated Clear, while retaining producer1.
+    for y in 0..144 { frame["rows"][y*16+2] = json!(16); frame["rows"][y*16+11] = json!(16); }
+    frame["hardware"][159] = json!(1); frame["hardware"][16965] = json!(1);
+    rejects(&written, "Native ShadowOAM changed after producer binding");
 }

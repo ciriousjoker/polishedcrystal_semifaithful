@@ -69,7 +69,7 @@ extern "C" unsigned acceptance_profile_simulation_record(unsigned index, unsigne
 
 // Acceptance-only instruction evidence. Limits are part of the ABI. Any invalid
 // configuration, stack exhaustion or event exhaustion sets the overflow gate.
-static constexpr unsigned acceptance_effect_spans = 8, acceptance_effect_watches = 16;
+static constexpr unsigned acceptance_effect_spans = 9, acceptance_effect_watches = 16;
 static constexpr unsigned acceptance_effect_bytes = 160, acceptance_effect_capacity = 4096;
 struct AcceptanceEffectWatch { unsigned bank = 0, address = 0, length = 0; };
 struct AcceptanceEffectCall { unsigned id, sp, pc, bank; };
@@ -93,6 +93,11 @@ static unsigned acceptance_effect_sequence = 0, acceptance_effect_overflow = 0;
 static unsigned acceptance_effect_returns[acceptance_effect_spans] = {};
 extern "C" unsigned acceptance_profile_effect_returns(unsigned id) {
     return id < acceptance_effect_spans ? acceptance_effect_returns[id] : 0;
+}
+static unsigned acceptance_effect_teardown_bank = ~0u, acceptance_effect_teardown_return = 0;
+extern "C" void acceptance_profile_effect_teardown(unsigned bank, unsigned pc) {
+    if (!pc || pc >= 0x8000 || (pc >= 0x4000 && !bank)) { ++acceptance_effect_overflow; return; }
+    acceptance_effect_teardown_bank = bank; acceptance_effect_teardown_return = pc;
 }
 static cpu_regs acceptance_effect_instruction_regs = {};
 static unsigned acceptance_native_scene_fields[8][5] = {}, acceptance_native_scene_count = 0;
@@ -173,6 +178,7 @@ static void acceptance_effect_emit(gb* game, const cpu_regs& regs, unsigned id, 
     acceptance_effect_records.push_back(event);
 }
 static unsigned acceptance_oam_dma_page = ~0u, acceptance_oam_dma_sequence = 0, acceptance_oam_dma_frame = 0, acceptance_oam_dma_count = 0;
+static unsigned acceptance_oam_dma_producer = 0;
 static unsigned acceptance_oam_dma_wbk = 0, acceptance_oam_dma_bank = 0;
 static unsigned char acceptance_oam_dma_source[160] = {};
 // Called by the isolated core at io_write, before the real synchronous GDMA.
@@ -185,6 +191,17 @@ static void acceptance_profile_effect_io_write(gb* game, unsigned address, unsig
         for (unsigned i = 0; i < 160; ++i)
             acceptance_oam_dma_source[i] = acceptance_effect_read(game, acceptance_oam_dma_bank, value * 256 + i);
         acceptance_oam_dma_sequence = acceptance_effect_sequence;
+        // Freeze the completed native producer at the actual DMA instruction.
+        // Unrelated Clear calls do not publish ordinary native OAM.
+        // A later return in the same raster frame cannot change this binding.
+        acceptance_oam_dma_producer = 0;
+        for (unsigned i = acceptance_effect_records.size(); i > 0; --i) {
+            const auto& event = acceptance_effect_records[i - 1];
+            if ((event.fields[2] == 5 || (event.fields[2] == 8 && event.fields[16] != 0)) && event.fields[3] == 2 &&
+                    event.fields[0] < acceptance_oam_dma_sequence) {
+                acceptance_oam_dma_producer = i; break;
+            }
+        }
         acceptance_oam_dma_frame = mobile_observed_frames;
         ++acceptance_oam_dma_count;
     }
@@ -323,13 +340,7 @@ extern "C" void acceptance_profile_render_line(gb* game, unsigned line, int wind
         acceptance_video_meta[12] = acceptance_oam_dma_bank;
         for (unsigned layer = 0; layer < 3; ++layer)
             if (game->get_lcd()->get_enable(layer)) acceptance_video_meta[13] |= 1u << layer;
-        for (unsigned i = acceptance_effect_records.size(); i > 0; --i) {
-            const auto& event = acceptance_effect_records[i - 1];
-            if ((event.fields[2] == 5 || event.fields[2] == 0) && event.fields[3] == 2 &&
-                event.fields[0] <= acceptance_oam_dma_sequence) {
-                acceptance_video_meta[4] = i; break;
-            }
-        }
+        acceptance_video_meta[4] = acceptance_oam_dma_producer;
     }
     if (!acceptance_video_meta[0]) return;
     if (acceptance_video_meta[5] != line) acceptance_video_meta[6] |= 1;
@@ -342,12 +353,7 @@ extern "C" void acceptance_profile_render_line(gb* game, unsigned line, int wind
     std::memcpy(acceptance_video_previous, actual, acceptance_video_size);
     auto* row = acceptance_video_rows[line];
     row[0] = acceptance_profile_effect_active(0); row[1] = 0;
-    for (unsigned i = acceptance_effect_records.size(); i > 0; --i) {
-        const auto& event = acceptance_effect_records[i - 1];
-        if (event.fields[2] == 5 && event.fields[3] == 2 && event.fields[0] <= acceptance_oam_dma_sequence) {
-            row[1] = i; break;
-        }
-    }
+    row[1] = acceptance_oam_dma_producer;
     row[2] = acceptance_oam_dma_sequence; row[3] = acceptance_oam_dma_frame;
     row[4] = acceptance_oam_dma_count; row[5] = acceptance_oam_dma_wbk; row[6] = acceptance_oam_dma_bank;
     for (unsigned layer = 0; layer < 3; ++layer) if (game->get_lcd()->get_enable(layer)) row[7] |= 1u << layer;
@@ -355,7 +361,10 @@ extern "C" void acceptance_profile_render_line(gb* game, unsigned line, int wind
     row[10] = mobile_observed_frames; row[11] = acceptance_effect_sequence;
     // Phase is instruction-derived: before initial animation return, active
     // native Shake, and after actual Shake return, including native-owned tails.
-    row[12] = acceptance_effect_returns[0] ? 2 : (row[1] ? 1 : 0);
+    const bool native_animation = row[1] &&
+        (acceptance_effect_records[row[1] - 1].fields[2] == 5 ||
+         acceptance_effect_records[row[1] - 1].fields[16] == 1);
+    row[12] = acceptance_effect_returns[0] ? 2 : (native_animation ? 1 : 0);
     ++acceptance_video_meta[5]; acceptance_video_meta[7] = line;
 
 }
@@ -383,7 +392,9 @@ static void acceptance_profile_after(gb* game, const cpu_regs& regs, unsigned op
     if (acceptance_effect_instruction_regs.SP == call.sp &&
         regs.SP == ((call.sp + 2) & 0xffff) && regs.PC == call.pc &&
         acceptance_effect_bank(game, regs.PC) == call.bank) {
-        acceptance_effect_emit(game, regs, call.id, 2, call);
+        acceptance_effect_emit(game, regs, call.id, 2, call,
+            call.id == 8 && acceptance_profile_effect_active(0) ?
+                (call.pc == acceptance_effect_teardown_return && call.bank == acceptance_effect_teardown_bank ? 1 : 2) : 0);
         ++acceptance_effect_returns[call.id];
         acceptance_effect_calls.pop_back();
     }
@@ -501,6 +512,7 @@ extern "C" void acceptance_profile_effect_reset() {
     std::fill_n(acceptance_display_metadata, 24, 0);
     acceptance_display_output = 0; acceptance_display_buffer = nullptr;
     acceptance_oam_dma_page = ~0u;
+    acceptance_oam_dma_producer = 0;
     acceptance_oam_dma_wbk = acceptance_oam_dma_bank = 0;
     std::fill_n(acceptance_oam_dma_source, 160, 0);
     acceptance_oam_dma_sequence = acceptance_oam_dma_frame = acceptance_oam_dma_count = 0;

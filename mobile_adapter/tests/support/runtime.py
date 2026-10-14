@@ -277,6 +277,35 @@ def rom_offset(binding):
     return bank * 0x4000 + address - (0x4000 if address >= 0x4000 else 0)
 
 
+def validate_native_effect_sources(rom, names):
+    """Bind the unchanged linked native teardown writer and its return site."""
+    required = ["ShakeHeadbuttTree", "ShakeHeadbuttTree.got_gfx", "ShakeHeadbuttTree.copy_done_loop", "ShakeHeadbuttTree.hide_loop",
+                "ClearSpriteAnims", "DelayFrame", "wSpriteAnimDict", "wSpriteAnimsEnd"]
+    if any(name not in names for name in required):
+        raise RuntimeError("Missing native effect source anchor")
+    data = Path(rom).read_bytes()
+    def exact(name, expected):
+        at = rom_offset(names[name])
+        if data[at:at + len(expected)] != expected:
+            raise RuntimeError("Changed linked native effect source: " + name)
+    exact("ShakeHeadbuttTree.copy_done_loop", bytes.fromhex("3a121b0d20fa"))
+    clear = names["ClearSpriteAnims"][1]
+    delay = names["DelayFrame"][1]
+    exact("ShakeHeadbuttTree.hide_loop", bytes.fromhex("77190d20fb") +
+          bytes([0xcd]) + clear.to_bytes(2, "little") + bytes([0xcd]) + delay.to_bytes(2, "little"))
+    start = names["wSpriteAnimDict"][1]
+    length = names["wSpriteAnimsEnd"][1] - start
+    exact("ClearSpriteAnims", bytes([0xaf, 0x21]) + start.to_bytes(2, "little") +
+          bytes([0x01]) + length.to_bytes(2, "little") + bytes([0xef, 0xc9]))
+    start_at = rom_offset(names["ShakeHeadbuttTree"])
+    end_at = rom_offset(names["ShakeHeadbuttTree.got_gfx"])
+    init_call = bytes([0xcd]) + clear.to_bytes(2, "little")
+    if data[start_at:end_at].count(init_call) != 1:
+        raise RuntimeError("Missing or ambiguous native initialization source caller")
+    bank, pc = names["ShakeHeadbuttTree.hide_loop"]
+    return bank, pc + 8
+
+
 def patch_data(rom, names, values, destination):
     data = bytearray(rom.read_bytes())
     sizes = {"AcceptanceScenarioID": 1, "AcceptanceAvatar": 1, "AcceptanceTrainerID": 2,
@@ -1043,7 +1072,8 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
             predicates[6] = ("wPlayerMapObjectIndex", 0)
             for field, (name, expected) in enumerate(predicates):
                 command += ["--native-scene-field", f"{field}:{name}:{expected}:255"]
-            spans = ["ShakeHeadbuttTree", "WriteVCopyRegistersToHRAM", "MobileNativeGraphicsRequest", "MobileNativeGraphicsRelease", "MobileVirtualCommitPose.dma", "DoNextFrameForAllSprites_OW", "TryHeadbuttOW", "RunScriptCommand"]
+            validate_native_effect_sources(current, bindings)
+            spans = ["ShakeHeadbuttTree", "WriteVCopyRegistersToHRAM", "MobileNativeGraphicsRequest", "MobileNativeGraphicsRelease", "MobileVirtualCommitPose.dma", "DoNextFrameForAllSprites_OW", "TryHeadbuttOW", "RunScriptCommand", "ClearSpriteAnims"]
             for number, name in enumerate(spans):
                 if enabled or number not in (2,3,4):
                     command += ["--effect-span", f"{number}:{name}"]

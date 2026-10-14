@@ -933,7 +933,7 @@ int main(int argc, char** argv) {
                 const auto fields = parts(value);
                 if (fields.size() != 2) fail("Effect span requires ID:SYMBOL");
                 const auto id = std::stoul(fields[0], nullptr, 0);
-                if (id >= 8 || !spans.insert(id).second || !native_addresses.count(fields[1]))
+                if (id >= 9 || (id == 8 && fields[1] != "ClearSpriteAnims") || !spans.insert(id).second || !native_addresses.count(fields[1]))
                     fail("Invalid or missing effect span: " + value);
                 const auto point = native_addresses.at(fields[1]);
                 symbol<void(*)(unsigned,unsigned,unsigned)>(core, "acceptance_profile_effect_span")(id, point.first, point.second);
@@ -941,6 +941,11 @@ int main(int argc, char** argv) {
                     if (!native_addresses.count("DoNextFrameForAllSprites")) fail("Missing initial native animation routine");
                     const auto alias = native_addresses.at("DoNextFrameForAllSprites");
                     symbol<void(*)(unsigned,unsigned,unsigned)>(core, "acceptance_profile_effect_alias")(id, alias.first, alias.second);
+                }
+                if (id == 8) {
+                    if (!native_addresses.count("ShakeHeadbuttTree.hide_loop")) fail("Missing native teardown caller");
+                    const auto caller = native_addresses.at("ShakeHeadbuttTree.hide_loop");
+                    symbol<void(*)(unsigned,unsigned)>(core, "acceptance_profile_effect_teardown")(caller.first, caller.second + 8);
                 }
                 effect_span_ids.push_back(id);
             }
@@ -1597,7 +1602,27 @@ int main(int argc, char** argv) {
                 const auto point = acceptance_symbols.at(name);
                 profile << '\"' << name << "\":[" << point.bank << ',' << point.address << ']';
             }
-            profile << "},\"native_effect_events\":[";
+            profile << "},\"native_effect_source_bindings\":{\"teardown_return\":[";
+            const auto teardown = acceptance_symbols.at("ShakeHeadbuttTree.hide_loop");
+            profile << teardown.bank << ',' << teardown.address + 8;
+            profile << "],\"initial_return\":[";
+            const auto initial = acceptance_symbols.at("ShakeHeadbuttTree");
+            const auto initial_end = acceptance_symbols.at("ShakeHeadbuttTree.got_gfx");
+            const auto clear = acceptance_symbols.at("ClearSpriteAnims");
+            unsigned initial_return = 0;
+            for (unsigned pc = initial.address; pc + 2 < initial_end.address; ++pc) {
+                const unsigned at = initial.bank * 0x4000 + pc - 0x4000;
+                if (at + 2 >= rom.size()) fail("Native initial source outside ROM");
+                if (static_cast<unsigned char>(rom[at]) == 0xcd &&
+                    static_cast<unsigned char>(rom[at + 1]) == (clear.address & 255) &&
+                    static_cast<unsigned char>(rom[at + 2]) == (clear.address >> 8)) {
+                    if (initial_return) fail("Ambiguous native initialization source");
+                    initial_return = pc + 3;
+                }
+            }
+            if (!initial_return) fail("Missing native initialization source");
+            profile << initial.bank << ',' << initial_return;
+            profile << "]},\"native_effect_events\":[";
             for (unsigned i = 0; i < count; ++i) {
                 if (i) profile << ',';
                 profile << "{\"fields\":[";

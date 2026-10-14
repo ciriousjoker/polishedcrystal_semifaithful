@@ -203,6 +203,7 @@ int main(){
  r.PC=0x100;r.SP=0xc100;stack(g,r.SP,0x200);acceptance_profile_before(&g,r);
  r.PC=0x510;r.SP=0xc0fe;stack(g,r.SP,0x150);acceptance_profile_before(&g,r);
  r.PC=0x150;r.SP=0xc100;acceptance_profile_after(&g,r,0xc9,16);
+ r.PC=0x160;acceptance_profile_before(&g,r);
  acceptance_profile_effect_io_write(&g,0xff46,0xd1);
  for(unsigned line=0;line<144;line++) {
    if(line==17) {g.cpu.vram[3]=55;g.lcd.mapped[8][2]=0x4321;}
@@ -212,6 +213,29 @@ int main(){
  assert(acceptance_profile_video_row(0,1)==3 && acceptance_profile_video_row(17,8)==9);
  assert(acceptance_profile_video_row(16,9)==0 && acceptance_profile_video_row(17,9)==3);
  assert(acceptance_profile_video_byte(163)==42 && acceptance_profile_video_change(0,1)==55);
+ // Ninth clear span captures the complete source. Later returns cannot rebind old DMA.
+ acceptance_profile_effect_span(8,0,0x600);
+ acceptance_profile_effect_teardown(0,0x180);
+ acceptance_profile_effect_watch(0,0,0xc100,160);
+ acceptance_profile_effect_watch(4,0,0xc200,160);
+ r.PC=0x600;r.SP=0xc0fe;stack(g,r.SP,0x180);acceptance_profile_before(&g,r);
+ g.cpu.memory[0xc190]=32;g.cpu.memory[0xc191]=24;g.cpu.memory[0xc192]=1;
+ std::memset(g.cpu.memory+0xc200,0,160);
+ r.PC=0x180;r.SP=0xc100;acceptance_profile_after(&g,r,0xc9,16);
+ const unsigned teardown_index=acceptance_effect_records.size();
+ assert(acceptance_profile_effect_returns(8)==1);
+ assert(acceptance_profile_effect_record(teardown_index-1,16)==1);
+ assert(acceptance_profile_effect_sample(teardown_index-1,0,144)==32);
+ acceptance_profile_render_line(&g,0);
+ assert(acceptance_profile_video_row(0,1)==3);
+ r.PC=0x190;acceptance_profile_before(&g,r);
+ acceptance_profile_effect_io_write(&g,0xff46,0xc1);
+ acceptance_profile_render_line(&g,1);
+ assert(acceptance_profile_video_row(1,1)==teardown_index);
+ for(unsigned line=2;line<144;line++)acceptance_profile_render_line(&g,line);
+ const auto overflow=acceptance_effect_overflow;
+ acceptance_profile_effect_span(9,0,0x600);
+ assert(acceptance_effect_overflow==overflow+1);
  acceptance_profile_render_line(&g,0); // complete prior frame, valid new frame
  acceptance_profile_render_line(&g,0); // unfinished previous capture is fatal
  assert(acceptance_profile_effect_record(0,33)>0);
@@ -227,6 +251,28 @@ int main(){
  assert(acceptance_profile_display_field(0)==0 && !acceptance_profile_display_matches(output));
  acceptance_profile_video_enable(0);acceptance_profile_render_line(&g,0);
  assert(acceptance_profile_video_field(0)==0);
+ // Unrelated Clear does not publish ordinary OAM before an effect. Later
+ // normal native writes are captured as DMA bytes with source_index0.
+ acceptance_profile_effect_reset();acceptance_profile_video_enable(1);
+ acceptance_profile_effect_span(0,0,0);acceptance_profile_effect_span(5,0,0x500);
+ acceptance_profile_effect_span(8,0,0x600);
+ r.PC=0x600;r.SP=0xc100;stack(g,r.SP,0x700);acceptance_profile_before(&g,r);
+ r.PC=0x700;r.SP=0xc102;acceptance_profile_after(&g,r,0xc9,16);
+ assert(acceptance_profile_effect_record(1,16)==0);
+ g.cpu.memory[0xc190]=33;r.PC=0x710;acceptance_profile_before(&g,r);
+ acceptance_profile_effect_io_write(&g,0xff46,0xc1);
+ assert(acceptance_oam_dma_producer==0 && acceptance_oam_dma_source[144]==33);
+ // Once an animation source exists, unrelated Clear retains that source,
+ // even when it clears animation state. The Rust gate checks source equality.
+ r.PC=0x500;r.SP=0xc100;stack(g,r.SP,0x720);acceptance_profile_before(&g,r);
+ r.PC=0x720;r.SP=0xc102;acceptance_profile_after(&g,r,0xc9,16);
+ const auto live_index=acceptance_effect_records.size();
+ r.PC=0x600;r.SP=0xc100;stack(g,r.SP,0x730);acceptance_profile_before(&g,r);
+ std::memset(g.cpu.memory+0xc200,0,160);
+ r.PC=0x730;r.SP=0xc102;acceptance_profile_after(&g,r,0xc9,16);
+ r.PC=0x740;acceptance_profile_before(&g,r);
+ acceptance_profile_effect_io_write(&g,0xff46,0xc1);
+ assert(acceptance_oam_dma_producer==live_index);
  std::puts("PASS immediate RET/IRQ/GDMA chronology, return registers/fence, RETI, conditional RET, recursive/nested calls, ROM0/ROMX, arguments, native readiness, legacy hooks, restores, reset, overflow and actual display binding");
  return 0;
 }

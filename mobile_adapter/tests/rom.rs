@@ -1887,19 +1887,62 @@ fn headbutt_row(frame: &Value, y: usize, hardware: &mut [u8], cursor: &mut usize
     for (dest, src) in [(3,0),(4,1),(8,2),(9,3),(10,4),(11,5),(12,6),(13,7),(2,10)] { meta[dest] = row[src].clone(); }
     serde_json::json!({"render_metadata":meta,"window_line":row[8],"phase":row[12]})
 }
-fn headbutt_video_step(run: &Value, frame: &Value) -> Option<usize> {
+fn headbutt_source_key(run: &Value, frame: &Value) -> Option<(u64, usize, Vec<u8>)> {
     let index = frame["render_metadata"][4].as_u64().unwrap() as usize;
     if index == 0 { return None; }
     let events = effect_events(run);
-    assert!(index <= events.len());
+    assert!(index <= events.len(), "Missing native producer event");
     let source = &events[index - 1];
-    assert_eq!(effect_field(source, 2), 5);
-    assert!(effect_field(source, 0) <= frame["render_metadata"][8].as_u64().unwrap(), "Animation source must precede the actual DMA");
+    let span = effect_field(source, 2);
+    assert!(span == 5 || span == 8, "Wrong native producer kind");
+    if span == 8 { assert!(effect_field(source, 16) <= 2, "Invalid native clear producer context"); }
+    assert!(effect_field(source, 0) < frame["render_metadata"][8].as_u64().unwrap(), "Native source must precede the actual DMA");
     assert_eq!(effect_field(source, 3), 2);
     assert!(effect_field(source, 1) <= frame["render_metadata"][2].as_u64().unwrap());
-    if effect_calls(run, 0, 2).iter().any(|completed|
-        effect_field(completed, 0) <= frame["render_metadata"][8].as_u64().unwrap()) { return None; }
-    Some(events[..index].iter().filter(|e| effect_field(e, 2) == 5 && effect_field(e, 3) == 2).count())
+    assert_eq!(effect_bytes(&source["watches"]["0"]).len(), 160, "Complete native ShadowOAM source required");
+    let mut animation = effect_bytes(&source["watches"]["4"]);
+    assert_eq!(animation.len(), 160, "Complete native animation snapshot required");
+    let generation = events[..index].iter().filter(|e| effect_field(e, 2) == 5 && effect_field(e, 3) == 2).count();
+    if span == 8 {
+        assert_ne!(effect_field(source, 16), 0, "Unrelated native ClearSpriteAnims is not an effect producer");
+        if effect_field(source, 16) == 2 {
+            assert_eq!(generation, 0, "Native initialization cannot waive live effect demand");
+            let binding = &run["profile"]["native_effect_source_bindings"]["initial_return"];
+            assert_eq!(effect_field(source, 14), binding[1].as_u64().expect("Missing native initialization caller binding"));
+            assert_eq!(effect_field(source, 15), binding[0].as_u64().unwrap());
+        }
+    }
+    let completed = effect_calls(run, 0, 2).iter().any(|e| effect_field(e, 0) < frame["render_metadata"][8].as_u64().unwrap());
+    let kind = if span == 8 && effect_field(source, 16) == 1 {
+        let binding = &run["profile"]["native_effect_source_bindings"]["teardown_return"];
+        assert_eq!(effect_field(source, 14), binding[1].as_u64().expect("Missing native teardown caller binding"), "Wrong native teardown caller");
+        assert_eq!(effect_field(source, 15), binding[0].as_u64().unwrap(), "Wrong native teardown caller bank");
+        assert!(animation.iter().all(|b| *b == 0), "Native teardown has live animation state");
+        8
+    } else if completed { 9 } else if span == 8 {
+        0
+    } else { 5 };
+    if kind == 9 {
+        let teardown = events[..index].iter().rev().find(|e| effect_field(e, 2) == 8
+            && effect_field(e, 3) == 2 && effect_field(e, 16) == 1
+            && effect_field(e, 0) < frame["render_metadata"][8].as_u64().unwrap())
+            .expect("Post-effect source has no preceding genuine native teardown");
+        let binding = &run["profile"]["native_effect_source_bindings"]["teardown_return"];
+        assert_eq!(effect_field(teardown, 14), binding[1].as_u64().unwrap());
+        assert_eq!(effect_field(teardown, 15), binding[0].as_u64().unwrap());
+        assert_eq!(effect_bytes(&teardown["watches"]["0"]).len(), 160);
+        assert!(effect_bytes(&teardown["watches"]["4"]).iter().all(|b| *b == 0));
+    }
+    for watch in ["1", "2"] {
+        let state = effect_bytes(&source["watches"][watch]);
+        assert_eq!(state.len(), 1, "Complete native producer state required");
+        animation.extend(state);
+    }
+    Some((kind, generation, animation))
+}
+fn headbutt_video_step(run: &Value, frame: &Value) -> Option<usize> {
+    headbutt_source_key(run, frame).and_then(|(kind, generation, _)|
+        if kind == 5 || kind == 8 { Some(generation) } else { None })
 }
 fn headbutt_pixels(e: &Value) {
     let mobile = &clients(e)[0]["mobile"];
@@ -1910,7 +1953,7 @@ fn headbutt_pixels(e: &Value) {
     for frame in native["profile"]["native_effect_video_frames"].as_array().unwrap() {
         let mut hardware = effect_bytes(&frame["hardware"]); let mut cursor = 0;
         for y in 0..144 { let row = headbutt_row(frame, y, &mut hardware, &mut cursor);
-            if let Some(step) = headbutt_video_step(native, &row) { controls.entry((step,y)).or_insert(frame); }
+            if let Some(key) = headbutt_source_key(native, &row) { controls.entry((key,y)).or_insert(frame); }
         }
     }
     let mut visible = 0usize;
@@ -1951,11 +1994,12 @@ fn headbutt_pixels(e: &Value) {
             }
             let source_index = meta[4].as_u64().unwrap() as usize;
             let latest = effect_events(run).iter().enumerate().rev().find(|(_,event)|
-                effect_field(event,2)==5 && effect_field(event,3)==2 && effect_field(event,0)<=meta[8].as_u64().unwrap()).map_or(0,|(i,_)|i+1);
+                (effect_field(event,2)==5 || (effect_field(event,2)==8 && effect_field(event,16)!=0)) && effect_field(event,3)==2 && effect_field(event,0)<meta[8].as_u64().unwrap()).map_or(0,|(i,_)|i+1);
             assert_eq!(source_index,latest,"Latest native animation return before actual DMA required");
             let sequence = frame["rows"][y as usize*16+11].as_u64().unwrap();
-            let phase = if effect_calls(run,0,2).iter().any(|event|effect_field(event,0)<=sequence) {2} else if source_index>0 {1} else {0};
+            let phase = if effect_calls(run,0,2).iter().any(|event|effect_field(event,0)<=sequence) {2} else if source_index>0 && effect_field(&effect_events(run)[source_index-1],2)==5 {1} else if source_index>0 && effect_field(&effect_events(run)[source_index-1],16)==1 {1} else {0};
             assert_eq!(n(&row,"phase"),phase,"Actual native phase provenance");
+            let key = headbutt_source_key(run, &row);
             let step = headbutt_video_step(run, &row);
             let source = if source_index > 0 {
                 effect_bytes(&effect_events(run)[source_index - 1]["watches"]["0"])
@@ -1970,22 +2014,43 @@ fn headbutt_pixels(e: &Value) {
                 quads.sort(); quads
             };
             let mut intended = demand(&source);
+            let released = effect_calls(run, 3, 2).iter().any(|release|
+                effect_field(release, 0) < meta[8].as_u64().unwrap()
+                && effect_bytes(&release["watches"]["5"]) == [0]
+                && effect_bytes(&release["watches"]["1"]) == [0]
+                && effect_bytes(&release["watches"]["2"]) == [0]
+                && effect_bytes(&release["watches"]["4"]).iter().all(|b| *b == 0));
+            if key.as_ref().map(|k| k.0) == Some(8) {
+                assert!(intended.is_empty(), "Genuine teardown source retained native effect tuples");
+            }
+            if key.as_ref().map(|k| k.0) == Some(0) && std::ptr::eq(run, mobile) {
+                let control = controls.get(&(key.clone().unwrap(), y as usize)).expect("No same-source native initialization control");
+                let mut c = effect_bytes(&control["hardware"]); let mut cc = 0; let mut cr = Value::Null;
+                for cy in 0..=y as usize { cr = headbutt_row(control, cy, &mut c, &mut cc); }
+                let ci = cr["render_metadata"][4].as_u64().unwrap() as usize - 1;
+                assert_eq!(source, effect_bytes(&effect_events(native)[ci]["watches"]["0"]), "Native initial source differs from control");
+            }
             if let Some(step) = step {
                 if std::ptr::eq(run, mobile) {
-                    let control = controls.get(&(step,y as usize)).expect("No same-source control at matched actual animation step");
+                    let control = controls.get(&(key.clone().unwrap(),y as usize)).expect("No same-source control at matched actual animation step");
                     let mut c = effect_bytes(&control["hardware"]); let mut cc = 0;
                     let mut cr = Value::Null;
                     for cy in 0..=y as usize { cr = headbutt_row(control, cy, &mut c, &mut cc); }
                     let ci = cr["render_metadata"][4].as_u64().unwrap() as usize - 1;
                     let control_source = effect_bytes(&effect_events(native)[ci]["watches"]["0"]);
                     assert_eq!(control_source.len(), 160);
+                    if key.as_ref().unwrap().0 == 8 {
+                        assert_eq!(source, control_source, "Native teardown restored-player source differs from control");
+                    }
                     assert_eq!(effect_events(run)[source_index - 1]["watches"]["4"], effect_events(native)[ci]["watches"]["4"], "Control animation state is not the same native step");
                     // Identical Route29/player-pose inputs require identical
                     // screen geometry. No tuple-derived coordinate realignment.
                     assert_eq!(&r[..5], &c[16800..16805], "Actual native view geometry differs");
                     let native_demand = demand(&control_source);
                     assert_eq!(intended, native_demand, "Complete disabled native effect source geometry/tile/attributes/palette/multiplicity differs");
+                    if !(released && key.as_ref().unwrap().0 == 8) {
                     assert_eq!(&h[160 + first * 16..160 + end * 16], &c[160 + first * 16..160 + end * 16], "Actual native animation tiles differ");
+                    }
                     for quad in &native_demand {
                         let slot = 8 + usize::from(quad[3] & 7);
                         assert_eq!(&h[16544 + slot * 8..16544 + (slot + 1) * 8], &c[16544 + slot * 8..16544 + (slot + 1) * 8], "Actual intended OBJ palette RGB differs at slot {slot}");
@@ -1993,7 +2058,7 @@ fn headbutt_pixels(e: &Value) {
                     }
                     if !native_demand.is_empty() { steps.insert(step); }
                 }
-            } else if source_index > 0 {
+            } else if source_index > 0 && key.as_ref().map(|k| k.0) != Some(0) {
                 // Native Shake return and cleared animation end native demand.
                 // The enabled addon must additionally release graphics ownership
                 // before private peers may reuse those native effect tiles.
@@ -2011,17 +2076,27 @@ fn headbutt_pixels(e: &Value) {
                             && effect_bytes(&release["watches"]["4"]).iter().all(|b| *b == 0)
                     }), "Completed effect has no preceding actual native graphics release");
                 }
+                // Ordinary aliases after completed native ownership remain subject
+                // to the independent full-frame pixel proof below.
                 intended.clear();
             } else {
                 assert_eq!(row["phase"], 0, "Missing source is only valid before actual animation");
-                assert_eq!(source_index, 0);
+                assert!(source_index == 0 || key.as_ref().map(|k| k.0) == Some(0), "Invalid initial native producer");
                 // Pre-animation hardware is its actual previous native/private
                 // OAM baseline. Tile numbers alone cannot invent effect demand.
             }
-            if step.is_some() {
+            if key.as_ref().map(|k| k.0) == Some(8) && std::ptr::eq(run, mobile)
+                && u64::from(page) == n(frame, "private_oam_page") {
+                assert!(released, "Completed effect has no preceding actual native graphics release");
+            }
+            let native_effect_owned = step.is_some() && !(released && key.as_ref().map(|k| k.0) == Some(8));
+            if native_effect_owned {
                 assert_eq!(demand(oam), intended, "Every source-bound native effect quad, preserving multiplicity");
             }
-            let targets: Vec<_> = (0..40).filter(|q| step.is_some() && (first..end).contains(&(oam[q * 4 + 2] as usize)) && oam[q * 4 + 3] & 8 == 0 && (1..160).contains(&oam[q * 4])).collect();
+            if page == 0xc1 && source_index > 0 {
+                assert_eq!(source, &h[16806..], "Native ShadowOAM changed after producer binding");
+            }
+            let targets: Vec<_> = (0..40).filter(|q| native_effect_owned && (first..end).contains(&(oam[q * 4 + 2] as usize)) && oam[q * 4 + 3] & 8 == 0 && (1..160).contains(&oam[q * 4])).collect();
             if !targets.is_empty() {
                 assert_eq!(meta[13], 7, "All actual native LCD layers must be enabled");
                 assert_eq!(r[0] & 0x82, 0x82, "LCD and OBJ must be enabled for intended pixels");
