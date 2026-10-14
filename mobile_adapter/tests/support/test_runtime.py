@@ -10,6 +10,76 @@ import runtime
 from storage import active_run, ensure_free_space
 
 
+class ObserverHooks(unittest.TestCase):
+    def test_compiled_effect_observer_boundaries(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as tmp:
+            binary = Path(tmp) / "observer"
+            source = Path(__file__).with_name("test_effect_observer.cpp")
+            subprocess.run(["c++", "-std=c++17", "-O2", str(source), "-o", str(binary)], check=True)
+            subprocess.run([str(binary)], check=True)
+
+    def source(self, root):
+        (root / "gb_core").mkdir()
+        (root / "libretro").mkdir()
+        (root / "gb_core/cpu.cpp").write_text(
+            "void cpu::io_write(word adr,byte dat)\n{\n}\n"
+            "mobile_profile_before_instruction(ref_gb, regs, total_clock);\n"
+            "mobile_profile_after_instruction(ref_gb, regs, total_clock, observed_opcode, tmp_clocks);\n")
+        (root / "libretro/libretro.cpp").write_text(
+            "bool retro_load_game(const struct retro_game_info *info)\n{\n}\n"
+            "void retro_reset(void)\n{\n}\n"
+            "bool retro_unserialize(const void *data, size_t size)\n{\n        return true;\n}\n")
+
+    def test_supported_hooks_are_idempotent_and_missing_anchors_fail_before_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.source(root)
+            runtime.extend_profile(root)
+            original = {p: p.read_bytes() for p in root.rglob("*") if p.is_file()}
+            runtime.extend_profile(root)
+            self.assertEqual(original, {p: p.read_bytes() for p in original})
+            self.assertIn("acceptance_profile_after(game, regs, opcode, cycles);",
+                          (root / "gb_core/profile_core.h").read_text())
+            self.assertEqual((root / "libretro/libretro.cpp").read_text().count(
+                "acceptance_profile_restore_boundary();"), 2)  # declaration and successful restore
+            cpu = root / "gb_core/cpu.cpp"
+            cpu.write_text(cpu.read_text().replace("void cpu::io_write", "void unsupported::io_write"))
+            before = {p: p.read_bytes() for p in original}
+            with self.assertRaisesRegex(RuntimeError, "unique observer source anchor"):
+                runtime.extend_profile(root)
+            self.assertEqual(before, {p: p.read_bytes() for p in before})
+
+    def test_duplicate_and_misplaced_anchors_fail(self):
+        with self.assertRaises(RuntimeError):
+            runtime.inject_unique("anchor anchor", "anchor", "anchor hook")
+        with self.assertRaises(RuntimeError):
+            runtime.inject_unique("anchor elsewhere hook", "anchor", "anchor hook")
+
+        with self.assertRaises(RuntimeError):
+            runtime.inject_unique("anchor hook elsewhere hook", "anchor", "anchor hook")
+
+    def test_projection_retains_effect_state_and_raw_events(self):
+        import gzip
+        import json
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fields = {"vAcceptanceEffectCount": 3, "vAcceptanceEffectOverflow": 0,
+                      "vAcceptanceNativeSceneReady": 1,
+                      **{f"vAcceptanceEffectActive{i}": i for i in range(8)}}
+            profile = {"native_effect_events": [{"fields": [1, 2, 3]}],
+                       "native_effect_event_count": 1, "native_effect_event_overflow": 0}
+            with gzip.open(root / "trace.jsonl.gz", "wt") as stream:
+                stream.write(json.dumps({"frame": 1, "symbols": fields}) + "\n")
+            (root / "profile.json").write_text(json.dumps(profile))
+            (root / "state.json").write_text(json.dumps({"frame_calls": 1, "symbols": fields}))
+            (root / "result.sav").write_bytes(b"save")
+            (root / "input-events.jsonl").write_text("")
+            result = runtime.projected(root)
+            self.assertEqual(result["frames"][0]["state"], fields)
+            self.assertEqual(result["profile"], profile)
+
+
 class Workspaces(unittest.TestCase):
     def test_rom_copy_excludes_apps_patches_and_generated_artifacts(self):
         with tempfile.TemporaryDirectory() as tmp:

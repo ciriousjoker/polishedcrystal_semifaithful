@@ -703,6 +703,18 @@ int main(int argc, char** argv) {
     }
     unsigned frame_limit = 1200;
     std::map<std::string, std::string> arguments;
+    std::map<std::string, std::vector<std::string>> effect_options;
+    std::map<unsigned, unsigned> effect_watch_lengths;
+    std::vector<unsigned> effect_span_ids;
+    for (int i = 5; i + 1 < argc; i += 2) {
+        const std::string key = argv[i];
+        if (key == "--effect-span" || key == "--effect-watch" || key == "--native-scene-field")
+            effect_options[key].push_back(argv[i + 1]);
+    }
+    const bool effect_enabled = !effect_options.empty();
+    if (effect_enabled) for (int i = 5; i < argc; i += 2)
+        if (std::string(argv[i]) == "--snapshot-in" || std::string(argv[i]) == "--test-snapshot-roundtrip")
+            fail("Effect/native-scene observation does not support snapshot restore");
     for (int i = 5; i < argc; i += 2) {
         std::string key = argv[i];
         if (key != "--frames" && key != "--input" && key != "--symbols" &&
@@ -711,7 +723,7 @@ int main(int argc, char** argv) {
             key != "--checkpoint-dir" && key != "--profile-out" && key != "--profile-window-start" &&
             key != "--snapshot-out" && key != "--test-snapshot-out" && key != "--snapshot-in" && key != "--input-events" &&
             key != "--finish-barrier" && key != "--pace-multiplier" && key != "--expected-peers" && key != "--expected-online" &&
-            key != "--acceptance-menu-routine" && key != "--measurement-gate" && key != "--measurement-warmup" && key != "--acceptance") fail("Unknown option: " + key);
+            key != "--effect-span" && key != "--effect-watch" && key != "--native-scene-field" && key != "--acceptance-menu-routine" && key != "--measurement-gate" && key != "--measurement-warmup" && key != "--acceptance") fail("Unknown option: " + key);
         arguments[key] = argv[i + 1];
     }
     if (arguments.count("--frames")) {
@@ -723,6 +735,8 @@ int main(int argc, char** argv) {
         if (arguments.at("--adapter") != "0" && arguments.at("--adapter") != "1") fail("Invalid adapter flag");
         adapter_enabled = arguments.at("--adapter") == "1";
     }
+    if (effect_enabled && (!arguments.count("--profile-out") || !arguments.count("--symbols")))
+        fail("Effect observation requires profile output and symbols");
     if (arguments.count("--symbols")) load_bindings(arguments.at("--symbols"));
     acceptance_enabled = arguments.count("--acceptance") && arguments.at("--acceptance") == "1";
     const bool mobile_menu_instruction = arguments.count("--acceptance-menu-routine");
@@ -831,6 +845,56 @@ int main(int argc, char** argv) {
                 std::stoul(location.substr(0, colon), nullptr, 16),
                 std::stoul(location.substr(colon + 1), nullptr, 16));
             configured = true;
+        }
+        if (effect_enabled) {
+            // Each repeated option is ID:SYMBOL[:LENGTH] or INDEX:SYMBOL:EXPECTED:MASK.
+            // EXPECTED=nonzero is a readiness predicate; zero is valid for the player map index.
+            auto parts = [](const std::string& value) {
+                std::vector<std::string> result; std::istringstream stream(value); std::string part;
+                while (std::getline(stream, part, ':')) result.push_back(part);
+                return result;
+            };
+            std::set<unsigned> spans, watches, scene_fields;
+            for (const auto& value : effect_options["--effect-span"]) {
+                const auto fields = parts(value);
+                if (fields.size() != 2) fail("Effect span requires ID:SYMBOL");
+                const auto id = std::stoul(fields[0], nullptr, 0);
+                if (id >= 8 || !spans.insert(id).second || !native_addresses.count(fields[1]))
+                    fail("Invalid or missing effect span: " + value);
+                const auto point = native_addresses.at(fields[1]);
+                symbol<void(*)(unsigned,unsigned,unsigned)>(core, "acceptance_profile_effect_span")(id, point.first, point.second);
+                effect_span_ids.push_back(id);
+            }
+            for (const auto& value : effect_options["--effect-watch"]) {
+                const auto fields = parts(value);
+                if (fields.size() != 3) fail("Effect watch requires ID:SYMBOL:LENGTH");
+                const auto id = std::stoul(fields[0], nullptr, 0), length = std::stoul(fields[2], nullptr, 0);
+                if (id >= 16 || !length || length > 160 || !watches.insert(id).second || !native_addresses.count(fields[1]))
+                    fail("Invalid or missing effect watch: " + value);
+                const auto point = native_addresses.at(fields[1]);
+                symbol<void(*)(unsigned,unsigned,unsigned,unsigned)>(core, "acceptance_profile_effect_watch")(id, point.first, point.second, length);
+                effect_watch_lengths[id] = length;
+            }
+            for (const auto& value : effect_options["--native-scene-field"]) {
+                const auto fields = parts(value);
+                if (fields.size() != 4) fail("Native scene field requires INDEX:SYMBOL:EXPECTED:MASK");
+                const auto id = std::stoul(fields[0], nullptr, 0);
+                if (id >= 8 || !scene_fields.insert(id).second || !native_addresses.count(fields[1]))
+                    fail("Invalid or missing native scene field: " + value);
+                const auto point = native_addresses.at(fields[1]);
+                const auto expected = fields[2] == "nonzero" ? ~0u : std::stoul(fields[2], nullptr, 0);
+                symbol<void(*)(unsigned,unsigned,unsigned,unsigned,unsigned)>(core, "acceptance_profile_native_scene_field")(
+                    id, point.first, point.second, expected, std::stoul(fields[3], nullptr, 0));
+            }
+            if (!scene_fields.empty()) {
+                if (scene_fields.size() != 8) fail("Native scene readiness requires all eight predicates");
+                symbol<void(*)(unsigned)>(core, "acceptance_profile_native_scene_enable")(8);
+            }
+            // Explicit ABI checks prevent a legacy core from silently yielding empty evidence.
+            symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_effect_active");
+            symbol<unsigned(*)(unsigned,unsigned)>(core, "acceptance_profile_effect_record");
+            symbol<unsigned(*)(unsigned,unsigned,unsigned)>(core, "acceptance_profile_effect_sample");
+            symbol<unsigned(*)()>(core, "acceptance_profile_native_scene_ready");
         }
         if (!configured && bindings.count("wMobileOwner")) fail("MobileTick symbol missing");
         if (bindings.count("wMobileVirtualActorMode")) {
@@ -1082,9 +1146,24 @@ int main(int argc, char** argv) {
         if (raster_aligned && input_frame >= measurement_start && input_frame < measurement_start + 800 &&
                 (raster_before != 0x100 || raster_after != 0x100)) raster_boundary_failures++;
         if (profile_frame) profile_frame();
+        if (effect_enabled) {
+            const auto event_record = symbol<unsigned(*)(unsigned,unsigned)>(core, "acceptance_profile_effect_record");
+            if (event_record(0, 33))
+                fail("Native effect evidence overflow: count=" + std::to_string(event_record(0, 32)) +
+                     " overflow=" + std::to_string(event_record(0, 33)));
+        }
         if (!trace_enabled && conditional_actions.empty() && walk_waypoints.empty()) continue;
         auto values = capture(sram, sram_size);
         values.insert(video_figure_values.begin(), video_figure_values.end());
+        if (effect_enabled) {
+            const auto record = symbol<unsigned(*)(unsigned,unsigned)>(core, "acceptance_profile_effect_record");
+            values["vAcceptanceEffectCount"] = record(0, 32);
+            values["vAcceptanceEffectOverflow"] = record(0, 33);
+            values["vAcceptanceNativeSceneReady"] = symbol<unsigned(*)()>(core, "acceptance_profile_native_scene_ready")();
+            for (const auto id : effect_span_ids)
+                values["vAcceptanceEffectActive" + std::to_string(id)] =
+                    symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_effect_active")(id);
+        }
         if (acceptance_enabled) {
             acceptance_capture(values, sram, sram_size);
             values["vAcceptanceSaveCount"] = acceptance_save_metric ? acceptance_save_metric(0) : 0;
@@ -1404,6 +1483,36 @@ int main(int argc, char** argv) {
             }
             profile << "],\"completed_native_update_overflow\":" << record(0, 3);
         }
+        if (effect_enabled) {
+            const auto record = symbol<unsigned(*)(unsigned,unsigned)>(core, "acceptance_profile_effect_record");
+            const auto sample = symbol<unsigned(*)(unsigned,unsigned,unsigned)>(core, "acceptance_profile_effect_sample");
+            const unsigned count = record(0, 32), overflow = record(0, 33);
+            profile << ",\"native_effect_event_count\":" << count
+                    << ",\"native_effect_event_overflow\":" << overflow
+                    << ",\"native_effect_events\":[";
+            for (unsigned i = 0; i < count; ++i) {
+                if (i) profile << ',';
+                profile << "{\"fields\":[";
+                for (unsigned field = 0; field < 22; ++field) {
+                    if (field) profile << ',';
+                    profile << record(i, field);
+                }
+                profile << "],\"watches\":{";
+                bool first = true;
+                for (const auto& watch : effect_watch_lengths) {
+                    if (!first) profile << ',';
+                    first = false; profile << '\"' << watch.first << "\":[";
+                    for (unsigned byte = 0; byte < watch.second; ++byte) {
+                        if (byte) profile << ',';
+                        profile << sample(i, watch.first, byte);
+                    }
+                    profile << ']';
+                }
+                profile << "}}";
+            }
+            profile << ']';
+            if (overflow) fail("Native effect evidence overflow");
+        }
         profile << ",\"raster_alignment_lines\":" << raster_alignment_lines
                 << ",\"raster_alignment_frame\":" << raster_alignment_frame
                 << ",\"raster_boundary_failures\":" << raster_boundary_failures;
@@ -1461,6 +1570,15 @@ int main(int argc, char** argv) {
         if (!arguments.count("--symbols")) fail("--state-out requires matching --symbols");
         auto values = capture(sram, sram_size);
         values.insert(video_figure_values.begin(), video_figure_values.end());
+        if (effect_enabled) {
+            const auto record = symbol<unsigned(*)(unsigned,unsigned)>(core, "acceptance_profile_effect_record");
+            values["vAcceptanceEffectCount"] = record(0, 32);
+            values["vAcceptanceEffectOverflow"] = record(0, 33);
+            values["vAcceptanceNativeSceneReady"] = symbol<unsigned(*)()>(core, "acceptance_profile_native_scene_ready")();
+            for (const auto id : effect_span_ids)
+                values["vAcceptanceEffectActive" + std::to_string(id)] =
+                    symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_effect_active")(id);
+        }
         if (acceptance_enabled) {
             acceptance_capture(values, sram, sram_size);
             const char* marker_names[] = {"vAcceptanceReady", "vAcceptanceDialogDone", "vAcceptanceLoaded", "vAcceptanceLoadFailed", "vAcceptanceLinkEntered"};

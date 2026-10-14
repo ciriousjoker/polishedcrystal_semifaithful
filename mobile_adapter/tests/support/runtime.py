@@ -47,15 +47,32 @@ def sha(path):
 
 def observer_fingerprint():
     paths = [ROOT / "mobile_adapter/tools/smoke_libretro.cpp", ROOT / "mobile_adapter/tools/profile_core.h",
-             TESTS / "support/profile_native.hpp", TESTS / "support/observer.hpp"]
+             TESTS / "support/profile_native.hpp", TESTS / "support/observer.hpp", Path(__file__)]
     return hashlib.sha256("".join(sha(path) for path in paths).encode()).hexdigest()
+
+
+def inject_unique(text, anchor, replacement, shared_hook=False):
+    """Accept exactly one original or already hooked anchor, never partial hooks."""
+    if text.count(anchor) != 1:
+        raise RuntimeError("Expected unique observer source anchor: " + anchor)
+    hook = replacement[len(anchor):] if replacement.startswith(anchor) else None
+    if replacement in text:
+        if hook and not shared_hook and text.count(hook.strip()) != 1:
+            raise RuntimeError("Duplicate observer hook: " + hook.strip())
+        return text
+    if hook and not shared_hook and hook.strip() in text:
+        raise RuntimeError("Misplaced or duplicate observer hook: " + hook.strip())
+    return text.replace(anchor, replacement)
 
 
 def extend_profile(profile_source):
     header = profile_source / "gb_core/profile_core.h"
     text = (ROOT / "mobile_adapter/tools/profile_core.h").read_text()
-    text = text.replace("static void mobile_profile_before_instruction(gb* game, const cpu_regs& regs, int clock) {",
+    text = inject_unique(text, "static void mobile_profile_before_instruction(gb* game, const cpu_regs& regs, int clock) {",
         '#include "acceptance_profile.hpp"\nstatic void mobile_profile_before_instruction(gb* game, const cpu_regs& regs, int clock) {\n    acceptance_profile_before(game, regs);')
+    text = inject_unique(text,
+        "static void mobile_profile_after_instruction(gb* game, const cpu_regs& regs, int clock, unsigned opcode, unsigned cycles) {",
+        "static void mobile_profile_after_instruction(gb* game, const cpu_regs& regs, int clock, unsigned opcode, unsigned cycles) {\n    acceptance_profile_after(game, regs, opcode, cycles);")
     text = text.replace("&span == &mobile_render_spans[10] && mobile_native_descriptor_address",
                         "&span == &mobile_render_spans[10] && mobile_native_shadow_address")
     text = text.replace("for (unsigned i = 0; i < 104; ++i)",
@@ -63,7 +80,42 @@ def extend_profile(profile_source):
     text = text.replace("i * 34", "i * acceptance_native_stride")
     text = text.replace("ram + 0x1000 + mobile_native_object_address", "ram + acceptance_native_object_bank * 0x1000 + mobile_native_object_address")
     text = text.replace("actor[0]", "actor[acceptance_native_sprite_field]").replace("actor[1]", "actor[acceptance_native_map_field]")
+    cpu = profile_source / "gb_core/cpu.cpp"
+    cpu_text = cpu.read_text()
+    for hook in ("mobile_profile_before_instruction(ref_gb, regs, total_clock);",
+                 "mobile_profile_after_instruction(ref_gb, regs, total_clock, observed_opcode, tmp_clocks);"):
+        if cpu_text.count(hook) != 1:
+            raise RuntimeError("Expected unique CPU instruction hook: " + hook)
+    cpu_text = inject_unique(cpu_text, "void cpu::io_write(word adr,byte dat)\n{",
+        "void cpu::io_write(word adr,byte dat)\n{\n    acceptance_profile_effect_io_write(ref_gb, adr, dat);")
+    libretro = profile_source / "libretro/libretro.cpp"
+    libretro_text = libretro.read_text()
+    declarations = ('extern "C" void acceptance_profile_effect_reset();',
+                    'extern "C" void acceptance_profile_restore_boundary();')
+    for declaration in declarations:
+        if libretro_text.count(declaration) > 1:
+            raise RuntimeError("Duplicate observer declaration: " + declaration)
+        if declaration not in libretro_text:
+            libretro_text = declaration + "\n" + libretro_text
+    for function in ("bool retro_load_game(const struct retro_game_info *info)", "void retro_reset(void)"):
+        libretro_text = inject_unique(libretro_text, function + "\n{",
+            function + "\n{\n    acceptance_profile_effect_reset();", shared_hook=True)
+    if libretro_text.count("acceptance_profile_effect_reset();") != 3:
+        raise RuntimeError("Expected exactly two reset hooks and one declaration")
+    start = libretro_text.find("bool retro_unserialize(const void *data, size_t size)\n{")
+    if start < 0 or libretro_text.count("bool retro_unserialize(const void *data, size_t size)\n{") != 1:
+        raise RuntimeError("Expected unique retro_unserialize anchor")
+    # This supported source ends the restore body with its sole successful return.
+    end = libretro_text.find("\n}", start)
+    if end < 0:
+        raise RuntimeError("Missing retro_unserialize closing anchor")
+    body = libretro_text[start:end]
+    body = inject_unique(body, "        return true;",
+        "        acceptance_profile_restore_boundary();\n        return true;")
+    libretro_text = libretro_text[:start] + body + libretro_text[end:]
     header.write_text(text)
+    cpu.write_text(cpu_text)
+    libretro.write_text(libretro_text)
     shutil.copyfile(TESTS / "support/profile_native.hpp", profile_source / "gb_core/acceptance_profile.hpp")
 
 
@@ -504,7 +556,9 @@ def projected(directory):
         "vProfileWorldUpdates", "vAcceptanceNativeHash", "vAcceptancePartyHash", "vAcceptanceInventoryHash",
         "vAcceptanceOAMHash", "vAcceptanceLocalComplete", "vAcceptanceFrameAudio", "vAcceptanceSaveCount",
         "vAcceptanceLocalPaletteHash", "vAcceptanceLocalTileHash", "vAcceptancePaletteDemand", "vAcceptanceSaveActive", "vAcceptanceMenuActive", "vAcceptanceLinkEntered",
-        "vAcceptanceSaveBytes", "vAcceptanceSaveMain", "vAcceptanceSaveBackup", "vAcceptanceTrainerID")
+        "vAcceptanceSaveBytes", "vAcceptanceSaveMain", "vAcceptanceSaveBackup", "vAcceptanceTrainerID",
+        "vAcceptanceEffectCount", "vAcceptanceEffectOverflow", "vAcceptanceNativeSceneReady",
+        *(f"vAcceptanceEffectActive{i}" for i in range(8)))
     frames = []
     with gzip.open(directory / "trace.jsonl.gz", "rt") as stream:
         for line in stream:
