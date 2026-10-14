@@ -61,6 +61,8 @@ int main() {
             memory[addr]^=f==14?4:1;
             auto wrong=base; wrong.before(s,false,false,true,0,0,0,read);
             assert(wrong.failure==14 && !wrong.latest.id && !wrong.dma.id && !wrong.raster.id);
+            assert(wrong.first_failure[1]==14 && wrong.first_failure[2]==3 && !wrong.ready());
+            assert(wrong.first_failure[32] == memory[r.fields[9].address]);
             memory[addr]=old;
         }
     }
@@ -96,7 +98,25 @@ int main() {
     memory[wrong.fields[2].address]=0;
     auto missing=base; missing.completed=7;
     missing.before(s,false,false,true,0,0,0,read); assert(missing.failure==5);
-    auto cold=base; cold.on_dma(0xc4,0); cold.row(0); assert(cold.failure==12);
+    // Mid-call enablement cannot authenticate retained old DMA or its rows.
+    auto cold=base; cold.context(55,1094,103); cold.on_dma(0xc4,0);
+    cold.row(103); cold.row(0); cold.row(143);
+    assert(!cold.failure && !cold.ready() && !cold.raster.id);
+    cold.before(s,false,false,true,0,0,0,read);
+    assert(cold.latest.id==1 && !cold.ready());
+    cold.row(0); assert(!cold.raster.id); // closed source alone is insufficient
+    cold.on_dma(0xc4,0); assert(cold.ready() && !cold.raster.id);
+    cold.row(70); assert(!cold.raster.id); // no manufactured partial-raster credit
+    cold.row(0); assert(cold.raster.id==1 && !cold.failure);
+    auto no_emitter=base; no_emitter.completed=7;
+    no_emitter.context(55,2583,0); no_emitter.before(s,false,false,true,0,0,0,read);
+    assert(no_emitter.failure==5 && !no_emitter.ready());
+    const auto immutable=no_emitter.first_failure;
+    assert(immutable[1]==5 && immutable[2]==3 && immutable[7]==1 && immutable[11]==7);
+    no_emitter.context(99,9999,143); no_emitter.on_dma(0xc4,0); no_emitter.row(0); no_emitter.fail(14);
+    assert(no_emitter.first_failure==immutable && no_emitter.failure==5);
+    const auto status=no_emitter.status(); assert(no_emitter.status()==status);
+    assert(no_emitter.first_failure==immutable);
     auto wrong_dma=base; wrong_dma.latest.id=1; wrong_dma.on_dma(0xd0,1); assert(wrong_dma.failure==11);
 }
 '''
@@ -106,6 +126,97 @@ int main() {
             cpp.write_text(source)
             subprocess.run(["c++", "-std=c++17", "-Wall", "-Wextra", "-Werror", "-I", str(SUPPORT), str(cpp), "-o", str(exe)], check=True)
             subprocess.run([str(exe)], check=True)
+
+    def test_profile_control_prologue_commits_only_known_dma_at_actual_row_zero(self):
+        source = r'''
+#define main prior_observer_main
+#include "test_effect_observer.cpp"
+#undef main
+int main() {
+    gb g; acceptance_profile_effect_reset(); acceptance_game_context=&g;
+    auto& r=acceptance_native_reference; r.enabled=true; r.fields[0]={0,0xc400};
+    assert(acceptance_profile_ordinary_arm(2));
+    const auto requested=acceptance_profile_ordinary_status(6);
+    acceptance_profile_render_buffer(g.cpu.oam,0);
+    assert(acceptance_profile_ordinary_status(5) && acceptance_profile_ordinary_status(1)==0);
+    assert(!r.failure && !r.raster.id);
+    r.latest.id=1; r.latest.entry=1; r.latest.returned=2; r.latest.closed=3;
+    acceptance_profile_render_buffer(g.cpu.oam,0);
+    assert(acceptance_profile_ordinary_status(5));
+    r.on_dma(0xc4,0);
+    acceptance_profile_render_buffer(g.cpu.oam,23);
+    assert(acceptance_profile_ordinary_status(5) && !r.raster.id);
+    acceptance_profile_render_buffer(g.cpu.oam,0);
+    assert(!acceptance_profile_ordinary_status(5) && acceptance_profile_ordinary_status(1)==1);
+    assert(r.raster.id==1 && acceptance_profile_ordinary_status(6)==requested);
+    const auto source_failure=acceptance_static_intent.failure;
+    for(unsigned k=0;k<5;++k) for(unsigned f=0;f<64;++f) (void)acceptance_profile_reference(k,f);
+    assert(acceptance_static_intent.failure==source_failure);
+    acceptance_profile_effect_reset(); r.enabled=true; r.fail(14);
+    assert(acceptance_profile_ordinary_arm(2));
+    acceptance_profile_render_buffer(g.cpu.oam,0);
+    assert(acceptance_profile_ordinary_status(5) && acceptance_profile_ordinary_status(1)==0);
+    // Ordinary physical capture with the reference mode disabled keeps its original commit.
+    acceptance_profile_effect_reset(); assert(acceptance_profile_ordinary_arm(2));
+    acceptance_profile_render_buffer(g.cpu.oam,0);
+    assert(acceptance_profile_ordinary_status(1)==1 && !acceptance_profile_ordinary_status(5));
+}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            cpp = Path(directory) / "prologue.cpp"
+            exe = Path(directory) / "prologue"
+            cpp.write_text(source)
+            subprocess.run(["c++", "-std=c++17", "-I", str(SUPPORT), str(cpp), "-o", str(exe)], check=True)
+            subprocess.run([str(exe)], check=True)
+
+    def test_runner_diagnostic_sidecar_is_bounded_and_precedes_failure(self):
+        runner = (SUPPORT.parent.parent / "tools/smoke_libretro.cpp").read_text()
+        diagnostic = runner[runner.index("static std::ofstream reference_status_log;"):runner.index("static int ordinary_fd = -1;")]
+        failure = runner[runner.index("static void fail("):runner.index("// OUTF v1:")]
+        source = r'''
+#include <fstream>
+#include <iostream>
+#include <string>
+#include <cstdlib>
+#include <cstdint>
+static unsigned input_frame=56,ordinary_count=1;
+static uint64_t value(unsigned section,unsigned field) {
+    if(section==0 && field==1) return 14;
+    return section*100+field;
+}
+static auto native_reference_value=value;
+static unsigned scalar(unsigned f){return f;}
+static auto ordinary_status=scalar;
+static unsigned (*ordinary_failure)(unsigned)=nullptr;
+DIAGNOSTIC
+FAILURE
+int main(int argc,char**argv) {
+    reference_status_log.open(argv[1]);
+    reference_snapshot("activation_request");
+    fail("native sentinel");
+}
+'''.replace("DIAGNOSTIC", diagnostic).replace("FAILURE", failure)
+        with tempfile.TemporaryDirectory() as directory:
+            cpp = Path(directory) / "diagnostic.cpp"
+            exe = Path(directory) / "diagnostic"
+            sidecar = Path(directory) / "diagnostic.jsonl"
+            cpp.write_text(source)
+            subprocess.run(["c++", "-std=c++17", str(cpp), "-o", str(exe)], check=True)
+            result = subprocess.run([str(exe), str(sidecar)], text=True, capture_output=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("reason=14 latest=217 dma=221 raster=225", result.stderr)
+            self.assertTrue(result.stderr.endswith("native sentinel\n"))
+            import json
+            records = [json.loads(line) for line in sidecar.read_text().splitlines()]
+            self.assertEqual([r["event"] for r in records], ["activation_request", "failure"])
+            self.assertEqual(len(records[-1]["first_failure"]), 64)
+            self.assertEqual(records[-1]["status"][32], 232)
+            self.assertEqual(len(records[-1]["configured_receiver_key"]), 18)
+            # Reuse the same real helper to prove the fixed event cap.
+            cpp.write_text(source.replace('fail("native sentinel");', 'for(unsigned i=0;i<100;++i) reference_snapshot("ready");'))
+            subprocess.run(["c++", "-std=c++17", str(cpp), "-o", str(exe)], check=True)
+            subprocess.run([str(exe), str(sidecar)], check=True)
+            self.assertEqual(len(sidecar.read_text().splitlines()), 8)
 
     def test_actual_row_reference_counterexamples(self):
         with tempfile.TemporaryDirectory() as directory:

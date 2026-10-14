@@ -303,6 +303,9 @@ extern "C" uint64_t acceptance_profile_reference(unsigned section, unsigned fiel
     const auto& r = acceptance_native_reference;
     if (!section) { const uint64_t v[] = {1, r.failure, r.raster.id, r.raster.entry, r.raster.returned, r.raster.closed};
         return field < 6 ? v[field] : ~uint64_t(0); }
+    if (section == 2) { const auto v = r.status(); return field < v.size() ? v[field] : ~uint64_t(0); }
+    if (section == 3) return field < r.first_failure.size() ? r.first_failure[field] : ~uint64_t(0);
+    if (section == 4) return field < r.expected_key.size() ? r.expected_key[field] : ~uint64_t(0);
     return section == 1 && field < native_reference::bytes ? r.raster.data[field] : ~uint64_t(0);
 }
 static unsigned acceptance_reference_read(gb* game, unsigned bank, unsigned address) {
@@ -323,6 +326,8 @@ static void acceptance_profile_effect_io_write(gb* game, unsigned address, unsig
             ((acceptance_oam_dma_wbk & 7) ? acceptance_oam_dma_wbk & 7 : 1) : 0;
         for (unsigned i = 0; i < 160; ++i)
             acceptance_oam_dma_source[i] = acceptance_effect_read(game, acceptance_oam_dma_bank, value * 256 + i);
+        acceptance_native_reference.context(mobile_observed_frames, acceptance_static_intent.instruction,
+            game->get_cpu()->read(0xff44));
         acceptance_native_reference.on_dma(value, acceptance_oam_dma_bank);
         acceptance_oam_dma_sequence = acceptance_effect_sequence;
         // Freeze the completed native producer at the actual DMA instruction.
@@ -462,7 +467,11 @@ extern "C" void acceptance_profile_ordinary_unsupported_output() {
     if (acceptance_ordinary_state == 1) acceptance_ordinary_fail(1);
 }
 extern "C" void acceptance_profile_render_buffer(const void* buffer, unsigned line) {
-    if (acceptance_ordinary_requested && line == 0) {
+    acceptance_native_reference.context(mobile_observed_frames, acceptance_static_intent.instruction,
+        acceptance_game_context ? acceptance_game_context->get_cpu()->read(0xff44) : ~0u);
+    acceptance_native_reference.row(line);
+    if (acceptance_ordinary_requested && line == 0 &&
+            (!acceptance_native_reference.enabled || acceptance_native_reference.ready())) {
         // This is the genuine lcd::render entry, before either row observer.
         // No previously rendered row or output contributes capture credit.
         acceptance_ordinary_requested = false;
@@ -596,7 +605,6 @@ extern "C" void acceptance_profile_render_line(gb* game, unsigned line, int wind
         acceptance_video_meta[4] = acceptance_oam_dma_producer;
     }
     if (!acceptance_video_meta[0]) return;
-    acceptance_native_reference.row(line);
     if (acceptance_video_meta[5] != line) acceptance_video_meta[6] |= 1;
     unsigned char actual[acceptance_video_size];
     acceptance_video_hardware(game, actual);
@@ -628,6 +636,9 @@ static void acceptance_profile_after(gb* game, const cpu_regs& regs, unsigned op
     if (acceptance_observation_invalid) return;
     const bool returned = opcode == 0xc9 || opcode == 0xd9 ||
         ((opcode & 0xe7) == 0xc0 && cycles == 20);
+    if (returned && acceptance_native_reference.emitter_active)
+        acceptance_native_reference.context(mobile_observed_frames, acceptance_static_intent.instruction,
+            game->get_cpu()->read(0xff44));
     acceptance_native_reference.after(acceptance_effect_bank(game, regs.PC), regs.PC, regs.SP,
         acceptance_instruction_sp, returned, [game](unsigned b, unsigned a) { return acceptance_reference_read(game, b, a); });
     acceptance_static_intent.after(acceptance_effect_bank(game, regs.PC), regs.PC, regs.SP, returned,
@@ -699,6 +710,10 @@ static void acceptance_profile_before(gb* game, const cpu_regs& regs) {
         [game](unsigned bank, unsigned address) { return bank == 8 ? game->get_cpu()->read(address) : acceptance_effect_read(game, bank, address); });
     if (acceptance_static_intent.enabled && acceptance_static_intent.started) {
         const unsigned b = acceptance_effect_bank(game, regs.PC);
+        if (acceptance_static_intent.matches(0, b, regs.PC) || acceptance_static_intent.matches(1, b, regs.PC) ||
+                acceptance_static_intent.matches(2, b, regs.PC))
+            acceptance_native_reference.context(mobile_observed_frames, acceptance_static_intent.instruction,
+                game->get_cpu()->read(0xff44));
         acceptance_native_reference.before(acceptance_static_intent,
             acceptance_static_intent.matches(0, b, regs.PC), acceptance_static_intent.matches(1, b, regs.PC),
             acceptance_static_intent.matches(2, b, regs.PC), regs.BC.w, regs.SP, b,

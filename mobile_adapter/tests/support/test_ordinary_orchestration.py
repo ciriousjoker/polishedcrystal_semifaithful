@@ -132,6 +132,8 @@ class OrdinaryOrchestration(unittest.TestCase):
 static unsigned input_frame=23,ordinary_count=7;
 static unsigned field(unsigned i){return i==1?19:i;}
 static auto ordinary_failure=field;static auto ordinary_status=field;
+static unsigned long long (*native_reference_value)(unsigned,unsigned)=nullptr;
+static void reference_snapshot(const char*){}
 FAIL
 int main(){fail("original failure");}
 '''.replace('FAIL',failure)
@@ -269,6 +271,8 @@ SETUP
 using Values=std::map<std::string,unsigned>;
 static unsigned loss=0,loss_during_run=0,loss_during_profile=0,status=0,records=0,arms=0,runs=0;
 static int ordinary_fd=8;static unsigned ordinary_count=0;
+static unsigned long long (*native_reference_value)(unsigned,unsigned)=nullptr;
+static void reference_snapshot(const char*){}
 static Values capture(const unsigned char*,unsigned){return {{"wMapStatus",loss==1?1u:2u},{"wScriptRunning",loss==2?1u:0u},{"wMobileOnline",loss==3?0u:1u},{"wMobilePeerCount",loss==4?2u:3u}};}
 static unsigned marker(unsigned){return loss!=5;}
 static unsigned long updates(unsigned){return loss!=6;}

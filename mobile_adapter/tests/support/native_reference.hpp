@@ -20,13 +20,54 @@ struct Observer {
     unsigned failure = 0, actor = 0, start = 0, emitter_sp = 0, return_pc = 0, return_bank = 0;
     unsigned completed = 0;
     Snapshot pending{}, latest{}, dma{}, raster{};
-    void fail(unsigned value) { if (!failure) failure = value; }
+    // Diagnostic ABI v1, pure numeric witnesses. Event: 0 configuration,
+    // 1 producer entry, 2 emitter entry, 3 source close, 4 emitter return,
+    // 5 actual DMA, 6 actual render row. IDs are never reconstructed later.
+    uint64_t frame = 0, instruction = 0, event = 0, ly = ~0u;
+    uint64_t source_failure = 0, source_latest = 0, source_entry = 0, source_return = 0, source_close = 0;
+    unsigned dma_page = ~0u, dma_bank = ~0u, row_line = ~0u;
+    std::array<uint64_t, 18> actual_key{};
+    std::array<uint64_t, 64> first_failure{};
+    static constexpr std::array<uint64_t, 18> expected_key =
+        {1, 1, 1, 12, 0, 0, 0, 0, 0, 1, 0, 1, 0x55, 11, 23, 3, 255, 0};
+    std::array<uint64_t, 64> status() const {
+        std::array<uint64_t, 64> out{};
+        const uint64_t v[] = {1, failure, event, frame, instruction, ly, source_failure,
+            source_latest, source_entry, source_return, source_close, completed, emitter_active,
+            pending.id, pending.entry, pending.returned, pending.closed,
+            latest.id, latest.entry, latest.returned, latest.closed,
+            dma.id, dma.entry, dma.returned, dma.closed,
+            raster.id, raster.entry, raster.returned, raster.closed, dma_page, dma_bank, row_line};
+        std::copy(std::begin(v), std::end(v), out.begin());
+        std::copy(actual_key.begin(), actual_key.end(), out.begin() + 32);
+        out[50] = enabled; out[51] = ready(); out[52] = 64;
+        out[53] = actor; out[54] = start; out[55] = emitter_sp;
+        out[56] = return_pc; out[57] = return_bank;
+        return out;
+    }
+    bool ready() const { return enabled && !failure && dma.id; }
+    void context(uint64_t host, uint64_t ordinal, unsigned line) {
+        if (failure) return;
+        frame = host; instruction = ordinal; ly = line;
+    }
+    void fail(unsigned value) {
+        if (failure) return;
+        failure = value; first_failure = status();
+    }
     template<class Read> unsigned value(unsigned field, unsigned offset, Read read) const {
         const auto p = fields[field]; return read(p.bank, p.address + offset);
     }
     template<class Source, class Read> void before(const Source& source, bool entry, bool emit, bool close,
             unsigned bc, unsigned sp, unsigned bank, Read read) {
         if (!enabled || failure) return;
+        if (entry || emit || close) {
+            event = close ? 3 : emit ? 2 : 1;
+            instruction = source.instruction; source_failure = source.failure; source_latest = source.latest;
+            source_entry = source.pending.entry; source_return = source.pending.returned; source_close = source.pending.closed;
+            unsigned n = 0;
+            for (unsigned f = 9; f < fields.size(); ++f)
+                for (unsigned k = 0; k < (f == 15 ? 4u : 1u); ++k) actual_key[n++] = value(f, k, read);
+        }
         if (entry) {
             if (emitter_active) { fail(1); return; }
             pending = Snapshot{}; completed = 0;
@@ -97,6 +138,7 @@ struct Observer {
     template<class Read> void after(unsigned bank, unsigned pc, unsigned sp, unsigned pre_sp, bool returned, Read read) {
         if (!enabled || failure || !emitter_active || !returned || pre_sp != emitter_sp ||
                 sp != ((emitter_sp + 2) & 65535) || pc != return_pc || bank != return_bank) return;
+        event = 4;
         if (value(1, 0, read) != start + 16) { fail(10); return; }
         for (unsigned n = 0; n < 4; ++n) {
             const unsigned q = 39 - start / 4 - n;
@@ -107,6 +149,7 @@ struct Observer {
     }
     void on_dma(unsigned page, unsigned bank) {
         if (!enabled || failure) return;
+        event = 5; dma_page = page; dma_bank = bank;
         // Before the first observed producer closes there is no reference token.
         if (!latest.id) { dma = Snapshot{}; return; }
         if (page != fields[0].address / 256 || bank != fields[0].bank) { fail(11); return; }
@@ -114,6 +157,11 @@ struct Observer {
     }
     void row(unsigned line) {
         if (!enabled || failure) return;
+        event = 6; row_line = line;
+        // Unobserved prior output has no reference identity and earns no credit.
+        // Only a genuine row zero after an authenticated source and actual DMA
+        // ends this control-only prologue. Source failures remain terminal.
+        if (!raster.id && (!dma.id || line)) return;
         if (!line) raster = dma;
         if (!raster.id || dma.id != raster.id) fail(12);
     }

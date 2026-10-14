@@ -62,8 +62,24 @@ static unsigned (*ordinary_status)(unsigned) = nullptr;
 static unsigned (*ordinary_failure)(unsigned) = nullptr;
 static unsigned (*ordinary_callback)(const void*) = nullptr;
 static uint64_t (*native_reference_value)(unsigned,unsigned) = nullptr;
-static int ordinary_fd = -1;
 static unsigned ordinary_start = 0, ordinary_count = 0;
+static std::ofstream reference_status_log;
+static unsigned reference_status_count = 0;
+static void reference_snapshot(const char* event) {
+    if (!native_reference_value || !reference_status_log.is_open() || reference_status_count >= 8) return;
+    ++reference_status_count;
+    reference_status_log << "{\"event\":\"" << event << "\",\"runner_host\":" << input_frame
+        << ",\"attempted_stream_ordinal\":" << ordinary_count << ",\"status\":[";
+    for (unsigned i = 0; i < 64; ++i) reference_status_log << (i ? "," : "") << native_reference_value(2, i);
+    reference_status_log << "],\"first_failure\":[";
+    for (unsigned i = 0; i < 64; ++i) reference_status_log << (i ? "," : "") << native_reference_value(3, i);
+    reference_status_log << "],\"configured_receiver_key\":[";
+    for (unsigned i = 0; i < 18; ++i) reference_status_log << (i ? "," : "") << native_reference_value(4, i);
+    reference_status_log << "],\"ordinary_request_commit\":[";
+    if (ordinary_status) for (unsigned i = 0; i < 10; ++i) reference_status_log << (i ? "," : "") << ordinary_status(i);
+    reference_status_log << "]}\n"; reference_status_log.flush();
+}
+static int ordinary_fd = -1;
 static void ordinary_capture(const void*, unsigned, unsigned, size_t);
 
 static unsigned (*effect_video_row)(unsigned,unsigned) = nullptr;
@@ -113,6 +129,14 @@ static const std::map<std::string, unsigned> buttons = {
 };
 
 static void fail(const std::string& message) {
+    if (native_reference_value) {
+        reference_snapshot("failure");
+        std::cerr << "native_reference_failure_v1 reason=" << native_reference_value(0, 1)
+            << " latest=" << native_reference_value(2, 17) << " dma=" << native_reference_value(2, 21)
+            << " raster=" << native_reference_value(2, 25) << " first_witness=";
+        for (unsigned i = 0; i < 64; ++i) std::cerr << (i ? "," : "") << native_reference_value(3, i);
+        std::cerr << '\n';
+    }
     if (ordinary_failure) {
         std::cerr << "ordinary_first_failure_v1 runner_host=" << input_frame
                   << " stream_ordinal=" << ordinary_count << " snapshot=";
@@ -1241,7 +1265,10 @@ int main(int argc, char** argv) {
                 auto configure = symbol<void(*)(unsigned,unsigned,unsigned)>(core, "acceptance_profile_reference_field");
                 for (unsigned i = 0; i < sizeof(fields) / sizeof(fields[0]); ++i) { const auto p = native_addresses.at(fields[i]); configure(i, p.first, p.second); }
                 native_reference_value = symbol<uint64_t(*)(unsigned,unsigned)>(core, "acceptance_profile_reference");
+                reference_status_log.open(arguments.at("--static-intent-sources") + ".reference-status.jsonl");
+                if (!reference_status_log) fail("Cannot open native reference diagnostic evidence");
                 if (!symbol<unsigned(*)()>(core, "acceptance_profile_reference_enable")()) fail("Disabled reference configuration failed");
+                reference_snapshot("configured");
             }
             static_log.open(arguments.at("--static-intent-sources"));
             if (!static_log) fail("Cannot open static source evidence");
@@ -1486,7 +1513,7 @@ int main(int argc, char** argv) {
         if (requested_start >= frame_limit) fail("Invalid ordinary capture start");
         ordinary_start = requested_start;
         if (!ordinary_count || ordinary_count > 800 || ordinary_start >= frame_limit) fail("Invalid ordinary capture bounds");
-        if (disabled_reference) ordinary_start = ~0u; // Its first source observation arms capture.
+        if (disabled_reference) ordinary_start = ~0u; // Control request commits only after authenticated source/DMA readiness.
         std::signal(SIGPIPE, SIG_IGN);
         ordinary_fd = open(arguments.at("--ordinary-stream").c_str(), O_WRONLY | O_NONBLOCK);
         struct stat info;
@@ -1507,6 +1534,7 @@ int main(int argc, char** argv) {
     const bool ordinary_gate = arguments.count("--ordinary-gate");
     bool ordinary_armed = false, ordinary_announced = false, ordinary_completed = false;
     bool ordinary_requested = false, ordinary_commit_reported = false;
+    bool reference_ready_reported = false;
     unsigned ordinary_request_frame = 0;
     if (ordinary_gate && (arguments.count("--ordinary-start") || !acceptance_enabled || !profile_frame || !arguments.count("--state-out")))
         fail("Ordinary gate requires acceptance readiness and excludes a fixed start");
@@ -1600,6 +1628,7 @@ int main(int argc, char** argv) {
                     const unsigned count = arguments.count("--ordinary-count") ? std::stoul(arguments.at("--ordinary-count")) : 16;
                     if (!symbol<unsigned(*)(unsigned)>(core, "acceptance_profile_ordinary_arm")(count)) fail("Disabled reference arm failed");
                     ordinary_requested = true; ordinary_request_frame = input_frame;
+                    reference_snapshot("activation_request");
                 }
                 static_snapshot("activated");
             }
@@ -1616,6 +1645,9 @@ int main(int argc, char** argv) {
         if (raster_aligned && input_frame >= measurement_start && input_frame < measurement_start + 800 &&
                 (raster_before != 0x100 || raster_after != 0x100)) raster_boundary_failures++;
         if (profile_frame) profile_frame();
+        if (native_reference_value && !reference_ready_reported && native_reference_value(2, 51)) {
+            reference_snapshot("ready"); reference_ready_reported = true;
+        }
         if (ordinary_requested && !ordinary_commit_reported && ordinary_status &&
                 !ordinary_status(5) && (ordinary_status(1) == 1 || ordinary_status(1) == 2)) {
             std::cerr << "ordinary_arm_v1 request_frame=" << ordinary_status(6)
@@ -1624,6 +1656,7 @@ int main(int argc, char** argv) {
                       << " commit_ly=" << ordinary_status(9)
                       << " commit_ordinal=0 observed_stream_ordinal=" << ordinary_count << '\n';
             ordinary_commit_reported = true;
+            reference_snapshot("commit");
         }
         if (ordinary_gate && !ordinary_completed && ordinary_status(1) == 2) {
             if (!ordinary_ready()) fail("Ordinary capture completed outside live readiness");
@@ -1853,6 +1886,7 @@ int main(int argc, char** argv) {
     std::set<unsigned> colors;
     for (size_t i = 0; i + 2 < image.size(); i += 3)
         colors.insert((unsigned(image[i]) << 16) | (unsigned(image[i + 1]) << 8) | image[i + 2]);
+    reference_snapshot("final");
     if (static_status) static_snapshot(static_started ? "final" : "never_armed");
     if (static_status && (!static_started || !static_written || static_status(1)))
         fail("Static source extraction incomplete: started=" + std::to_string(static_started) +
