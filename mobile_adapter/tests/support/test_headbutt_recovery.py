@@ -152,6 +152,10 @@ int main() {
                 inputs = runtime.native_headbutt_control_inputs(rom, names, 0, 0)
             script = root / 'recovery.input'
             script.write_text(inputs)
+            enabled_script = root / 'enabled.input'
+            with patch.object(runtime, 'ROOT', root):
+                enabled_script.write_text(runtime.native_headbutt_inputs(
+                    rom, names, 0, 0, 'vAcceptanceMeasuring=1,vAcceptancePeer1Complete=1,wMobilePeer1NativeStage=7'))
             fixture = root / 'realistic.sym'
             fixture.write_text(
                 '; RGBDS symbol export\n'
@@ -160,7 +164,8 @@ int main() {
                 '00:d438 wScriptRunning\n01:d226 wBattleMode\n'
                 '00:ce59 wBattleMenuFlags\n00:c100 wUnlistedCursor\n'
                 '00:d100 wMapStatus\n00:d101 wXCoord\n00:d102 wYCoord\n'
-                '00:d103 wPlayerDirection\n00:ff9a hInMenu\n')
+                '00:d103 wPlayerDirection\n00:ff9a hInMenu\n'
+                '01:d200 wMobilePeer1NativeStage\n')
             prelude = ('#include "' + str(header) + '"\n#include <cassert>\n'
                        '#include <fstream>\n#include <set>\n#include <vector>\n#include <iostream>\n'
                        '#include <chrono>\n#include <cstdint>\n#include <algorithm>\n' + binding + '\n'
@@ -220,6 +225,7 @@ static void drives_branch(const std::string& path, bool wild) {
     // admission above applies to every scheduled physical input below.
     std::map<std::string,unsigned> values = {
         {"vAcceptanceNativeSceneReady",1}, {"wMapStatus",2},
+        {"vAcceptanceMeasuring",1}, {"vAcceptancePeer1Complete",1}, {"wMobilePeer1NativeStage",7},
         {"wScriptRunning",0}, {"wBattleMode",0}, {"wXCoord",46}, {"wYCoord",8},
         {"vAcceptanceHeadbuttAsked",0}, {"vAcceptanceHeadbuttFinished",0},
         {"vAcceptancePartyCount",1}, {"vAcceptancePartyMove",29},
@@ -247,7 +253,7 @@ static void drives_branch(const std::string& path, bool wild) {
                 ++up; values["wPlayerDirection"] = 4;
             }
             if (frame == pulse.first && pulse.button == RETRO_DEVICE_ID_JOYPAD_A) {
-                if (frame < 150) { ++use; asked_at = frame + 2; }
+                if (frame < 200) { ++use; asked_at = frame + 2; }
                 else if (frame < 330) ++yes;
                 else {
                     assert(wild && selected && down == 1);
@@ -293,12 +299,12 @@ static void drives_branch(const std::string& path, bool wild) {
         for (auto& action : actions) {
             InputAction pulse;
             if (!schedule_conditional_action(action, frame, 3200, values, pulse)) continue;
-            if (pulse.button == RETRO_DEVICE_ID_JOYPAD_A && frame < 150) {
+            if (pulse.button == RETRO_DEVICE_ID_JOYPAD_A && frame < 200) {
                 assert(frame >= 140 && values["hInMenu"] == 0);
                 assert(values["vAcceptanceHeadbuttControlUpReleased"] == 1);
                 assert(down == 0 && frame - last_down >= 16);
             }
-            if (pulse.button == RETRO_DEVICE_ID_JOYPAD_A && frame >= 150) {
+            if (pulse.button == RETRO_DEVICE_ID_JOYPAD_A && frame >= 200) {
                 assert(down == 0 && frame - last_down >= 16);
                 assert(values["vAcceptanceMenuSourcePC"] == 0x5234);
                 if (frame >= 330) {
@@ -380,13 +386,15 @@ static void checks_control_option() {
         {"--native-scene-field",{"0:wMapGroup:1:255"}}
     };
     validate_option(options, effects, true, false, true);
+    validate_option(options, effects, true, true, true);
+    for (bool adapter_present : {false, true})
     for (unsigned bad = 0; bad < 8; ++bad) {
         auto o = options; auto e = effects;
-        bool acceptance = true, adapter = false, menu = true;
+        bool acceptance = true, adapter = adapter_present, menu = true;
         if (bad == 0) o["--native-headbutt-control"] = "0";
         if (bad == 1) o["--native-headbutt-control"] = "garbage";
         if (bad == 2) acceptance = false;
-        if (bad == 3) adapter = true;
+        if (bad == 3) e["--effect-span"] = {"6:TryHeadbuttOW"};
         if (bad == 4) o.erase("--profile-out");
         if (bad == 5) e.erase("--native-scene-field");
         if (bad == 6) e["--effect-span"] = {"0:ShakeHeadbuttTree"};
@@ -398,7 +406,7 @@ static void checks_control_option() {
     }
 }
 int main(int argc, char** argv) {
-    assert(argc == 5);
+    assert(argc == 7);
     checks_control_option();
     checks_returned_input_barrier();
     load_bindings(argv[1]);
@@ -408,6 +416,10 @@ int main(int argc, char** argv) {
     assert(parses(argv[4], 14513));
     drives_branch(argv[2], false);
     drives_branch(argv[2], true);
+    bindings.clear();
+    load_bindings(argv[6]); // enabled source includes the networking symbol
+    drives_branch(argv[5], false);
+    drives_branch(argv[5], true);
     std::istringstream unknown("CHECKED_AFTER 16 wUnlistedCursor=2 A 8");
     bool rejected = false;
     try { parse_conditional_action(unknown, true, 3200, buttons,
@@ -438,7 +450,7 @@ int main(int argc, char** argv) {
                     actual_rom, runtime.symbols(symbol_file), 11313, 0)
                     if actual_rom.exists() else inputs)
                 subprocess.run([str(binary), str(symbol_file), str(script), str(missing),
-                                str(actual_script)], check=True)
+                                str(actual_script), str(enabled_script), str(fixture)], check=True)
 
     def test_control_roles_and_measurement_bounds_preserve_native_chord_policy(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -451,7 +463,7 @@ int main(int argc, char** argv) {
             rows = [row for row in text.splitlines() if not row.startswith('#')]
             self.assertEqual(len(rows), 250)
             self.assertTrue(rows[0].startswith('ON 11363 '))
-            self.assertTrue(rows[1].startswith('ON 11388 '))
+            self.assertTrue(rows[1].startswith('CHECKED_AFTER 16 '))
             self.assertEqual(sum(row.endswith(' UP 8') for row in rows), 1)
             self.assertEqual(sum(row.endswith(' LEFT 12') for row in rows), 1)
             self.assertTrue(all(not line or line.startswith('#')
@@ -466,6 +478,119 @@ int main(int argc, char** argv) {
             self.assertTrue(all('hJoypadDown=0' in row for row in rows
                                 if row.endswith((' B 1', ' B 8'))))
             self.assertIn('wScriptRunning=0,wBattleMode=0,vAcceptanceNativeSceneReady=1,wMapStatus=2', rows[-1])
+
+    def test_common_native_readiness_rejects_each_false_source_and_release(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rom, names = self.fixture(root)
+            with patch.object(runtime, 'ROOT', root):
+                disabled = runtime.native_headbutt_control_inputs(rom, names, 0, 0)
+                enabled = runtime.native_headbutt_inputs(
+                    rom, names, 0, 0,
+                    'vAcceptanceMeasuring=1,vAcceptancePeer1Complete=1,wMobilePeer1NativeStage=7')
+            header = runtime.ROOT / 'mobile_adapter/tools/conditional_input.hpp'
+            source = root / 'readiness.cpp'
+            source.write_text('#include "' + str(header) + '"\n' + r'''
+#include <cassert>
+#include <vector>
+static std::vector<ConditionalAction> parse(const std::string& text) {
+    std::istringstream stream(text); std::string line;
+    std::vector<ConditionalAction> actions;
+    while (std::getline(stream, line)) {
+        if (line.empty() || line[0] == '#') continue;
+        bool optional = line.rfind("OPTIONAL ", 0) == 0;
+        std::istringstream row(optional ? line.substr(9) : line);
+        actions.push_back(parse_conditional_action(row, optional, 3200,
+            {{"UP",64},{"A",1},{"B",2},{"LEFT",32}},
+            [](const std::string&) { return true; }));
+    }
+    return actions;
+}
+static bool schedule(ConditionalAction& action, unsigned frame,
+                     const std::map<std::string,unsigned>& values) {
+    InputAction pulse;
+    bool fired = schedule_conditional_action(action, frame, 3200, values, pulse);
+    if (fired) assert(pulse.first == frame + 1);
+    return fired;
+}
+int main() {
+    auto disabled = parse(R"INPUT(''' + disabled + r''')INPUT");
+    auto enabled = parse(R"INPUT(''' + enabled + r''')INPUT");
+    assert(disabled.size() == enabled.size());
+    for (unsigned i = 0; i < disabled.size(); ++i) {
+        auto common = enabled[i].conditions;
+        if (i == 0) {
+            common.erase("vAcceptanceMeasuring");
+            common.erase("vAcceptancePeer1Complete");
+            common.erase("wMobilePeer1NativeStage");
+        }
+        assert(common == disabled[i].conditions);
+        assert(enabled[i].earliest == disabled[i].earliest);
+        assert(enabled[i].checked_delay == disabled[i].checked_delay);
+        assert(enabled[i].button == disabled[i].button);
+        assert(enabled[i].duration == disabled[i].duration);
+    }
+    // Explicit independent native states. A is checked only after returned UP8
+    // and continuous release; held input, wrong game state or ownership reset it.
+    std::map<std::string,unsigned> world = {
+        {"vAcceptanceNativeSceneReady",1},{"wMapStatus",2},
+        {"wScriptRunning",0},{"hInMenu",0},{"wBattleMode",0},
+        {"wXCoord",46},{"wYCoord",8},{"vAcceptanceHeadbuttAsked",0},
+        {"vAcceptanceHeadbuttFinished",0},{"vAcceptancePartyCount",1},
+        {"vAcceptancePartyMove",29},{"hJoypadDown",0},{"wPlayerDirection",4},
+        {"vAcceptanceHeadbuttControlUpReleased",1},{"vAcceptanceMeasuring",1},
+        {"vAcceptancePeer1Complete",1},{"wMobilePeer1NativeStage",7}
+    };
+    for (const auto& actions : {disabled, enabled}) {
+        for (unsigned i : {0u,1u}) {
+            for (const auto& predicate : actions[i].conditions) {
+                auto values = world; values[predicate.first] = predicate.second ^ 1;
+                auto action = actions[i];
+                for (unsigned frame = 50; frame <= 100; ++frame)
+                    assert(!schedule(action, frame, values));
+            }
+        }
+        auto a = actions[1];
+        for (unsigned frame = 50; frame < 66; ++frame) assert(!schedule(a,frame,world));
+        auto bad = world; bad["hInMenu"] = 1;
+        assert(!schedule(a,66,bad));
+        for (unsigned frame = 67; frame < 83; ++frame) assert(!schedule(a,frame,world));
+        assert(schedule(a,83,world));
+        std::map<std::string,unsigned> menu = {
+            {"vAcceptanceHeadbuttAsked",1},{"vAcceptanceHeadbuttAskScript",1},
+            {"vAcceptanceMenuActive",1},{"vAcceptanceMenuSourceBank",5},
+            {"vAcceptanceMenuSourcePC",0x5234},{"wMenuCursorX",1},
+            {"wMenuCursorY",1},{"wBattleMode",0},{"hJoypadDown",0},
+            {"vAcceptanceHeadbuttFinished",0}
+        };
+        const unsigned yes = 28; // UP, use A, 26 bounded native text pulses.
+        assert(actions[yes].button == 1);
+        for (const auto& predicate : actions[yes].conditions) {
+            auto values = menu; values[predicate.first] = predicate.second ^ 1;
+            auto action = actions[yes];
+            for (unsigned frame = 100; frame <= 140; ++frame)
+                assert(!schedule(action,frame,values));
+        }
+        auto yes_action = actions[yes];
+        for (unsigned frame = 100; frame < 116; ++frame)
+            assert(!schedule(yes_action,frame,menu));
+        assert(schedule(yes_action,116,menu));
+        // Prior enabled ON menu A could fire with the wrong source and held A.
+        std::istringstream prior("ON 0 vAcceptanceHeadbuttAsked=1,vAcceptanceHeadbuttAskScript=1,vAcceptanceMenuActive=1,wMenuCursorY=1 A 8");
+        auto old = parse_conditional_action(prior,false,3200,{{"A",1}},
+            [](const std::string&) { return true; });
+        menu["hJoypadDown"] = 1; menu["vAcceptanceMenuSourcePC"] = 0x1111;
+        assert(schedule(old,100,menu));
+        auto corrected = actions[yes];
+        for (unsigned frame = 100; frame <= 140; ++frame)
+            assert(!schedule(corrected,frame,menu));
+    }
+}
+''')
+            binary = root / 'readiness'
+            subprocess.run(['c++', '-std=c++17', str(source), '-o', str(binary)], check=True)
+            subprocess.run([str(binary)], check=True)
 
     def test_changed_native_script_fails_before_generating_inputs(self):
         with tempfile.TemporaryDirectory() as tmp:

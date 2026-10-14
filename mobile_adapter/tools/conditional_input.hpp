@@ -13,7 +13,7 @@ struct ConditionalAction {
     unsigned anchor = 0;
     bool anchored = false, checked_delay = false;
 };
-// One native-control startup barrier. It observes returned physical input and
+// One common native Headbutt startup barrier. It observes returned physical input and
 // completed frames only; queued actions and game memory writes cannot release it.
 struct HeadbuttControlUpRelease {
     bool delivered = false, sampled = false;
@@ -44,9 +44,11 @@ struct HeadbuttControlUpRelease {
 inline void validate_headbutt_control_option(const std::string& value,
         bool acceptance, bool adapter, bool profile, bool native_scene,
         bool headbutt_spans, bool native_menu) {
-    if (value != "1" || !acceptance || adapter || !profile || !native_scene ||
+    // Adapter presence changes neither native readiness nor physical release.
+    (void)adapter;
+    if (value != "1" || !acceptance || !profile || !native_scene ||
             !headbutt_spans || !native_menu)
-        throw std::runtime_error("Native Headbutt control requires disabled native acceptance profiling");
+        throw std::runtime_error("Native Headbutt control requires native acceptance profiling");
 }
 inline unsigned conditional_unsigned(const std::string& token) {
     if (token.empty() || token.find_first_not_of("0123456789") != std::string::npos)

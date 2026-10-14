@@ -835,22 +835,21 @@ def native_headbutt_recovery_inputs(rom, names):
     return text
 
 
-def native_headbutt_control_inputs(rom, names, profile, index):
-    """Drive one ordinary native tree use from the control's own game state."""
-    # Keep the paired measurement exposure, but never replay enabled events:
-    # native RNG and text/menu timing may legitimately take a different branch.
-    # Disabled clients do not own an adapter join or exit request. Even the held
-    # case leaves their physical controls ordinary; Select+B is an enabled-only
-    # ownership challenge, not an input needed by native Headbutt gameplay.
-    text = "# Native Headbutt control uses independent observed game readiness.\n"
+def native_headbutt_inputs(rom, names, profile, index, start_ready=""):
+    """Drive common native actions from each primary role's own game state."""
+    # Networking and Select+B ownership challenges are separate from normal
+    # gameplay. Never replay one role's actions into the independent control.
+    text = "# Common native Headbutt actions use independent game readiness.\n"
     if index != 0:
         return text
     world = ("vAcceptanceNativeSceneReady=1,wMapStatus=2,wScriptRunning=0,hInMenu=0,"
              "wBattleMode=0,wXCoord=46,wYCoord=8,vAcceptanceHeadbuttAsked=0,"
              "vAcceptanceHeadbuttFinished=0,vAcceptancePartyCount=1,"
              "vAcceptancePartyMove=29")
-    text += f"ON {profile + 50} {world} UP 8\n"
-    text += f"ON {profile + 75} {world},wPlayerDirection=4,hJoypadDown=0,vAcceptanceHeadbuttControlUpReleased=1 A 8\n"
+    # Networking may delay UP, but cannot replace any native prerequisite.
+    start = f",{start_ready}" if start_ready else ""
+    text += f"ON {profile + 50} {world},hJoypadDown=0{start} UP 8\n"
+    text += f"CHECKED_AFTER 16 {world},wPlayerDirection=4,hJoypadDown=0,vAcceptanceHeadbuttControlUpReleased=1 A 8\n"
     for offset in range(0, 500, 40):
         text += f"OPTIONAL CHECKED_AFTER {offset} vAcceptanceHeadbuttAsked=1,vAcceptanceHeadbuttAskScript=1,vAcceptanceMenuActive=0,vAcceptanceHeadbuttFinished=0,hJoypadDown=0 B 1\n"
         text += f"OPTIONAL CHECKED_AFTER {offset} vAcceptanceHeadbuttAsked=1,vAcceptanceHeadbuttUseScript=1,vAcceptanceMenuActive=0,wBattleMode=0,vAcceptanceHeadbuttFinished=0,hJoypadDown=0 B 1\n"
@@ -858,7 +857,7 @@ def native_headbutt_control_inputs(rom, names, profile, index):
     text += ("CHECKED_AFTER 16 vAcceptanceHeadbuttAsked=1,vAcceptanceHeadbuttAskScript=1,"
              "vAcceptanceMenuActive=1,"
              f"vAcceptanceMenuSourceBank={menu_bank},vAcceptanceMenuSourcePC={menu_pc},"
-             "wMenuCursorY=1,hJoypadDown=0,vAcceptanceHeadbuttFinished=0 A 8\n")
+             "wMenuCursorX=1,wMenuCursorY=1,wBattleMode=0,hJoypadDown=0,vAcceptanceHeadbuttFinished=0 A 8\n")
     for offset in range(0, 400, 40):
         text += f"OPTIONAL CHECKED_AFTER {offset} vAcceptanceHeadbuttFinished=1,wScriptRunning=255,wBattleMode=0,vAcceptanceMenuActive=0,hJoypadDown=0 B 8\n"
     # Ownership can change during a delivered A8. Native text/selection B must
@@ -868,6 +867,11 @@ def native_headbutt_control_inputs(rom, names, profile, index):
     text += ("ON 0 vAcceptanceHeadbuttFinished=1,wScriptRunning=0,wBattleMode=0,"
              "vAcceptanceNativeSceneReady=1,wMapStatus=2,hJoypadDown=0 LEFT 12\n")
     return text
+
+
+def native_headbutt_control_inputs(rom, names, profile, index):
+    """Build the independent disabled role with the common native actions."""
+    return native_headbutt_inputs(rom, names, profile, index)
 
 
 def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 1), duplicate=False, settle_frames=300, functional=False, moving_peers=False, identity=None):
@@ -1033,24 +1037,12 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
             text = text.replace("vAcceptanceReady", ready)
             if index == 0 and enabled:
                 peer_gate = ",".join(f"vAcceptancePeer{peer}Complete=1,wMobilePeer{peer}NativeStage=7" for peer in range(1,4))
-                text += f"CHECKED_AFTER 50 vAcceptanceMeasuring=1,wXCoord=46,wYCoord=8,wScriptRunning=0,{peer_gate} UP 8\n"
-                text += f"CHECKED_AFTER 75 vAcceptanceMeasuring=1,wXCoord=46,wYCoord=8,wScriptRunning=0,wPlayerDirection=4,{peer_gate} A 8\n"
-                # Continue restores the native party, while the native transient
-                # automatic-use flag resets. Answer the genuine first question.
-                for offset in range(0, 500, 40):
-                    text += f"OPTIONAL CHECKED_AFTER {offset} vAcceptanceHeadbuttAsked=1,vAcceptanceHeadbuttAskScript=1,vAcceptanceMenuActive=0,vAcceptanceHeadbuttFinished=0 B 1\n"
-                    text += f"OPTIONAL CHECKED_AFTER {offset} vAcceptanceHeadbuttAsked=1,vAcceptanceHeadbuttUseScript=1,vAcceptanceMenuActive=0,wBattleMode=0,vAcceptanceHeadbuttFinished=0 B 1\n"
-                text += "ON 0 vAcceptanceHeadbuttAsked=1,vAcceptanceHeadbuttAskScript=1,vAcceptanceMenuActive=1,wMenuCursorY=1 A 8\n"
-                # Physical B only while a completed effect still owns a native
-                # script/text state. It cannot invoke the tree a second time.
-                for offset in range(0, 400, 40):
-                    text += f"OPTIONAL CHECKED_AFTER {offset} vAcceptanceHeadbuttFinished=1,wScriptRunning=255,wBattleMode=0 B 8\n"
-                text += native_headbutt_recovery_inputs(mobile, mobile_symbols)
+                text += native_headbutt_inputs(mobile, mobile_symbols, profile, index,
+                                              f"vAcceptanceMeasuring=1,{peer_gate}")
                 if action == "native-headbutt-held":
                     for button in ("SELECT", "B"):
                         text += f"ON 0 vAcceptanceEffectActive0=1,vAcceptanceHeadbuttAnimationStarted=1 {button} 160\n"
                         text += f"CHECKED_AFTER 240 vAcceptanceHeadbuttAnimationStarted=1,wScriptRunning=0,wMobileWanted=0 {button} 8\n"
-                text += "ON 0 vAcceptanceHeadbuttFinished=1,wScriptRunning=0,wBattleMode=0 LEFT 12\n"
         script = directory / "input.txt"
         script.write_text(text)
         command = [meta["runner"], meta["core"], rom, directory / "screen.ppm", directory,
@@ -1061,7 +1053,7 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
             "--profile-out", directory / "profile.json", "--profile-window-start", total - 1000 if functional and enabled else profile,
             "--pace-from", first if enabled else total, "--pace-multiplier", speed, "--adapter", int(enabled), "--acceptance", "1"]
         command += functional_horizon_options(functional, enabled, action)
-        if functional and not enabled and index == 0 and action in ("native-headbutt", "native-headbutt-held"):
+        if functional and index == 0 and action in ("native-headbutt", "native-headbutt-held"):
             command += ["--native-headbutt-control", "1"]
         if fx.get("native_map_events"):
             command += ["--native-object-count", fx["ordinary_objects"], "--acceptance-menu-routine", "DoMenuJoypadLoop"]
