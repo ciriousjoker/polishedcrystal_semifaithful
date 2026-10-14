@@ -1945,7 +1945,7 @@ int main(int argc, char** argv) {
             const uint64_t live = static_status(4) ? std::min(static_status(3), static_status(4)) : static_status(3);
             if (live > 1) static_release(live - 1);
         }
-        if (!trace_enabled && conditional_actions.empty() && walk_waypoints.empty()) continue;
+        if (!timing_requested && !trace_enabled && conditional_actions.empty() && walk_waypoints.empty()) continue;
         auto values = capture(sram, sram_size);
         values.insert(video_figure_values.begin(), video_figure_values.end());
         if (input_status) values["vAcceptanceInputReady"] = input_status(2) && !input_status(3);

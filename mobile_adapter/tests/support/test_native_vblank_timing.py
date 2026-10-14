@@ -64,6 +64,98 @@ int main() {
             subprocess.run([str(binary)], check=True, capture_output=True, text=True)
 
 
+class NativeTimingRunnerLoopControl(unittest.TestCase):
+    def test_requested_timing_reaches_actual_arm_without_trace_actions_or_walk(self):
+        support = Path(__file__).resolve().parent
+        source = (support.parents[1] / "tools/smoke_libretro.cpp").read_text()
+        capture = source.index('        auto values = capture(sram, sram_size);')
+        guard_start = source.rindex('\n', 0, capture - 1) + 1
+        guard = source[guard_start:capture]
+        start = source.index('        if (timing_requested && timing_armed && timing_status(2)')
+        end = source.index('        values["vAcceptanceFaultArmed"]', start)
+        arm_path = source[start:end]
+        harness = r'''
+#include <cstdint>
+#include <cstdio>
+#include <map>
+#include <stdexcept>
+#include <string>
+#include <vector>
+static unsigned scene_ready=1, metric21=1, arm_calls=0, scene_calls=0;
+static unsigned scene(){++scene_calls;return scene_ready;}
+static unsigned arm(){++arm_calls;return 1;}
+template<typename T> T symbol(void*,const char* name) {
+ return reinterpret_cast<T>(std::string(name)=="acceptance_profile_timing_arm" ? &arm : &scene);
+}
+static void fail(const std::string& message){throw std::runtime_error(message);}
+static void require(bool value){if(!value) fail("loop control regression");}
+struct Result {unsigned reached,arms,snapshots,scene_reads,arm_frame,done_frame;bool armed;};
+int main(){try {
+ void* core=nullptr;
+ auto metric=+[](unsigned)->uint64_t{return metric21;};
+ auto timing_status=+[](unsigned f){return f==2;};
+ bool adapter_enabled=false,measurement_released=false,measurement_ready=false;
+ std::map<std::string,unsigned> values={{"wMapStatus",2},{"wScriptRunning",0}};
+ auto run=[&](bool timing_requested,bool trace_enabled=false,unsigned actions=0,unsigned walks=0){
+   std::vector<unsigned> conditional_actions(actions),walk_waypoints(walks);
+   bool timing_armed=false;
+   unsigned timing_arm_frame=0,timing_done_frame=0,reached=0,snapshots=0;
+   std::string timing_prearm_arm;
+   auto timing_prearm_snapshot=[&](){++snapshots;return std::string("snapshot");};
+   arm_calls=scene_calls=0;
+   for(unsigned input_frame=1;input_frame<=3;++input_frame){
+''' + guard + r'''
+     ++reached;
+''' + arm_path + r'''
+   }
+   return Result{reached,arm_calls,snapshots,scene_calls,timing_arm_frame,timing_done_frame,timing_armed};
+ };
+ // The normal fast path and each existing observation path keep their behavior.
+ auto result=run(false);require(!result.reached&&!result.arms&&!result.snapshots&&!result.scene_reads);
+ for(unsigned path=0;path<3;++path){
+   result=run(false,path==0,path==1,path==2);
+   require(result.reached==3&&!result.armed&&!result.arms&&!result.snapshots&&!result.scene_reads);
+ }
+ // Disabled timing has no trace, conditional actions, walk or adapter symbols.
+ auto armed=[&](){auto r=run(true);require(r.reached==3&&r.armed&&r.arms==1&&r.snapshots==1&&
+                                         r.scene_reads==1&&r.arm_frame==1&&r.done_frame==2);};
+ auto unarmed=[&](){auto r=run(true);require(r.reached==3&&!r.armed&&!r.arms&&!r.snapshots&&
+                                           !r.arm_frame&&!r.done_frame);};
+ armed();
+ scene_ready=0;unarmed();scene_ready=1;
+ metric21=0;unarmed();metric21=1;
+ const auto saved_metric=metric;metric=nullptr;unarmed();metric=saved_metric;
+ values["wMapStatus"]=1;unarmed();values["wMapStatus"]=2;
+ values["wScriptRunning"]=1;unarmed();values["wScriptRunning"]=0;
+ adapter_enabled=true;values["wMobileOnline"]=1;values["wMobilePeerCount"]=3;
+ unarmed();measurement_released=true;unarmed();measurement_ready=true;armed();
+ values["wMobileOnline"]=0;unarmed();values["wMobileOnline"]=1;
+ values["wMobilePeerCount"]=2;unarmed();values["wMobilePeerCount"]=3;
+ for(unsigned path=0;path<3;++path){
+   result=run(true,path==0,path==1,path==2);
+   require(result.reached==3&&result.armed&&result.arms==1&&result.snapshots==1);
+ }
+ return 0;
+ }catch(const std::exception& error){std::fprintf(stderr,"%s\n",error.what());return 1;}}
+'''
+        old_guard = '        if (!trace_enabled && conditional_actions.empty() && walk_waypoints.empty()) continue;\n'
+        scratch = os.environ.get("TMPDIR", "/Volumes/Storage/tmp")
+        with tempfile.TemporaryDirectory(prefix="timing-loop-151-", dir=scratch) as directory:
+            for name, code, expected in (("current", harness, 0),
+                                        ("historical", harness.replace(guard, old_guard, 1), 1)):
+                with self.subTest(guard=name):
+                    cpp = Path(directory) / (name + ".cpp")
+                    cpp.write_text(code)
+                    binary = Path(directory) / name
+                    result = subprocess.run(["clang++", "-std=c++17", "-Wall", "-Wextra", "-Werror",
+                                             str(cpp), "-o", str(binary)], capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    result = subprocess.run([str(binary)], capture_output=True, text=True)
+                    self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+                    if name == "historical":
+                        self.assertIn("loop control regression", result.stderr)
+
+
 class NativeTimingLoadLifecycle(unittest.TestCase):
     def test_configure_before_generated_load_and_repeated_reset(self):
         import runtime
