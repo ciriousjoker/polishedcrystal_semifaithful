@@ -442,7 +442,11 @@ Headbutt functional consumers request a bounded 3200-frame completion horizon
 after measurement start. The default for other cases stays 1000 and the measured
 window stays 800 frames. `--functional-horizon` strictly accepts 1000..4000 only
 with gated acceptance profiling, and rejects release arithmetic above 100000
-frames. Disabled controls replay the actual enabled frame count and input rows.
+frames. Disabled Headbutt controls use the paired enabled frame count and
+measurement bounds, with their own observed native state driving physical input.
+Each primary must complete exactly one real effect and recover independently;
+its siblings receive no primary effect or adapter chord. Other functional cases
+retain their matched input replay policy.
 This extends functional recovery coverage; it does not change command deadlines,
 exit limits, rendering rhythm or wall-clock performance criteria. These contracts
 remain acceptance tests to satisfy, not a statement that M2 has passed.
