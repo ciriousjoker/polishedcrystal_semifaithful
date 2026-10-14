@@ -596,6 +596,26 @@ static void acceptance_input_before(gb* game, const cpu_regs& regs) {
     const unsigned bank = acceptance_effect_bank(game,regs.PC);
     unsigned point = 12;
     for (unsigned i=0;i<12;++i) if (acceptance_input_points[i].pc == regs.PC && acceptance_input_points[i].bank == bank) point=i;
+    // The ordinary successful hook only advances pairing. Keep every guard;
+    // all other paths enter the original body with untouched pre-hook state.
+    // These configured WRAM reads do not advance execution or mutate observers.
+    if (acceptance_input_active && point == 12 &&
+            !acceptance_static_intent.matches(3,bank,regs.PC) &&
+            !acceptance_input_pair && acceptance_static_intent.instruction &&
+            acceptance_static_intent.instruction > acceptance_input_previous &&
+            !acceptance_static_intent.failure && acceptance_static_world_ready &&
+            (!acceptance_input.online || acceptance_input_read(game,4))) {
+        bool same_scene = true;
+        for (unsigned i=5;i<18;++i)
+            if (i != 12 && acceptance_input_scene[i-5] != acceptance_input_read(game,i)) {
+                same_scene = false; break;
+            }
+        if (same_scene) {
+            acceptance_input_pair = true;
+            acceptance_input_previous = acceptance_static_intent.instruction;
+            return;
+        }
+    }
     AcceptanceInputFailureContext context(game,bank,regs.PC,point);
     if (!acceptance_input_active) {
         if (point == 7 || point == 0 || point == 2) { acceptance_input_fail(accepted_ordinary_input::Failure::missing_source); return; }
@@ -655,8 +675,10 @@ static void acceptance_input_before(gb* game, const cpu_regs& regs) {
 }
 static void acceptance_input_after(gb* game, const cpu_regs& regs) {
     if (!acceptance_input_active || acceptance_input.failure != accepted_ordinary_input::Failure::none) return;
-    AcceptanceInputFailureContext context(game,acceptance_effect_bank(game,regs.PC),regs.PC,12,7);
-    if (!acceptance_input_pair) { acceptance_input_fail(accepted_ordinary_input::Failure::ordinal); return; }
+    if (!acceptance_input_pair) {
+        AcceptanceInputFailureContext context(game,acceptance_effect_bank(game,regs.PC),regs.PC,12,7);
+        acceptance_input_fail(accepted_ordinary_input::Failure::ordinal); return;
+    }
     acceptance_input_pair = false;
 }
 extern "C" void acceptance_profile_reference_field(unsigned i, unsigned bank, unsigned address) {

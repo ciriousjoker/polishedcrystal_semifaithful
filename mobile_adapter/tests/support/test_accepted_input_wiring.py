@@ -1,4 +1,5 @@
 """Actual profile wrapper and generated load/reset accepted-input regression."""
+import hashlib
 import os
 from pathlib import Path
 import subprocess
@@ -170,6 +171,28 @@ static void witness(unsigned trigger,unsigned point,unsigned pc) {
  for(unsigned i=0;i<40;++i)(void)acceptance_profile_input_failure_context(i);
  assert(acceptance_static_intent.failure==after);
 }
+// Serialize public diagnostics and hook state without object padding. The golden
+// digest below was captured from the actual pre-fast-path production wrapper.
+static void snapshot(unsigned scenario) {
+ std::printf("case %u",scenario);
+ auto word=[](uint64_t v){std::printf(" %llu",static_cast<unsigned long long>(v));};
+ for(unsigned i=0;i<34;++i)word(acceptance_profile_input_failure_context(i));
+ for(unsigned i=0;i<12;++i)word(acceptance_profile_input_status(i));
+ word(acceptance_input_pair);word(acceptance_input_welcome_path);
+ word(acceptance_input.instruction);word(acceptance_input.lifetime);
+ word(acceptance_input.next_transaction);word(acceptance_input.released);
+ word(acceptance_input.current.id);word(acceptance_input.current.committed);
+ word(acceptance_input.candidate.transaction);word(acceptance_input.candidate.captured);
+ word(acceptance_input.latched.opportunity);word(acceptance_input.latched.instruction);
+ word(acceptance_input.latched.source);word(acceptance_input.latched.source_closed);
+ word(acceptance_input.latched.input);
+ for(unsigned e=0;e<acceptance_input_event_count;++e) {
+  for(unsigned i=0;i<14;++i)word(acceptance_profile_input_event(e,0,i));
+  for(unsigned i=0;i<acceptance_input_events[e].meta[12];++i)word(acceptance_profile_input_event(e,1,i));
+  for(unsigned i=0;i<acceptance_input_events[e].definition.count*20;++i)word(acceptance_profile_input_event(e,2,i));
+ }
+ std::puts("");
+}
 static void commit(unsigned n,unsigned kind=19,unsigned revision=1) {
  setframe(frame(n,kind,revision));g.cpu.memory[0xc301]=0;input(2);
  assert(acceptance_input.pending);
@@ -246,6 +269,70 @@ int main() {
  arm();welcome();acceptance_profile_after(&g,r,0,4);assert(acceptance_input.failure==accepted_ordinary_input::Failure::ordinal);
  arm();welcome();acceptance_static_intent.sources[0].closed=acceptance_static_intent.instruction+100;tick(0x4580);assert(acceptance_input.failure==accepted_ordinary_input::Failure::missing_source);
  arm();welcome();for(unsigned i=0;i<40;++i)tick(0x4580);assert(acceptance_input.failure==accepted_ordinary_input::Failure::definition_pressure);
+
+ // Exact before/after witnesses from the original actual wrapper, including
+ // pre-retirement online/pending state and source-close lookup semantics.
+ unsigned scenario=0;
+ arm();tick(0x4200);snapshot(scenario++);
+ arm();welcome();commit(1);tick(0x4200);snapshot(scenario++);
+ arm();welcome();g.cpu.memory[0xc32c]^=1;tick(0x4200);snapshot(scenario++);
+ for(unsigned field=5;field<18;++field) {
+  if(field==12)continue;
+  arm();welcome();commit(1);setframe(frame(0));input(2);
+  const auto old=g.cpu.memory[0xc320+field];
+  g.cpu.memory[0xc320+field]=old^1;tick(0x4200);snapshot(scenario++);
+  assert(acceptance_profile_input_failure_context(20)==1);
+  assert(acceptance_profile_input_failure_context(23)==1);
+  assert(acceptance_profile_input_failure_context(28)==0);
+  g.cpu.memory[0xc320+field]=old;
+ }
+ for(unsigned fault=0;fault<8;++fault) {
+  arm();welcome();commit(1);r.PC=0x4200;
+  if(fault==0)acceptance_input_pair=true;
+  if(fault==1)acceptance_static_intent.instruction=0;
+  if(fault==2)acceptance_input_previous=acceptance_static_intent.instruction;
+  if(fault==3)acceptance_static_intent.fail(77);
+  if(fault==4)acceptance_static_world_ready=false;
+  if(fault==5)g.cpu.memory[0xc302]=0;
+  if(fault==6)acceptance_static_intent.sources[0].closed=0;
+  if(fault==7)acceptance_static_intent.sources[0].closed=9999;
+  // Direct hook calls retain deliberately supplied ordinal/pre-pair state.
+  acceptance_input_before(&g,r);snapshot(scenario++);
+ }
+ arm();welcome();r.PC=0x4201;acceptance_input_after(&g,r);snapshot(scenario++);
+ assert(acceptance_profile_input_failure_context(7)==7);
+ arm();welcome();r.PC=0x4200;acceptance_profile_before(&g,r);snapshot(scenario++);
+ r.PC=0x4201;acceptance_profile_after(&g,r,0,4);snapshot(scenario++);
+ for(unsigned point=0;point<12;++point) {
+  arm();welcome();commit(1);input(point);snapshot(scenario++);
+ }
+ arm();welcome();commit(1);tick(0x4580);snapshot(scenario++);
+ for(unsigned point=0;point<12;++point) {
+  arm();welcome();commit(1);
+  const auto pc=0x4100+point*0x10;g.cpu.memory[pc]=1;
+  input(point);snapshot(scenario++);g.cpu.memory[pc]=0;
+ }
+ // Guard priority remains ordinal, first scene mismatch, source/world, online.
+ arm();welcome();g.cpu.memory[0xc325]^=1;g.cpu.memory[0xc326]^=1;
+ acceptance_static_world_ready=false;g.cpu.memory[0xc302]=0;
+ r.PC=0x4200;acceptance_input_before(&g,r);snapshot(scenario++);
+ g.cpu.memory[0xc325]^=1;g.cpu.memory[0xc326]^=1;
+ // Missing-pair after preserves source failure and post-op bank/PC context.
+ arm();welcome();acceptance_static_intent.fail(77);r.PC=0x4202;
+ acceptance_input_after(&g,r);snapshot(scenario++);
+ // Inactive activation guards and restore continue to use full precontext.
+ for(unsigned point : {0u,2u,7u}) {
+  arm();acceptance_input_active=false;input(point);snapshot(scenario++);
+ }
+ arm();welcome();commit(1);acceptance_profile_restore_boundary();snapshot(scenario++);
+
+ for(unsigned fault=0;fault<3;++fault) {
+  arm();acceptance_input_active=false;
+  if(fault==0)acceptance_static_world_ready=false;
+  if(fault==1)g.cpu.memory[0xc302]=1;
+  if(fault==2)g.cpu.memory[0xc331]=0;
+  tick(0x4200);snapshot(scenario++);
+ }
 
  // Native sleep duration is not displacement: retain cold activation and
  // accepted WELCOME/capture/commit while duration changes under STANDING255.
@@ -338,7 +425,15 @@ int main() {
             (root / 'test.cpp').write_text(source)
             subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-I', str(SUPPORT),
                             str(root / 'test.cpp'), '-o', str(root / 'test')], check=True)
-            subprocess.run([str(root / 'test')], check=True, cwd=root)
+            result = subprocess.run([str(root / 'test')], check=True, cwd=root,
+                                    capture_output=True, text=True)
+            transcript = ''.join(line + '\n' for line in result.stdout.splitlines()
+                                 if line.startswith('case '))
+            # Original profile_native.hpp SHA256: 0ebd08fae7d5a5bd1fb737c8a51c99b3
+            # 18e144190510f29614724ca9afc452db. Compare every serialized word.
+            self.assertEqual(len(transcript.splitlines()), 60)
+            self.assertEqual(hashlib.sha256(transcript.encode()).hexdigest(),
+                             '2b842eaa6c4d7bafff602f71ee3578e86aadd66def143a4de7711fd9b38e3899', result.stdout)
 
 
 if __name__ == '__main__':
