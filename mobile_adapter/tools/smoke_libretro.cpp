@@ -4,6 +4,7 @@
 // per instance. Acceptance tests boot battery saves. Explicit snapshot flags are
 // for regenerating manual-play start states with the current ROM/core only.
 #include <libretro.h>
+#include <algorithm>
 #include <zlib.h>
 #include <dlfcn.h>
 #include <cstdarg>
@@ -72,6 +73,8 @@ static unsigned restoring_native_slots[3] = {};
 #include "conditional_input.hpp"
 static std::vector<InputAction> input_actions = {{700, 710, RETRO_DEVICE_ID_JOYPAD_START}};
 static std::vector<ConditionalAction> conditional_actions;
+static bool native_headbutt_control = false;
+static HeadbuttControlUpRelease headbutt_control_up;
 struct WalkWaypoint { unsigned earliest, x, y, timeout, started = 0; };
 static std::vector<WalkWaypoint> walk_waypoints;
 static size_t walk_index = 0;
@@ -709,6 +712,8 @@ static int16_t input_state(unsigned port, unsigned device, unsigned, unsigned id
                              << ",\"duration\":" << action.end - input_frame
                              << ",\"wall_us\":" << timestamp << "}\n";
             }
+            if (native_headbutt_control)
+                headbutt_control_up.returned(action, input_frame, RETRO_DEVICE_ID_JOYPAD_UP);
             return 1;
         }
     return 0;
@@ -756,7 +761,7 @@ int main(int argc, char** argv) {
             key != "--checkpoint-dir" && key != "--profile-out" && key != "--profile-window-start" &&
             key != "--snapshot-out" && key != "--test-snapshot-out" && key != "--snapshot-in" && key != "--input-events" &&
             key != "--finish-barrier" && key != "--pace-multiplier" && key != "--expected-peers" && key != "--expected-online" &&
-            key != "--effect-video" && key != "--native-object-count" && key != "--effect-span" && key != "--effect-watch" && key != "--native-scene-field" && key != "--acceptance-menu-routine" && key != "--measurement-gate" && key != "--measurement-warmup" && key != "--functional-horizon" && key != "--acceptance") fail("Unknown option: " + key);
+            key != "--native-headbutt-control" && key != "--effect-video" && key != "--native-object-count" && key != "--effect-span" && key != "--effect-watch" && key != "--native-scene-field" && key != "--acceptance-menu-routine" && key != "--measurement-gate" && key != "--measurement-warmup" && key != "--functional-horizon" && key != "--acceptance") fail("Unknown option: " + key);
         arguments[key] = argv[i + 1];
     }
     if (arguments.count("--frames")) {
@@ -789,6 +794,19 @@ int main(int argc, char** argv) {
     if (mobile_menu_instruction && (arguments.at("--acceptance-menu-routine") != "MobileMenuInput" ||
             !acceptance_enabled || !adapter_enabled || !arguments.count("--profile-out")))
         fail("Mobile menu instruction observation requires enabled acceptance profiling");
+    if (arguments.count("--native-headbutt-control")) {
+        const auto& spans = effect_options["--effect-span"];
+        const bool headbutt_spans =
+            std::find(spans.begin(), spans.end(), "0:ShakeHeadbuttTree") != spans.end() &&
+            std::find(spans.begin(), spans.end(), "6:TryHeadbuttOW") != spans.end();
+        try {
+            validate_headbutt_control_option(arguments.at("--native-headbutt-control"),
+                acceptance_enabled, adapter_enabled, arguments.count("--profile-out"),
+                !effect_options["--native-scene-field"].empty(), headbutt_spans,
+                menu_observer_requested && arguments.at("--acceptance-menu-routine") == "DoMenuJoypadLoop");
+        } catch (const std::exception& error) { fail(error.what()); }
+        native_headbutt_control = true;
+    }
     unsigned acceptance_menu_source_bank = 0, acceptance_menu_source_pc = 0;
     if (arguments.count("--symbols")) acceptance_load_symbols(arguments.at("--symbols"), argv[2]);
     if (arguments.count("--input-events")) {
@@ -1245,6 +1263,9 @@ int main(int argc, char** argv) {
             for (unsigned i = 0; i < 5; ++i) values[marker_names[i]] = acceptance_marker_count ? acceptance_marker_count(i) : 0;
             values["vProfileWorldUpdates"] = metric ? metric(21) : 0;
         }
+        if (native_headbutt_control)
+            values["vAcceptanceHeadbuttControlUpReleased"] =
+                headbutt_control_up.completed_frame(input_frame, values.at("hJoypadDown"));
         if (acceptance_enabled && profile_frame && !raster_aligned && (effect_options["--native-scene-field"].empty() ? values.at("vAcceptanceReady") : values.at("vAcceptanceNativeSceneReady")) &&
                 values.at("wMapStatus") == 2 && values.at("wScriptRunning") == 0 &&
                 (raster_state() & 0x100) &&

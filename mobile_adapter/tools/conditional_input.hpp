@@ -13,6 +13,41 @@ struct ConditionalAction {
     unsigned anchor = 0;
     bool anchored = false, checked_delay = false;
 };
+// One native-control startup barrier. It observes returned physical input and
+// completed frames only; queued actions and game memory writes cannot release it.
+struct HeadbuttControlUpRelease {
+    bool delivered = false, sampled = false;
+    unsigned pulse_end = 0, released_samples = 0, last_sample = 0;
+    void returned(const InputAction& action, unsigned frame, unsigned up_button) {
+        if (action.button != up_button || action.end < action.first ||
+                action.end - action.first != 8 || frame < action.first || frame >= action.end)
+            return;
+        if (!delivered || pulse_end != action.end) {
+            delivered = true;
+            pulse_end = action.end;
+            released_samples = 0;
+        }
+    }
+    unsigned completed_frame(unsigned frame, unsigned joypad_down) {
+        if (sampled && frame == last_sample) return released_samples >= 16;
+        const bool consecutive = !sampled || frame == last_sample + 1;
+        sampled = true;
+        last_sample = frame;
+        if (!delivered || frame < pulse_end || joypad_down) released_samples = 0;
+        else {
+            if (!consecutive) released_samples = 0;
+            if (released_samples < 16) ++released_samples;
+        }
+        return released_samples >= 16;
+    }
+};
+inline void validate_headbutt_control_option(const std::string& value,
+        bool acceptance, bool adapter, bool profile, bool native_scene,
+        bool headbutt_spans, bool native_menu) {
+    if (value != "1" || !acceptance || adapter || !profile || !native_scene ||
+            !headbutt_spans || !native_menu)
+        throw std::runtime_error("Native Headbutt control requires disabled native acceptance profiling");
+}
 inline unsigned conditional_unsigned(const std::string& token) {
     if (token.empty() || token.find_first_not_of("0123456789") != std::string::npos)
         throw std::runtime_error("Invalid conditional input number");
