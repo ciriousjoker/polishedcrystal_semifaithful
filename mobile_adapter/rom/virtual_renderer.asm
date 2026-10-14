@@ -512,6 +512,14 @@ MobileVirtualFrameValid:
 	ret
 
 MobileVirtualPushOAM::
+; Zero-token native DMA must not publish peer metadata or change its native ABI.
+	ld a, [wMobileVirtualPreviousOAM]
+	and a
+	jr nz, .private
+	mobile_actual_native_oam_setup
+	call hPushOAM
+	ret
+.private
 ; Native HRAM DMA code and its timing remain intact. Only its source page changes.
 ; Restore WBK and all registers preserved by the original ForcePushOAM routine.
 	push hl

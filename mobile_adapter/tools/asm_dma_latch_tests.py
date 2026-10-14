@@ -17,10 +17,22 @@ def require(condition, message):
         raise AssertionError(message)
 
 
-def fixture(latch=True, disabled=False):
+def fixture(latch=True, disabled=False, previous_dispatch=False):
     video = (ROOT / 'home/video.asm').read_text().split('\nif DEF(MOBILE_ADAPTER)\n\tmobile_native_rectangle_trampoline')[0]
     renderer = (ROOT / 'mobile_adapter/rom/virtual_renderer.asm').read_text()
     renderer = renderer[renderer.index('MobileVirtualFrameValid:'):renderer.index('MobileVirtualCopyRawRectangle:')]
+    if previous_dispatch:
+        require(video.count('\tfarjp MobileVirtualPushOAM') == 1 and renderer.count('\tjr nz, .private') == 1,
+                'Production dispatch changed; update the immutable pre-reclamation fixture deliberately')
+        # Exact dispatch preimage, retained to compare emitted caller behavior.
+        video = video.replace('\tfarjp MobileVirtualPushOAM',
+                              '\tld a, [wMobileVirtualPreviousOAM]\n\tand a\n\tjr z, .ordinary\n'
+                              '\tfarjp MobileVirtualPushOAM\n.ordinary\n\tmobile_actual_native_oam_setup')
+        renderer = renderer.replace('; Zero-token native DMA must not publish peer metadata or change its native ABI.\n'
+                                    '\tld a, [wMobileVirtualPreviousOAM]\n\tand a\n\tjr nz, .private\n'
+                                    '\tmobile_actual_native_oam_setup\n\tcall hPushOAM\n\tret\n.private\n', '')
+    hide = (ROOT / 'home/clear_sprites.asm').read_text()
+    hide = hide[hide.index('HideSprites::'):hide.index('FadeToMenu_BackupSprites::')]
     area = (ROOT / 'engine/pokedex/area.asm').read_text()
     start = area.index('\tldh a, [rWBK]\n\tpush af\n\tld a, BANK(wDexAreaShadowOAM)')
     area = area[start:area.index('\nPHB_WriteNestOAM_FirstRun:', start)]
@@ -37,6 +49,7 @@ def fixture(latch=True, disabled=False):
         lcd += source[start:end] + '\n'
     if not latch:
         video = video.replace('\tmobile_actual_native_oam_setup', '\tlb bc, 41, LOW(rDMA)\n\tld a, HIGH(wShadowOAM)')
+        renderer = renderer.replace('\tmobile_actual_native_oam_setup', '\tlb bc, 41, LOW(rDMA)\n\tld a, HIGH(wShadowOAM)')
         renderer = renderer.replace('\tmobile_actual_oam_dma_latch b\n', '')
         area = area.replace('\tmobile_actual_oam_dma_latch\n', '')
     return ('INCLUDE "ram.asm"\nSECTION "DMA fixture", ROM0[$1000]\n'
@@ -48,15 +61,18 @@ def fixture(latch=True, disabled=False):
             + '\nSECTION "DMA bank switch", ROM0[$8]\nBankswitch::\n ldh [hROMBank], a\n ld [rROMB], a\n ret\nDoNothing:: ret\n'
             + '\nSECTION "DMA farcall vector", ROM0[$10]\nFarCall::\n dec sp\n call _RstFarCall\n jp _ReturnFarCall\n'
             + '\nSECTION "DMA load image", ROM0[$2000]\n' + oam
+            + '\nSECTION "Hide fixture", ROM0[$2800]\n'
+            + ('PURGE MOBILE_ADAPTER\n' if disabled else '') + hide + '\nHideFixtureEnd::\n'
+            + ('DEF MOBILE_ADAPTER EQU 1\n' if disabled else '')
             + '\nSECTION "DMA private fixture", ROMX, BANK[128]\n' + renderer + '\nMobileVirtualPushOAMFixtureEnd::\n'
             + '\nSECTION "DMA LCD layouts", ROMX, BANK[18]\n' + lcd
             # Unexecuted serial IRQ layout dependencies, matching production.
             + '\nDEF MobileIRQRuntimeStart EQU $d980\nDEF MobileIRQRuntimeEnd EQU $dad0\nDEF CopyBytes EQU $20\n')
 
 
-def compile_fixture(rgbds, directory, latch=True, disabled=False):
+def compile_fixture(rgbds, directory, latch=True, disabled=False, previous_dispatch=False):
     directory.mkdir()
-    (directory / 'fixture.asm').write_text(fixture(latch, disabled))
+    (directory / 'fixture.asm').write_text(fixture(latch, disabled, previous_dispatch))
     layout = (ROOT / 'layout.link').read_text()
     (directory / 'ram.link').write_text(layout[layout.index('VRAM $0'):])
     subprocess.run([str(rgbds / 'rgbasm'), '-Weverything', '-DMOBILE_ADAPTER', '-P', 'includes.asm',
@@ -188,6 +204,11 @@ class Machine:
             elif op in (0x23, 0x3b, 0x33):
                 name = 'hl' if op == 0x23 else 'sp'
                 self.put(name, self.pair(name) + (-1 if op == 0x3b else 1)); self.cycles += 8
+            elif op == 0x19:
+                old, value = self.pair('hl'), self.pair('de')
+                self.put('hl', old + value)
+                self.f = (self.f & 128) | (32 if (old & 4095) + (value & 4095) > 4095 else 0) | (16 if old + value > 65535 else 0)
+                self.cycles += 8
             elif op == 0xf8:
                 value = fetch(); offset = value if value < 128 else value - 256
                 self.f = (32 if (self.sp & 15) + (value & 15) > 15 else 0) | (16 if (self.sp & 255) + value > 255 else 0)
@@ -235,7 +256,7 @@ class Machine:
         raise AssertionError('DMA caller exceeded the bounded instruction runner')
 
 
-def verify(enabled, baseline, disabled, disabled_baseline):
+def verify(enabled, baseline, disabled, disabled_baseline, previous):
     costs, cases = {}, 0
     rng = random.Random(0x646d61)
     gates = ('wMobileNativeGraphicsFence', 'wMobileWanted', 'wMobileOnline', 'wMobileLocalValid', 'hInMenu', 'hVBlank', 'wMobileVirtualHeaderOAM')
@@ -244,8 +265,8 @@ def verify(enabled, baseline, disabled, disabled_baseline):
         for frame in (0, 1, 127, 254, 255):
             for wbk in range(8):
                 seed = rng.randrange(2**32)
-                current, control = (Machine(*image, seed) for image in (enabled, baseline))
-                for machine in (current, control):
+                current, control, previous_control = (Machine(*image, seed) for image in (enabled, baseline, previous))
+                for machine in (current, control, previous_control):
                     for gate in gates:
                         machine.memory[machine.address(gate)] = 0
                     for gate in ('wMobileWanted', 'wMobileOnline', 'wMobileLocalValid'):
@@ -260,6 +281,12 @@ def verify(enabled, baseline, disabled, disabled_baseline):
                         value = 1 if reject in ('wMobileNativeGraphicsFence', 'hInMenu', 'hVBlank') else (frame + 1) & 255 if reject == 'wMobileVirtualHeaderOAM' else 0
                         machine.memory[machine.address(reject)] = value
                 c1, c0 = current.execute('PushOAM'), control.execute('PushOAM')
+                previous_cost = previous_control.execute('PushOAM')
+                require(current.r == previous_control.r and current.f == previous_control.f and current.bank == previous_control.bank, f'{name}: pre-reclamation ABI changed')
+                require(current.transfers == previous_control.transfers and current.banks == previous_control.banks, f'{name}: pre-reclamation DMA/banked state changed')
+                live_differences = {i for i, (a, b) in enumerate(zip(current.memory, previous_control.memory)) if a != b}
+                require(live_differences <= set(range(0xc780, 0xc800)), f'{name}: pre-reclamation live resident state changed')
+                costs[name + '_reclamation'] = {'before': previous_cost, 'after': c1, 'added': c1 - previous_cost}
                 expected = current.address('wMobileVirtualOutput') >> 8 if name.startswith('private') else current.address('wShadowOAM') >> 8
                 dma_bank = 5 if name.startswith('private') else 2 if token else wbk
                 require(current.transfers == control.transfers == [(expected, frame, dma_bank)], f'{name}: wrong actual source/frame/bank')
@@ -267,8 +294,8 @@ def verify(enabled, baseline, disabled, disabled_baseline):
                 require(current.r == control.r and current.f == control.f and current.bank == control.bank, f'{name}: native register/flag/bank convention changed')
                 require(current.banks == control.banks, f'{name}: banked native memory changed')
                 differences = {i for i, (a, b) in enumerate(zip(current.memory, control.memory)) if a != b}
-                # Far-call return addresses differ because the fixture's emitted
-                # wrapper gains ten bytes. Dead stack bytes are not live state.
+                # Emitted latch instructions move far-call return addresses.
+                # Dead stack bytes are not live state.
                 allowed = {current.address('wMobileActualOAMPage'), current.address('wMobileActualOAMFrame')} | set(range(0xc780, 0xc800))
                 require(differences <= allowed, f'{name}: unexpected resident mutation {differences - allowed}')
                 require(c1 - c0 == 52, f'{name}: unpriced latch clocks')
@@ -312,6 +339,9 @@ def verify(enabled, baseline, disabled, disabled_baseline):
     require(rom[raw:raw + len(expected)] == expected, 'Disabled ForcePushOAM bytes changed')
     require(symbols['wMobileActualOAMPage'][1] == 0xcf39 and symbols['wMobileActualOAMFrame'][1] == 0xcf3a, 'Resident latch allocation moved')
     require(enabled[1]['ForcePushOAM'][1] - enabled[1]['PushOAM'][1] == 4, 'hOAMUpdate suppression gate changed')
+    for image in (enabled, baseline, disabled, disabled_baseline, previous):
+        lo, hi = image[1]['OAMDMACode'][1], image[1]['OAMDMACode.End'][1]
+        require(image[0][lo:hi] == bytes.fromhex('e20520fdc9'), 'Actual native HRAM DMA write/wait instructions changed')
     emitted_growth = {}
     for name, start, end in (('raw_rom0', 'PushOAM', 'PushOAMFixtureEnd'),
                              ('private_upper_rom', 'MobileVirtualPushOAM', 'MobileVirtualPushOAMFixtureEnd'),
@@ -319,7 +349,7 @@ def verify(enabled, baseline, disabled, disabled_baseline):
         current_size = enabled[1][end][1] - enabled[1][start][1]
         baseline_size = baseline[1][end][1] - baseline[1][start][1]
         emitted_growth[name] = current_size - baseline_size
-        require(current_size - baseline_size == 10, f'{name}: unexpected emitted latch size')
+        require(current_size - baseline_size == {'raw_rom0': 0, 'private_upper_rom': 20, 'dex_lower_rom': 10}[name], f'{name}: unexpected emitted latch size')
     for suppressed in range(1, 256):
         machine = Machine(*enabled, suppressed)
         machine.memory[machine.address('hOAMUpdate')] = suppressed
@@ -328,7 +358,46 @@ def verify(enabled, baseline, disabled, disabled_baseline):
         for field in ('wMobileActualOAMPage', 'wMobileActualOAMFrame', 'wMobileVirtualPreviousOAM'):
             require(machine.memory[machine.address(field)] == before[machine.address(field)], 'Suppressed DMA touched stamp or publication')
         cases += 1
-    return {'cases': cases, 'costs_t_clocks': costs, 'emitted_growth_bytes': emitted_growth,
+    reclamation_costs = {}
+    for token in (0, 1, 255):
+        for seed in range(256):
+            current, control = (Machine(*image, seed) for image in (enabled, previous))
+            for machine in (current, control):
+                machine.memory[machine.address('wMobileVirtualPreviousOAM')] = token
+                machine.memory[machine.address('hOAMUpdate')] = 0
+                machine.memory[machine.address('hROMBank')] = machine.bank
+                machine.memory[0xff70] = seed % 8
+            c1, c0 = current.execute('ForcePushOAM'), control.execute('ForcePushOAM')
+            require(current.r == control.r and current.f == control.f and current.bank == control.bank,
+                    f'Reclaimed dispatch token {token}: actual register/flag/ROM bank ABI changed')
+            require(current.transfers == control.transfers and current.banks == control.banks,
+                    f'Reclaimed dispatch token {token}: DMA or peer metadata changed')
+            differences = {i for i, (a, b) in enumerate(zip(current.memory, control.memory)) if a != b}
+            require(differences <= set(range(0xc780, 0xc800)), 'Reclaimed dispatch live resident state changed')
+            reclamation_costs[str(token)] = {'before': c0, 'after': c1, 'added': c1 - c0}
+            cases += 1
+    hide_cases = 0
+    for slot in range(0, 145, 4):
+        for seed in range(256):
+            current, control = (Machine(*image, seed) for image in (enabled, disabled))
+            for machine in (current, control):
+                machine.memory[machine.address('wPlayerCurrentOAMSlot')] = slot
+            c1, c0 = current.execute('HidePlayerSprite'), control.execute('HidePlayerSprite')
+            require(current.r == control.r and current.f == control.f and current.banks == control.banks,
+                    f'Hide slot {slot}: native register/flag/banked memory ABI changed')
+            require(current.memory == control.memory, f'Hide slot {slot}: native memory changed')
+            require(c1 - c0 == 12, 'Shared hide-tail JR cost changed')
+            hide_cases += 1
+    for start, end in (('PushOAM', 'PushOAMFixtureEnd'), ('HideSprites', 'HideFixtureEnd')):
+        lo, hi = disabled[1][start][1], disabled[1][end][1]
+        require(disabled[0][lo:hi] == disabled_baseline[0][lo:hi], 'Disabled native fixture bytes changed')
+    old_dma = previous[1]['PushOAMFixtureEnd'][1] - previous[1]['PushOAM'][1]
+    new_dma = enabled[1]['PushOAMFixtureEnd'][1] - enabled[1]['PushOAM'][1]
+    old_hide = disabled[1]['HideFixtureEnd'][1] - disabled[1]['HidePlayerSprite'][1]
+    new_hide = enabled[1]['HideFixtureEnd'][1] - enabled[1]['HidePlayerSprite'][1]
+    require(old_dma - new_dma == 21 and old_hide - new_hide == 9, 'Expected 30-byte ROM0 reclamation changed')
+    return {'hide_cases': hide_cases, 'reclamation_costs_t_clocks': reclamation_costs,
+            'reclaimed_rom0_bytes': {'dma': old_dma - new_dma, 'hide': old_hide - new_hide}, 'cases': cases, 'costs_t_clocks': costs, 'emitted_growth_bytes': emitted_growth,
             'resident_growth_bytes': 2, 'disabled_raw_bytes': expected.hex(),
             'disabled_dex_tail_bytes': rom[dex_start:dex_end].hex(),
             'native_cadence': 'Not run. Coordinator four-core validation required.'}
@@ -345,7 +414,8 @@ def main():
         result = verify(compile_fixture(args.rgbds, directory / 'enabled'),
                         compile_fixture(args.rgbds, directory / 'baseline', latch=False),
                         compile_fixture(args.rgbds, directory / 'disabled', disabled=True),
-                        compile_fixture(args.rgbds, directory / 'disabled_baseline', latch=False, disabled=True))
+                        compile_fixture(args.rgbds, directory / 'disabled_baseline', latch=False, disabled=True),
+                        compile_fixture(args.rgbds, directory / 'previous', previous_dispatch=True))
         if args.artifacts:
             shutil.copytree(directory, args.artifacts, dirs_exist_ok=True)
         if args.output:

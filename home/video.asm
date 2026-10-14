@@ -6,12 +6,7 @@ PushOAM::
 	ret nz
 ForcePushOAM:
 if DEF(MOBILE_ADAPTER)
-	ld a, [wMobileVirtualPreviousOAM]
-	and a
-	jr z, .ordinary
 	farjp MobileVirtualPushOAM
-.ordinary
-	mobile_actual_native_oam_setup
 else
 	lb bc, 40 + 1, LOW(rDMA)
 	ld a, HIGH(wShadowOAM)

@@ -38,6 +38,10 @@ HidePlayerSprite::
 	ld h, HIGH(wShadowOAM)
 	ld a, [wPlayerCurrentOAMSlot]
 	ld l, a
+if DEF(MOBILE_ADAPTER)
+	ld b, 4
+	jr HideSpritesInRange
+else
 	ld de, OBJ_SIZE
 	ld b, 4
 	ld a, OAM_YCOORD_HIDDEN
@@ -47,6 +51,7 @@ HidePlayerSprite::
 	dec b
 	jr nz, .loop
 	ret
+endc
 
 
 FadeToMenu_BackupSprites::
