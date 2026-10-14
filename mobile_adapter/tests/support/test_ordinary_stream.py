@@ -93,6 +93,7 @@ int main() {
 #undef main
 static int ordinary_fd=-1;
 static unsigned ordinary_count=0,input_frame=5;
+static uint64_t (*native_reference_value)(unsigned,unsigned)=nullptr;
 static unsigned pixel_format=2;
 static constexpr unsigned RETRO_PIXEL_FORMAT_RGB565=2;
 static void fail(const std::string& message) {std::cerr<<message<<'\n';std::exit(1);}
