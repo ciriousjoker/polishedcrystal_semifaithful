@@ -233,6 +233,44 @@ static void load_bindings(const std::string& path) {
         "sCheckValue1", "sCheckValue2", "sSaveVersion", "sChecksum",
         "sBackupCheckValue1", "sBackupCheckValue2"
     };
+    // Exported EQU aliases have no bank in RGBDS symbols. This exact private
+    // bank-5 layout is audited against mobile_adapter/rom/ram.asm. NativeRGB
+    // owns 64 bytes at DB4B..DB8A; the other aliases occupy D840..D9FF.
+    const std::map<std::string, unsigned> stable_aliases = {
+        {"wMobileStableOriginalYs", 0xd840},
+        {"wMobileStableOwners", 0xd868},
+        {"wMobileStablePhases", 0xd890},
+        {"wMobileStableBindingValid", 0xd8a0},
+        {"wMobileStableEligible", 0xd8b0},
+        {"wMobileStableContinuous", 0xd8b2},
+        {"wMobileStablePhaseMasks", 0xd8b4},
+        {"wMobileStableLastActual", 0xd8b8},
+        {"wMobileStableLastEligible", 0xd8ba},
+        {"wMobileStableDue", 0xd8bc},
+        {"wMobileStableNativeComplete", 0xd8be},
+        {"wMobileStablePendingNative", 0xd8c0},
+        {"wMobileStablePendingPrivate", 0xd8c2},
+        {"wMobileStableRetired", 0xd8c4},
+        {"wMobileStableOutputOffsets", 0xd8c6},
+        {"wMobileStablePhasePaletteBindings", 0xd8d6},
+        {"wMobileStableSourceValid", 0xd8e6},
+        {"wMobileStableActorViewValid", 0xd8e7},
+        {"wMobileStableCapacityValid", 0xd8e8},
+        {"wMobileStablePendingValid", 0xd8e9},
+        {"wMobileStableFinalDecision", 0xd8ea},
+        {"wMobileStableHardwarePaletteProvenance", 0xd8eb},
+        {"wMobileStableOutputPhase", 0xd8ec},
+        {"wMobileStableNativeCandidateValid", 0xd8ed},
+        {"wMobileStableProducerActive", 0xd8ee},
+        {"wMobileStableCurrentOwner", 0xd8ef},
+        {"wMobileStableTransactionScratch", 0xd8f0},
+        {"wMobileStableRemoteBindings", 0xd8fe},
+        {"wMobileStableScratch", 0xd90a},
+        {"wMobileStableRawXTileFlags", 0xd92a},
+        {"wMobileStableNativeRGB", 0xdb4b},
+        {"wMobileStableCameraX", 0xd8f0},
+        {"wMobileStableCameraY", 0xd8f2},
+    };
     std::ifstream symbols(path);
     if (!symbols) fail("Cannot read matching symbols");
     std::string line;
@@ -243,6 +281,25 @@ static void load_bindings(const std::string& path) {
         if (!watched.count(name) && name.rfind("wMobile", 0) != 0 && name.rfind("wLoadedObjPal", 0) != 0 &&
             name.rfind("wAcceptance", 0) != 0) continue;
         auto colon = location.find(':');
+        if (name.rfind("wMobileStable", 0) == 0) {
+            const auto alias = stable_aliases.find(name);
+            if (alias == stable_aliases.end()) fail("Unknown retained-source alias");
+            // Validate the complete location, rather than accepting a numeric
+            // prefix or allowing a typed row to bypass the private-bank guard.
+            const auto hex = [](const std::string& value) {
+                return !value.empty() && value.find_first_not_of("0123456789abcdefABCDEF") == std::string::npos;
+            };
+            const std::string bank_text = colon == std::string::npos ? "5" : location.substr(0, colon);
+            const std::string address_text = colon == std::string::npos ? location : location.substr(colon + 1);
+            if (!hex(bank_text) || !hex(address_text) || bank_text.size() > 2 || address_text.size() > 4)
+                fail("Invalid retained-source symbol location");
+            const unsigned bank = std::stoul(bank_text, nullptr, 16);
+            const unsigned address = std::stoul(address_text, nullptr, 16);
+            if (bank != 5 || address != alias->second)
+                fail("Retained-source alias outside audited bank-5 layout");
+            bindings[name] = {bank, address};
+            continue;
+        }
         if (colon == std::string::npos) {
             if (name.rfind("wMobileVirtual", 0) != 0 && name != "wMobileNativeShapeKeys" &&
                 name != "wMobileNativeShapes") fail("Invalid symbol location");
