@@ -134,7 +134,7 @@ int main() {
 #undef main
 int main() {
     gb g; acceptance_profile_effect_reset(); acceptance_game_context=&g;
-    auto& r=acceptance_native_reference; r.enabled=true; r.fields[0]={0,0xc400};
+    auto& r=acceptance_native_reference; r.configured=true; r.enabled=true; r.fields[0]={0,0xc400};
     assert(acceptance_profile_ordinary_arm(2));
     const auto requested=acceptance_profile_ordinary_status(6);
     acceptance_profile_render_buffer(g.cpu.oam,0);
@@ -157,6 +157,7 @@ int main() {
     acceptance_profile_render_buffer(g.cpu.oam,0);
     assert(acceptance_profile_ordinary_status(5) && acceptance_profile_ordinary_status(1)==0);
     // Ordinary physical capture with the reference mode disabled keeps its original commit.
+    acceptance_native_reference = native_reference::Observer{};
     acceptance_profile_effect_reset(); assert(acceptance_profile_ordinary_arm(2));
     acceptance_profile_render_buffer(g.cpu.oam,0);
     assert(acceptance_profile_ordinary_status(1)==1 && !acceptance_profile_ordinary_status(5));
@@ -165,6 +166,116 @@ int main() {
         with tempfile.TemporaryDirectory() as directory:
             cpp = Path(directory) / "prologue.cpp"
             exe = Path(directory) / "prologue"
+            cpp.write_text(source)
+            subprocess.run(["c++", "-std=c++17", "-I", str(SUPPORT), str(cpp), "-o", str(exe)], check=True)
+            subprocess.run([str(exe)], check=True)
+
+    def test_profile_configuration_survives_core_load_and_activates_at_source_enable(self):
+        source = r'''
+
+#define main prior_observer_main
+#include "test_effect_observer.cpp"
+#undef main
+void configure(gb& g) {
+ for(unsigned f=0;f<24;++f) acceptance_profile_reference_field(f,0,0xc000+f*32);
+ acceptance_profile_reference_field(0,0,0xc400);
+ for(unsigned a=0;a<4;++a) {
+  acceptance_profile_reference_actor(a,a+1,a,10+a,12);
+  auto* p=g.cpu.memory+0xc800+a*34;p[0]=a+1;p[6]=a;p[16]=10+a;p[17]=12;p[33]=a;
+  g.cpu.memory[0xc040+a]=a;
+ }
+ for(auto p:{std::pair<unsigned,unsigned>{9,1},{10,1},{11,1},{12,12},{17,1},{18,0x55},{19,11},{20,23},{21,3},{22,255}})
+  g.cpu.memory[0xc000+p.first*32]=p.second;
+ g.cpu.memory[0xc000+15*32+3]=1;
+ for(unsigned i=0;i<4;++i) acceptance_profile_static_point(i,0,i==3?0x600:0x100+i*0x100);
+ acceptance_profile_static_inputs(0,0xc800,0xc9c0,0xc9c1);
+ for(unsigned i=0;i<4;++i) acceptance_profile_static_world_field(i,0,0xca00+i);
+ g.cpu.memory[0xca00]=11;g.cpu.memory[0xca01]=23;g.cpu.memory[0xca02]=2;
+ acceptance_profile_simulation(0,0x700,1,0xc800,34,1,10);
+ assert(acceptance_profile_reference_enable());
+ assert(acceptance_profile_reference(2,58)==1 && !acceptance_profile_reference(2,50));
+}
+void activate(gb& g) {
+ cpu_regs regs;regs.PC=0x700;regs.SP=0xcb00;stack(g,regs.SP,0x800);
+ acceptance_profile_before(&g,regs);regs.PC=0x710;acceptance_profile_before(&g,regs);
+ regs.PC=0x800;regs.SP=0xcb02;acceptance_profile_after(&g,regs,0xc9,16);
+ assert(acceptance_profile_static_status(6));
+ assert(acceptance_profile_static_enable());
+ assert(acceptance_profile_reference(2,50) && !acceptance_profile_reference(2,51));
+}
+void producer(gb& g,bool badkey=false,bool missing=false,bool wrongreturn=false) {
+ cpu_regs regs;regs.PC=0x100;regs.SP=0xc700;stack(g,regs.SP,0x400);acceptance_profile_before(&g,regs);
+ for(unsigned a=0;a<(missing?3u:4u);++a){regs.PC=0x200;regs.SP=0xc6fe;regs.BC.w=0xc800+a*34;
+  stack(g,regs.SP,0x500);g.cpu.memory[acceptance_native_reference.fields[1].address]=a*16;
+  acceptance_profile_before(&g,regs);g.cpu.memory[acceptance_native_reference.fields[1].address]=(a+1)*16;
+  regs.PC=wrongreturn?0x501:0x500;regs.SP=0xc700;acceptance_profile_after(&g,regs,0xc9,16);if(wrongreturn)break;}
+ regs.PC=0x350;regs.SP=0xc700;acceptance_profile_before(&g,regs);
+ regs.PC=0x400;regs.SP=0xc702;acceptance_profile_after(&g,regs,0xc9,16);
+ if(badkey)g.cpu.memory[acceptance_native_reference.fields[9].address]=2;
+ regs.PC=0x300;acceptance_profile_before(&g,regs);
+}
+
+int main() {
+ for(unsigned bad=0;bad<4;++bad) {
+  gb g; configure(g);
+  // Exact retro_load_game/retro_reset hook, after runner configuration.
+  acceptance_profile_effect_reset();
+  auto& r=acceptance_native_reference;
+  assert(r.configured && !r.enabled && !r.failure && r.fields[0].address==0xc400 && r.sprites[3]==4);
+  assert(acceptance_profile_ordinary_arm(2));
+  acceptance_profile_render_buffer(g.cpu.oam,0);
+  assert(acceptance_profile_ordinary_status(5) && !acceptance_profile_ordinary_status(1));
+  // Boot producers are outside the declared ordinary source observation.
+  producer(g);assert(!r.failure && !r.latest.id && !r.enabled);
+  activate(g);
+  acceptance_profile_effect_io_write(&g,0xff46,0xc4);
+  acceptance_profile_render_buffer(g.cpu.oam,103);acceptance_profile_render_buffer(g.cpu.oam,0);
+  assert(!r.raster.id && acceptance_profile_ordinary_status(5));
+  producer(g,bad==1,bad==2,bad==3);
+  if(bad) {
+   assert(r.failure==(bad==1?14u:5u));const auto witness=r.first_failure;
+   assert(!acceptance_profile_reference_enable()); assert(r.first_failure==witness);
+  } else {
+   assert(!r.failure && r.latest.id==1 && !r.ready());
+   acceptance_profile_render_buffer(g.cpu.oam,0);assert(acceptance_profile_ordinary_status(5));
+   acceptance_profile_effect_io_write(&g,0xff46,0xc4);
+   acceptance_profile_render_buffer(g.cpu.oam,23);assert(!r.raster.id && acceptance_profile_ordinary_status(5));
+   acceptance_profile_render_buffer(g.cpu.oam,0);
+   assert(r.raster.id==1 && !acceptance_profile_ordinary_status(5) && acceptance_profile_ordinary_status(1)==1);
+   acceptance_profile_restore_boundary();assert(r.failure==15 && !r.enabled && !r.ready());
+   const auto witness=r.first_failure;
+   assert(!acceptance_profile_reference_enable());
+   assert(!acceptance_profile_static_enable());assert(r.first_failure==witness);
+  }
+  if(bad) {
+   const auto witness=r.first_failure;
+   assert(!acceptance_profile_reference_enable());
+   acceptance_profile_effect_io_write(&g,0xff46,0xc4);acceptance_profile_render_buffer(g.cpu.oam,0);
+   assert(acceptance_profile_ordinary_status(5) && !acceptance_profile_ordinary_status(1));
+   acceptance_profile_restore_boundary();assert(r.first_failure==witness);
+   assert(acceptance_profile_ordinary_arm(2));acceptance_profile_render_buffer(g.cpu.oam,0);
+   assert(acceptance_profile_ordinary_status(5) && !acceptance_profile_ordinary_status(1));
+   assert(r.first_failure==witness && !r.ready());
+  }
+  acceptance_profile_effect_reset();assert(r.configured && !r.enabled && !r.failure && !r.latest.id);
+  assert(acceptance_profile_ordinary_arm(2));acceptance_profile_render_buffer(g.cpu.oam,0);
+  assert(acceptance_profile_ordinary_status(5));
+ }
+ // Explicitly unconfigured physical mode retains its old row-zero gate.
+ acceptance_native_reference=native_reference::Observer{};
+ acceptance_profile_effect_reset();gb g;assert(acceptance_profile_ordinary_arm(2));
+ acceptance_profile_render_buffer(g.cpu.oam,0);assert(acceptance_profile_ordinary_status(1)==1);
+ // Invalid declared configuration survives load/reset and never becomes mode off.
+ acceptance_profile_effect_reset();acceptance_profile_reference_field(0,9,0xc400);
+ assert(!acceptance_profile_reference_enable());acceptance_profile_effect_reset();
+ assert(acceptance_native_reference.configured && acceptance_native_reference.failure==13);
+ assert(acceptance_profile_ordinary_arm(2));acceptance_profile_render_buffer(g.cpu.oam,0);
+ assert(acceptance_profile_ordinary_status(5));
+}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            cpp = Path(directory) / "lifecycle.cpp"
+            exe = Path(directory) / "lifecycle"
             cpp.write_text(source)
             subprocess.run(["c++", "-std=c++17", "-I", str(SUPPORT), str(cpp), "-o", str(exe)], check=True)
             subprocess.run([str(exe)], check=True)

@@ -16,7 +16,8 @@ struct Observer {
     // palette flags, current endpoint[4], weather, map time/palset/group/number/environment, fixture lighting and needed glow.
     std::array<Point, 24> fields{};
     std::array<unsigned char, 4> sprites{}, palettes{}, map_x{}, map_y{};
-    bool enabled = false, emitter_active = false;
+    // Declared mode survives core load; enabled is runtime source activation.
+    bool configured = false, enabled = false, emitter_active = false;
     unsigned failure = 0, actor = 0, start = 0, emitter_sp = 0, return_pc = 0, return_bank = 0;
     unsigned completed = 0;
     Snapshot pending{}, latest{}, dma{}, raster{};
@@ -42,8 +43,17 @@ struct Observer {
         std::copy(actual_key.begin(), actual_key.end(), out.begin() + 32);
         out[50] = enabled; out[51] = ready(); out[52] = 64;
         out[53] = actor; out[54] = start; out[55] = emitter_sp;
-        out[56] = return_pc; out[57] = return_bank;
+        out[56] = return_pc; out[57] = return_bank; out[58] = configured; // Additive mode witness.
         return out;
+    }
+    // Core load/reset begins a new experiment, retaining declared mode and inputs.
+    // Re-enabling alone never clears a runtime failure or its first witness.
+    void reset() {
+        const auto config = *this;
+        *this = Observer{};
+        fields = config.fields; sprites = config.sprites; palettes = config.palettes;
+        map_x = config.map_x; map_y = config.map_y; configured = config.configured;
+        if (config.failure == 13) fail(13);
     }
     bool ready() const { return enabled && !failure && dma.id; }
     void context(uint64_t host, uint64_t ordinal, unsigned line) {

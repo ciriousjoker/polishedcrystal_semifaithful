@@ -249,6 +249,8 @@ extern "C" unsigned acceptance_profile_static_enable() {
     if (!acceptance_static_intent.objects || !acceptance_static_world_configured) acceptance_static_intent.fail(10);
     if (!acceptance_static_world_ready || acceptance_observation_invalid) return 0;
     acceptance_static_intent.enabled = !acceptance_static_intent.failure;
+    if (acceptance_static_intent.enabled && acceptance_native_reference.configured)
+        acceptance_native_reference.enabled = !acceptance_native_reference.failure;
     return acceptance_static_intent.enabled;
 }
 // Additive status fields: 0 ABI, 1 first failure, 2 count, 3 latest, 4 opportunity,
@@ -294,10 +296,12 @@ extern "C" void acceptance_profile_reference_actor(unsigned i, unsigned sprite, 
     acceptance_native_reference.map_x[i] = x; acceptance_native_reference.map_y[i] = y;
 }
 extern "C" unsigned acceptance_profile_reference_enable() {
+    acceptance_native_reference.configured = true;
     for (const auto p : acceptance_native_reference.fields) if (!p.address) acceptance_native_reference.fail(13);
     for (unsigned s : acceptance_native_reference.sprites) if (!s) acceptance_native_reference.fail(13);
-    acceptance_native_reference.enabled = !acceptance_native_reference.failure;
-    return acceptance_native_reference.enabled;
+    // Declaring reference mode does not observe unrelated core boot producers.
+    // Runtime activation belongs to successful ordinary source enablement.
+    return !acceptance_native_reference.failure;
 }
 extern "C" uint64_t acceptance_profile_reference(unsigned section, unsigned field) {
     const auto& r = acceptance_native_reference;
@@ -471,7 +475,7 @@ extern "C" void acceptance_profile_render_buffer(const void* buffer, unsigned li
         acceptance_game_context ? acceptance_game_context->get_cpu()->read(0xff44) : ~0u);
     acceptance_native_reference.row(line);
     if (acceptance_ordinary_requested && line == 0 &&
-            (!acceptance_native_reference.enabled || acceptance_native_reference.ready())) {
+            (!acceptance_native_reference.configured || acceptance_native_reference.ready())) {
         // This is the genuine lcd::render entry, before either row observer.
         // No previously rendered row or output contributes capture credit.
         acceptance_ordinary_requested = false;
@@ -794,7 +798,7 @@ static void acceptance_profile_before(gb* game, const cpu_regs& regs) {
 
 extern "C" void acceptance_profile_effect_reset() {
     acceptance_static_intent.reset();
-    acceptance_native_reference = native_reference::Observer{};
+    acceptance_native_reference.reset();
     acceptance_static_world_active = acceptance_static_world_ready = false;
     acceptance_static_world_returns = 0;
     std::fill_n(acceptance_static_world_map, 2, 0);
@@ -830,13 +834,18 @@ extern "C" void acceptance_profile_effect_reset() {
 
 // Host observation is not serialized. Restored CPU state cannot prove missed entries.
 extern "C" void acceptance_profile_restore_boundary() {
+    if (acceptance_native_reference.configured) {
+        acceptance_native_reference.fail(15);
+        acceptance_native_reference.enabled = false;
+    }
     acceptance_static_world_active = acceptance_static_world_ready = false;
     if (acceptance_static_world_configured) acceptance_static_intent.fail(12);
     if (acceptance_ordinary_state == 1 || acceptance_ordinary_requested) {
         acceptance_ordinary_fail(20);
         acceptance_ordinary_requested = false;
     }
-    if (!acceptance_effect_enabled && !acceptance_native_scene_count && !acceptance_static_world_configured) return;
+    if (!acceptance_effect_enabled && !acceptance_native_scene_count && !acceptance_static_world_configured &&
+            !acceptance_native_reference.configured) return;
     acceptance_observation_invalid = true;
     ++acceptance_effect_overflow;
     acceptance_effect_calls.clear();
