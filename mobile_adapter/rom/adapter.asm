@@ -671,6 +671,13 @@ MobilePrepareCommand:
 	inc a
 	ld [wMobilePingSent], a
 .size
+	ld a, [wMobileStep]
+	cp 4
+	jr nz, .generic_size
+	ld a, [wMobileMode]
+	and a
+	jp nz, .fused
+.generic_size
 	ld a, c
 	add 12
 	ld [wMobileTxSize], a
@@ -744,6 +751,7 @@ MobilePrepareCommand:
 	inc bc
 	inc bc
 	call MobileChecksum
+.trailer
 	ld a, d
 	ld [hli], a
 	ld a, e
@@ -771,6 +779,119 @@ MobilePrepareCommand:
 	ld a, MOBILE_WIRE_TX
 	ld [wMobileWire], a
 	jmp MobileClock
+.fused
+; Mode1 step4 copies application bytes once while computing the wire sum.
+; RX validation scratch is dead here. Cursor is reset before a new response.
+	ld a, c
+	add 12
+	ld [wMobileTxSize], a
+	push bc
+	dec c
+	ld a, c
+	ld [wMobileChecksumLeft], a
+	ld de, 0
+	ld a, [wMobileCommand]
+	add e
+	ld e, a
+	adc d
+	sub e
+	ld d, a
+	ld a, c
+	inc a
+	add e
+	ld e, a
+	adc d
+	sub e
+	ld d, a
+	ld a, [wMobileConnection]
+	ld [wMobileTx + 6], a
+	add e
+	ld e, a
+	adc d
+	sub e
+	ld d, a
+	ld bc, wMobileTx + 7
+.fused_blocks
+	ld a, [wMobileChecksumLeft]
+	sub 8
+	jr c, .fused_tail
+	ld [wMobileChecksumLeft], a
+rept 8
+	ld a, [hli]
+	ld [bc], a
+	inc bc
+	add e
+	ld e, a
+	adc d
+	sub e
+	ld d, a
+endr
+	jr .fused_blocks
+.fused_tail
+	add 8
+	jr z, .fused_header
+	ld a, [wMobileChecksumLeft]
+	and 4
+	jr z, .fused_tail_4_done
+rept 4
+	ld a, [hli]
+	ld [bc], a
+	inc bc
+	add e
+	ld e, a
+	adc d
+	sub e
+	ld d, a
+endr
+.fused_tail_4_done
+	ld a, [wMobileChecksumLeft]
+	and 2
+	jr z, .fused_tail_2_done
+rept 2
+	ld a, [hli]
+	ld [bc], a
+	inc bc
+	add e
+	ld e, a
+	adc d
+	sub e
+	ld d, a
+endr
+.fused_tail_2_done
+	ld a, [wMobileChecksumLeft]
+	and 1
+	jr z, .fused_tail_1_done
+rept 1
+	ld a, [hli]
+	ld [bc], a
+	inc bc
+	add e
+	ld e, a
+	adc d
+	sub e
+	ld d, a
+endr
+.fused_tail_1_done
+.fused_header
+	pop bc
+	xor a
+	ld [wMobileChecksumCursor + 1], a
+	ld hl, wMobileTx
+	ld a, $99
+	ld [hli], a
+	ld a, $66
+	ld [hli], a
+	ld a, [wMobileCommand]
+	ld [hli], a
+	xor a
+	ld [hli], a
+	ld [hli], a
+	ld [hl], c
+	ld b, 0
+	inc hl
+	add hl, bc
+	jp .trailer
+
 .invalid
 ; Abandon the partial stream and retain the normal reconnect cooldown.
 	ld a, MOBILE_ERROR_PACKET
