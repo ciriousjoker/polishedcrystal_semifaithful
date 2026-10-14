@@ -281,6 +281,28 @@ class ObserverHooks(unittest.TestCase):
                 runtime.extend_profile(root)
             self.assertEqual(before,{p:p.read_bytes() for p in before})
 
+    def test_display_declarations_preserve_initial_bom_and_other_content(self):
+        for prefix in ("", "\ufeff"):
+            with self.subTest(initial_bom=bool(prefix)), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                self.source(root)
+                renderer = root / "libretro/dmy_renderer.cpp"
+                renderer.write_text(prefix + renderer.read_text() + "// Keep embedded \ufeff content.\n")
+                runtime.extend_profile(root)
+                rendered = renderer.read_bytes()
+                self.assertEqual(rendered.startswith(b"\xef\xbb\xbf"), bool(prefix))
+                self.assertEqual(rendered.count(b"\xef\xbb\xbf"), 1 + bool(prefix))
+                self.assertTrue(rendered.endswith("// Keep embedded \ufeff content.\n".encode()))
+                self.assertTrue(rendered[len(prefix.encode()):].startswith(b'extern "C"'))
+                before = {p: p.read_bytes() for p in root.rglob("*") if p.is_file()}
+                runtime.extend_profile(root)
+                self.assertEqual(before, {p: p.read_bytes() for p in before})
+                renderer.write_bytes(rendered.replace(b"word dmy_renderer::map_color", b"word changed::map_color"))
+                before = {p: p.read_bytes() for p in before}
+                with self.assertRaisesRegex(RuntimeError, "unique observer source anchor"):
+                    runtime.extend_profile(root)
+                self.assertEqual(before, {p: p.read_bytes() for p in before})
+
     def test_missing_actual_getter_header_anchor_rejects_before_any_write(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp); self.source(root)

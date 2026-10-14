@@ -133,13 +133,16 @@ def extend_profile(profile_source):
     # anchors are checked before any source is written.
     renderer = profile_source / "libretro/dmy_renderer.cpp"
     renderer_text = renderer.read_text()
+    # Keep an initial UTF-8 BOM at byte zero when adding declarations.
+    declaration_offset = int(renderer_text.startswith("\ufeff"))
     declarations = ('extern "C" void acceptance_profile_palette_config(unsigned, unsigned, float);',
                     'extern "C" void acceptance_profile_display_begin(const void*, unsigned, unsigned, unsigned, unsigned, unsigned, unsigned, float, unsigned, unsigned, unsigned, unsigned, unsigned);')
     for declaration in declarations:
         if renderer_text.count(declaration) > 1:
             raise RuntimeError("Duplicate display observer declaration")
         if declaration not in renderer_text:
-            renderer_text = declaration + "\n" + renderer_text
+            renderer_text = (renderer_text[:declaration_offset] + declaration + "\n" +
+                             renderer_text[declaration_offset:])
     renderer_text = inject_unique(renderer_text, "word dmy_renderer::map_color(word gb_col)\n{",
         "word dmy_renderer::map_color(word gb_col)\n{\n    acceptance_observe_palette_config(); // Observe actual palette mapping call.")
     renderer_text = inject_unique(renderer_text,
