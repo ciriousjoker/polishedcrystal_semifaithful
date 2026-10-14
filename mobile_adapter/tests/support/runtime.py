@@ -463,7 +463,7 @@ class ProxyHandler(socketserver.BaseRequestHandler):
 
 
 def projected(directory):
-    names = ("hCrashCode", "hInMenu", "wMapStatus", "wScriptRunning", "wInputFlags", "wXCoord", "wYCoord",
+    names = ("hROMBank", "hJoypadDown", "hJoyPressed", "wMobileMenuState", "vMobileMenuSourceBank", "vMobileMenuSourcePC", "vMobileMenuInstructionActive", "vAcceptanceMenuSourceBank", "vAcceptanceMenuSourcePC", "hCrashCode", "hInMenu", "wMapStatus", "wScriptRunning", "wInputFlags", "wXCoord", "wYCoord",
         "wMapGroup", "wMapNumber", "wTimeOfDay", "vAcceptanceReady", "vAcceptanceDialogDone", "vAcceptanceLoaded", "vAcceptanceLoadFailed", "vStoryFlagsHash",
         "wMobileOnline", "wMobileWanted", "wMobileOwner", "wMobileServerError", "wMobilePeerCount", "wMobilePlayerId", "wMobileGeneration",
         "vNPCOccupiedMask", "vNPCPositionsHash", "vLocalPaletteHash", "vOAMMaxScanline",
@@ -477,6 +477,8 @@ def projected(directory):
             row = json.loads(line)
             state = row["symbols"]
             values = {key: state[key] for key in names if key in state}
+            values.update((key, value) for key, value in state.items()
+                          if key.startswith(("vMobileMenuTile", "vMobileMenuRoster")))
             for slot in range(13):
                 for suffix in ("Count", "Complete", "Sprite", "Map", "PaletteHash"):
                     name = f"vNativeSource{slot}{suffix}"
@@ -536,6 +538,49 @@ def seed_saves(meta, session, fx, hour):
         return directory / "result.sav"
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
         return list(pool.map(produce, range(4), [fx["primary"], *fx["peers"]]))
+
+
+def mobile_menu_inputs(action):
+    """Physical actions anchored to actual menu ownership and measurement state."""
+    text = ""
+    def chord(anchor, buttons, duration=8):
+        nonlocal text
+        for button in buttons:
+            text += f"{anchor} {button} {duration}\n"
+    if action == "mobile-menu-connect":
+        chord("ON 0 vAcceptanceReady=1,wMapStatus=2,wScriptRunning=0", ("SELECT", "A"))
+        chord("AFTER 100 wMobileMenuState=1,wMenuCursorY=1", ("A",))
+        chord("AFTER 650 vAcceptanceMeasuring=1", ("LEFT",), 12)
+        return text
+    chord("AFTER 50 vAcceptanceMeasuring=1", ("SELECT", "A"))
+    if action in ("mobile-menu-players", "mobile-menu-exit-roster"):
+        chord("AFTER 40 wMobileMenuState=1", ("DOWN",))
+        chord("AFTER 80 wMobileMenuState=1", ("A",))
+        if action == "mobile-menu-players":
+            # Advance the native paragraph prompts, then WaitButton and menu B.
+            for at in (150, 210, 270):
+                chord(f"AFTER {at} wMobileMenuState=1", ("A",))
+            chord("AFTER 330 wMobileMenuState=1", ("B",))
+        else:
+            chord("AFTER 140 wMobileMenuState=1", ("SELECT", "B"), 160)
+            chord("AFTER 330 wMobileMenuState=1", ("B",))
+    elif action == "mobile-menu-cancel":
+        for at in (40, 65, 90):
+            chord(f"AFTER {at} wMobileMenuState=1", ("DOWN",))
+        chord("AFTER 120 wMobileMenuState=1", ("A",))
+    elif action == "mobile-menu-disconnect":
+        for at in (40, 65):
+            chord(f"AFTER {at} wMobileMenuState=1", ("DOWN",))
+        chord("AFTER 100 wMobileMenuState=1", ("A",))
+    elif action == "mobile-menu-exit":
+        chord("AFTER 100 wMobileMenuState=1", ("SELECT", "B"), 160)
+        chord("AFTER 300 wMobileMenuState=1", ("B",))
+    else:
+        chord("AFTER 100 wMobileMenuState=1", ("B",))
+    if action in ("mobile-menu-disconnect", "mobile-menu-exit", "mobile-menu-exit-roster"):
+        chord("AFTER 500 vAcceptanceMeasuring=1", ("SELECT", "B"))
+    chord("AFTER 650 vAcceptanceMeasuring=1", ("LEFT",), 12)
+    return text
 
 
 def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 1), duplicate=False, settle_frames=300, functional=False, moving_peers=False, identity=None):
@@ -620,7 +665,7 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
         if enabled and index == 0 and identity in ("digest", "schema", "digest-held"):
             patch_identity_fixture(rom, bindings, identity.removesuffix("-held"), rom)
         text = "# Native initialization enters the fixture without title/dialog input.\n"
-        if enabled and not (index == 0 and action.startswith("private:")):
+        if enabled and not (index == 0 and (action.startswith("private:") or action == "mobile-menu-connect")):
             for button in ("SELECT", "B"):
                 text += f"ON 0 vAcceptanceReady=1,wMapStatus=2,wScriptRunning=0 {button} 8\n"
         if enabled and index == 0 and identity in ("digest", "schema", "digest-held"):
@@ -670,6 +715,8 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
             else:
                 text += f"{at} SELECT 8\n{at} B 8\n"
             text += f"{at + 180} B 8\n{at + 250} LEFT 12\n"
+        if enabled and index == 0 and action.startswith("mobile-menu-"):
+            text += mobile_menu_inputs(action)
         if functional and enabled:
             transformed = []
             for line in text.splitlines():
@@ -701,6 +748,8 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
             "--trace-out", directory / "trace.jsonl.gz", "--input-events", directory / "input-events.jsonl",
             "--profile-out", directory / "profile.json", "--profile-window-start", total - 1000 if functional and enabled else profile,
             "--pace-from", first if enabled else total, "--pace-multiplier", speed, "--adapter", int(enabled), "--acceptance", "1"]
+        if enabled and index == 0 and action.startswith("mobile-menu-"):
+            command += ["--acceptance-menu-routine", "MobileMenuInput"]
         if functional and enabled:
             command += ["--measurement-gate", out / "measure", "--measurement-warmup", "300"]
             if action.startswith("private:") or identity in ("digest", "schema", "digest-held"):
@@ -805,6 +854,8 @@ def execute(meta, fx, out, seeds, action="idle", fault="none", speeds=(1, 1, 1, 
                 "--adapter", "0", "--acceptance", "1"], source, recovery_dir / "process.log")
             recovery = projected(recovery_dir)
         return {"fixture": fx, "clients": [{"mobile": m, "single": s} for m, s in zip(online, offline)],
+            "menu_charmap": {match[1]: int(match[2], 16) for match in re.finditer(r'charmap "(.)",\s*\$([0-9a-fA-F]+)', (Path(meta["source"]) / "constants/charmap.asm").read_text())} if action.startswith("mobile-menu-") else {},
+            "menu_text": dict(re.findall(r'\.(OfflineText|OnlineText|RosterText)\n\s*text "([^"]+)"', (Path(meta["source"]) / "mobile_adapter/rom/menu.asm").read_text())) if action.startswith("mobile-menu-") else {},
             "identity": identity, "identity_wire": list(proxy.wire) if identity else [],
             "clean_counterpart_sha256": meta["baseline_sha256"],
             "fault": fault, "injected": proxy.injected, "recovered": proxy.recovered, "speeds": speeds, "action": action,
@@ -862,6 +913,8 @@ def main():
         fault = args.case.removeprefix("fault-") if args.case.startswith("fault-") else "none"
         scene = args.case if args.case in ("scanline", "pool", "palettes", "interaction", "script", "link", "save", "warp", "npc-movement", "night", "dark") else "empty"
         action = args.case if args.case in ("interaction", "script", "link", "save", "warp", "menu", "exit", "exit-menu", "exit-script", "exit-save", "night", "dark", "resume", "clear-conflict", "npc-movement") else "idle"
+        if args.case.startswith("mobile-menu-"):
+            action = args.case
         if args.case.startswith("fault-") and fault not in ("reconnect", "reconnect-one"):
             scene, action = "save", "fault-save-exit"
         if action == "clear-conflict":

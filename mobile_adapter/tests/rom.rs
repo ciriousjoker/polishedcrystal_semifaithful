@@ -1015,6 +1015,333 @@ fn emergency_exit_in_native_menu() {
     );
     emergency(&e);
 }
+fn mobile_menu_has_text(e: &Value, state: &Value, text: &str) -> bool {
+    let expected: Vec<_> = text
+        .chars()
+        .map(|c| n(&e["menu_charmap"], &c.to_string()))
+        .collect();
+    (0..18).any(|row| {
+        let tiles: Vec<_> = (0..20)
+            .map(|column| {
+                state[format!("vMobileMenuTile{}", row * 20 + column)]
+                    .as_u64()
+                    .unwrap_or(0)
+            })
+            .collect();
+        tiles.windows(expected.len()).any(|span| span == expected)
+    })
+}
+
+// Require a complete decimal token. A label plus a numeric prefix of a longer
+// ID is insufficient; native roster entries end at a blank tile or row edge.
+// Native TextboxBorder uses the left middle tile "│" beside first-column labels.
+fn mobile_menu_has_id(e: &Value, state: &Value, text: &str) -> bool {
+    let expected: Vec<_> = text
+        .chars()
+        .map(|c| n(&e["menu_charmap"], &c.to_string()))
+        .collect();
+    let blank = n(&e["menu_charmap"], " ");
+    let left_border = n(&e["menu_charmap"], "│");
+    (0..18).any(|row| {
+        let tiles: Vec<_> = (0..20)
+            .map(|column| n(state, &format!("vMobileMenuTile{}", row * 20 + column)))
+            .collect();
+        tiles
+            .windows(expected.len())
+            .enumerate()
+            .any(|(column, span)| {
+                span == expected
+                    && (column == 0
+                        || tiles[column - 1] == blank
+                        || tiles[column - 1] == left_border)
+                    && (column + expected.len() == 20 || tiles[column + expected.len()] == blank)
+            })
+    })
+}
+
+fn actual_mobile_menu(e: &Value) {
+    let run = &clients(e)[0]["mobile"];
+    let active: Vec<_> = frames(run)
+        .iter()
+        .map(|f| &f["state"])
+        .filter(|s| s["wMobileMenuState"] == 1)
+        .collect();
+    assert!(
+        !active.is_empty(),
+        "Select+A never entered the actual Mobile menu"
+    );
+    assert!(
+        active.iter().all(|s| n(s, "vMobileMenuSourceBank") == 134),
+        "Menu source did not remain in relocated addon bank 134"
+    );
+    assert!(
+        active.iter().any(|s| {
+            n(s, "vMobileMenuInstructionActive") == 1
+                && n(s, "vAcceptanceMenuSourceBank") == 134
+                && n(s, "vAcceptanceMenuSourcePC") == n(s, "vMobileMenuSourcePC")
+                && n(s, "vMobileMenuSourcePC") >= 0x4000
+                && n(s, "vMobileMenuSourcePC") < 0x8000
+        }),
+        "No actual execution in the relocated Mobile menu bank was observed"
+    );
+    assert!(
+        active
+            .iter()
+            .any(|s| n(s, "hInMenu") != 0 && mobile_menu_has_text(e, s, "PLAYERS")),
+        "Native menu ownership and rendered options were not observed together"
+    );
+    let final_state = &run["state"];
+    for key in [
+        "wMobileMenuState",
+        "hInMenu",
+        "hJoypadDown",
+        "hJoyPressed",
+        "hCrashCode",
+    ] {
+        assert_eq!(
+            n(final_state, key),
+            0,
+            "Native menu/joypad recovery failed: {key}"
+        );
+    }
+    assert!(
+        n(final_state, "hROMBank") < 128,
+        "Addon ROM bank leaked after menu close"
+    );
+    assert_ne!(
+        final_state["wXCoord"], e["fixture"]["primary"][0],
+        "Native movement did not resume"
+    );
+
+    // Recovery must really present all three independent peers, with current
+    // native pixel and palette references, after the final physical movement.
+    let last_input = run["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|event| n(event, "frame") + n(event, "duration"))
+        .max()
+        .unwrap();
+    let recovery: Vec<_> = frames(run)
+        .iter()
+        .filter(|f| n(f, "frame") > last_input + 30)
+        .collect();
+    assert!(recovery.len() > 1, "No post-menu native recovery window");
+    assert!(
+        n(&recovery.last().unwrap()["state"], "vProfileWorldUpdates")
+            > n(&recovery[0]["state"], "vProfileWorldUpdates"),
+        "Native world simulation did not resume"
+    );
+    let mut presented = BTreeSet::new();
+    for state in frames(run)
+        .iter()
+        .filter(|f| n(f, "frame") > last_input + 30)
+        .map(|f| &f["state"])
+    {
+        for peer in 1..=3 {
+            if n(state, &format!("vAcceptancePeer{peer}Complete")) == 0 {
+                continue;
+            }
+            presented.insert(peer);
+            let avatar = n(state, &format!("wMobilePeer{peer}Avatar")) as usize;
+            let reference = &clients(e)[avatar]["single"];
+            for (actual, expected) in [
+                (
+                    format!("vAcceptancePeer{peer}TileHash"),
+                    "vAcceptanceLocalTileHash",
+                ),
+                (
+                    format!("vMobilePeer{peer}PaletteHash"),
+                    "vAcceptanceLocalPaletteHash",
+                ),
+            ] {
+                assert!(
+                    frames(reference)
+                        .iter()
+                        .any(|f| n(&f["state"], "vAcceptanceLocalComplete") == 1
+                            && n(&f["state"], expected) == n(state, &actual)),
+                    "Post-menu remote pixels/colors changed: {actual}"
+                );
+            }
+        }
+    }
+    assert_eq!(
+        presented,
+        BTreeSet::from([1, 2, 3]),
+        "Post-menu remote recovery was never actually presented"
+    );
+}
+
+#[test]
+fn mobile_menu_offline_connect_enters_four_player_lobby() {
+    let e = evidence("mobile-menu-connect");
+    actual_mobile_menu(&e);
+    let ids: BTreeSet<_> = clients(&e)
+        .iter()
+        .map(|c| {
+            assert_eq!(n(&c["mobile"]["state"], "wMobileOnline"), 1);
+            assert_eq!(n(&c["mobile"]["state"], "wMobilePeerCount"), 3);
+            n(&c["mobile"]["state"], "wMobilePlayerId")
+        })
+        .collect();
+    assert_eq!(ids.len(), 4);
+    assert!(
+        frames(&clients(&e)[0]["mobile"])
+            .iter()
+            .any(|f| f["state"]["wMobileMenuState"] == 1
+                && f["state"]["wMobileOnline"] == 0
+                && mobile_menu_has_text(
+                    &e,
+                    &f["state"],
+                    e["menu_text"]["OfflineText"].as_str().unwrap()
+                )),
+        "Offline status was not rendered before CONNECT"
+    );
+}
+
+#[test]
+fn mobile_menu_players_renders_all_four_independent_session_ids() {
+    let e = evidence("mobile-menu-players");
+    actual_mobile_menu(&e);
+    let run = &clients(&e)[0]["mobile"];
+    let roster = frames(run)
+        .iter()
+        .map(|f| &f["state"])
+        .find(|s| {
+            s["wMobileMenuState"] == 1
+                && mobile_menu_has_text(&e, s, e["menu_text"]["RosterText"].as_str().unwrap())
+        })
+        .expect("Actual native roster text never appeared");
+    let ids: BTreeSet<_> = clients(&e)
+        .iter()
+        .map(|c| n(&c["mobile"]["state"], "wMobilePlayerId"))
+        .collect();
+    assert_eq!(ids.len(), 4);
+    let staged: BTreeSet<_> = (0..4)
+        .map(|i| n(roster, &format!("vMobileMenuRoster{i}")))
+        .collect();
+    assert_eq!(
+        staged, ids,
+        "Roster staging did not contain local plus three independent 16-bit IDs"
+    );
+    for i in 0..4 {
+        let id = n(roster, &format!("vMobileMenuRoster{i}"));
+        let label = if i == 0 {
+            "YOU: ".to_string()
+        } else {
+            format!("{i}: ")
+        };
+        // TextCommand_DECIMAL sets PRINTNUM_LEFTALIGN, so PrintNum skips
+        // leading spaces even though text_decimal allows five digits.
+        assert!((1..=u16::MAX as u64).contains(&id));
+        let text = format!("{label}{id}");
+        assert!(
+            frames(run)
+                .iter()
+                .any(|f| f["state"]["wMobileMenuState"] == 1
+                    && mobile_menu_has_id(&e, &f["state"], &text)),
+            "Actual roster never rendered {text}"
+        );
+    }
+    assert!(
+        frames(run).iter().any(|f| mobile_menu_has_text(
+            &e,
+            &f["state"],
+            e["menu_text"]["OnlineText"].as_str().unwrap()
+        )),
+        "Online status was not rendered"
+    );
+}
+
+#[test]
+fn mobile_menu_cancel_restores_native_world_and_remote_graphics() {
+    actual_mobile_menu(&evidence("mobile-menu-cancel"));
+}
+#[test]
+fn mobile_menu_b_restores_native_world_and_remote_graphics() {
+    actual_mobile_menu(&evidence("mobile-menu-b"));
+}
+
+fn mobile_menu_disconnect_suppression(case: &str, roster: bool) {
+    let e = evidence(case);
+    actual_mobile_menu(&e);
+    let run = &clients(&e)[0]["mobile"];
+    let selects: Vec<_> = run["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|event| n(event, "button") == 2)
+        .collect();
+    let rejoin = n(selects.last().unwrap(), "frame");
+    let first = if case == "mobile-menu-disconnect" {
+        frames(run)
+            .iter()
+            .find(|f| n(f, "frame") > n(selects[1], "frame") && f["state"]["wMobileWanted"] == 0)
+            .map(|f| n(f, "frame") + limit("exit_frames"))
+            .expect("DISCONNECT never cleared connection intent")
+    } else {
+        let held = selects
+            .iter()
+            .find(|event| n(event, "duration") == 160)
+            .expect("Held emergency chord absent");
+        let before = &frames(run)
+            .iter()
+            .find(|f| n(f, "frame") + 1 == n(held, "frame"))
+            .unwrap()["state"];
+        assert_eq!(
+            n(before, "wMobileMenuState"),
+            1,
+            "Emergency chord missed actual Mobile menu"
+        );
+        if roster {
+            assert!(
+                mobile_menu_has_text(&e, before, e["menu_text"]["RosterText"].as_str().unwrap()),
+                "Emergency chord missed actual roster"
+            );
+        }
+        n(held, "frame") + limit("exit_frames")
+    };
+    let suppressed: Vec<_> = frames(run)
+        .iter()
+        .filter(|f| n(f, "frame") >= first && n(f, "frame") < rejoin)
+        .collect();
+    assert!(
+        !suppressed.is_empty(),
+        "No suppression interval before new explicit join"
+    );
+    for f in suppressed {
+        for key in [
+            "wMobileWanted",
+            "wMobileOnline",
+            "wMobilePeerCount",
+            "wMobileOwner",
+        ] {
+            assert_eq!(
+                n(&f["state"], key),
+                0,
+                "Held chord or released teardown revived {key}"
+            );
+        }
+    }
+    assert_eq!(
+        n(&run["state"], "wMobileOnline"),
+        1,
+        "New explicit join did not reconnect"
+    );
+}
+#[test]
+fn mobile_menu_disconnect_requires_new_explicit_join() {
+    mobile_menu_disconnect_suppression("mobile-menu-disconnect", false);
+}
+#[test]
+fn mobile_menu_priority_exit_suppresses_held_chord_rejoin() {
+    mobile_menu_disconnect_suppression("mobile-menu-exit", false);
+}
+#[test]
+fn mobile_menu_roster_priority_exit_suppresses_held_chord_rejoin() {
+    mobile_menu_disconnect_suppression("mobile-menu-exit-roster", true);
+}
+
 #[test]
 fn emergency_exit_during_script_and_input_lock() {
     let e = evidence("exit-script");
@@ -1203,7 +1530,9 @@ fn native_identity_wire(e: &Value, mismatch: Option<&str>) {
     use mobile_protocol::lobby::{ERROR, HELLO, SCHEMA, WELCOME};
     let expected = identity_bytes(e["clean_counterpart_sha256"].as_str().unwrap());
     assert_eq!(expected.len(), 32);
-    let wire = e["identity_wire"].as_array().expect("Actual proxy wire evidence");
+    let wire = e["identity_wire"]
+        .as_array()
+        .expect("Actual proxy wire evidence");
     assert!(!wire.is_empty());
     let mut healthy = BTreeSet::new();
     let mut rejected = BTreeSet::new();
@@ -1211,7 +1540,10 @@ fn native_identity_wire(e: &Value, mismatch: Option<&str>) {
         let frame = identity_bytes(item["frame"].as_str().unwrap());
         assert!(frame.len() >= 8);
         assert_eq!(&frame[..3], b"PC\x01");
-        assert_eq!(frame.len(), 8 + u16::from_be_bytes([frame[6], frame[7]]) as usize);
+        assert_eq!(
+            frame.len(),
+            8 + u16::from_be_bytes([frame[6], frame[7]]) as usize
+        );
         if item["direction"] == "native-to-bridge" && frame[3] == HELLO {
             assert_eq!(frame.len(), 55, "Actual outgoing HELLO length");
             let connection = n(item, "connection");
@@ -1226,7 +1558,11 @@ fn native_identity_wire(e: &Value, mismatch: Option<&str>) {
                         assert_eq!(&frame[23..55], declared.as_slice());
                     }
                     Some("schema") => {
-                        assert_eq!(&frame[23..55], expected.as_slice(), "Schema negative changed digest");
+                        assert_eq!(
+                            &frame[23..55],
+                            expected.as_slice(),
+                            "Schema negative changed digest"
+                        );
                         assert_eq!(frame[8], SCHEMA ^ 0xff);
                     }
                     _ => panic!("Actual native HELLO did not match clean counterpart"),
@@ -1238,19 +1574,31 @@ fn native_identity_wire(e: &Value, mismatch: Option<&str>) {
     assert_eq!(healthy.len(), if mismatch.is_some() { 3 } else { 4 });
     assert_eq!(rejected.len(), usize::from(mismatch.is_some()));
     for connection in &healthy {
-        assert!(wire.iter().any(|item| n(item, "connection") == *connection
-            && item["direction"] == "bridge-to-native"
-            && identity_bytes(item["frame"].as_str().unwrap())[3] == WELCOME),
-            "Matching native stream never received authoritative WELCOME");
+        assert!(
+            wire.iter().any(|item| n(item, "connection") == *connection
+                && item["direction"] == "bridge-to-native"
+                && identity_bytes(item["frame"].as_str().unwrap())[3] == WELCOME),
+            "Matching native stream never received authoritative WELCOME"
+        );
     }
     for connection in &rejected {
-        let replies: Vec<_> = wire.iter().filter(|item| n(item, "connection") == *connection
-            && item["direction"] == "bridge-to-native")
-            .map(|item| identity_bytes(item["frame"].as_str().unwrap())).collect();
-        assert!(replies.iter().any(|frame| frame[3] == ERROR && frame.len() == 9 && frame[8] == 2),
-            "Declared mismatch did not receive authoritative incompatible rejection");
-        assert!(!replies.iter().any(|frame| frame[3] == WELCOME),
-            "Rejected candidate received successful admission");
+        let replies: Vec<_> = wire
+            .iter()
+            .filter(|item| {
+                n(item, "connection") == *connection && item["direction"] == "bridge-to-native"
+            })
+            .map(|item| identity_bytes(item["frame"].as_str().unwrap()))
+            .collect();
+        assert!(
+            replies
+                .iter()
+                .any(|frame| frame[3] == ERROR && frame.len() == 9 && frame[8] == 2),
+            "Declared mismatch did not receive authoritative incompatible rejection"
+        );
+        assert!(
+            !replies.iter().any(|frame| frame[3] == WELCOME),
+            "Rejected candidate received successful admission"
+        );
     }
 }
 
@@ -1269,29 +1617,59 @@ fn native_identity_rejection(kind: &str) {
     native_preserved(&e);
     let candidate = &clients(&e)[0]["mobile"];
     for row in frames(candidate) {
-        assert_eq!(n(&row["state"], "wMobileOnline"), 0, "Rejected candidate participated");
-        assert_eq!(n(&row["state"], "wMobilePeerCount"), 0, "Rejected candidate acquired peers");
+        assert_eq!(
+            n(&row["state"], "wMobileOnline"),
+            0,
+            "Rejected candidate participated"
+        );
+        assert_eq!(
+            n(&row["state"], "wMobilePeerCount"),
+            0,
+            "Rejected candidate acquired peers"
+        );
     }
     if kind == "digest-held" {
-        assert_eq!(n(before_exit(&e), "wMobileWanted"), 1,
-            "Held rejection did not retain a live native join for physical escape");
+        assert_eq!(
+            n(before_exit(&e), "wMobileWanted"),
+            1,
+            "Held rejection did not retain a live native join for physical escape"
+        );
         emergency(&e);
     } else {
-        assert!(frames(candidate).iter().any(|row| n(&row["state"], "wMobileServerError") == 2),
-            "Native ROM never consumed the incompatible ERROR payload");
+        assert!(
+            frames(candidate)
+                .iter()
+                .any(|row| n(&row["state"], "wMobileServerError") == 2),
+            "Native ROM never consumed the incompatible ERROR payload"
+        );
         for state in steady(candidate) {
-            for key in ["wMobileWanted", "wMobileOwner", "wMobileOnline", "wMobilePeerCount"] {
+            for key in [
+                "wMobileWanted",
+                "wMobileOwner",
+                "wMobileOnline",
+                "wMobilePeerCount",
+            ] {
                 assert_eq!(n(state, key), 0, "Native ERROR did not tear down {key}");
             }
         }
-        assert_ne!(candidate["state"]["wXCoord"], e["fixture"]["primary"][0],
-            "Rejected native client did not resume ordinary movement");
+        assert_ne!(
+            candidate["state"]["wXCoord"], e["fixture"]["primary"][0],
+            "Rejected native client did not resume ordinary movement"
+        );
     }
     let mut ids = BTreeSet::new();
     for client in &clients(&e)[1..] {
         for state in steady(&client["mobile"]) {
-            assert_eq!(n(state, "wMobileOnline"), 1, "Healthy sibling lost admission");
-            assert_eq!(n(state, "wMobilePeerCount"), 2, "Rejected candidate changed healthy membership");
+            assert_eq!(
+                n(state, "wMobileOnline"),
+                1,
+                "Healthy sibling lost admission"
+            );
+            assert_eq!(
+                n(state, "wMobilePeerCount"),
+                2,
+                "Rejected candidate changed healthy membership"
+            );
         }
         ids.insert(n(&client["mobile"]["state"], "wMobilePlayerId"));
     }

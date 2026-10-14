@@ -25,6 +25,11 @@ MobileMenuInput::
 	ld a, [wMobileMenuState]
 	and a
 	ret nz
+; Match native menus: preserve entry ownership until the entire text UI closes.
+	ldh a, [hInMenu]
+	push af
+	ld a, TRUE
+	ldh [hInMenu], a
 	ld a, [wMobileDeferred]
 	ld [wMobileMenuDeferred], a
 	ld a, 1
@@ -72,9 +77,18 @@ MobileMenuInput::
 	cp 2
 	jr z, .players
 	cp 3
-	jr nz, .close
+	jp nz, .close
 	xor a
 	ld [wMobileWanted], a
+	ld [wMobileOnline], a
+	ld [wMobilePeerCount], a
+; Explicit local cancellation must not wait for the remote teardown exchange.
+; Only the serial owner may restore the saved native serial registers.
+	ld a, [wMobileOwner]
+	and a
+	jr z, .close
+	ld a, MOBILE_ERROR_CANCEL
+	farcall MobileFail
 	jr .close
 .connect
 	ld a, 1
@@ -116,6 +130,8 @@ endr
 	jp .menu
 .close
 	call CloseText
+	pop af
+	ldh [hInMenu], a
 	farcall MobileNativeInvalidateHash
 	xor a
 	ld [wMobileMenuState], a

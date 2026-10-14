@@ -117,7 +117,7 @@ static unsigned observe(unsigned bank, unsigned address, const unsigned char* sr
 
 static void load_bindings(const std::string& path) {
     const std::set<std::string> watched = {
-        "hCGB", "hCrashCode", "hVBlankCounter", "hDelayFrameLY", "hInMenu", "wJumptableIndex",
+        "hROMBank", "hJoypadDown", "hJoyPressed", "hCGB", "hCrashCode", "hVBlankCounter", "hDelayFrameLY", "hInMenu", "wJumptableIndex",
         "hNbTilesToCopy", "hRequested1bpp", "hRequested2bpp", "hHours", "hMinutes", "wTimeOfDay",
         "wInputFlags", "wGameLogicPaused",
         "wSaveFileExists", "wMapGroup", "wMapNumber", "wXCoord", "wYCoord",
@@ -711,7 +711,7 @@ int main(int argc, char** argv) {
             key != "--checkpoint-dir" && key != "--profile-out" && key != "--profile-window-start" &&
             key != "--snapshot-out" && key != "--test-snapshot-out" && key != "--snapshot-in" && key != "--input-events" &&
             key != "--finish-barrier" && key != "--pace-multiplier" && key != "--expected-peers" && key != "--expected-online" &&
-            key != "--measurement-gate" && key != "--measurement-warmup" && key != "--acceptance") fail("Unknown option: " + key);
+            key != "--acceptance-menu-routine" && key != "--measurement-gate" && key != "--measurement-warmup" && key != "--acceptance") fail("Unknown option: " + key);
         arguments[key] = argv[i + 1];
     }
     if (arguments.count("--frames")) {
@@ -725,6 +725,11 @@ int main(int argc, char** argv) {
     }
     if (arguments.count("--symbols")) load_bindings(arguments.at("--symbols"));
     acceptance_enabled = arguments.count("--acceptance") && arguments.at("--acceptance") == "1";
+    const bool mobile_menu_instruction = arguments.count("--acceptance-menu-routine");
+    if (mobile_menu_instruction && (arguments.at("--acceptance-menu-routine") != "MobileMenuInput" ||
+            !acceptance_enabled || !adapter_enabled || !arguments.count("--profile-out")))
+        fail("Mobile menu instruction observation requires enabled acceptance profiling");
+    unsigned acceptance_menu_source_bank = 0, acceptance_menu_source_pc = 0;
     if (arguments.count("--symbols")) acceptance_load_symbols(arguments.at("--symbols"), argv[2]);
     if (arguments.count("--input-events")) {
         input_events.open(arguments.at("--input-events"));
@@ -890,7 +895,9 @@ int main(int argc, char** argv) {
             auto save_start = native_addresses.at("wPlayerData");
             auto save_routine = native_addresses.at("SaveGameData");
             symbol<void(*)(unsigned,unsigned)>(core,"acceptance_profile_save_routine")(save_routine.first,save_routine.second);
-            auto menu_routine = native_addresses.at("StartMenu");
+            auto menu_routine = native_addresses.at(mobile_menu_instruction ? "MobileMenuInput" : "StartMenu");
+            acceptance_menu_source_bank = menu_routine.first;
+            acceptance_menu_source_pc = menu_routine.second;
             symbol<void(*)(unsigned,unsigned)>(core,"acceptance_profile_menu_routine")(menu_routine.first,menu_routine.second);
             symbol<void(*)(unsigned,unsigned,unsigned,unsigned,unsigned,unsigned,unsigned)>(core,"mobile_profile_save")(
                 0, 0x20, native_addresses.at("wPlayerDataEnd").second - save_start.second, 0, save_start.second, 0, 0);
@@ -1083,6 +1090,11 @@ int main(int argc, char** argv) {
             values["vAcceptanceSaveCount"] = acceptance_save_metric ? acceptance_save_metric(0) : 0;
             values["vAcceptanceSaveActive"] = acceptance_save_active ? acceptance_save_active() : 0;
             values["vAcceptanceMenuActive"] = acceptance_menu_active ? acceptance_menu_active() : 0;
+            // Active comes from the core's mapped-ROM + PC entry hook and matching
+            // stack return, not the bank sampled at the host video boundary.
+            values["vAcceptanceMenuSourceBank"] = acceptance_menu_source_bank;
+            values["vAcceptanceMenuSourcePC"] = acceptance_menu_source_pc;
+            values["vMobileMenuInstructionActive"] = mobile_menu_instruction && values["vAcceptanceMenuActive"];
             const char* marker_names[] = {"vAcceptanceReady", "vAcceptanceDialogDone", "vAcceptanceLoaded", "vAcceptanceLoadFailed", "vAcceptanceLinkEntered"};
             for (unsigned i = 0; i < 5; ++i) values[marker_names[i]] = acceptance_marker_count ? acceptance_marker_count(i) : 0;
             values["vProfileWorldUpdates"] = metric ? metric(21) : 0;

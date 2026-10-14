@@ -30,6 +30,25 @@ static void acceptance_load_symbols(const std::string& path, const std::string& 
 
 static void acceptance_capture(std::map<std::string, unsigned>& values,
                                const unsigned char* sram, size_t sram_size) {
+    // Observe the real native text buffer and roster staging, never a host model.
+    if (acceptance_symbols.count("MobileMenuInput")) {
+        values["vMobileMenuSourceBank"] = acceptance_symbols.at("MobileMenuInput").bank;
+        values["vMobileMenuSourcePC"] = acceptance_symbols.at("MobileMenuInput").address;
+        const auto staging = acceptance_symbols.at("wMobileLocalStaging");
+        for (unsigned i = 0; i < 4; ++i)
+            values["vMobileMenuRoster" + std::to_string(i)] =
+                observe(staging.bank, staging.address + 2 * i, sram, sram_size) << 8 |
+                observe(staging.bank, staging.address + 2 * i + 1, sram, sram_size);
+        if (values.at("wMobileMenuState")) {
+            const auto tilemap = acceptance_symbols.at("wTilemap");
+            const auto tilemap_end = acceptance_symbols.at("wTilemapEnd");
+            if (tilemap_end.address - tilemap.address != 20 * 18)
+                fail("Native menu tilemap dimensions changed");
+            for (unsigned i = 0; i < 20 * 18; ++i)
+                values["vMobileMenuTile" + std::to_string(i)] =
+                    observe(tilemap.bank, tilemap.address + i, sram, sram_size);
+        }
+    }
     auto hash_span = [&](const char* begin, const char* end) {
         const auto first = acceptance_symbols.at(begin), last = acceptance_symbols.at(end);
         if (first.bank != last.bank || first.address > last.address) fail("Acceptance span changed");

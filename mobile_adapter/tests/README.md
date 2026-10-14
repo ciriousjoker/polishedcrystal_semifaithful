@@ -164,6 +164,39 @@ full-pool results are not presented as equal-actor-load evidence. The primary
 receiver must contain all twelve ordinary objects. Other receivers are compared
 against their native activation/culling, so normal off-screen culling is retained.
 
+## Select+A Mobile menu acceptance
+
+The `mobile_menu_` ROM contracts are additive to the existing native StartMenu
+contracts. Seven isolated four-client cases physically open the relocated bank
+134 menu with Select+A: offline CONNECT, online PLAYERS, CANCEL, B, DISCONNECT,
+and held Select+B exit during the menu and roster. Inputs follow observed native
+menu ownership and the existing measurement gate. Paragraph prompts use physical
+A presses; no host working-RAM or CPU patch creates a menu or roster.
+
+Read-only observers retain the current native `wTilemap`, all four 16-bit roster
+staging IDs, source bank, current ROM bank and joypad state. Assertions decode
+text with the current source charmap and status/roster literals, compare roster
+IDs against four actual clients, and require menu ownership and native text
+together. The exit cases preserve the existing exit deadline, require local
+teardown throughout a held chord and the released interval, and reconnect only
+after a new explicit physical join. Post-close assertions require native movement
+and world updates plus actual complete remote figures whose tile and palette
+hashes match current native controls. Final screenshots remain in each client's
+ordinary artifact directory.
+
+Run the focused contracts against a fresh output after source writers finish:
+
+```sh
+MOBILE_ACCEPTANCE_OUTPUT=/absolute/path/to/fresh-menu-run \
+  cargo test --locked --manifest-path mobile_adapter/tests/Cargo.toml \
+  --test rom mobile_menu_ -- --nocapture
+```
+
+These newly authored contracts remain pending actual native execution. Source
+checks alone do not establish Mobile menu acceptance, menu recovery or graphics
+correctness. A reused output from before these observers existed cannot supply
+this evidence.
+
 ## Interpretation and limits
 
 These are finite acceptance scenarios, not a proof covering all possible bytes,
@@ -321,3 +354,26 @@ MOBILE_ACCEPTANCE_OUTPUT=/fresh/output/path \
   cargo test --locked --manifest-path mobile_adapter/tests/Cargo.toml \
   --test rom native_identity_ -- --nocapture
 ```
+
+Mobile menu cases select `--acceptance-menu-routine MobileMenuInput` only for
+the enabled primary client. Other clients and cases retain the native StartMenu
+hook. `vMobileMenuInstructionActive` records the core hook's actual mapped-ROM
+pointer and PC entry, remaining active until its matching stack return, including
+native text/menu callees in other banks. `vAcceptanceMenuSourceBank/PC` identify
+that configured entry; `vMobileMenuSourceBank/PC` are independent symbol metadata.
+Neither symbol metadata nor the bank sampled at a video boundary alone proves
+instruction execution. Assertions require the active hook during actual open-menu
+observations as well as native ownership and rendered options.
+
+Roster decimal text is left-aligned: `TextCommand_DECIMAL` in `home/text.asm`
+adds `PRINTNUM_DELAY | PRINTNUM_LEFTALIGN`, and `PrintHLNum` in
+`engine/math/print_num.asm` omits leading blanks with that flag. The five-digit
+`text_decimal` argument sets maximum digits, not padding. Each complete 16-bit ID
+is compared with its native label and blank/row-edge delimiters, preventing a
+shorter numeric prefix from passing. All four independent IDs remain required.
+
+Native roster labels may begin beside the left textbox middle border (`│`,
+charmap tile `$fb`), defined by `home/text.asm` TextBoxCharacters and emitted by
+TextboxBorder. The left label delimiter accepts that actual native border as well
+as blank/row-edge; the complete label and decimal ID plus right blank/row-edge
+remain mandatory.
