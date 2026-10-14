@@ -1132,7 +1132,9 @@ int main(int argc, char** argv) {
     void (*profile_frame)() = nullptr;
     using TimingValue = uint64_t(*)(unsigned);
     using TimingEvent = uint64_t(*)(unsigned,unsigned);
-    TimingValue timing_status = nullptr; TimingEvent timing_event = nullptr;
+    TimingValue timing_status = nullptr, scene_diagnostic = nullptr;
+    TimingEvent timing_event = nullptr, scene_field = nullptr, scene_snapshot = nullptr;
+    std::string timing_prearm_load, timing_prearm_arm;
     std::vector<std::pair<std::string, std::pair<unsigned,unsigned>>> timing_bindings;
     unsigned timing_arm_frame = 0, timing_done_frame = 0;
     bool timing_armed = false;
@@ -1176,6 +1178,9 @@ int main(int argc, char** argv) {
         if (timing_requested) {
             timing_status = symbol<TimingValue>(core, "acceptance_profile_timing_status");
             timing_event = symbol<TimingEvent>(core, "acceptance_profile_timing_event");
+            scene_diagnostic = symbol<TimingValue>(core, "acceptance_profile_scene_diagnostic");
+            scene_field = symbol<TimingEvent>(core, "acceptance_profile_scene_field");
+            scene_snapshot = symbol<TimingEvent>(core, "acceptance_profile_scene_snapshot");
             auto binding = [&](const std::string& name) {
                 if (!native_addresses.count(name)) fail("Missing timing symbol: " + name);
                 const auto p = native_addresses.at(name); timing_bindings.push_back({name,p}); return p;
@@ -1716,6 +1721,30 @@ int main(int argc, char** argv) {
     unsigned measurement_start = arguments.count("--profile-window-start") ? std::stoul(arguments.at("--profile-window-start")) : 3600;
     const bool measurement_gate = arguments.count("--measurement-gate");
     bool measurement_released = !measurement_gate, measurement_ready = false;
+    // Independent operands, including those skipped by the unchanged arm gate.
+    auto timing_prearm_snapshot = [&]() {
+        const auto live = capture(sram,sram_size);
+        std::ostringstream out;
+        out << "{\"host_frame\":" << input_frame
+            << ",\"profile_window_start\":" << measurement_start
+            << ",\"metric21\":" << (metric ? metric(21) : 0)
+            << ",\"metric_available\":" << bool(metric)
+            << ",\"native_scene_ready\":" << symbol<unsigned(*)()>(core,"acceptance_profile_native_scene_ready")()
+            << ",\"map_status\":" << live.at("wMapStatus") << ",\"script_running\":" << live.at("wScriptRunning")
+            << ",\"adapter_enabled\":" << adapter_enabled << ",\"measurement_gate\":" << measurement_gate
+            << ",\"measurement_released\":" << measurement_released << ",\"measurement_ready\":" << measurement_ready
+            << ",\"online\":" << live.at("wMobileOnline") << ",\"peers\":" << live.at("wMobilePeerCount")
+            << ",\"live_scene_status\":[";
+        for (unsigned f=0;f<15;++f) out << (f ? "," : "") << scene_diagnostic(f);
+        out << "],\"live_fields\":[";
+        for (unsigned i=0;i<8;++i) {
+            out << (i ? ",[" : "[");
+            for (unsigned f=0;f<7;++f) out << (f ? "," : "") << scene_field(i,f);
+            out << ']';
+        }
+        out << "]}"; return out.str();
+    };
+    if (timing_requested) timing_prearm_load = timing_prearm_snapshot();
     auto align_raster = reinterpret_cast<unsigned(*)()>(dlsym(core, "mobile_frontend_align_raster"));
     auto raster_state = reinterpret_cast<unsigned(*)()>(dlsym(core, "mobile_frontend_raster_state"));
     unsigned raster_alignment_lines = 0, raster_alignment_frame = 0;
@@ -1986,6 +2015,7 @@ int main(int argc, char** argv) {
             const bool ready = scene && (!adapter_enabled || (measurement_released && measurement_ready &&
                 values.at("wMobileOnline") == 1 && values.at("wMobilePeerCount") == 3));
             if (ready) {
+                timing_prearm_arm = timing_prearm_snapshot();
                 if (!symbol<unsigned(*)()>(core, "acceptance_profile_timing_arm")()) fail("Native timing arm failed");
                 timing_arm_frame = input_frame; timing_armed = true;
             }
@@ -2154,6 +2184,24 @@ int main(int argc, char** argv) {
             if (!first) timing << ','; first = false;
             timing << '"' << b.first << "\":[" << b.second.first << ',' << b.second.second << ']';
         }
+        timing << "},\"prearm\":{\"live_status_fields\":[\"enabled\",\"scene_count\",\"scene_ready\",\"world_completed\",\"simulation_active\","
+                  "\"observation_invalid\",\"effect_overflow\",\"entries\",\"taken_return_candidates\",\"matched_returns\",\"invalidations\",\"overwritten_entries\",\"live_failmask\",\"context_available\",\"core_observed_frame\"],"
+                  "\"live_field_fields\":[\"bank\",\"address\",\"expected\",\"mask\",\"configured\",\"raw\",\"masked\"],"
+                  "\"unavailable_live_value\":18446744073709551615,\"after_load\":" << timing_prearm_load
+               << ",\"before_arm\":" << (timing_prearm_arm.empty() ? "null" : timing_prearm_arm)
+               << ",\"final_live\":" << timing_prearm_snapshot()
+               << ",\"boundary_names\":[\"first_entry\",\"last_entry\",\"first_taken_return_candidate\",\"last_taken_return_candidate\",\"first_matched_return\",\"last_matched_return\"],"
+                  "\"boundary_fields\":[\"valid\",\"core_observed_frame\",\"post_bank\",\"post_pc\",\"post_sp\",\"pre_bank\",\"pre_pc\",\"pre_sp\","
+                  "\"entry_sp\",\"expected_return_sp\",\"expected_return_bank\",\"expected_return_pc\",\"opcode\",\"return_mismatch_mask\","
+                  "\"world_completed\",\"scene_ready\",\"simulation_active\",\"all_initial_fields_failmask\",\"observation_invalid\","
+                  "\"masked0\",\"masked1\",\"masked2\",\"masked3\",\"masked4\",\"masked5\",\"masked6\",\"masked7\"],"
+                  "\"return_mismatch_bits\":[\"pre_sp\",\"post_sp\",\"return_pc\",\"return_bank\"],\"boundaries\":[";
+        for (unsigned i=0;i<6;++i) {
+            timing << (i ? ",[" : "[");
+            for (unsigned f=0;f<27;++f) timing << (f ? "," : "") << scene_snapshot(i,f);
+            timing << ']';
+        }
+        timing << ']';
         timing << "},\"status_fields\":[\"configured\",\"running\",\"done\",\"fault\",\"observer_failure\",\"completed_irqs\",\"event_count\",\"instruction_t\",\"core_t\",\"row0_intervals\",\"retained\",\"repeated\",\"hMapAnims_guard\"],\"first_failure_sample\":[";
         for (unsigned f = 6; f < 23; ++f) timing << (f == 6 ? "" : ",") << timing_event(~0u,f);
         timing << "],\"status\":[";

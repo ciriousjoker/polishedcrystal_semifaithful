@@ -289,6 +289,58 @@ static unsigned acceptance_effect_read(gb* game, unsigned bank, unsigned address
         return game->get_cpu()->get_ram()[bank * 0x1000 + address - 0xd000];
     return game->get_cpu()->read(address);
 }
+// Timing-only bounded readiness witness. Getters never evaluate the mutating
+// readiness helper. Snapshot rows are frozen at genuine instruction boundaries.
+static uint64_t acceptance_scene_entries = 0, acceptance_scene_returns = 0;
+static uint64_t acceptance_scene_matches = 0, acceptance_scene_invalidations = 0;
+static uint64_t acceptance_scene_overwrites = 0;
+static unsigned acceptance_scene_pre_pc = 0, acceptance_scene_pre_bank = 0;
+static uint64_t acceptance_scene_snapshots[6][27] = {};
+static unsigned acceptance_scene_failmask(gb* game) {
+    unsigned failed = 0;
+    for (unsigned i = 0; i < acceptance_native_scene_count; ++i) {
+        const auto* f = acceptance_native_scene_fields[i];
+        const unsigned value = game && f[4] ? acceptance_effect_read(game,f[0],f[1]) & f[3] : 0;
+        if (!game || !f[4] || (f[2] == ~0u ? value == 0 : value != f[2])) failed |= 1u << i;
+    }
+    return failed;
+}
+extern "C" uint64_t acceptance_profile_scene_diagnostic(unsigned field) {
+    const uint64_t values[] = {acceptance_timing_configured, acceptance_native_scene_count,
+        acceptance_native_scene_ready, acceptance_native_world_completed, acceptance_simulation_active,
+        acceptance_observation_invalid, acceptance_effect_overflow, acceptance_scene_entries,
+        acceptance_scene_returns, acceptance_scene_matches, acceptance_scene_invalidations,
+        acceptance_scene_overwrites, acceptance_scene_failmask(acceptance_game_context),
+        acceptance_game_context != nullptr, mobile_observed_frames};
+    return field < 15 ? values[field] : 0;
+}
+extern "C" uint64_t acceptance_profile_scene_field(unsigned index, unsigned field) {
+    if (index >= 8 || field >= 7) return 0;
+    const auto* f = acceptance_native_scene_fields[index];
+    if (field < 5) return f[field];
+    if (!acceptance_game_context || !f[4]) return ~uint64_t(0);
+    const unsigned value = acceptance_effect_read(acceptance_game_context,f[0],f[1]);
+    return field == 5 ? value : value & f[3];
+}
+extern "C" uint64_t acceptance_profile_scene_snapshot(unsigned index, unsigned field) {
+    return index < 6 && field < 27 ? acceptance_scene_snapshots[index][field] : 0;
+}
+static void acceptance_scene_snapshot(gb* game, const cpu_regs& regs, unsigned index,
+        unsigned opcode, unsigned mismatch) {
+    uint64_t row[27] = {1, mobile_observed_frames, acceptance_effect_bank(game,regs.PC), regs.PC, regs.SP,
+        acceptance_scene_pre_bank, acceptance_scene_pre_pc, acceptance_instruction_sp,
+        acceptance_simulation_sp, (acceptance_simulation_sp + 2) & 0xffff,
+        acceptance_simulation_return_bank, acceptance_simulation_return, opcode, mismatch,
+        acceptance_native_world_completed, acceptance_native_scene_ready, acceptance_simulation_active,
+        acceptance_scene_failmask(game), acceptance_observation_invalid};
+    for (unsigned i = 0; i < 8; ++i) {
+        const auto* f = acceptance_native_scene_fields[i];
+        row[19+i] = f[4] ? acceptance_effect_read(game,f[0],f[1]) & f[3] : ~uint64_t(0);
+    }
+    if (!acceptance_scene_snapshots[index][0]) std::copy_n(row,27,acceptance_scene_snapshots[index]);
+    std::copy_n(row,27,acceptance_scene_snapshots[index+1]);
+}
+
 static void acceptance_effect_emit(gb* game, const cpu_regs& regs, unsigned id, unsigned kind,
         const AcceptanceEffectCall& call, unsigned value = 0) {
     if (acceptance_effect_records.size() >= acceptance_effect_capacity) { ++acceptance_effect_overflow; return; }
@@ -990,6 +1042,16 @@ static void acceptance_profile_after(gb* game, const cpu_regs& regs, unsigned op
     if (!returned) return;
     // Observe completed native world updates before readiness. The memory
     // predicates alone can match during partially initialized map setup.
+    const bool scene_return_candidate = acceptance_timing_configured &&
+        acceptance_native_scene_count && acceptance_simulation_active;
+    unsigned scene_return_mismatch = 0;
+    if (scene_return_candidate) {
+        ++acceptance_scene_returns;
+        if (acceptance_instruction_sp != acceptance_simulation_sp) scene_return_mismatch |= 1;
+        if (regs.SP != ((acceptance_simulation_sp + 2) & 0xffff)) scene_return_mismatch |= 2;
+        if (regs.PC != acceptance_simulation_return) scene_return_mismatch |= 4;
+        if (acceptance_effect_bank(game,regs.PC) != acceptance_simulation_return_bank) scene_return_mismatch |= 8;
+    }
     if (acceptance_native_scene_count && acceptance_simulation_active &&
         acceptance_instruction_sp == acceptance_simulation_sp &&
         regs.SP == ((acceptance_simulation_sp + 2) & 0xffff) &&
@@ -999,7 +1061,12 @@ static void acceptance_profile_after(gb* game, const cpu_regs& regs, unsigned op
         // The completed-world provenance must never cross a map boundary.
         acceptance_native_world_completed = true;
         acceptance_native_scene_ready = acceptance_native_scene_is_ready(game);
+        if (acceptance_timing_configured) {
+            ++acceptance_scene_matches;
+            acceptance_scene_snapshot(game,regs,4,opcode,0);
+        }
     }
+    if (scene_return_candidate) acceptance_scene_snapshot(game,regs,2,opcode,scene_return_mismatch);
     if (!acceptance_effect_enabled || acceptance_effect_calls.empty()) return;
     const auto call = acceptance_effect_calls.back();
     if (acceptance_effect_instruction_regs.SP == call.sp &&
@@ -1016,11 +1083,18 @@ static bool acceptance_native_scene_is_ready(gb* game) {
     if (!acceptance_native_scene_count || acceptance_observation_invalid) return false;
     for (unsigned i = 0; i < acceptance_native_scene_count; ++i) {
         const auto* field = acceptance_native_scene_fields[i];
-        if (!field[4]) { acceptance_native_scene_ready = 0; acceptance_native_world_completed = false; return false; }
+        if (!field[4]) {
+            if (acceptance_timing_configured && (acceptance_native_scene_ready || acceptance_native_world_completed))
+                ++acceptance_scene_invalidations;
+            acceptance_native_scene_ready = 0; acceptance_native_world_completed = false; return false;
+        }
         if (i >= 2 && acceptance_native_scene_ready) continue;
         const unsigned value = acceptance_effect_read(game, field[0], field[1]) & field[3];
         // UINT_MAX means nonzero; all other values mean exact masked equality.
         if (field[2] == ~0u ? value == 0 : value != field[2]) {
+            if (acceptance_timing_configured && (acceptance_native_world_completed ||
+                    (i < 2 && (acceptance_native_scene_ready || acceptance_simulation_active))))
+                ++acceptance_scene_invalidations;
             // A failed initial prerequisite invalidates this completion too.
             // Once ready, transient predicates above are deliberately skipped.
             acceptance_native_world_completed = false;
@@ -1040,6 +1114,10 @@ static void acceptance_profile_before(gb* game, const cpu_regs& regs) {
     if (acceptance_observation_invalid) return;
     acceptance_game_context = game;
     acceptance_instruction_sp = regs.SP;
+    if (acceptance_timing_configured) {
+        acceptance_scene_pre_pc = regs.PC;
+        acceptance_scene_pre_bank = acceptance_effect_bank(game,regs.PC);
+    }
     acceptance_static_world_before(game, regs);
     acceptance_static_intent.before(acceptance_effect_bank(game, regs.PC), regs.PC, regs.SP, regs.BC.w,
         [game](unsigned bank, unsigned address) { return bank == 8 ? game->get_cpu()->read(address) : acceptance_effect_read(game, bank, address); });
@@ -1080,10 +1158,15 @@ static void acceptance_profile_before(gb* game, const cpu_regs& regs) {
     }
     if (acceptance_simulation_entry && regs.PC == acceptance_simulation_entry &&
             game->get_mbc()->get_rom() == game->get_rom()->get_rom() + (acceptance_simulation_bank - 1) * 0x4000) {
+        if (acceptance_timing_configured) {
+            ++acceptance_scene_entries;
+            if (acceptance_simulation_active) ++acceptance_scene_overwrites;
+        }
         acceptance_simulation_active = true;
         acceptance_simulation_sp = regs.SP;
         acceptance_simulation_return = game->get_cpu()->read(regs.SP) | game->get_cpu()->read(regs.SP + 1) << 8;
         acceptance_simulation_return_bank = acceptance_effect_bank(game, acceptance_simulation_return);
+        if (acceptance_timing_configured) acceptance_scene_snapshot(game,regs,0,0,0);
     }
 
     if (acceptance_menu_active && regs.SP == acceptance_menu_sp + 2 && regs.PC == acceptance_menu_return)
@@ -1129,6 +1212,10 @@ static void acceptance_profile_before(gb* game, const cpu_regs& regs) {
 }
 
 extern "C" void acceptance_profile_effect_reset() {
+    acceptance_scene_entries = acceptance_scene_returns = acceptance_scene_matches = 0;
+    acceptance_scene_invalidations = acceptance_scene_overwrites = 0;
+    acceptance_scene_pre_pc = acceptance_scene_pre_bank = 0;
+    std::memset(acceptance_scene_snapshots,0,sizeof(acceptance_scene_snapshots));
     acceptance_timing = native_vblank_timing::Observer{};
     // Load/reset starts a fresh experiment. Runner-declared ROM bindings and
     // fields precede core load and remain immutable across that boundary.
@@ -1199,6 +1286,8 @@ extern "C" void acceptance_profile_restore_boundary() {
     }
     if (!acceptance_effect_enabled && !acceptance_native_scene_count && !acceptance_static_world_configured &&
             !acceptance_native_reference.configured) return;
+    if (acceptance_timing_configured && (acceptance_native_world_completed ||
+            acceptance_native_scene_ready || acceptance_simulation_active)) ++acceptance_scene_invalidations;
     acceptance_observation_invalid = true;
     ++acceptance_effect_overflow;
     acceptance_effect_calls.clear();
