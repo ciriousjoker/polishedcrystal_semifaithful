@@ -156,6 +156,8 @@ MobilePaletteGuardRange:
 .intersects
  ld a, MOBILE_BACKUP_BANK
  ldh [rWBK], a
+ xor a
+ ld [wMobileNativeRGBLeaseValid], a
  ; Preserve normal producer auth, immutable completions and physical raw owners.
  call MobileRejectNormalPresentation
  ld a, (1 << MOBILE_PEERS) - 1

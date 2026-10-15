@@ -80,7 +80,11 @@ endc
 	call _hl_
 
 .doGameTime
+if DEF(MOBILE_ADAPTER)
+	farcall MobileAfterNativeGraphics
+else
 	call GameTimer
+endc
 
 	ld hl, hVBlankOccurred
 	dec [hl]

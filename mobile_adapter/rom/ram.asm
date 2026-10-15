@@ -492,3 +492,14 @@ DEF wMobileStablePosePreparing EQU wMobileStableScratch + 25
 DEF wMobileStablePoseCanceled EQU wMobileStableScratch + 26
 EXPORT wMobileStablePosePreparing, wMobileStablePoseCanceled
 ASSERT wMobileStablePoseCanceled + 1 <= wMobileStableRawXTileFlags
+
+; Fresh synchronous ROM transaction only. Never a persistent lighting seal.
+DEF wMobileStableFreshPaletteBase EQU wMobileStableScratch + 27
+EXPORT wMobileStableFreshPaletteBase
+ASSERT wMobileStableFreshPaletteBase + 2 <= wMobileStableRawXTileFlags
+
+; Native RGB authority is separate from private publication and actual HW RGB.
+SECTION "Mobile Native Palette Lease Authority", WRAMX[$db90], BANK[MOBILE_BACKUP_BANK]
+wMobileNativeRGBLeaseValid:: db
+ASSERT wMobileVirtualScratchEnd <= wMobileNativeRGBLeaseValid
+ASSERT @ <= wMobileVirtualGroundRotation

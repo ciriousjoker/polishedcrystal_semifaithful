@@ -10,8 +10,8 @@ if DEF(MOBILE_ADAPTER)
 else
 	lb bc, 40 + 1, LOW(rDMA)
 	ld a, HIGH(wShadowOAM)
-endc
 	jmp hPushOAM
+endc
 
 if DEF(MOBILE_ADAPTER)
 	mobile_native_rectangle_trampoline

@@ -48,11 +48,24 @@ def source(rows):
               'MobileVirtualAssetStart::', 'MobileVirtualAssetPointers::']
     for _, _, path in rows:
         lines += [f'\tdw MobileVirtualAsset{paths.index(path)}']
+    # Every authenticated appearance has six exact native four-tile poses.
+    # Sixteen-byte rows allow bounded lookup without consulting a mutable job.
+    lines += ['MobileVirtualPoseDescriptors::']
+    for sprite, _, path in rows:
+        label = f'MobileVirtualAsset{paths.index(path)}'
+        lines += [f'\tdb {sprite}, 0']
+        lines += [f'\tdw {label} + {frame} tiles' for frame in range(0, 24, 4)]
+        lines += ['\tdw 0']
+    lines += ['MobileVirtualPoseDescriptorsEnd::',
+              '\tASSERT @ - MobileVirtualPoseDescriptors == NUM_PLAYER_GENDERS * NUM_PLAYER_STATES * 16',
+              '\tALIGN 6']
     for index, path in enumerate(paths):
         if (REPO / path).stat().st_size != 384:
             raise ValueError(f'Canonical walking sprite is not 24 tiles: {path}')
         lines += [f'MobileVirtualAsset{index}:', f'\tINCBIN "{path}"',
-                  f'\tASSERT @ - MobileVirtualAsset{index} == 24 tiles']
+                  f'\tASSERT @ - MobileVirtualAsset{index} == 24 tiles',
+                  f'\tASSERT LOW(MobileVirtualAsset{index}) & $3f == 0',
+                  f'\tASSERT (MobileVirtualAsset{index} & $3fff) + 24 tiles <= $4000']
     lines += ['MobileVirtualAssetEnd::', '']
     # Read the native facing data verbatim into the same upper ROM bank as
     # the compositor. Relative offsets remain identical; only labels and the

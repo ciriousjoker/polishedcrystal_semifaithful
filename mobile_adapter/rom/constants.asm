@@ -47,7 +47,11 @@ DEF MOBILE_DEVICE EQU $88 ; blue adapter, 8-bit mode
 			DEF mobile_virtual_assets EQUS "INCLUDE \"mobile_adapter/build-faithful-mobile/virtual-avatars.asm\""
 	else
 			DEF mobile_title_version EQUS "INCBIN \"mobile_adapter/build-mobile/title-version.2bpp.lzp\""
+		if DEF(MOBILE_TEST_SCENARIOS)
+			DEF mobile_virtual_assets EQUS "INCLUDE \"mobile_adapter/build-mobile-test/virtual-avatars.asm\""
+		else
 			DEF mobile_virtual_assets EQUS "INCLUDE \"mobile_adapter/build-mobile/virtual-avatars.asm\""
+		endc
 	endc
 
 DEF MOBILE_WIRE_IDLE EQU 0

@@ -1,10 +1,10 @@
-; Measured complete cold admission through NativeIdle.done: 34568T for one
-; pose, 43688T for two. Bounds include 1912T of phase/return reserve; the
-; third bound adds its constructor, four transfer blocks and full peer tail.
-; One further LCD line is reserved below for the unknown sampling subline.
-DEF MOBILE_COMPACT_COLD_ONE_T EQU 36480
+; Complete measured cache-hit paths, including foreground RGB staging and
+; caller return: one36808T, two42408T, three49208T. Prices retain phase/return
+; reserve; an invalid native RGB lease additionally reserves seven LCD lines.
+DEF MOBILE_COMPACT_COLD_ONE_T EQU 39000
 DEF MOBILE_COMPACT_COLD_TWO_T EQU 45600
-DEF MOBILE_COMPACT_COLD_THREE_T EQU 60192
+DEF MOBILE_COMPACT_COLD_THREE_T EQU 51000
+DEF MOBILE_COMPACT_COLD_THREE_FAST_T EQU 48500
 DEF MOBILE_COMPACT_LINE_T EQU 912
 DEF MOBILE_COMPACT_NATIVE_LINE EQU 144
 ; Complete-figure OAM admission runs only in native idle time. Ordinary actors
@@ -79,8 +79,8 @@ endr
  ld a, c
  and a
  jr z, .cold_jobs_done
- ; Measured 9804T constructors, four HBlanks per pose, shared validation,
- ; direct emission, RGB publication and caller return are charged together.
+ ; Price the whole foreground transaction, including immutable descriptors,
+ ; transfer phase, exact emission, RGB publication and native caller return.
  ld b, MOBILE_COMPACT_NATIVE_LINE - MOBILE_COMPACT_COLD_ONE_T / MOBILE_COMPACT_LINE_T - 1
  dec a
  jr z, .cold_admit
@@ -89,11 +89,37 @@ endr
  jr z, .cold_admit
  ld b, MOBILE_COMPACT_NATIVE_LINE - MOBILE_COMPACT_COLD_THREE_T / MOBILE_COMPACT_LINE_T - 1
 .cold_admit
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, [wMobileNativeRGBLeaseValid]
+ and a
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+ jr nz, .native_rgb_priced
+ ld a, b
+ sub 7
+ ld b, a
+.native_rgb_priced
+ ; Fresh-HBlank GDMA replaces four line waits only when native LCD IRQ is off.
+ ; Complete core46444T plus separately charged256T hardware64B transfer,
+ ; phase/return reserve and bounded helper support48500T. STAT uses51000T.
+ ld a, c
+ cp 3
+ jr nz, .cold_price_ready
+ ldh a, [rIE]
+ and IE_STAT
+ jr nz, .cold_price_ready
+ ld a, b
+ add MOBILE_COMPACT_COLD_THREE_T / MOBILE_COMPACT_LINE_T - MOBILE_COMPACT_COLD_THREE_FAST_T / MOBILE_COMPACT_LINE_T
+ ld b, a
+.cold_price_ready
  ldh a, [rLY]
  cp b
  ret nc
  farcall MobileCompactRetirePublication
- farcall MobileCompactPrepareColdCohort
+ farcall MobileCompactFreshResources
+ jp c, .abort
+ jr .cold_prepare_done
 .cold_jobs_done
  farcall MobileCompactRetirePublication
  ld a, MOBILE_BACKUP_BANK
@@ -392,25 +418,22 @@ MobileVirtualChooseOutput::
  ; One VBlank decision is shared by OBJ palette and OAM consumers.
  ld a, MOBILE_BACKUP_BANK
  ldh [rWBK], a
+ ld a, [wMobileStableFinalDecision]
+ and a
+ jr nz, .done
  ldh a, [hOAMUpdate]
  and a
  jr nz, .retain
  call MobileVirtualFrameValid
  jr z, .native
- ; Pending native tile transfers can conflict with the captured presentation.
- ldh a, [hRequested2bpp]
- ld b, a
- ldh a, [hRequested1bpp]
- or b
- jr nz, .native
+ ; The complete native-request/pose proof was sealed in foreground. IRQ work
+ ; consumes the one-shot authority plus fixed hardware cancellation state.
  ldh a, [hDMATransfer]
  and a
  jr nz, .native
  ldh a, [rVDMA_LEN]
  bit B_VDMA_LEN_BUSY, a
  jr z, .native
- call MobileVirtualCommitPose
- jr c, .native
  ld a, [wMobileStableFinalDecision]
  cp $82
  jr z, .private_selected
@@ -443,27 +466,19 @@ MobileVirtualPushOAM::
  push af
  ld a, MOBILE_BACKUP_BANK
  ldh [rWBK], a
+ call MobileVirtualChooseOutput
  ld a, [wMobileStableFinalDecision]
  and $7f
  cp 2
  jr nz, .ordinary
  ; No second FrameValid decision after private RGB has been exposed.
- ld a, HIGH(wMobileVirtualOutput)
- push af
- ld a, MOBILE_WRAM_BANK
- ldh [rWBK], a
-for peer, 1, MOBILE_PEERS + 1
- ld a, [wMobilePeer{d:peer}OAMStart + 1]
- ld [wMobilePeer{d:peer}OAMStart], a
-endr
+ call MobileVirtualUpdateOBJOnly
  ld a, MOBILE_BACKUP_BANK
  ldh [rWBK], a
- pop af
+ ld a, HIGH(wMobileVirtualOutput)
  jr .dma
 .ordinary
- ld hl, sp + 1
- ld a, [hl]
- ldh [rWBK], a
+ call MobileVirtualUpdateOBJOnly
  ld a, HIGH(wShadowOAM)
 .dma
  ; Preserve the native DMA caller flags, including direct ForcePushOAM carry.
@@ -473,8 +488,31 @@ endr
  push de
  pop af
  mobile_actual_oam_dma_latch b
+ push af
+ ld a, [wMobileStableFinalDecision]
+ cp 2
+ jr z, .private_overlap
+ cp 1
+ jr nz, .ordinary_dma
+ ld a, [wMobileStableHardwarePaletteProvenance]
+ cp 1
+ jr z, .ordinary_dma
+ ld a, [wMobileNativeRGBLeaseValid]
+ cp 1
+ jr nz, .ordinary_dma
+ ld hl, $8740
+ jr .overlap_ready
+.private_overlap
+ ld hl, $8700
+.overlap_ready
+ pop af
+ call MobileVirtualOverlapDMA
+ jr .dma_finished
+.ordinary_dma
+ pop af
  lb bc, 40 + 1, LOW(rDMA)
  call hPushOAM
+.dma_finished
  push af
  ld a, MOBILE_BACKUP_BANK
  ldh [rWBK], a
@@ -514,6 +552,40 @@ endr
  pop hl
  inc sp
  inc sp
+ ret
+
+MobileVirtualOverlapDMA:
+ ld d, a
+ push af
+ ldh a, [rVBK]
+ push af
+ ld a, 1
+ ldh [rVBK], a
+ ld a, $80
+ ldh [rOBPI], a
+ ld c, LOW(rOBPD)
+ ld a, d
+.overlap_trigger
+ ldh [rDMA], a
+ rept 64
+ ld a, [hli]
+ ldh [c], a
+ endr
+.overlap_done
+ ; The1024T unrolled body has completed the physical640T OAM transfer.
+ pop af
+ ldh [rVBK], a
+ ld a, d
+ cp HIGH(wMobileVirtualOutput)
+ ld a, 1
+ jr nz, .native_provenance
+ inc a
+.native_provenance
+ ld [wMobileStableHardwarePaletteProvenance], a
+ pop af
+ ld c, LOW(rDMA)
+ ld b, 1
+ dec b
  ret
 
 MobileVirtualAdmitWeatherQuad:
@@ -1980,6 +2052,10 @@ MobileVirtualPublish:
  farcall MobileVirtualPrevalidatePoseBatch
  jp c, .abort
 .pose_batch_ready
+ farcall MobileVirtualNativeRequestsDisjoint
+ jp c, .abort
+ farcall MobileVirtualCommitPose
+ jp c, .abort
  ld a, 1
  ld [wMobileStableCapacityValid], a
  mobile_virtual_publish_page MobileVirtualPublish.abort

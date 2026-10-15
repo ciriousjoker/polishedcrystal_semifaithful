@@ -3,10 +3,56 @@ SECTION "Mobile Native Palettes", ROMX, BANK[MOBILE_ROM_BANK]
 MobileNativePaletteCodeStart::
 
 MobileEmergencyInput::
-	call MobileEmergencyKeys
-	call MobileNativePaletteFadeDirty
-	call MobileVirtualChooseOutput
-	jp MobileVirtualUpdateOBJOnly
+; Only immediate serial exclusion and raw cancellation precede native graphics.
+ ld a, [wMobileOwner]
+ and a
+ jr z, .buttons
+ ldh a, [rIE]
+ and ~IE_SERIAL
+ ldh [rIE], a
+.buttons
+ ldh a, [rJOYP]
+ and $30
+ push af
+ ld a, JOYP_GET_BUTTONS
+ ldh [rJOYP], a
+ rept 6
+ ldh a, [rJOYP]
+ endr
+ cpl
+ and PAD_SELECT | PAD_B
+ ld b, a
+ pop af
+ ldh [rJOYP], a
+ ld a, b
+ cp PAD_SELECT | PAD_B
+ jr nz, .choose
+; Reject the candidate before any palette/OAM write. Full local teardown runs
+; after native graphics, including every sound-only and locked input route.
+ ldh a, [rWBK]
+ push af
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ xor a
+ ld [wMobileStablePendingValid], a
+ pop af
+ ldh [rWBK], a
+.choose
+ ; Each VBlank seals its choice only at the first real OBJ/OAM consumer.
+ ldh a, [rWBK]
+ push af
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ xor a
+ ld [wMobileStableFinalDecision], a
+ pop af
+ ldh [rWBK], a
+ ret
+
+MobileAfterNativeGraphics::
+ call MobileEmergencyKeys
+ call MobileNativePaletteFadeDirty
+ jp GameTimer
 
 ; VBlank already saved all registers and keeps IME disabled. Read physical
 ; buttons before any native input lock can filter them. No packet or cache data
@@ -76,12 +122,7 @@ endr
 	ld [wMobileWanted], a
 	ret
 .cancel
-	ld a, [wMobileWanted]
-	and a
-	jr z, .palette_restored
-	ld a, TRUE
-	ldh [hCGBPalUpdate], a
-.palette_restored
+ ; Addon exit restores only OBJ. Preserve a genuine pending native BG queue.
 	ld a, 1
 	ld [wMobileEmergencyPending], a
 	xor a
@@ -274,6 +315,7 @@ MobileNativePaletteFadeDirty:
 	ret
 
 MobileNativeUpdateOBPalettes::
+ call MobileVirtualChooseOutput
  ld a, [wMobileStableFinalDecision]
  and $7f
  cp 3
@@ -327,12 +369,15 @@ MobileVirtualUpdateOBJOnly:
  ld a, [wMobileStableFinalDecision]
  and $7f
  cp 2
- jr z, .upload
+ jr z, .done
  cp 1
  jr nz, .done
  ld a, [wMobileStableHardwarePaletteProvenance]
  cp 1
  jr z, .done
+ ld a, [wMobileNativeRGBLeaseValid]
+ cp 1
+ jr z, .done ; native restore streams together with its actual OAM DMA
 .upload
  ld a, $80
  ldh [rOBPI], a

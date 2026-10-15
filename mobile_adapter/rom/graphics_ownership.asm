@@ -32,9 +32,6 @@ MobileNativeGraphicsRequest::
 	push hl
 	ldh a, [rWBK]
 	push af
-	ld a, [wMobileWanted]
-	and a
-	jp z, .restore
 	ld a, c
 	and a
 	jp z, .restore
@@ -55,6 +52,8 @@ endr
 	mobile_graphics_overlap $8640, $86d0, .restore
 	jp .restore
 .bank_one
+	mobile_graphics_overlap $8700, $8780, .palette_lease_clear
+.palette_lease_clear
 	mobile_graphics_overlap $83f0, $8400, .second_slot
 .second_slot
 	mobile_graphics_overlap $87f0, $8800, .third_slot
@@ -62,6 +61,14 @@ endr
 	mobile_graphics_overlap $8ff0, $9000, .restore
 	jp .restore
 .invalidate
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ xor a
+ ld [wMobileNativeRGBLeaseValid], a
+ ; Native writes also revoke a retained RGB lease after addon exit.
+ ld a, [wMobileWanted]
+ and a
+ jp z, .restore
 	farcall MobileInvalidateNormalSource
 	ld a, 1
 	ld [wMobileNativeGraphicsFence], a

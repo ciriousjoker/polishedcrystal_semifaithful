@@ -358,6 +358,7 @@ static void load_bindings(const std::string& path) {
         {"wMobileStablePoseGeneration", 0xd922},
         {"wMobileStablePosePreparing", 0xd923},
         {"wMobileStablePoseCanceled", 0xd924},
+        {"wMobileStableFreshPaletteBase", 0xd925},
     };
     std::ifstream symbols(path);
     if (!symbols) fail("Cannot read matching symbols");

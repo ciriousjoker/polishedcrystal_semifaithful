@@ -134,11 +134,8 @@ MobileNativeIdle::
 	ldh a, [rIE]
 	and ~IE_SERIAL
 	ldh [rIE], a
-	ldh a, [hRequested2bpp]
-	ld b, a
-	ldh a, [hRequested1bpp]
-	or b
-	jp nz, .done
+	call MobileVirtualNativeRequestsDisjoint
+	jp c, .done
 	ldh a, [hDMATransfer]
 	and a
 	jp nz, .done
@@ -150,30 +147,47 @@ MobileNativeIdle::
 	ld a, [wMobileLastFrame]
 	cp b
 	jr z, .sample
-; Every frame must advance the bounded transport state, including response
-; parsing and command deadlines. A scene that cannot finish must not repeatedly
-; reserve its first idle slice and starve a live connection. Continue directly
-; to admitted rendering with serial IRQs still masked, rather than paying an
-; interrupt/context gap before the composer. Pending bytes drain before HALT.
+; Replenish genuine frame credit before required presentation. The protected
+; credit entry leaves FrameTick pending: the ordinary pump still owns command
+; deadlines/parsing. A previous pending tick forces that pump now, bounding
+; deferral even when consecutive frames cannot finish cold presentation.
 .first_transport
-; A byte carried from the preceding frame takes priority over new composition.
-; No byte has been launched by this frame's tick yet. The helper never waits.
+; Preserve the carried-byte drain before taking the foreground slice.
 	call MobileNativeLateIRQ
 	ldh a, [rIE]
 	and ~IE_SERIAL
 	ldh [rIE], a
+	ld a, [wMobileVirtualStage]
+	cp 1
+	jr nz, .ordinary_tick
+	ld a, [wMobileFrameTick]
+	and a
+	jr nz, .ordinary_tick
+	call MobileTickCredit
+	jr .sample
+.ordinary_tick
 	call MobileTick
-	jp .sample
 .sample
-; A pending actual source gets first use of its current idle interval.
-; Optional age policies cannot postpone a cold eligible figure.
+; The closed native source does not depend on local upload readiness. Give it
+; its first actual attempt before optional initial snapshot/hash work.
+	ld a, [wMobileVirtualStage]
+	and a
+	jp nz, .compose
+	ld a, [wMobileLocalValid]
+	and a
+	jr nz, .required_capture_ready
+	ldh a, [rLY]
+	cp 94
+	jr nc, .required_capture_ready
+	call MobileCapture
+.required_capture_ready
 	ld a, [wMobileVirtualStage]
 	and a
 	jp nz, .compose
 ; A dense native frame leaves a much smaller idle window. Once a complete
 ; guest exists, reserve three of four late windows for presentation; the fourth
 ; advances optional capture/pose/projection jobs. Early scenes keep their normal
-; per-frame policy. Transport still receives its first poll on every frame.
+; per-frame policy. Deferred transport keeps real frame credit pending.
 	ld a, [wMobileVirtualStage]
 	and a
 	jr z, .optional_job
@@ -258,6 +272,8 @@ MobileNativeIdle::
 	ld a, [wMobileVirtualStage]
 	and a
 	jr z, .transport
+	cp 1
+	jr z, .transport ; a rejected cold attempt must yield to the real pump
 	ldh a, [hVBlankOccurred]
 	and a
 	jr nz, .done
@@ -426,7 +442,10 @@ MobileNativePrepareSpritesWork:
 	ldh [rWBK], a
 	ld a, [wScriptRunning]
 	and a
+	jr z, .world_ready
+	cp PLAYEREVENT_JOYCHANGEFACING
 	ret nz
+.world_ready
 	ld a, [wPanningAroundTinyMap]
 	and a
 	ret nz
@@ -1094,6 +1113,8 @@ MobileNativeResetLeases:
 	push af
 	ld a, MOBILE_BACKUP_BANK
 	ldh [rWBK], a
+ xor a
+ ld [wMobileNativeRGBLeaseValid], a
  ; This entry is called only by actual map replacement, not ordinary refresh.
  ; Retire native bindings before the map setup script clears associations.
  xor a
@@ -1929,4 +1950,208 @@ MobileCompactColdPalette:
 .bits
  db 1,2,4
 ASSERT BANK(MobileCompactColdPalette) == BANK(MobileVirtualAssetPointers)
+POPS
+
+PUSHS
+SECTION "Mobile Fresh ROM Resources", ROMX, BANK[MOBILE_ROM_BANK + 1]
+; This entry creates all records from live authenticated peers and consumes
+; them synchronously. Serial is masked by NativeIdle; native prewrite guards
+; keep cancellation sticky throughout selector, construction and transfer.
+MobileCompactFreshResources::
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ xor a
+ ld [wMobileVirtualQueuedPeer], a ; no old queued record inherits this proof
+ ld [wMobileStablePoseCanceled], a
+ inc a
+ ld [wMobileStablePosePreparing], a
+ ld a, [wPalFadeDelayFrames]
+ and a
+ jp nz, .failed
+ ld a, 1
+ ldh [rWBK], a
+ ld a, [wPalState]
+ push af
+ ld a, [wNeededObjPalGlow]
+ push af
+ ld a, CURR_PALSTATE
+ ld [wPalState], a
+ xor a
+ ld [wNeededObjPalGlow], a
+ farcall LookupOBPalette
+ pop af
+ ld [wNeededObjPalGlow], a
+ pop af
+ ld [wPalState], a
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, l
+ ld [wMobileStableFreshPaletteBase], a
+ ld a, h
+ ld [wMobileStableFreshPaletteBase + 1], a
+ ; LookupOBPalette's time-dependent domain is contiguous in every endpoint.
+ ASSERT NUM_PLAYER_GENDERS <= NUM_OW_TIME_OF_DAY_PALS
+ ASSERT NUM_PLAYER_STATES == 6
+ ASSERT NUM_PLAYER_GENDERS * NUM_PLAYER_STATES * 16 <= $200
+for peer, 1, MOBILE_PEERS + 1
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+ ld a, [wMobilePeer{d:peer}Visible]
+ and a
+ jp z, .next{d:peer}
+ ld a, [wMobilePeer{d:peer}NativeStage]
+ cp 7
+ jp z, .next{d:peer}
+ ld a, [wMobilePeerCount]
+ cp peer
+ jp c, .failed
+ ld a, [wMobilePeer{d:peer}Avatar]
+ cp NUM_PLAYER_GENDERS
+ jp nc, .failed
+ ld b, a
+ ld a, [wMobilePeer{d:peer}Movement]
+ cp NUM_PLAYER_STATES
+ jp nc, .failed
+ ld c, a
+ ld a, b
+ add a
+ add b
+ add a
+ add c
+ ld l, a
+ ld h, 0
+ rept 4
+ add hl, hl
+ endr
+ ld de, MobileVirtualPoseDescriptors
+ add hl, de
+ ld a, [hli]
+ ld [wMobilePeer{d:peer}NativeSprite], a
+ inc hl
+ push hl
+ ld a, [wMobilePeer{d:peer}Facing]
+ ld b, a
+ and $c
+ cp $c
+ jr nz, .facing{d:peer}
+ ld a, 8
+.facing{d:peer}
+ bit 0, b
+ jr z, .standing{d:peer}
+ add 12
+.standing{d:peer}
+ ld c, a
+ ; frame is exactly one of 0,4,8,12,16,20. Descriptor pointers are two bytes.
+ rrca
+ ld e, a
+ ld d, 0
+ add hl, de
+ ld a, [hli]
+ ld e, a
+ ld d, [hl]
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld hl, wMobileStablePoseBatch + (peer - 1) * 8
+ ld a, peer - 1
+ ld [hli], a
+ ld a, e
+ ld [hli], a
+ ld a, d
+ ld [hli], a
+ ld a, c
+ ld [hli], a
+ ld a, b
+ ld [hli], a
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+ ld a, [wMobilePeer{d:peer}Avatar]
+ ld b, a
+ ld a, [wMobilePeer{d:peer}Movement]
+ ld c, a
+ pop hl
+ dec hl
+ dec hl
+ ld d, [hl]
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, b
+ ld [wMobileStablePoseBatch + (peer - 1) * 8 + 6], a
+ ld a, d
+ ld [wMobileStablePoseBatch + (peer - 1) * 8 + 5], a
+ ld a, c
+ ld [wMobileStablePoseBatch + (peer - 1) * 8 + 7], a
+ ; Full player and generation identity, copied while no peer writer can run.
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+ ld hl, wMobilePeer{d:peer}
+ ld a, [hli]
+ ld b, a
+ ld a, [hli]
+ ld c, a
+ ld a, [hli]
+ ld d, a
+ ld e, [hl]
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld hl, wMobileStableRemoteBindings + (peer - 1) * 4
+ ld a, b
+ ld [hli], a
+ ld a, c
+ ld [hli], a
+ ld a, d
+ ld [hli], a
+ ld [hl], e
+ ; Exact receiving-lighting RGB, one native lookup for the common domain.
+ ld a, [wMobileStablePoseBatch + (peer - 1) * 8 + 6]
+ ld [wMobilePrivatePalIdentities + peer - 1], a
+ add a
+ add a
+ add a
+ ld e, a
+ ld d, 0
+ ld a, [wMobileStableFreshPaletteBase]
+ ld l, a
+ ld a, [wMobileStableFreshPaletteBase + 1]
+ ld h, a
+ add hl, de
+ ld de, wMobilePrivatePalColors + (peer - 1) * 8
+ ld bc, 8
+ ld a, BANK(LookupOBPalette)
+ call FarCopyBytes
+ ld a, [wMobilePrivatePalDirty]
+ res peer - 1, a
+ ld [wMobilePrivatePalDirty], a
+ ld a, [wMobileVirtualQueuedPeer]
+ set peer - 1, a
+ ld [wMobileVirtualQueuedPeer], a
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+ ld a, 1
+ ld [wMobilePeer{d:peer}PrivatePalValid], a
+.next{d:peer}
+endr
+MobileCompactFreshResources.constructed::
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld hl, wMobileStablePoseGeneration
+ inc [hl]
+ ld a, [hl]
+ ld [wMobileStablePoseToken], a
+ ld a, [wMobileVirtualQueuedPeer]
+ ld [wMobileStablePoseMask], a
+ call MobileCompactFreshPrepare
+ jr c, .failed
+ xor a
+ ld [wMobileStablePosePreparing], a
+ and a
+ ret
+.failed
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ xor a
+ ld [wMobileVirtualQueuedPeer], a
+ ld [wMobileStablePosePreparing], a
+ scf
+ ret
+ASSERT BANK(MobileCompactFreshResources) == BANK(MobileVirtualPoseDescriptors)
 POPS

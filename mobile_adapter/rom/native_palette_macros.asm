@@ -709,7 +709,7 @@ MACRO mobile_virtual_publish_page
  jr nz, .general_publish_bound
  ; Exact RGB is already sealed. Measured entry-to-idle.done is1896T;
  ; three LCD lines cover this close, unknown subline and restored caller.
- ld b, MOBILE_COMPACT_NATIVE_LINE - 3
+ ld b, MOBILE_COMPACT_NATIVE_LINE - 5
  jr .publish_deadline
 .general_publish_bound
 	ld a, [wMobileVirtualLength]
@@ -769,6 +769,8 @@ endr
  jr z, .rgb_prepared
  farcall MobileVirtualPrepareRGB
 .rgb_prepared
+ farcall MobileVirtualStageOverlapRGB
+ jp c, \1
 	xor a
 	ld [wMobileVirtualStage], a
 	ldh a, [hVBlankCounter]

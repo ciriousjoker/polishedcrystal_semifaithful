@@ -98,9 +98,26 @@ MobileBeginNormalAttempt::
  ldh a, [hInMenu]
  and a
  jr nz, .done
- ld a, [wMobileLocalValid]
+ ; Native output authorization does not depend on upload snapshot readiness.
+ ld a, BANK(wMapStatus)
+ ldh [rWBK], a
+ ld a, [wMapStatus]
+ cp 2
+ jr nz, .done
+ ld a, [wBattleMode]
  and a
- jr z, .done
+ jr nz, .done
+ ld a, [wPanningAroundTinyMap]
+ and a
+ jr nz, .done
+ ld a, [wScriptRunning]
+ and a
+ jr z, .world_ready
+ cp PLAYEREVENT_JOYCHANGEFACING
+ jr nz, .done
+.world_ready
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
  ld a, 1
  ld [wMobileStableProducerActive], a
  ld [wMobileNativeCaptureActive], a
