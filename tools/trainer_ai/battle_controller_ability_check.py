@@ -68,6 +68,8 @@ def run_case(m, oracle, case, output):
     callbacks = []
     display = []
     captured = []
+    initial_wram = []
+    initial_wram_path = output / (case + '.initial-wram.bin')
     fight = None
     def conversion_policy(side, observation, actions):
         require(side == 0 and MoveAction(2) in actions, 'Missing zero-PP Water type choice')
@@ -97,6 +99,12 @@ def run_case(m, oracle, case, output):
     base = scenario(m, case)
     def execute():
         fight.reset(base, 193)
+        wram = bytes(m.state.m[0xc000:0xe000])
+        if initial_wram:
+            require(wram == initial_wram[0], 'Post-reset initial WRAM replay diverged')
+        else:
+            initial_wram.append(wram)
+            initial_wram_path.write_bytes(wram)
         states = [snapshot(m)]
         intimidate = m._constant('constants/ability_constants.asm', 'INTIMIDATE')
         require(states[0]['enemy_attack'] == 6, 'Initial Intimidate did not lower Attack')
@@ -130,7 +138,9 @@ def run_case(m, oracle, case, output):
     states, record = execute()
     initial_display, initial_callbacks = copy.deepcopy(display), copy.deepcopy(callbacks)
     record.update(case=case, snapshots=states, displays=initial_display,
-        callbacks=initial_callbacks, recorded_segments=recording.rows)
+        callbacks=initial_callbacks, recorded_segments=recording.rows,
+        initial_wram=str(initial_wram_path), initial_wram_sha256=sha(initial_wram_path),
+        initial_wram_boundary='after-actual-ControllerFight.reset-before-first-actor-action')
     destination = output / (case + '.json')
     destination.write_text(json.dumps(record, indent=2) + '\n')
     display.clear(); callbacks.clear()
@@ -141,7 +151,8 @@ def run_case(m, oracle, case, output):
         replay['turns'] == record['turns'] and replay['winner'] == record['winner'],
         'Ability exact native replay diverged')
     result = dict(case=case, passed=True, turns=fight.turn, comparisons=len(recording.rows),
-        replay_equal=True, evidence=str(destination), evidence_sha256=sha(destination))
+        replay_equal=True, evidence=str(destination), evidence_sha256=sha(destination),
+        initial_wram=str(initial_wram_path), initial_wram_sha256=sha(initial_wram_path))
     print(json.dumps(result), flush=True)
     return result
 

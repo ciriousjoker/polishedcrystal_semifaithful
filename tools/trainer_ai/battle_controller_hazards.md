@@ -54,3 +54,12 @@ absorption controls are observed during the isolated entry interval; subsequent
 combat is allowed to apply its ordinary effects. Existing fixed-level and
 permanent-stat guards remain active throughout every complete fight.
 No universal observer or new game engine is introduced.
+
+New executions additionally retain the actual loaded Oracle C/library/mGBA and
+State/Hook identities in each raw case and aggregate report. They also compare
+post-reset initial WRAM during native replay. A fresh 18-fight run passed all
+117 rounds and 11,946 independent comparisons with exact replay and matching
+initial WRAM. Records live under `build/battle-controller/hazards-provenance` in
+the external run, with all 15 executed host sources hash-verified and preserved.
+Earlier hazard records retain their execution-time provenance limit; current
+library identities are never attached to earlier execution.

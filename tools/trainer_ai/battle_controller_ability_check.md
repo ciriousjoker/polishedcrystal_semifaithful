@@ -70,3 +70,12 @@ Reports: `/Volumes/Storage/tmp/polished-ai/build/battle-controller/ability-proje
 and `/Volumes/Storage/tmp/polished-ai/build/battle-controller/ability-wrapper-continuation/report.json`.
 The latter directory also holds complete physical states and
 `raw-difference-review.json`, with every difference's nearest source aliases.
+
+New runs also retain each case's mapped initial WRAM after actual reset and
+before either actor commits, with its byte hash and replay equality check. This
+recording passed a fresh two-fight run: 25 rounds, 2,056 independent comparisons
+and exact replay, including equal post-reset WRAM. The new records are under
+`build/battle-controller/ability-projection-initial-wram` in the external run;
+all 16 executed host sources are hash-verified and preserved beside them.
+Earlier accepted fights and their separate unhooked display continuation remain
+unchanged; missing initial bytes are never assigned to those old records.

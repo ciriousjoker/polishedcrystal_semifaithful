@@ -41,7 +41,7 @@ DEPENDENCIES = (
     'battle_controller_fight.py', 'battle_controller_fight_check.py',
     'battle_controller_check.py', 'battle_controller_oracle.c', 'battle_decisions.py',
     'battle_scenarios.py', 'battle_bag.py', 'battle_env.py', 'stateful_lifting.py',
-    'stateful_fixture_check.py',
+    'stateful_fixture_check.py', 'battle_env_check.py', 'battle_actions.py',
 )
 
 
@@ -215,6 +215,7 @@ def run(root, output, cases, sides, seeds, native_build=None, optimization='O3')
                 result = fight.replay_record()
                 result.update(case=name, setter=setter, seed=seed, witness=facts,
                               recorded_segments=recording.rows, host_sources=sources,
+                              oracle_provenance=oracle.provenance,
                               initial_wram=str(initial_path), initial_wram_sha256=sha(initial_path),
                               comparisons=list(oracle.rows[-len(recording.rows):]),
                               controller_audit=machine.audit_configuration)
@@ -225,6 +226,8 @@ def run(root, output, cases, sides, seeds, native_build=None, optimization='O3')
                 fight._old_segment_checker = recording.replay_segment
                 fight._old_single_step_checker = recording.replay_one
                 fight.reset(base,seed)
+                if bytes(machine.state.m[0xc000:0xe000]) != raw:
+                    raise UnsupportedFight('Hazard post-reset initial WRAM replay diverged')
                 while not fight.terminal and not fight.truncated:
                     fight.step(choose(fight,case,setter))
                 replay = fight.replay_record()
@@ -243,6 +246,7 @@ def run(root, output, cases, sides, seeds, native_build=None, optimization='O3')
         raise UnsupportedFight('Host sources changed during hazard-family validation')
     report = dict(passed=True,scope='actual-source-isolated-hazard-entry-full-fights',cases=rows,
                   generator_sha256=stateful_lifting.MODULE_DIGEST,host_sources=sources,
+                  oracle_provenance=oracle.provenance,
                   rom_sha256=sha(machine.rom_path),symbols_sha256=sha(machine.symbols_path),
                   manifest_sha256=sha(machine.build_dir/'manifest.json'),
                   limits=['Declared presentation/input projections remain conditional.',
