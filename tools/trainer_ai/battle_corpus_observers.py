@@ -68,7 +68,7 @@ def source_bindings(machine, inventory):
     """Resolve observer masks through the runner's same-source constant reader."""
     for path in ('constants/battle_constants.asm', 'data/moves/moves.asm',
                  'constants/move_constants.asm', 'constants/move_effect_constants.asm',
-                 'constants/ability_constants.asm'):
+                 'constants/ability_constants.asm', 'engine/battle/endturn.asm'):
         actual = hashlib.sha256((machine.source_root / path).read_bytes()).hexdigest()
         if inventory['source_inputs'].get(path) != actual:
             raise ValueError('Observer source binding is stale: ' + path)
@@ -76,7 +76,23 @@ def source_bindings(machine, inventory):
     source = (machine.source_root / 'constants/battle_constants.asm').read_text()
     if not re.search(r'^DEF SLP_MASK EQU %111\s*(?:;.*)?$', source, re.M):
         raise ValueError('Sleep status mask requires source review')
+    endturn = (machine.source_root / 'engine/battle/endturn.asm').read_text()
+    # The low nibble is the remaining Encore duration; the high nibble holds
+    # the last move index even without active Encore (also used for Choice).
+    # Require both duration testing and move-index extraction to remain explicit.
+    region = re.search(r'^HandleEncore:\s*\n(.*?)^TickDisableAndEncoreAfterMove:',
+                       endturn, re.M | re.S)
+    if region is None:
+        raise ValueError('Encore duration region requires source review')
+    code = '\n'.join(line.split(';', 1)[0].strip() for line in region[1].splitlines()
+                     if line.split(';', 1)[0].strip())
+    duration = re.search(r'^\.do_encore\nld a, \[hl\]\nand \$([0-9a-f]+)\nret z\n'
+                         r'push hl\nld a, \[hl\]\nswap a\nand \$f\ndec a$', code, re.M)
+    if duration is None or int(duration[1], 16) != 15 or not re.search(
+            r'^EndturnEncoreDisable:\nld a, \[hl\]\nand \$f\nret z\ndec \[hl\]$', code, re.M):
+        raise ValueError('Encore duration mask requires source review')
     return dict(inventory_sha256=inventory['inventory_sha256'],
+                encore_duration_mask=int(duration[1], 16),
                 moves={row['name']: row['identifier'] for row in inventory['rules'] if row['group'] == 'move'},
                 status_masks={name: 1 << machine._constant('constants/battle_constants.asm', name)
                               for name in ('PSN', 'BRN', 'FRZ', 'PAR', 'TOX')},
@@ -137,16 +153,23 @@ def supported_effect(effect):
             _stage_recipe(effect) is not None)
 
 
-def _splash_projection(observation):
+def _splash_projection(observation, bindings):
     # Deliberately excludes PP and ordinary turn/cursor bookkeeping. Include
-    # active HP/status/item/ability/moves/types and field state. A validation
-    # frame must not include end-turn processing or another actor's move.
+    # active HP/status/item/ability/moves/types and field state. Encore's last
+    # move index is ordinary move-use bookkeeping; retain its actual duration.
+    # Every other field flag, counter and stage remains compared unchanged.
+    fields = []
+    for field in observation['battlefield']:
+        count = field['EncoreCount']
+        if type(count) is not int or not 0 <= count <= 255:
+            raise ValueError('Invalid Encore counter byte')
+        fields.append({key: (value & bindings['encore_duration_mask'] if key == 'EncoreCount' else value)
+                       for key, value in field.items() if key != 'TurnsTaken'})
     return (tuple(tuple((member['index'], member['active'], member['HP'], member['status'],
                          member['item'], member['ability'], tuple(member['moves']),
                          tuple(member.get('types', ()))) for member in team)
                   for team in observation['teams']),
-            tuple({key: value for key, value in field.items() if key != 'TurnsTaken'}
-                  for field in observation['battlefield']), observation['weather'], observation['weather_turns'],
+            tuple(fields), observation['weather'], observation['weather_turns'],
             observation['trick_room'])
 
 
@@ -208,7 +231,7 @@ def _activated(effect, frame, bindings):
             return False
         before, after = (_active(state, side) for state in (frame.before, frame.after))
         used = any(old > new for old, new in zip(before['pp'], after['pp']))
-        return used and _splash_projection(frame.before) == _splash_projection(frame.after)
+        return used and _splash_projection(frame.before, bindings) == _splash_projection(frame.after, bindings)
     return False
 
 

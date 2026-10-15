@@ -11,7 +11,7 @@ def observation():
     field = dict(volatile={'confused': False}, stages=(7,) * 7,
                  reflect_turns=0, light_screen_turns=0, safeguard_turns=0, mist_turns=0,
                  spikes=0, toxic_spikes=0, FutureSightCount=0, TrappingMove=0,
-                 WrapCount=0, PerishCount=0, ConfuseCount=0, TurnsTaken=0)
+                 WrapCount=0, PerishCount=0, ConfuseCount=0, TurnsTaken=0, EncoreCount=0)
     return dict(teams=((deepcopy(member),), (deepcopy(member),)),
                 battlefield=(deepcopy(field), deepcopy(field)), weather=0,
                 weather_turns=0, trick_room=0)
@@ -20,7 +20,7 @@ def observation():
 def check():
     bindings = dict(inventory_sha256='source', moves={'PROBE': 1, 'SPLASH': 2},
                     status_masks=dict(PSN=8, BRN=16, FRZ=32, PAR=64, TOX=128),
-                    sleep_mask=7, weather=dict(WEATHER_NONE=0, WEATHER_RAIN=1, WEATHER_SUN=2,
+                    sleep_mask=7, encore_duration_mask=15, weather=dict(WEATHER_NONE=0, WEATHER_RAIN=1, WEATHER_SUN=2,
                                                WEATHER_SANDSTORM=3, WEATHER_HAIL=4), neutral_ability=9)
     case = SimpleNamespace(inventory_sha256='source', actor_side=0, move='PROBE',
                            effect='EFFECT_NORMAL_HIT', candidate_rules=('move:PROBE', 'effect:EFFECT_NORMAL_HIT'))
@@ -83,6 +83,22 @@ def check():
     splash['teams'][0][0]['pp'] = (19, 20, 0, 0)
     splash['battlefield'][0]['TurnsTaken'] = 1
     assert observe_move(case, [replace(controlled, after=splash)], bindings).state == 'activated'
+    for field in splash['battlefield']:
+        field['EncoreCount'] = 16  # Source move-index bookkeeping, zero duration.
+    assert observe_move(case, [replace(controlled, after=splash)], bindings).state == 'activated'
+    for side in (0, 1):
+        duration = deepcopy(splash)
+        duration['battlefield'][side]['EncoreCount'] = 17  # Actual duration 0 -> 1.
+        assert observe_move(case, [replace(controlled, after=duration)], bindings).state == 'unsatisfied'
+        stage = deepcopy(splash)
+        stage['battlefield'][side]['stages'] = (8, 7, 7, 7, 7, 7, 7)
+        assert observe_move(case, [replace(controlled, after=stage)], bindings).state == 'unsatisfied'
+        flag = deepcopy(splash)
+        flag['battlefield'][side]['volatile']['confused'] = True
+        assert observe_move(case, [replace(controlled, after=flag)], bindings).state == 'unsatisfied'
+        counter = deepcopy(splash)
+        counter['battlefield'][side]['ConfuseCount'] = 1
+        assert observe_move(case, [replace(controlled, after=counter)], bindings).state == 'unsatisfied'
     splash['teams'][1][0]['HP'] -= 1
     assert observe_move(case, [replace(controlled, after=splash)], bindings).state == 'unsatisfied'
     case.effect = 'EFFECT_METRONOME'
