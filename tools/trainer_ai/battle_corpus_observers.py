@@ -81,6 +81,7 @@ class ProbeResult:
 
 DAMAGE_ONLY = {'EFFECT_NORMAL_HIT', 'EFFECT_PRIORITY_HIT', 'EFFECT_ALWAYS_HIT',
                'EFFECT_STATIC_DAMAGE', 'EFFECT_LEVEL_DAMAGE'}
+DRAIN_RECOIL = {'EFFECT_LEECH_HIT', 'EFFECT_RECOIL_HIT'}
 STATUS = {
     'EFFECT_POISON': ('PSN', 'BattleCommand_poison'),
     'EFFECT_TOXIC': ('TOXIC', 'BattleCommand_toxic'),
@@ -186,6 +187,16 @@ def _damage(frame):
             frame.attack_missed == 0 and _changed_hp(frame, frame.actor_side ^ 1, -1))
 
 
+def _bounded_hp(frame, side):
+    """Check observed source HP caps without reproducing drain/recoil formulas."""
+    if not _same_participant(frame, side):
+        return False
+    old, new = (_active(state, side) for state in (frame.before, frame.after))
+    return (type(old['MaxHP']) is int and old['MaxHP'] > 0 and new['MaxHP'] == old['MaxHP'] and
+            all(type(member['HP']) is int and 0 <= member['HP'] <= old['MaxHP']
+                for member in (old, new)))
+
+
 def _stage_recipe(effect):
     if effect in COMPOUND_STAGES:
         return COMPOUND_STAGES[effect]
@@ -202,7 +213,7 @@ def _stage_recipe(effect):
 
 
 def supported_effect(effect):
-    return (effect in DAMAGE_ONLY or effect in STATUS or effect in WEATHER or
+    return (effect in DAMAGE_ONLY or effect in DRAIN_RECOIL or effect in STATUS or effect in WEATHER or
             effect in FIELDS or effect in {'EFFECT_HEAL', 'EFFECT_HEALING_LIGHT', 'EFFECT_SPLASH',
                                           'EFFECT_CONFUSE', 'EFFECT_CONFUSE_HIT'} or
             _stage_recipe(effect) is not None)
@@ -233,6 +244,12 @@ def _activated(effect, frame, bindings):
     if effect in DAMAGE_ONLY:
         extra = effect not in {'EFFECT_STATIC_DAMAGE', 'EFFECT_LEVEL_DAMAGE'} or _command(frame, 'BattleCommand_constantdamage')
         return extra and _damage(frame)
+    if effect in DRAIN_RECOIL:
+        if not all(_bounded_hp(frame, actor) for actor in (side, opposite)) or not _damage(frame):
+            return False
+        if effect == 'EFFECT_LEECH_HIT':
+            return _command(frame, 'BattleCommand_draintarget') and _changed_hp(frame, side, 1)
+        return _command(frame, 'BattleCommand_recoil') and _changed_hp(frame, side, -1)
     if effect in STATUS:
         name, command = STATUS[effect]
         if not _command(frame, command) or not _same_participant(frame, opposite):
@@ -316,9 +333,9 @@ def _neutral_fixture(frame, bindings, *, horsea=False):
 
 
 def _local_fixture(frame, bindings, effect):
-    """Permit reviewed damage, status/confusion and secondary stage transitions."""
+    """Permit reviewed damage, drain/recoil, status and secondary stages."""
     stage_hit = effect.endswith('_HIT') and _stage_recipe(effect) is not None
-    if ((effect not in DAMAGE_ONLY and effect not in STATUS and
+    if ((effect not in DAMAGE_ONLY and effect not in DRAIN_RECOIL and effect not in STATUS and
             effect not in {'EFFECT_CONFUSE', 'EFFECT_CONFUSE_HIT'} and not stage_hit) or
             not frame.move_execution_verified or not frame.observation_read_only_verified):
         return False

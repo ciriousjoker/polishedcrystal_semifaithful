@@ -363,3 +363,89 @@ Exact source snapshots, prefix outcomes, commands and provenance are retained
 under `subagents/m2-rare-secondary-side1-01/artifacts`. Selected positive fixtures
 are not held-out evaluation or model-strength evidence. Runtime sources and
 native artifacts were unchanged.
+
+## Prepared local drain and recoil families
+
+The source-local observer is prepared for `EFFECT_LEECH_HIT` and
+`EFFECT_RECOIL_HIT`. Both require actual target damage; drain additionally needs
+actor HP gain, and recoil actor HP loss. Both actors' observed HP must stay
+within unchanged source MaxHP bounds. The existing source-call identity,
+read-only observation, exact trace equality and neutral Horsea/Swift Swim/no-item
+fixture remain unchanged. Full-HP drain without healing is unsatisfied; ordinary
+damage without the actor transition cannot establish either effect.
+
+These checks observe direction and bounds. Exact source ratios, rounding,
+minimum recoil, target-damage clamping and healing saturation remain the
+independent full CPU/memory Oracle's responsibility. No host damage formula is
+introduced. Source `LeechHit` drains after applying damage; `RecoilHit` applies
+recoil before post-faint effects. The source skips ordinary recoil under Rock
+Head or Magic Guard, which the neutral fixture excludes. Struggle has a distinct
+quarter-MaxHP source branch and needs an exhausted-PP forced action. The frozen
+named probe resolver cannot select that typed action, so its case now records
+known Tackle with zero PP and remains explicitly unsupported rather than giving
+Struggle as a learned move. Composite Flare Blitz and sleeping-target Dream Eater
+are outside this preparation.
+
+Drain recipes now start at 85 HP so normal level-50 Horsea fixtures can reach
+the actual source MaxHP cap. The observer reads that cap from source observations;
+it does not hardcode the maximum. Family acceptance additionally requires at
+least one actual positive drain witness ending at observed MaxHP. All numerical
+correctness still requires complete differential execution and exact replay.
+
+After source review and CPU allocation, first run synthetic observer checks and
+one canary:
+
+```sh
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -B tools/trainer_ai/battle_corpus_run.py \
+  --artifact-root /Volumes/Storage/tmp/polished-ai \
+  --inventory /Volumes/Storage/tmp/polished-ai/build/battle-coverage/inventory.json \
+  --native-build /Volumes/Storage/tmp/polished-ai/build/battle-controller/native-o3 \
+  --optimization O3 \
+  --output /Volumes/Storage/tmp/polished-ai/build/battle-corpus/drain-recoil-canary-o3-01 \
+  --moves GIGA_DRAIN --sides 0 --seeds 193 --max-turns 256
+```
+
+If the canary passes, the bounded family command requests 22 cases, of which
+Struggle's two forced-action fixture gaps stay visibly blocked:
+
+```sh
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -B tools/trainer_ai/battle_corpus_run.py \
+  --artifact-root /Volumes/Storage/tmp/polished-ai \
+  --inventory /Volumes/Storage/tmp/polished-ai/build/battle-coverage/inventory.json \
+  --native-build /Volumes/Storage/tmp/polished-ai/build/battle-controller/native-o3 \
+  --optimization O3 \
+  --output /Volumes/Storage/tmp/polished-ai/build/battle-corpus/drain-recoil-o3-01 \
+  --moves ABSORB MEGA_DRAIN LEECH_LIFE DRAINING_KISS DRAIN_PUNCH GIGA_DRAIN \
+          TAKE_DOWN DOUBLE_EDGE BRAVE_BIRD WILD_CHARGE STRUGGLE \
+  --sides 0 1 --seeds 193 --max-turns 256
+```
+
+The prepared synthetic controls and commands have not run. Existing raw and
+retained evidence stays unchanged. New full-fight outcomes must be retained
+with matching host sources before any claims or merged ledger updates.
+
+## Executed drain and recoil checkpoint
+
+Synthetic observer checks and the Giga Drain canary passed. The canary observed
+actor HP 85 to source MaxHP 90 and target HP 90 to zero, then reached source
+terminal after nine rounds with exact native replay. The family batch retained
+20 accepted full fights covering six drain moves and four ordinary recoil moves
+on both sides with seed 193. All reached source terminal and exact replay,
+with 32,316 independent Oracle comparisons. Struggle's two unsupported forced-
+action cases remain blocked and contribute no claims.
+
+All twelve drain family witnesses ended at observed MaxHP after positive healing,
+so the required actual healing-cap check passed. Recoil witnesses required both
+target damage and actor damage. Numeric source formulas, rounding, cap and
+clamping behavior were compared by the independent CPU/memory Oracle. No host
+formula replaced that comparison. Two disposable cases consistently removed
+drain healing or recoil target damage from both frame and matching trace;
+semantic recomputation rejected both with exit 2 and no ledger.
+
+Exact raw, source snapshots and retained provenance live in
+`build/battle-corpus/drain-recoil-o3-01`, `drain-recoil-retained-o3-01` and
+`subagents/m2-drain-recoil-01/artifacts`. The existing merger combined the new
+twelve keys with the latest weather-inclusive 198-key ledger into
+`build/battle-corpus/combined-through-drain-recoil-o3`: 210 tested keys, 643
+missing required-rule failures and no invalid evidence. Historical artifacts
+were preserved unchanged. M2 remains incomplete.

@@ -81,6 +81,15 @@ def _recipe(rule):
         actor['hp'] = 10
         prerequisites.append('Actor starts below source-calculated maximum HP; target uses Splash during probe.')
         expected.append('Actor HP increases, with the source maximum-HP cap respected.')
+        if effect == 'EFFECT_LEECH_HIT':
+            actor['hp'] = 85
+            prerequisites.append('Near-full initial HP exercises source healing saturation when absorption exceeds the observed gap.')
+    if effect == 'EFFECT_RECOIL_HIT':
+        expected.append('Both target HP loss and actor recoil HP loss occur during the actual source move.')
+        prerequisites.append('Neutral Swift Swim and no items avoid recoil suppression or other HP effects.')
+        if rule['name'] == 'STRUGGLE':
+            actor['moves'], actor['pp'] = ('TACKLE',), (0,)
+            fixtures.append('Struggle requires the actual exhausted-PP StruggleAction; the named probe resolver does not select forced actions.')
     if effect == 'EFFECT_ROOST':
         actor['species'] = 'PIDGEY'
         expected.append('Flying type is removed during the turn and restored at the source end-turn point.')

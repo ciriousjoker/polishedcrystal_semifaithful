@@ -158,6 +158,45 @@ def check():
         assert observe_move(case, [replace(damage_frame, before=confounded)], bindings).state == 'blocked'
     assert observe_move(case, [replace(damage_frame, source_interval=None)], bindings).state == 'blocked'
     assert observe_move(case, [replace(damage_frame, observation_read_only_verified=False)], bindings).state == 'blocked'
+    case.effect = 'EFFECT_LEECH_HIT'
+    drained = deepcopy(before)
+    drained['teams'][1][0]['HP'] = 60
+    drained['teams'][0][0]['HP'] = 90
+    drain_frame = replace(local, after=drained)
+    assert observe_move(case, [drain_frame], bindings).state == 'activated'
+    no_heal = deepcopy(drained)
+    no_heal['teams'][0][0]['HP'] = 80
+    assert observe_move(case, [replace(drain_frame, after=no_heal)], bindings).state == 'unsatisfied'
+    full_before, full_after = deepcopy(before), deepcopy(drained)
+    full_before['teams'][0][0]['HP'] = full_after['teams'][0][0]['HP'] = 100
+    assert observe_move(case, [replace(drain_frame, before=full_before, after=full_after)], bindings).state == 'unsatisfied'
+    capped_before = deepcopy(before)
+    capped_before['teams'][0][0]['HP'] = 95
+    assert observe_move(case, [replace(drain_frame, before=capped_before, after=full_after)], bindings).state == 'activated'
+    no_target_loss = deepcopy(drained)
+    no_target_loss['teams'][1][0]['HP'] = 80
+    assert observe_move(case, [replace(drain_frame, after=no_target_loss)], bindings).state == 'unsatisfied'
+    assert observe_move(case, [replace(drain_frame, attack_missed=1)], bindings).state == 'unsatisfied'
+    assert observe_move(case, [replace(drain_frame, before=item)], bindings).state == 'blocked'
+    assert observe_move(case, [replace(drain_frame, source_interval=None)], bindings).state == 'blocked'
+    for side, value in ((0, 101), (1, -1)):
+        invalid_hp = deepcopy(drained)
+        invalid_hp['teams'][side][0]['HP'] = value
+        assert observe_move(case, [replace(drain_frame, after=invalid_hp)], bindings).state == 'unsatisfied'
+    case.effect = 'EFFECT_RECOIL_HIT'
+    assert observe_move(case, [drain_frame], bindings).state == 'unsatisfied'  # Healing is not recoil.
+    recoiled = deepcopy(drained)
+    recoiled['teams'][0][0]['HP'] = 70
+    recoil_frame = replace(local, after=recoiled)
+    assert observe_move(case, [recoil_frame], bindings).state == 'activated'
+    assert observe_move(case, [replace(recoil_frame, after=no_heal)], bindings).state == 'unsatisfied'
+    recoil_only = deepcopy(recoiled)
+    recoil_only['teams'][1][0]['HP'] = 80
+    assert observe_move(case, [replace(recoil_frame, after=recoil_only)], bindings).state == 'unsatisfied'
+    assert observe_move(case, [replace(recoil_frame, attack_missed=1)], bindings).state == 'unsatisfied'
+    nonneutral = deepcopy(before)
+    nonneutral['teams'][0][0]['ability'] = 10  # Suppression/interactions need another fixture.
+    assert observe_move(case, [replace(recoil_frame, before=nonneutral)], bindings).state == 'blocked'
     case.effect = 'EFFECT_RAIN_DANCE'
     wet = deepcopy(before)
     wet['weather'], wet['weather_turns'] = 1, 4
