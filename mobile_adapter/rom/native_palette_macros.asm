@@ -281,7 +281,10 @@ MACRO mobile_virtual_gather_peer
 	add hl, de
 	ld a, [hl]
 	cp b
-	jr nz, .ineligible
+	jr z, .pose_identity_ready
+	call MobileVirtualPeerHasStagedPose
+	jr z, .ineligible
+.pose_identity_ready
 ; The committed pose may retain its previous movement mode while new graphics
 ; prepare. Its own uploaded tiles, facing and color remain authoritative.
 	pop hl
@@ -339,6 +342,8 @@ else
 	ldh [rWBK], a
 	pop hl
 endc
+	call MobileVirtualGatherStagedPose
+	ret c
 	ld bc, MOBILE_PEER_NATIVE_STAGE - MOBILE_PEER_SCREEN_Y
 	add hl, bc
 	ld a, [hl]
@@ -693,14 +698,24 @@ ENDM
 
 ; Commit identical palette ownership and one-shot DMA tokens in either bank.
 MACRO mobile_virtual_publish_page
+	farcall MobileVirtualPoseBatchMatches
+	jp nz, \1
 	ld a, [wMobileStableSourceValid]
 	cp 1
 	jp nz, \1
-	ld b, 141
+	ld b, 138
+ ld a, [wMobileVirtualFastAdmission]
+ cp 3
+ jr nz, .general_publish_bound
+ ; Exact RGB is already sealed. Measured entry-to-idle.done is1896T;
+ ; three LCD lines cover this close, unknown subline and restored caller.
+ ld b, MOBILE_COMPACT_NATIVE_LINE - 3
+ jr .publish_deadline
+.general_publish_bound
 	ld a, [wMobileVirtualLength]
 	cp OAM_SIZE
 	jr nz, .publish_deadline
-	ld b, 142 ; a full page needs no unused-Y suffix stores
+	ld b, 139 ; full prepared RGB plus complete publication return
 .publish_deadline
 	ldh a, [rLY]
 	cp b
@@ -719,10 +734,6 @@ rept 8
 	inc hl
 endr
 	ld [wMobileVirtualHasPrivateColors], a
-	and a
-	jr z, .colors_ready
-	ld a, TRUE
-	ldh [hCGBPalUpdate], a
 .colors_ready
 	ld a, [wMobileVirtualLength]
 	rrca ; two-byte entry for each four-byte OAM quad
@@ -753,6 +764,11 @@ for hardware_color, 8
 .source_ready{d:hardware_color}
  ld [wMobilePrivatePalBindings + hardware_color], a
 endr
+ ld a, [wMobileVirtualFastAdmission]
+ cp 3
+ jr z, .rgb_prepared
+ farcall MobileVirtualPrepareRGB
+.rgb_prepared
 	xor a
 	ld [wMobileVirtualStage], a
 	ldh a, [hVBlankCounter]

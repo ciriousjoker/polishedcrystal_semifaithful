@@ -5,8 +5,8 @@ MobileNativePaletteCodeStart::
 MobileEmergencyInput::
 	call MobileEmergencyKeys
 	call MobileNativePaletteFadeDirty
-	call MobileVirtualCommitPose
-	jp MobileVirtualChooseOutput
+	call MobileVirtualChooseOutput
+	jp MobileVirtualUpdateOBJOnly
 
 ; VBlank already saved all registers and keeps IME disabled. Read physical
 ; buttons before any native input lock can filter them. No packet or cache data
@@ -222,7 +222,7 @@ MobileNativePrivatePalette::
 	ld bc, 54
 	add hl, bc
 	ld [hl], 1
-	call MobileNativeClearPaletteBinding
+	; The private cache changed; native RGB and the closed source did not.
 	jr .success
 .success
 	pop af
@@ -273,10 +273,6 @@ MobileNativePaletteFadeDirty:
 	ldh [rWBK], a
 	ret
 
-MobileNativeClearPaletteBinding:
- call MobileInvalidateNormalSource
- ret
-
 MobileNativeUpdateOBPalettes::
  ld a, [wMobileStableFinalDecision]
  and $7f
@@ -287,36 +283,12 @@ MobileNativeUpdateOBPalettes::
  ; Lock the shared choice before the first private hardware RGB store.
  ld a, $82
  ld [wMobileStableFinalDecision], a
+ ld hl, wMobileVirtualPreparedRGB
  ld c, LOW(rOBPD)
-for hardware_color, 8
- ld a, [wMobilePrivatePalBindings + hardware_color]
- cp 8
- jr nc, .peer{d:hardware_color}
- add a
- add a
- add a
- add LOW(wMobileStableNativeRGB)
- ld l, a
- adc HIGH(wMobileStableNativeRGB)
- sub l
- ld h, a
- jr .source{d:hardware_color}
-.peer{d:hardware_color}
- sub 8
- add a
- add a
- add a
- add LOW(wMobileVirtualFrameColors)
- ld l, a
- adc HIGH(wMobileVirtualFrameColors)
- sub l
- ld h, a
-.source{d:hardware_color}
- rept 1 palettes
+ rept 64
  ld a, [hli]
  ldh [c], a
  endr
-endr
  ld a, 2
  ld [wMobileStableHardwarePaletteProvenance], a
  jr .done
@@ -342,6 +314,34 @@ endr
  ld hl, wOBPals2 + 8 palettes
  ld b, 0
  ret
+; Existing upper-bank VBlank entry. Genuine native updates keep their normal
+; BG path and call the same prepared OBJ consumer exactly once afterward.
+MobileVirtualUpdateOBJOnly:
+ ldh a, [hCGBPalUpdate]
+ and a
+ ret nz
+ ldh a, [rWBK]
+ push af
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, [wMobileStableFinalDecision]
+ and $7f
+ cp 2
+ jr z, .upload
+ cp 1
+ jr nz, .done
+ ld a, [wMobileStableHardwarePaletteProvenance]
+ cp 1
+ jr z, .done
+.upload
+ ld a, $80
+ ldh [rOBPI], a
+ call MobileNativeUpdateOBPalettes
+.done
+ pop af
+ ldh [rWBK], a
+ ret
+
 MobileNativePaletteGuard::
 ; Native palette scratch also lies inside wPlayerData. Preserve it across our
 ; ordinary allocator call, including failed allocations and cached palettes.

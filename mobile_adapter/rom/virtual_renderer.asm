@@ -1,3 +1,12 @@
+; Measured complete cold admission through NativeIdle.done: 34568T for one
+; pose, 43688T for two. Bounds include 1912T of phase/return reserve; the
+; third bound adds its constructor, four transfer blocks and full peer tail.
+; One further LCD line is reserved below for the unknown sampling subline.
+DEF MOBILE_COMPACT_COLD_ONE_T EQU 36480
+DEF MOBILE_COMPACT_COLD_TWO_T EQU 45600
+DEF MOBILE_COMPACT_COLD_THREE_T EQU 60192
+DEF MOBILE_COMPACT_LINE_T EQU 912
+DEF MOBILE_COMPACT_NATIVE_LINE EQU 144
 ; Complete-figure OAM admission runs only in native idle time. Ordinary actors
 ; are immutable descriptors, never leased, deleted, frozen or reclassified.
 SECTION "Mobile Virtual Renderer", ROMX, BANK[MOBILE_ROM_BANK]
@@ -52,10 +61,61 @@ MobileVirtualComposeStep::
  jp .abort
 .start
  call MobileNativePrepareSpritesWork
+ ; Admit the complete cold cohort once. Constructor and transfer work cannot
+ ; stop between eligible peers and silently publish a proper subset.
+ ld c, 0
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+for peer, 1, MOBILE_PEERS + 1
+ ld a, [wMobilePeer{d:peer}Visible]
+ and a
+ jr z, .count_cold_next{d:peer}
+ ld a, [wMobilePeer{d:peer}NativeStage]
+ cp 7
+ jr z, .count_cold_next{d:peer}
+ inc c
+.count_cold_next{d:peer}
+endr
+ ld a, c
+ and a
+ jr z, .cold_jobs_done
+ ; Measured 9804T constructors, four HBlanks per pose, shared validation,
+ ; direct emission, RGB publication and caller return are charged together.
+ ld b, MOBILE_COMPACT_NATIVE_LINE - MOBILE_COMPACT_COLD_ONE_T / MOBILE_COMPACT_LINE_T - 1
+ dec a
+ jr z, .cold_admit
+ ld b, MOBILE_COMPACT_NATIVE_LINE - MOBILE_COMPACT_COLD_TWO_T / MOBILE_COMPACT_LINE_T - 1
+ dec a
+ jr z, .cold_admit
+ ld b, MOBILE_COMPACT_NATIVE_LINE - MOBILE_COMPACT_COLD_THREE_T / MOBILE_COMPACT_LINE_T - 1
+.cold_admit
+ ldh a, [rLY]
+ cp b
+ ret nc
+ farcall MobileCompactRetirePublication
+ farcall MobileCompactPrepareColdCohort
+.cold_jobs_done
+ farcall MobileCompactRetirePublication
  ld a, MOBILE_BACKUP_BANK
  ldh [rWBK], a
+ ld a, [wMobileVirtualQueuedPeer]
+ ld [wMobileStablePoseMask], a
+ ld a, [wMobileStablePoseGeneration]
+ ld [wMobileStablePoseToken], a
+ ld a, [wMobileVirtualQueuedPeer]
+ and a
+ jr z, .cold_prepare_done
+ call MobileVirtualPrevalidatePoseBatch
+ jr c, .cold_prepare_done
+ call MobileVirtualPrepareColdPose
+.cold_prepare_done
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, [wMobileVirtualQueuedPeer]
+ ld [wMobileStablePoseMask], a
+ ld a, [wMobileStablePoseGeneration]
+ ld [wMobileStablePoseToken], a
  xor a
- ld [wMobileVirtualFastAdmission], a
  ld [wMobileVirtualPeerMask], a
  ld [wMobileVirtualForceFull], a
  ld [wMobileVirtualLength], a
@@ -69,6 +129,15 @@ MobileVirtualComposeStep::
  ld [wMobileStableEligible + 1], a
  ld [wMobileStablePendingPrivate], a
  ld [wMobileStablePendingPrivate + 1], a
+ farcall MobileVirtualCertifyCompact
+ jr c, .general_rows
+ ; The certificate leaves the complete native prefix in physical OAM order.
+ ld a, 3
+ ld [wMobileVirtualFastAdmission], a
+ farcall MobileCompactEmitCohort
+ jp c, .abort
+ jp .publish
+.general_rows
  ld hl, wMobileVirtualLines
  ld b, SCREEN_HEIGHT_PX
 .clear_rows
@@ -85,6 +154,10 @@ MobileVirtualComposeStep::
  ld [wMobileVirtualStage], a
  ret
 .weather
+ ld a, [wMobileStableUnknownCount]
+ and a
+ jr z, .weather_done
+.weather_scan
  ld a, [wMobileVirtualCursor]
  cp OAM_COUNT
  jr nc, .weather_done
@@ -95,13 +168,13 @@ MobileVirtualComposeStep::
  add hl, de
  ld a, [hl]
  cp $ff
- jr nz, .weather_next
+ jr nz, .weather_skip
  call MobileVirtualRetainedTuple
  ld a, [hl]
  cp 9
- jr c, .weather_next
+ jr c, .weather_skip
  cp SCREEN_HEIGHT_PX + OAM_Y_OFS
- jr nc, .weather_next
+ jr nc, .weather_skip
  ld a, [wMobileVirtualLength]
  push af
  call MobileVirtualAdmitWeatherQuad
@@ -113,6 +186,10 @@ MobileVirtualComposeStep::
  ld hl, wMobileVirtualCursor
  inc [hl]
  ret
+.weather_skip
+ ld hl, wMobileVirtualCursor
+ inc [hl]
+ jr .weather_scan
 .weather_done
  xor a
  ld [wMobileVirtualCursor], a
@@ -120,6 +197,25 @@ MobileVirtualComposeStep::
  ld [wMobileVirtualStage], a
  ret
 .native
+ ; Empty descriptors have no figure, RGB or row work. Drain their bounded
+ ; hardware count together instead of spending a complete idle dispatch each.
+.empty_native
+ ld a, [wMobileVirtualCursor]
+ cp NUM_OBJECT_STRUCTS
+ jr nc, .native_done
+ add a
+ add a
+ add a
+ add LOW(wMobileVirtualDescriptors + 6)
+ ld l, a
+ ld h, HIGH(wMobileVirtualDescriptors + 6)
+ ld a, [hl]
+ and $1f
+ jr nz, .occupied_native
+ ld hl, wMobileVirtualCursor
+ inc [hl]
+ jr .empty_native
+.occupied_native
  ; Native exact colors reserve their slots before any private color is lent.
  ; No admission-order rejection can silently remove an intended figure.
  call MobileVirtualNativeDeadline
@@ -151,20 +247,8 @@ MobileVirtualComposeStep::
  ld [wMobileVirtualStage], a
  ret
 .publish
- ; Certify the entire all-fit transaction before its one final publication.
- ld a, [wMobileStableEligible]
- ld b, a
- ld a, [wMobileStablePendingPrivate]
- cp b
- jp nz, .abort
- ld a, [wMobileStableEligible + 1]
- ld b, a
- ld a, [wMobileStablePendingPrivate + 1]
- cp b
- jp nz, .abort
- ld a, 1
- ld [wMobileStableCapacityValid], a
- mobile_virtual_publish_page MobileVirtualComposeStep.abort
+ farcall MobileVirtualPublish
+ ret
 .abort
  xor a
  ld [wMobileStableCapacityValid], a
@@ -325,10 +409,14 @@ MobileVirtualChooseOutput::
  ldh a, [rVDMA_LEN]
  bit B_VDMA_LEN_BUSY, a
  jr z, .native
+ call MobileVirtualCommitPose
+ jr c, .native
+ ld a, [wMobileStableFinalDecision]
+ cp $82
+ jr z, .private_selected
  ld a, 2
  ld [wMobileStableFinalDecision], a
- ld a, TRUE
- ldh [hCGBPalUpdate], a
+.private_selected
  jr .done
 .native
  ld a, 1
@@ -336,8 +424,6 @@ MobileVirtualChooseOutput::
  ld a, [wMobileStableHardwarePaletteProvenance]
  cp 1
  jr z, .done
- ld a, TRUE
- ldh [hCGBPalUpdate], a
  jr .done
 .retain
  ld a, 3
@@ -392,6 +478,20 @@ endr
  push af
  ld a, MOBILE_BACKUP_BANK
  ldh [rWBK], a
+ ; Record only the membership whose page has just physically completed DMA.
+ ld a, [wMobileActualOAMPage]
+ cp HIGH(wMobileVirtualOutput)
+ jr nz, .native_actual
+ ld a, [wMobileStablePendingPrivate]
+ ld [wMobileStableLastActual], a
+ ld a, [wMobileStablePendingPrivate + 1]
+ ld [wMobileStableLastActual + 1], a
+ jr .actual_ready
+.native_actual
+ xor a
+ ld [wMobileStableLastActual], a
+ ld [wMobileStableLastActual + 1], a
+.actual_ready
  xor a
  ld [wMobileStablePendingValid], a
  ld [wMobileVirtualPreviousOAM], a
@@ -526,6 +626,15 @@ MobileVirtualNativeGroup:
  add LOW(wMobileVirtualDescriptors)
  ld l, a
  ld h, HIGH(wMobileVirtualDescriptors)
+ ; Empty native descriptors emit no quads and reserve no palette or rows.
+ ; Avoid copying and rejecting the same empty figure through the general path.
+ push hl
+ ld de, 6
+ add hl, de
+ ld a, [hl]
+ and $1f
+ pop hl
+ ret z
  ld de, wMobileVirtualTemplate
  rept 8
  ld a, [hli]
@@ -579,16 +688,70 @@ MobileVirtualNativeGroup:
  ld hl, wMobileStablePendingPrivate
  jp MobilePhaseSetMaskBit
 
+; The batch marker and generation bind the prepared OAM to exact pose jobs.
+; A changed batch never turns a previously composed page into an upload plan.
+MobileVirtualPoseBatchMatches:
+ ld a, [wMobileVirtualQueuedPeer]
+ ld b, a
+ ld a, [wMobileStablePoseMask]
+ cp b
+ ret nz
+ ld a, [wMobileStablePoseGeneration]
+ ld b, a
+ ld a, [wMobileStablePoseToken]
+ cp b
+ ret
+
+MobileVirtualPeerHasStagedPose:
+ push bc
+ push de
+ push hl
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, [wMobileBudgetIndex]
+ ld e, a
+ ld d, 0
+ ld hl, MobileVirtualPaletteBits
+ add hl, de
+ ld a, [wMobileVirtualQueuedPeer]
+ and [hl]
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+ pop hl
+ pop de
+ pop bc
+ ret
+
+MobileVirtualGatherStagedPose:
+ call MobileVirtualPeerHasStagedPose
+ ret z ; AND cleared carry: continue with the committed pose
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, [wMobileBudgetIndex]
+ ld [wMobileVirtualWindow], a
+ add a
+ add a
+ add a
+ ld e, a
+ ld d, 0
+ ld hl, wMobileStablePoseBatch + 4 ; immutable facing, including mirror
+ add hl, de
+ ld a, [hl]
+ ld [wMobileVirtualFrame], a
+ ld a, 1
+ ld [wMobileVirtualCacheHit], a
+ ld [wMobileVirtualPeerGatherValid], a
+ ld a, $ff
+ ld [wMobileAvatarPalette], a
+ scf
+ ret
+
+MobileVirtualGatherCompactPeer:
 MobileVirtualGatherPeer::
 	mobile_virtual_gather_peer MobileNativePeerPointer, MobileVirtualCheckExactRectangle
 
 MobileVirtualPeerGroup:
- ld b, a
-
-.gather
-	ld a, b
-	call MobileVirtualGatherPeer
-.gathered
+ call MobileVirtualGatherPeer
 	ld a, MOBILE_BACKUP_BANK
 	ldh [rWBK], a
 	ld a, [wMobileVirtualPeerGatherValid]
@@ -609,6 +772,14 @@ MobileVirtualPeerGroup:
  ld a, [wPalFadeDelayFrames]
  and a
  ret nz ; exact intermediate fade construction remains an explicit cadence gap
+ ld a, [wMobileVirtualFastAdmission]
+ cp 3
+ jr nz, .exact_color
+ ; A distinct unused hardware slot is sufficient; exact deduplication remains
+ ; the fallback when native allocation has exhausted the free set.
+ call MobileVirtualChoosePrivatePalette
+ jr nc, MobileVirtualMaterializePeer
+.exact_color
  call MobileVirtualFindRetainedPeerColor
  jr c, .private_color
  ld [wMobileAvatarPalette], a
@@ -621,7 +792,7 @@ MobileVirtualPeerGroup:
  add hl, de
  ld a, [hl]
  and a
- ret nz
+ jr nz, .private_color ; a borrowed match does not establish palette pressure
  jr MobileVirtualMaterializePeer
 .private_color
  call MobileVirtualChoosePrivatePalette
@@ -679,6 +850,8 @@ MobileVirtualMaterializePeer::
 	ld a, [wMobileVirtualTemplate + 1]
 	ld d, a
 	ld a, [wMobileVirtualFastAdmission]
+ cp 3
+ jr z, .peer_rectangle_ready
 	cp 2
 	jr nz, .scratch_peer
 	ld a, [wMobileVirtualLength]
@@ -1297,4 +1470,521 @@ MobileVirtualFindRetainedPeerColor:
  jr c, .palette
  pop de
  scf
+ ret
+
+; Foreground only, before PendingValid. All aliases/bulk template writers use
+; <=8 bytes. IRQ consumption owns CPU until both RGB and OAM use finish.
+SECTION "Mobile Compact Transaction", ROMX, BANK[MOBILE_ROM_BANK + 5]
+MobileVirtualPrepareRGB:
+ ld de, wMobileVirtualPreparedRGB
+for hardware_color, 8
+ ld a, [wMobilePrivatePalBindings + hardware_color]
+ cp 8
+ jr nc, .peer{d:hardware_color}
+ add a
+ add a
+ add a
+ add LOW(wMobileStableNativeRGB)
+ ld l, a
+ adc HIGH(wMobileStableNativeRGB)
+ sub l
+ ld h, a
+ jr .copy{d:hardware_color}
+.peer{d:hardware_color}
+ sub 8
+ add a
+ add a
+ add a
+ add LOW(wMobileVirtualFrameColors)
+ ld l, a
+ adc HIGH(wMobileVirtualFrameColors)
+ sub l
+ ld h, a
+.copy{d:hardware_color}
+ rept 8
+ ld a, [hli]
+ ld [de], a
+ inc e
+ endr
+endr
+ ret
+
+; Finite resource certificate, independent of map/role. Every descriptor must
+; name a completed four-tuple physical span, including any invisible figure.
+; Two equal-Y pairs separated by eight rows bound each figure to two objects
+; per scanline. At most four native+visible peer figures therefore use <=8.
+; Ownership is proved for every tuple, including hidden-X Y-active objects.
+MobileVirtualCertifyCompact:
+ ld a, [wMobileVirtualFastAdmission]
+ cp 3
+ jp nz, .fresh_source
+ ; No source bytes, camera, native RGB or descriptors changed. D700's native
+ ; prefix is never touched by a peer-only composition or physical DMA.
+ ld a, [wMobileCompactNativeLength]
+ swap a
+ and $f
+ ld b, a
+ ld a, [wMobileVisibleCount]
+ add b
+ cp 5
+ jp nc, .failed
+ ld a, [wMobileCompactNativeLength]
+ ld [wMobileVirtualLength], a
+ ld a, [wMobileCompactNativePalette]
+ ld [wMobileVirtualPaletteUsed], a
+ for byte, 2
+ ld a, [wMobileCompactNativeMask + byte]
+ ld [wMobileStableEligible + byte], a
+ ld [wMobileStablePendingPrivate + byte], a
+ endr
+ xor a
+ ld [wMobileVirtualCursor], a
+ ld hl, wMobileVirtualBindings
+ rept 8
+ ld [hli], a
+ endr
+ ret
+.fresh_source
+ ldh a, [rLCDC]
+ bit 2, a ; physical LCDC OBJ size bit, independent of legacy bit numbering
+ jp nz, .failed
+ ld a, [wMobileStableUnknownCount]
+ and a
+ jp nz, .failed
+ ld a, [wMobileVisibleCount]
+ ld [wMobileVirtualRectangleCount], a
+ xor a
+ ld [wMobileVirtualIndex], a
+ ld [wMobileVirtualLength], a
+ ld [wMobileVirtualPaletteUsed], a
+ ld [wMobileVirtualGroup + 4], a ; complete native span count
+ ld hl, wMobileVirtualGroup
+ ld a, $ff
+ rept 4
+ ld [hli], a
+ endr
+ xor a
+ ld hl, wMobileVirtualBindings
+ rept 8
+ ld [hli], a
+ endr
+.descriptor
+ ld a, [wMobileVirtualIndex]
+ add a
+ add a
+ add a
+ add LOW(wMobileVirtualDescriptors + 6)
+ ld l, a
+ ld h, HIGH(wMobileVirtualDescriptors)
+ ld a, [hli]
+ ld b, a
+ and $1f
+ jp z, .next
+ cp 4
+ jp nz, .failed
+ bit 7, b
+ jp z, .failed
+ ld a, [hl]
+ cp OAM_SIZE - 16 + 1
+ jp nc, .failed ; includes the explicit $ff overflow descriptor
+ and 3
+ jp nz, .failed
+ ld a, [hl]
+ rrca
+ rrca
+ ld c, a
+ ld e, a
+ ld d, 0
+ ld hl, wMobileStableOwners
+ add hl, de
+ ld a, [wMobileVirtualIndex]
+ rept 4
+ cp [hl]
+ jp nz, .failed
+ inc hl
+ endr
+ ld hl, wMobileStableOriginalYs
+ add hl, de
+ ld a, [hli]
+ ld b, a
+ cp [hl]
+ jp nz, .failed
+ inc hl
+ ld a, [hli]
+ cp [hl]
+ jp nz, .failed
+ sub b
+ cp 8
+ jr z, .rectangle
+ cp -8
+ jp nz, .failed
+.rectangle
+ ; Sort certified source offsets, independently of descriptor/actor order.
+ ; Producer ownership can only be created for these exact completed spans;
+ ; every later raw writer revokes source proof before touching any tuple.
+ ld b, c
+ ld hl, wMobileVirtualGroup
+ rept 4
+ ld a, [hl]
+ cp b
+ jr c, :+
+ ld d, a
+ ld a, b
+ ld [hl], a
+ ld b, d
+:
+ inc hl
+ endr
+ ld hl, wMobileVirtualGroup + 4
+ inc [hl]
+ ld hl, wMobileVirtualRectangleCount
+ inc [hl]
+ ld a, [hl]
+ cp 5
+ jp nc, .failed
+ ld a, [wMobileVirtualIndex]
+ ld hl, wMobileStableEligible
+ call MobileCompactSetMaskBit
+ ld hl, wMobileStablePendingPrivate
+ call MobileCompactSetMaskBit
+.next
+ ld hl, wMobileVirtualIndex
+ inc [hl]
+ ld a, [hl]
+ cp NUM_OBJECT_STRUCTS
+ jp c, .descriptor
+ ; Copy only the certified spans in ascending physical native priority.
+ ; No second raw scan or descriptor reconstruction is needed.
+ xor a
+ ld [wMobileVirtualIndex], a
+.span
+ ld a, [wMobileVirtualGroup + 4]
+ ld b, a
+ ld a, [wMobileVirtualIndex]
+ cp b
+ jr nc, .complete
+ ld e, a
+ ld d, 0
+ ld hl, wMobileVirtualGroup
+ add hl, de
+ ld c, [hl]
+ ld b, 4
+.quad
+ call MobileCompactRetainedTuple
+ ld a, [wMobileVirtualLength]
+ ld e, a
+ ld d, HIGH(wMobileVirtualOutput)
+ rept 3
+ ld a, [hli]
+ ld [de], a
+ inc e
+ endr
+ ld a, [hl]
+ ld [de], a
+ and OAM_PALETTE
+ push bc
+ ld e, a
+ ld d, 0
+ ld hl, MobileCompactPaletteBits
+ add hl, de
+ ld a, [wMobileVirtualPaletteUsed]
+ or [hl]
+ ld [wMobileVirtualPaletteUsed], a
+ pop bc
+ ld a, [wMobileVirtualLength]
+ add 4
+ ld [wMobileVirtualLength], a
+ inc c
+ dec b
+ jr nz, .quad
+ ld hl, wMobileVirtualIndex
+ inc [hl]
+ jr .span
+.complete
+ ld a, [wMobileVirtualLength]
+ ld [wMobileCompactNativeLength], a
+ ld a, [wMobileVirtualPaletteUsed]
+ ld [wMobileCompactNativePalette], a
+ for byte, 2
+ ld a, [wMobileStableEligible + byte]
+ ld [wMobileCompactNativeMask + byte], a
+ endr
+ xor a
+ ld [wMobileVirtualCursor], a
+ ret
+.failed
+ xor a
+ ld [wMobileVirtualFastAdmission], a
+ ld [wMobileVirtualLength], a
+ ld [wMobileVirtualPaletteUsed], a
+ ld [wMobileStableEligible], a
+ ld [wMobileStableEligible + 1], a
+ ld [wMobileStablePendingPrivate], a
+ ld [wMobileStablePendingPrivate + 1], a
+ ld [wMobileVirtualCursor], a
+ ld hl, wMobileVirtualBindings
+ rept 8
+ ld [hli], a
+ endr
+ scf
+ ret
+
+
+MobileCompactSetMaskBit:
+ push af
+ push bc
+ push de
+ push hl
+ ld b, a
+ and 7
+ ld c, a
+ ld a, b
+ cp 8
+ jr c, .low
+ inc hl
+.low
+ ld a, 1
+ inc c
+.shift
+ dec c
+ jr z, .store
+ add a
+ jr .shift
+.store
+ or [hl]
+ ld [hl], a
+ pop hl
+ pop de
+ pop bc
+ pop af
+ ret
+
+MobileCompactRetainedTuple:
+ ld e, c
+ ld d, 0
+ ld hl, wMobileStableOriginalYs
+ add hl, de
+ ld a, [hl]
+ ld [wMobileVirtualTemplate], a
+ ld a, c
+ add a
+ add c
+ ld e, a
+ ld hl, wMobileStableRawXTileFlags
+ add hl, de
+ ld de, wMobileVirtualTemplate + 1
+ rept 3
+ ld a, [hli]
+ ld [de], a
+ inc de
+ endr
+ ld hl, wMobileVirtualTemplate
+ ret
+
+
+MobileCompactPaletteBits: db 1,2,4,8,16,32,64,128
+
+SECTION "Mobile Fused Cohort", ROMX, BANK[MOBILE_ROM_BANK + 5]
+; Foreground owns the accepted roster while serial IRQs are masked. VBlank
+; never writes peer records. Validate the entire resident set before stores.
+MobileCompactEmitCohort:
+ xor a
+ ld hl, wMobileVirtualBindings
+ rept 8
+ ld [hli], a
+ endr
+ ld a, [wPalFadeDelayFrames]
+ and a
+ jp nz, .failed
+for peer, 1, MOBILE_PEERS + 1
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+ ld a, [wMobilePeer{d:peer}Visible]
+ and a
+ jp z, .checked{d:peer}
+ ld a, [wMobilePeer{d:peer}NativeStage]
+ cp 7
+ jp nz, .failed
+ ld a, [wMobilePeer{d:peer} + 18]
+ ld b, a
+ ld a, [wMobilePeer{d:peer}LoadedSprite]
+ cp b
+ jp nz, .failed
+ ld a, [wMobileVirtualWindowOwners + peer - 1]
+ cp peer
+ jp nz, .failed
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, [wMobilePrivatePalDirty]
+ and 1 << (peer - 1)
+ jp nz, .failed
+ ; Choose all colors before emitting the first figure. Native slots win.
+ ld hl, wMobileVirtualBindings
+ ld c, 0
+ ld b, 1
+.color{d:peer}
+ ld a, [wMobileVirtualPaletteUsed]
+ and b
+ jr nz, .next_color{d:peer}
+ ld [hl], peer
+ ld a, [wMobileVirtualPaletteUsed]
+ or b
+ ld [wMobileVirtualPaletteUsed], a
+ jr .checked{d:peer}
+.next_color{d:peer}
+ inc hl
+ inc c
+ sla b
+ jp nc, .color{d:peer}
+ jp .failed
+.checked{d:peer}
+endr
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ; Native exact RGB is the immutable base. Peer payloads overwrite only their
+ ; final unused hardware slots, avoiding frame-color intermediates.
+ ld hl, wMobileStableNativeRGB
+ ld de, wMobileVirtualPreparedRGB
+ rept 64
+ ld a, [hli]
+ ld [de], a
+ inc e
+ endr
+for peer, 1, MOBILE_PEERS + 1
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+ ld a, [wMobilePeer{d:peer}Visible]
+ and a
+ jp z, .emitted{d:peer}
+ ld a, [wMobilePeer{d:peer}NativeFacing]
+ ld b, a
+ and $c
+ cp $c
+ jr z, .mirror{d:peer}
+ cp 8
+ jr nc, .unmirrored{d:peer}
+ ld a, b
+ and 3
+ cp 3
+ jr nz, .unmirrored{d:peer}
+.mirror{d:peer}
+ ld c, OAM_XFLIP
+ ld b, $64 + (peer - 1) * 4 + 1
+ jr .base{d:peer}
+.unmirrored{d:peer}
+ ld c, 0
+ ld b, $64 + (peer - 1) * 4
+.base{d:peer}
+ ld a, [wMobilePeer{d:peer} + MOBILE_PEER_SCREEN_X]
+ ld e, a
+ ld a, [wMobilePeer{d:peer} + MOBILE_PEER_SCREEN_Y]
+ ld d, a
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld hl, wMobileVirtualBindings
+ ld a, 0
+.palette{d:peer}
+ push af
+ ld a, [hli]
+ cp peer
+ jr z, .found{d:peer}
+ pop af
+ inc a
+ jr .palette{d:peer}
+.found{d:peer}
+ pop af
+ or c
+ ld c, a
+ and 7
+ ld [wMobileAvatarPalette], a
+ ld a, [wMobileVirtualLength]
+ ld [wMobileOAMReadCursor], a
+ add LOW(wMobileVirtualOutput)
+ ld l, a
+ adc HIGH(wMobileVirtualOutput)
+ sub l
+ ld h, a
+ call .quads
+ ld a, [wMobileVirtualLength]
+ add 16
+ ld [wMobileVirtualLength], a
+ ld a, [wMobileAvatarPalette]
+ add a
+ add a
+ add a
+ add LOW(wMobileVirtualPreparedRGB)
+ ld e, a
+ ld d, HIGH(wMobileVirtualPreparedRGB)
+ ld hl, wMobilePrivatePalColors + (peer - 1) * 8
+ rept 8
+ ld a, [hli]
+ ld [de], a
+ inc e
+ endr
+ ld hl, wMobileVirtualPeerMask
+ set peer - 1, [hl]
+ ld hl, wMobileStableEligible + 1
+ set peer + 4, [hl]
+ ld hl, wMobileStablePendingPrivate + 1
+ set peer + 4, [hl]
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+ ld a, [wMobileAvatarPalette]
+ ld [wMobilePeer{d:peer} + MOBILE_PEER_PALETTE], a
+ ld a, [wMobileOAMReadCursor]
+ ld [wMobilePeer{d:peer} + MOBILE_PEER_OAM_START + 1], a
+ ld hl, wMobileRenderedCount
+ inc [hl]
+.emitted{d:peer}
+endr
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ and a
+ ret
+.failed
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ scf
+ ret
+.quads
+ mobile_virtual_write_peer_quads
+
+; The complete batch has passed admission. Its first write retires the old
+; page, before any constructor can modify a resource or candidate dependency.
+SECTION "Mobile Publication Retirement", ROMX, BANK[MOBILE_ROM_BANK + 5]
+MobileCompactRetirePublication:
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ xor a
+ ld [wMobileStablePendingValid], a
+ ld [wMobileVirtualPreviousOAM], a
+ ld [wMobileCompactKeepPublication], a
+ ret
+
+SECTION "Mobile Whole Publication", ROMX, BANK[MOBILE_ROM_BANK + 5]
+MobileVirtualPublish:
+ ; Certify the entire all-fit transaction before its one final publication.
+ ld a, [wMobileStableEligible]
+ ld b, a
+ ld a, [wMobileStablePendingPrivate]
+ cp b
+ jp nz, .abort
+ ld a, [wMobileStableEligible + 1]
+ ld b, a
+ ld a, [wMobileStablePendingPrivate + 1]
+ cp b
+ jp nz, .abort
+ ld a, [wMobileVirtualQueuedPeer]
+ and a
+ jr z, .pose_batch_ready
+ farcall MobileVirtualPrevalidatePoseBatch
+ jp c, .abort
+.pose_batch_ready
+ ld a, 1
+ ld [wMobileStableCapacityValid], a
+ mobile_virtual_publish_page MobileVirtualPublish.abort
+.abort
+ xor a
+ ld [wMobileStableCapacityValid], a
+ ld [wMobileVirtualStage], a
  ret

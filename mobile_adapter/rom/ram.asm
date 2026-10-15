@@ -69,7 +69,7 @@ wMobileAppPending:: db
 wMobileRxConsumed:: db
 wMobileBudgetPriority:: db
 wMobileBudgetIndex:: db
-wMobileBudgetOptional:: db
+wMobileBudgetOptional:: db ; compact cold cohort construction owns one lifetime
 wMobileBudgetCursor:: db
 wMobileIRQInstallOffset:: dw
 wMobilePumpCount:: db
@@ -278,6 +278,25 @@ DEF wMobileVirtualLines EQU wMobileVirtualOutput + OAM_SIZE
 DEF wMobileVirtualGroup EQU wMobileVirtualScratch
 DEF wMobileVirtualBindings EQU wMobileVirtualGroup + 64
 DEF wMobileVirtualTemplate EQU wMobileVirtualBindings + 8
+; Template readers and immutable descriptor copies use exactly bytes 0..7.
+; This bank-5 payload is disjoint from the bank-2 avatar cache alias.
+DEF wMobileVirtualPreparedRGB EQU wMobileVirtualTemplate + 8
+EXPORT wMobileVirtualPreparedRGB
+ASSERT LOW(wMobileVirtualPreparedRGB) == 0
+ASSERT wMobileVirtualPreparedRGB + 64 <= wMobileVirtualTemplate + 80
+; Source-bound native prefix cache. Peer-only revocation preserves this proof;
+; every new source capture clears FastAdmission before any reuse can occur.
+DEF wMobileCompactNativeLength EQU wMobileVirtualTemplate + 72
+DEF wMobileCompactNativeMask EQU wMobileVirtualTemplate + 73
+DEF wMobileCompactNativePalette EQU wMobileVirtualTemplate + 75
+; Scoped roster-store barrier: preserve only an already sealed publication.
+DEF wMobileCompactKeepPublication EQU wMobileVirtualTemplate + 76
+ASSERT wMobileCompactKeepPublication == wMobileCompactNativePalette + 1
+ASSERT wMobileCompactKeepPublication < wMobileVirtualTemplate + 80
+EXPORT wMobileCompactKeepPublication
+EXPORT wMobileCompactNativeLength, wMobileCompactNativeMask, wMobileCompactNativePalette
+ASSERT wMobileVirtualPreparedRGB + 64 == wMobileCompactNativeLength
+ASSERT wMobileCompactNativePalette < wMobileVirtualTemplate + 80
 DEF wMobileVirtualGroupLength EQU wMobileVirtualTemplate + 80
 DEF wMobileVirtualRejected EQU wMobileVirtualGroupLength + 1
 DEF wMobileVirtualGroupPalette EQU wMobileVirtualRejected + 1
@@ -447,3 +466,29 @@ DEF wMobileStableCameraX EQU wMobileStableTransactionScratch
 DEF wMobileStableCameraY EQU wMobileStableTransactionScratch + 2
 EXPORT wMobileStableCameraX, wMobileStableCameraY
 ASSERT wMobileStableCameraY + 2 <= wMobileStableRemoteBindings
+; Producer certificate: number of visible raw quads with no actor owner.
+; The camera occupies the preceding four bytes of this transient span.
+DEF wMobileStableUnknownCount EQU wMobileStableTransactionScratch + 4
+EXPORT wMobileStableUnknownCount
+ASSERT wMobileStableUnknownCount + 1 <= wMobileStableRemoteBindings
+
+; Three bounded immutable pose jobs. Existing global queue clears revoke the
+; entire batch on map replacement or native graphics takeover.
+DEF wMobileStablePoseBatch EQU wMobileStableScratch
+DEF wMobileStablePoseGeneration EQU wMobileStableScratch + 24
+DEF wMobileStablePoseMask EQU wMobileStableTransactionScratch + 5
+DEF wMobileStablePoseToken EQU wMobileStableTransactionScratch + 6
+DEF wMobileVirtualPoseBatchMask EQU wMobileSavedFacings + 10
+DEF wMobileVirtualPoseBatchIndex EQU wMobileSavedFacings + 11
+EXPORT wMobileStablePoseBatch, wMobileStablePoseGeneration
+EXPORT wMobileStablePoseMask, wMobileStablePoseToken
+EXPORT wMobileVirtualPoseBatchMask, wMobileVirtualPoseBatchIndex
+ASSERT wMobileStablePoseGeneration + 1 <= wMobileStableRawXTileFlags
+ASSERT wMobileVirtualPoseBatchIndex < wMobileSavedFacings + NUM_OBJECT_STRUCTS
+
+; One foreground preparation is active at a time. An interrupt-side revoke is
+; sticky until that preparation exits, independently of the generation byte.
+DEF wMobileStablePosePreparing EQU wMobileStableScratch + 25
+DEF wMobileStablePoseCanceled EQU wMobileStableScratch + 26
+EXPORT wMobileStablePosePreparing, wMobileStablePoseCanceled
+ASSERT wMobileStablePoseCanceled + 1 <= wMobileStableRawXTileFlags

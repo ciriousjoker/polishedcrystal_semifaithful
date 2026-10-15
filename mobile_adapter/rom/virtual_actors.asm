@@ -165,6 +165,11 @@ MobileNativeIdle::
 	call MobileTick
 	jp .sample
 .sample
+; A pending actual source gets first use of its current idle interval.
+; Optional age policies cannot postpone a cold eligible figure.
+	ld a, [wMobileVirtualStage]
+	and a
+	jp nz, .compose
 ; A dense native frame leaves a much smaller idle window. Once a complete
 ; guest exists, reserve three of four late windows for presentation; the fourth
 ; advances optional capture/pose/projection jobs. Early scenes keep their normal
@@ -325,15 +330,38 @@ MobileVirtualCanCompose:
 	ld b, 140
 	jr .deadline
 .publication
-	ld b, 141 ; suffix stores need the general complete-return window
+	ld b, 138 ; include foreground merged RGB and complete caller return
 	ld a, [wMobileVirtualLength]
 	cp OAM_SIZE
 	jr nz, .deadline
-	ld b, 142 ; full pages have no suffix work; separately bounded publication
+	ld b, 139 ; full pages have no suffix stores
 	jr .deadline
 .small
-	ld b, 138 ; one peer has a measured bound below six double-speed scanlines
-	jr .deadline
+ ; Known invisible peers only advance bookkeeping. A visible complete peer
+ ; keeps a conservative twelve-line closure until actual entry/return proof.
+ ld a, [wMobileVirtualCursor]
+ ld c, a
+ ld a, [wMobilePeerCount]
+ cp c
+ jr z, .cheap_peer
+ jr c, .cheap_peer
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+ ld a, c
+ call MobileNativePeerPointer
+ ld bc, MOBILE_PEER_VISIBLE
+ add hl, bc
+ ld c, [hl]
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, c
+ and a
+ jr z, .cheap_peer
+ ld b, 132
+ jr .deadline
+.cheap_peer
+ ld b, 140
+ jr .deadline
 .weather_deadline
 	ld b, 140
 .deadline
@@ -344,7 +372,7 @@ MobileVirtualCanCompose:
 MobileVirtualNativeDeadline:
 ; Both the idle caller and the step check the actual pending native slot.
 ; Leave all transaction state intact when a complete figure must wait.
-	ld b, 140 ; cheap rejection/bookkeeping plus complete idle caller return
+	ld b, 138 ; bounded empty-slot drain plus complete idle caller return
 	ld a, [wMobileVirtualCursor]
 	cp NUM_OBJECT_STRUCTS
 	jr nc, .deadline
@@ -423,34 +451,8 @@ MobileNativePrepareSpritesWork:
 	xor a
 	ld [wMobileVisibleCount], a
 	ld [wMobileDeferred], a
-	ld hl, wMobilePeer1
-	ld c, 0
-.project
-	push bc
-	push hl
-	ld a, [wMobilePeerCount]
-	cp c
-	jr z, .hidden
-	jr c, .hidden
-	ld a, [wMobileLocalValid]
-	and a
-	jr z, .hidden
-	call MobileProjectPeer
-	jr .next
-.hidden
-	ld bc, MOBILE_PEER_VISIBLE
-	add hl, bc
-	ld [hl], 0
-.next
-	pop hl
-	ld bc, MOBILE_PEER_SIZE
-	add hl, bc
-	pop bc
-	inc c
-	ld a, c
-	cp MOBILE_PEERS
-	jr c, .project
-	ret
+ farcall MobileCompactProjectPeers
+ ret
 
 MobileVirtualUploadJob:
 	ld a, [wMobileNativeGraphicsFence]
@@ -460,9 +462,6 @@ MobileVirtualUploadJob:
 	and a
 	ret nz
 .ownership_ready
-	ld a, [wMobileVirtualQueuedPeer]
-	and a
-	ret nz ; source and identity remain immutable until the hardware commit
 ; One bounded pose/color job. Native menus and scripts own their graphics.
 	ld a, [wMobileOnline]
 	and a
@@ -505,6 +504,21 @@ MobileVirtualUploadJob:
 	jp MobileNativeUpload
 
 MobileNativeUpload:
+; A pending job owns this peer's source until the joint hardware commit.
+	push hl
+	ld a, MOBILE_BACKUP_BANK
+	ldh [rWBK], a
+	ld a, [wMobileBudgetIndex]
+	ld e, a
+	ld d, 0
+	ld hl, MobileVirtualPaletteBits
+	add hl, de
+	ld a, [wMobileVirtualQueuedPeer]
+	and [hl]
+	ld a, MOBILE_WRAM_BANK
+	ldh [rWBK], a
+	pop hl
+	ret nz
 ; WBK=2, HL=peer. No native record or native VRAM atlas is writable.
 	push hl
 	ld bc, MOBILE_PEER_VISIBLE
@@ -513,6 +527,28 @@ MobileNativeUpload:
 	pop hl
 	and a
 	ret z
+ ; Cold jobs use one bounded constructor. Keep the general committed-pose
+ ; updater for warm motion until a separate active-window lease is established.
+ push hl
+ ld bc, MOBILE_PEER_NATIVE_STAGE
+ add hl, bc
+ ld a, [hl]
+ cp 7
+ pop hl
+ jr z, .committed_update
+ push hl
+ farcall MobileCompactColdUpload
+ pop hl
+ ret
+.committed_update
+	ld a, MOBILE_BACKUP_BANK
+	ldh [rWBK], a
+	xor a
+	ld [wMobileStablePoseCanceled], a
+	inc a
+	ld [wMobileStablePosePreparing], a
+	ld a, MOBILE_WRAM_BANK
+	ldh [rWBK], a
 	push hl
 	ld bc, 18
 	add hl, bc
@@ -576,8 +612,6 @@ MobileNativeUpload:
 ; A build-prepared canonical asset removes the cold LZ job from the frame
 ; budget. Only the current four-tile pose is copied into the private cache.
 	ld [hl], 1
-	pop hl
-	ret
 
 .pose
 	ld a, [hl]
@@ -697,44 +731,9 @@ MobileNativeUpload:
 	cp [hl]
 	jp z, .publish_facing
 .copy
-	ld a, [wMobileBudgetIndex]
-	call MobileNativePeerPointer
-	ld bc, 18
-	add hl, bc
-	ld a, [hli]
-	ld b, a
-	add a
-	add b
-	add a
-	add [hl]
-	add a
-	ld e, a
-	ld d, 0
-	ld hl, MobileVirtualAssetPointers
-	add hl, de
-	ld a, BANK(MobileVirtualAssetPointers)
-	call GetFarWord
-	ld a, [wMobileVirtualFrame]
-	ld bc, 1 tiles
-	rst AddNTimes
-	push hl
-	ld a, [wMobileBudgetIndex]
-	ld hl, wMobileAvatarCache1
-	ld bc, 24 tiles
-	rst AddNTimes
-	ld a, [wMobileVirtualFrame]
-	ld bc, 1 tiles
-	rst AddNTimes
-	ld d, h
-	ld e, l
-	pop hl
-	ld bc, 4 tiles
-	ld a, BANK(MobileVirtualAssetPointers)
-	call FarCopyBytes
-	ld h, d
-	ld l, e
-	ld bc, -4 tiles
-	add hl, bc
+ ; The generated assets and this fixed-size copier share the same upper bank.
+ ; One immutable canonical pose copy replaces the generic far-copy constructor.
+ farcall MobileVirtualCopyCanonicalPose
 
 	ld d, h
 	ld e, l
@@ -762,8 +761,62 @@ MobileNativeUpload:
 	ld a, [hl]
 	ld [wMobileVirtualQueuedMovement], a
 	ld a, [wMobileBudgetIndex]
-	inc a
-	ld [wMobileVirtualQueuedPeer], a ; publish the complete transaction last
+	call MobileNativePeerPointer
+	ld a, [hli]
+	ld b, a
+	ld a, [hli]
+	ld c, a
+	ld a, [hli]
+	ld d, a
+	ld e, [hl]
+	push bc
+	push de
+	ld a, MOBILE_BACKUP_BANK
+	ldh [rWBK], a
+	ld a, [wMobileBudgetIndex]
+	add a
+	add a
+	ld e, a
+	ld d, 0
+	ld hl, wMobileStableRemoteBindings
+	add hl, de
+	pop de
+	pop bc
+	ld a, b
+	ld [hli], a
+	ld a, c
+	ld [hli], a
+	ld a, d
+	ld [hli], a
+	ld [hl], e
+	ld a, [wMobileBudgetIndex]
+	add a
+	add a
+	add a
+	ld e, a
+	ld d, 0
+	ld hl, wMobileStablePoseBatch
+	add hl, de
+	ld d, h
+	ld e, l
+	ld hl, wMobileVirtualQueuedWindow
+	ld bc, 8
+	rst CopyBytes
+	ld hl, wMobileStablePoseGeneration
+	inc [hl]
+	ld a, [wMobileBudgetIndex]
+	ld e, a
+	ld d, 0
+	ld hl, MobileVirtualPaletteBits
+	add hl, de
+	ld a, [wMobileVirtualQueuedPeer]
+	or [hl]
+	ld [wMobileVirtualQueuedPeer], a ; publish the complete peer job last
+	ld a, [wMobileStablePoseCanceled]
+	and a
+	jr z, .return
+	xor a
+	ld [wMobileVirtualQueuedPeer], a
 	jr .return
 .publish_facing
 	pop hl
@@ -784,6 +837,27 @@ MobileNativeUpload:
 	add hl, bc
 	ld [hl], a
 .return
+	ld a, MOBILE_BACKUP_BANK
+	ldh [rWBK], a
+	ld a, [wMobileStablePoseCanceled]
+	and a
+	jr z, .preparation_done
+	xor a
+	ld [wMobileVirtualQueuedPeer], a
+	ld a, MOBILE_WRAM_BANK
+	ldh [rWBK], a
+	ld a, [wMobileBudgetIndex]
+	call MobileNativePeerPointer
+	ld bc, MOBILE_PEER_NATIVE_STAGE
+	add hl, bc
+	ld [hl], 0
+.preparation_done
+	ld a, MOBILE_BACKUP_BANK
+	ldh [rWBK], a
+	xor a
+	ld [wMobileStablePosePreparing], a
+	ld a, MOBILE_WRAM_BANK
+	ldh [rWBK], a
 	pop hl
 	ret
 
@@ -1038,3 +1112,821 @@ MobileNativeResetLeases:
 	pop bc
 	pop af
 	ret
+
+PUSHS
+SECTION "Mobile Canonical Pose Copy", ROMX, BANK[MOBILE_ROM_BANK + 1]
+MobileVirtualCopyCanonicalPose:
+ ; WBK=2. The validated peer supplies avatar and movement exactly once.
+ ld a, [wMobileBudgetIndex]
+ add a
+ ld e, a
+ ld d, 0
+ ld hl, .peer_appearance
+ add hl, de
+ ld a, [hli]
+ ld h, [hl]
+ ld l, a
+ ld a, [hli]
+ ld b, a
+ add a
+ add b
+ add a
+ add [hl]
+ add a
+ ld e, a
+ ld d, 0
+ ld hl, MobileVirtualAssetPointers
+ add hl, de
+ ld a, [hli]
+ ld d, [hl]
+ ld e, a
+ ld a, [wMobileVirtualFrame]
+ ld l, a
+ ld h, 0
+ rept 4
+ add hl, hl
+ endr
+ push hl
+ add hl, de
+ push hl
+ ld a, [wMobileBudgetIndex]
+ add a
+ ld e, a
+ ld d, 0
+ ld hl, .cache_bases
+ add hl, de
+ ld a, [hli]
+ ld d, [hl]
+ ld e, a
+ pop bc ; exact generated ROM source
+ pop hl ; exact pose byte offset
+ add hl, de
+ ld d, h
+ ld e, l
+ push hl ; immutable destination start, including a possible page-end copy
+ ld h, b
+ ld l, c
+ rept 64
+ ld a, [hli]
+ ld [de], a
+ inc e
+ endr
+ pop hl
+ ret
+.peer_appearance
+ for peer, 1, MOBILE_PEERS + 1
+ dw wMobilePeer{d:peer} + 18
+ endr
+.cache_bases
+ for peer, 1, MOBILE_PEERS + 1
+ dw wMobileAvatarCache{d:peer}
+ endr
+ASSERT BANK(MobileVirtualCopyCanonicalPose) == BANK(MobileVirtualAssetPointers)
+POPS
+
+PUSHS
+SECTION "Mobile Compact Peer Projection", ROMX, BANK[MOBILE_ROM_BANK + 5]
+MobileCompactProjectPeers:
+ xor a
+ for peer, 1, MOBILE_PEERS + 1
+ ld [wMobilePeer{d:peer}Visible], a
+ endr
+ ; Combine the old projection and drawing scope checks once per snapshot.
+ ld a, [wMobileLocalStaging]
+ ld b, a
+ ld a, [wMobileVirtualMapGroup]
+ cp b
+ ret nz
+ ld a, [wMobileLocalStaging + 1]
+ ld b, a
+ ld a, [wMobileVirtualMapNumber]
+ cp b
+ ret nz
+ ld a, [wMobileLocalValid]
+ and a
+ ret z
+
+ ; Slot 1: exact accepted scope and one immutable current-camera projection.
+ ld a, [wMobilePeerCount]
+ cp 1
+ jp c, .hidden1
+ ld a, [wMobilePeer1 + 6]
+ ld b, a
+ ld a, [wMobileLocalStaging]
+ cp b
+ jp nz, .hidden1
+ ld a, [wMobilePeer1 + 7]
+ ld b, a
+ ld a, [wMobileLocalStaging + 1]
+ cp b
+ jp nz, .hidden1
+ ld a, [wMobilePeer1 + 8]
+ ld b, a
+ ld a, [wMobileInstanceKey]
+ cp b
+ jp nz, .hidden1
+ ld a, [wMobilePeer1 + 9]
+ ld b, a
+ ld a, [wMobileInstanceKey + 1]
+ cp b
+ jp nz, .hidden1
+ ld a, [wMobilePeer1 + 17]
+ cp 1
+ jp nz, .hidden1
+ ld a, [wMobilePeer1 + MOBILE_PEER_DRAW_VALID]
+ and a
+ jr z, .snap1
+ ld a, [wMobilePeer1 + 12]
+ ld b, a
+ ld a, [wMobilePeer1 + MOBILE_PEER_DRAW_X + 1]
+ cp b
+ jr nz, .smooth1
+ ld a, [wMobilePeer1 + 13]
+ ld b, a
+ ld a, [wMobilePeer1 + MOBILE_PEER_DRAW_X]
+ cp b
+ jr nz, .smooth1
+ ld a, [wMobilePeer1 + 14]
+ ld b, a
+ ld a, [wMobilePeer1 + MOBILE_PEER_DRAW_Y + 1]
+ cp b
+ jr nz, .smooth1
+ ld a, [wMobilePeer1 + 15]
+ ld b, a
+ ld a, [wMobilePeer1 + MOBILE_PEER_DRAW_Y]
+ cp b
+ jr nz, .smooth1
+ jr .project1
+.smooth1
+ ld hl, wMobilePeer1 + 12
+ ld de, wMobilePeer1 + MOBILE_PEER_DRAW_X
+ call MobileCompactApproachPixel
+ ld hl, wMobilePeer1 + 14
+ ld de, wMobilePeer1 + MOBILE_PEER_DRAW_Y
+ call MobileCompactApproachPixel
+ jr .project1
+.snap1
+ ld a, 1
+ ld [wMobilePeer1 + MOBILE_PEER_DRAW_VALID], a
+ ld a, [wMobilePeer1 + 12]
+ ld [wMobilePeer1 + MOBILE_PEER_DRAW_X + 1], a
+ ld a, [wMobilePeer1 + 13]
+ ld [wMobilePeer1 + MOBILE_PEER_DRAW_X], a
+ ld a, [wMobilePeer1 + 14]
+ ld [wMobilePeer1 + MOBILE_PEER_DRAW_Y + 1], a
+ ld a, [wMobilePeer1 + 15]
+ ld [wMobilePeer1 + MOBILE_PEER_DRAW_Y], a
+.project1
+ ld a, [wMobileCameraX]
+ ld c, a
+ ld a, [wMobilePeer1 + MOBILE_PEER_DRAW_X]
+ sub c
+ ld e, a
+ ld a, [wMobileCameraX + 1]
+ ld c, a
+ ld a, [wMobilePeer1 + MOBILE_PEER_DRAW_X + 1]
+ sbc c
+ ld d, a
+ ld a, e
+ add 8
+ ld e, a
+ ld a, d
+ adc 0
+ and a
+ jr nz, .hidden1
+ ld a, e
+ cp 168
+ jr nc, .hidden1
+ ld [wMobilePeer1 + MOBILE_PEER_SCREEN_X], a
+ ld a, [wMobileCameraY]
+ ld c, a
+ ld a, [wMobilePeer1 + MOBILE_PEER_DRAW_Y]
+ sub c
+ ld e, a
+ ld a, [wMobileCameraY + 1]
+ ld c, a
+ ld a, [wMobilePeer1 + MOBILE_PEER_DRAW_Y + 1]
+ sbc c
+ ld d, a
+ ld a, e
+ add 12
+ ld e, a
+ ld a, d
+ adc 0
+ and a
+ jr nz, .hidden1
+ ld a, e
+ cp 160
+ jr nc, .hidden1
+ ld [wMobilePeer1 + MOBILE_PEER_SCREEN_Y], a
+ ld a, 1
+ ld [wMobilePeer1 + MOBILE_PEER_VISIBLE], a
+ ld hl, wMobileVisibleCount
+ inc [hl]
+.hidden1
+
+ ; Slot 2: exact accepted scope and one immutable current-camera projection.
+ ld a, [wMobilePeerCount]
+ cp 2
+ jp c, .hidden2
+ ld a, [wMobilePeer2 + 6]
+ ld b, a
+ ld a, [wMobileLocalStaging]
+ cp b
+ jp nz, .hidden2
+ ld a, [wMobilePeer2 + 7]
+ ld b, a
+ ld a, [wMobileLocalStaging + 1]
+ cp b
+ jp nz, .hidden2
+ ld a, [wMobilePeer2 + 8]
+ ld b, a
+ ld a, [wMobileInstanceKey]
+ cp b
+ jp nz, .hidden2
+ ld a, [wMobilePeer2 + 9]
+ ld b, a
+ ld a, [wMobileInstanceKey + 1]
+ cp b
+ jp nz, .hidden2
+ ld a, [wMobilePeer2 + 17]
+ cp 1
+ jp nz, .hidden2
+ ld a, [wMobilePeer2 + MOBILE_PEER_DRAW_VALID]
+ and a
+ jr z, .snap2
+ ld a, [wMobilePeer2 + 12]
+ ld b, a
+ ld a, [wMobilePeer2 + MOBILE_PEER_DRAW_X + 1]
+ cp b
+ jr nz, .smooth2
+ ld a, [wMobilePeer2 + 13]
+ ld b, a
+ ld a, [wMobilePeer2 + MOBILE_PEER_DRAW_X]
+ cp b
+ jr nz, .smooth2
+ ld a, [wMobilePeer2 + 14]
+ ld b, a
+ ld a, [wMobilePeer2 + MOBILE_PEER_DRAW_Y + 1]
+ cp b
+ jr nz, .smooth2
+ ld a, [wMobilePeer2 + 15]
+ ld b, a
+ ld a, [wMobilePeer2 + MOBILE_PEER_DRAW_Y]
+ cp b
+ jr nz, .smooth2
+ jr .project2
+.smooth2
+ ld hl, wMobilePeer2 + 12
+ ld de, wMobilePeer2 + MOBILE_PEER_DRAW_X
+ call MobileCompactApproachPixel
+ ld hl, wMobilePeer2 + 14
+ ld de, wMobilePeer2 + MOBILE_PEER_DRAW_Y
+ call MobileCompactApproachPixel
+ jr .project2
+.snap2
+ ld a, 1
+ ld [wMobilePeer2 + MOBILE_PEER_DRAW_VALID], a
+ ld a, [wMobilePeer2 + 12]
+ ld [wMobilePeer2 + MOBILE_PEER_DRAW_X + 1], a
+ ld a, [wMobilePeer2 + 13]
+ ld [wMobilePeer2 + MOBILE_PEER_DRAW_X], a
+ ld a, [wMobilePeer2 + 14]
+ ld [wMobilePeer2 + MOBILE_PEER_DRAW_Y + 1], a
+ ld a, [wMobilePeer2 + 15]
+ ld [wMobilePeer2 + MOBILE_PEER_DRAW_Y], a
+.project2
+ ld a, [wMobileCameraX]
+ ld c, a
+ ld a, [wMobilePeer2 + MOBILE_PEER_DRAW_X]
+ sub c
+ ld e, a
+ ld a, [wMobileCameraX + 1]
+ ld c, a
+ ld a, [wMobilePeer2 + MOBILE_PEER_DRAW_X + 1]
+ sbc c
+ ld d, a
+ ld a, e
+ add 8
+ ld e, a
+ ld a, d
+ adc 0
+ and a
+ jr nz, .hidden2
+ ld a, e
+ cp 168
+ jr nc, .hidden2
+ ld [wMobilePeer2 + MOBILE_PEER_SCREEN_X], a
+ ld a, [wMobileCameraY]
+ ld c, a
+ ld a, [wMobilePeer2 + MOBILE_PEER_DRAW_Y]
+ sub c
+ ld e, a
+ ld a, [wMobileCameraY + 1]
+ ld c, a
+ ld a, [wMobilePeer2 + MOBILE_PEER_DRAW_Y + 1]
+ sbc c
+ ld d, a
+ ld a, e
+ add 12
+ ld e, a
+ ld a, d
+ adc 0
+ and a
+ jr nz, .hidden2
+ ld a, e
+ cp 160
+ jr nc, .hidden2
+ ld [wMobilePeer2 + MOBILE_PEER_SCREEN_Y], a
+ ld a, 1
+ ld [wMobilePeer2 + MOBILE_PEER_VISIBLE], a
+ ld hl, wMobileVisibleCount
+ inc [hl]
+.hidden2
+
+ ; Slot 3: exact accepted scope and one immutable current-camera projection.
+ ld a, [wMobilePeerCount]
+ cp 3
+ jp c, .hidden3
+ ld a, [wMobilePeer3 + 6]
+ ld b, a
+ ld a, [wMobileLocalStaging]
+ cp b
+ jp nz, .hidden3
+ ld a, [wMobilePeer3 + 7]
+ ld b, a
+ ld a, [wMobileLocalStaging + 1]
+ cp b
+ jp nz, .hidden3
+ ld a, [wMobilePeer3 + 8]
+ ld b, a
+ ld a, [wMobileInstanceKey]
+ cp b
+ jp nz, .hidden3
+ ld a, [wMobilePeer3 + 9]
+ ld b, a
+ ld a, [wMobileInstanceKey + 1]
+ cp b
+ jp nz, .hidden3
+ ld a, [wMobilePeer3 + 17]
+ cp 1
+ jp nz, .hidden3
+ ld a, [wMobilePeer3 + MOBILE_PEER_DRAW_VALID]
+ and a
+ jr z, .snap3
+ ld a, [wMobilePeer3 + 12]
+ ld b, a
+ ld a, [wMobilePeer3 + MOBILE_PEER_DRAW_X + 1]
+ cp b
+ jr nz, .smooth3
+ ld a, [wMobilePeer3 + 13]
+ ld b, a
+ ld a, [wMobilePeer3 + MOBILE_PEER_DRAW_X]
+ cp b
+ jr nz, .smooth3
+ ld a, [wMobilePeer3 + 14]
+ ld b, a
+ ld a, [wMobilePeer3 + MOBILE_PEER_DRAW_Y + 1]
+ cp b
+ jr nz, .smooth3
+ ld a, [wMobilePeer3 + 15]
+ ld b, a
+ ld a, [wMobilePeer3 + MOBILE_PEER_DRAW_Y]
+ cp b
+ jr nz, .smooth3
+ jr .project3
+.smooth3
+ ld hl, wMobilePeer3 + 12
+ ld de, wMobilePeer3 + MOBILE_PEER_DRAW_X
+ call MobileCompactApproachPixel
+ ld hl, wMobilePeer3 + 14
+ ld de, wMobilePeer3 + MOBILE_PEER_DRAW_Y
+ call MobileCompactApproachPixel
+ jr .project3
+.snap3
+ ld a, 1
+ ld [wMobilePeer3 + MOBILE_PEER_DRAW_VALID], a
+ ld a, [wMobilePeer3 + 12]
+ ld [wMobilePeer3 + MOBILE_PEER_DRAW_X + 1], a
+ ld a, [wMobilePeer3 + 13]
+ ld [wMobilePeer3 + MOBILE_PEER_DRAW_X], a
+ ld a, [wMobilePeer3 + 14]
+ ld [wMobilePeer3 + MOBILE_PEER_DRAW_Y + 1], a
+ ld a, [wMobilePeer3 + 15]
+ ld [wMobilePeer3 + MOBILE_PEER_DRAW_Y], a
+.project3
+ ld a, [wMobileCameraX]
+ ld c, a
+ ld a, [wMobilePeer3 + MOBILE_PEER_DRAW_X]
+ sub c
+ ld e, a
+ ld a, [wMobileCameraX + 1]
+ ld c, a
+ ld a, [wMobilePeer3 + MOBILE_PEER_DRAW_X + 1]
+ sbc c
+ ld d, a
+ ld a, e
+ add 8
+ ld e, a
+ ld a, d
+ adc 0
+ and a
+ jr nz, .hidden3
+ ld a, e
+ cp 168
+ jr nc, .hidden3
+ ld [wMobilePeer3 + MOBILE_PEER_SCREEN_X], a
+ ld a, [wMobileCameraY]
+ ld c, a
+ ld a, [wMobilePeer3 + MOBILE_PEER_DRAW_Y]
+ sub c
+ ld e, a
+ ld a, [wMobileCameraY + 1]
+ ld c, a
+ ld a, [wMobilePeer3 + MOBILE_PEER_DRAW_Y + 1]
+ sbc c
+ ld d, a
+ ld a, e
+ add 12
+ ld e, a
+ ld a, d
+ adc 0
+ and a
+ jr nz, .hidden3
+ ld a, e
+ cp 160
+ jr nc, .hidden3
+ ld [wMobilePeer3 + MOBILE_PEER_SCREEN_Y], a
+ ld a, 1
+ ld [wMobilePeer3 + MOBILE_PEER_VISIBLE], a
+ ld hl, wMobileVisibleCount
+ inc [hl]
+.hidden3
+ ret
+
+MobileCompactApproachPixel:
+; HL=big-endian target, DE=little-endian render coordinate. Preserve pointers.
+	push hl
+	push de
+	ld a, [hli]
+	ld b, a
+	ld c, [hl]
+	ld a, [de]
+	ld l, a
+	inc de
+	ld a, [de]
+	ld h, a
+	push hl
+	ld a, c
+	sub l
+	ld l, a
+	ld a, b
+	sbc h
+	ld h, a
+	or l
+	jr z, .snap
+	ld a, h
+	and a
+	jr z, .positive
+	cp -1
+	jr nz, .snap
+	ld a, l
+	cp -32
+	jr c, .snap
+	jr .smooth
+.positive
+	ld a, l
+	cp 33
+	jr nc, .snap
+.smooth
+	sra h
+	rr l
+	ld a, h
+	or l
+	jr nz, .add
+	inc l ; positive one-pixel residual must make progress
+.add
+	pop de
+	add hl, de
+	jr .store
+.snap
+	pop hl
+	ld h, b
+	ld l, c
+.store
+	ld b, h
+	ld c, l
+	pop de
+	ld a, c
+	ld [de], a
+	inc de
+	ld a, b
+	ld [de], a
+	dec de
+	pop hl
+	ret
+
+
+POPS
+
+PUSHS
+SECTION "Mobile Compact Cold Job", ROMX, BANK[MOBILE_ROM_BANK + 1]
+MobileCompactPrepareColdCohort:
+ ; One admitted foreground batch owns CPU through exact prevalidation. Each
+ ; constructor consumes a generic slot; no generic upload dispatch is entered.
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ xor a
+ ld [wMobileStablePoseCanceled], a
+ inc a
+ ld [wMobileStablePosePreparing], a
+ ld [wMobileBudgetOptional], a ; one construction lifetime for the whole cohort
+for peer, 1, MOBILE_PEERS + 1
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+ ld a, [wMobilePeer{d:peer}Visible]
+ and a
+ jr z, .next{d:peer}
+ ld a, [wMobilePeer{d:peer}NativeStage]
+ cp 7
+ jr z, .next{d:peer}
+ ld a, [wMobileVirtualQueuedPeer]
+ bit peer - 1, a
+ jr nz, .next{d:peer}
+ ld a, peer - 1
+ ld [wMobileBudgetIndex], a
+ call MobileCompactColdUpload
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, [wMobileStablePoseCanceled]
+ and a
+ jr nz, .finish
+.next{d:peer}
+endr
+.finish
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ xor a
+ ld [wMobileBudgetOptional], a
+ ld [wMobileStablePosePreparing], a
+ ret
+
+MobileCompactColdUpload:
+ ld a, [wMobileBudgetIndex]
+ ld b, a
+ ld a, [wMobilePeerCount]
+ cp b
+ ret z
+ ret c
+ ld a, [wMobileWanted]
+ and a
+ ret z
+ ld a, [wMobileOnline]
+ and a
+ ret z
+ ld a, [wMobileBudgetIndex]
+ ld e, a
+ ld d, 0
+ ld hl, wMobileVirtualWindowOwners
+ add hl, de
+ ld a, [hl]
+ and a
+ ret nz ; this constructor never overwrites an existing private tile lease
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, [wMobileStableSourceValid]
+ cp 1
+ jp nz, .early_return
+ ld a, [wMobileStableActorViewValid]
+ cp 1
+ jp nz, .early_return
+ ld a, [wMobileBudgetOptional]
+ and a
+ jr nz, .construction_lifetime_ready
+ xor a
+ ld [wMobileStablePoseCanceled], a
+ inc a
+ ld [wMobileStablePosePreparing], a
+.construction_lifetime_ready
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+ call .peer
+ ld bc, 18
+ add hl, bc
+ ld a, [hli]
+ ld [wMobileVirtualQueuedAvatar], a
+ ld b, a
+ add a
+ add b
+ add a
+ add [hl]
+ ld e, a
+ ld d, 0
+ ld a, [hl]
+ ld [wMobileVirtualQueuedMovement], a
+ ld hl, MobileVirtualAssetSprites
+ add hl, de
+ ld a, [hl] ; immutable assets share this upper bank
+ ld [wMobileVirtualQueuedSprite], a
+ push af
+ call .peer
+ ld bc, 33
+ add hl, bc
+ pop af
+ ld [hli], a
+ ld [hl], 1 ; immutable job pending, not a resident GPU pose
+ call MobileCompactColdPalette
+ jp c, .failed
+ call .peer
+ ld bc, 16
+ add hl, bc
+ ld a, [hl]
+ ld [wMobileAvatarTile], a
+ ld [wMobileVirtualQueuedFacing], a
+ ld b, a
+ and $c
+ cp $c
+ jr nz, .source
+ ld a, 8
+.source
+ bit 0, b
+ jr z, .standing
+ add 12
+.standing
+ ld [wMobileVirtualFrame], a
+ ld [wMobileVirtualQueuedFrame], a
+ ld a, [wMobileBudgetIndex]
+ ld [wMobileVirtualQueuedWindow], a
+ call MobileVirtualCopyCanonicalPose
+ ld a, l
+ ld [wMobileVirtualQueuedSource], a
+ ld a, h
+ ld [wMobileVirtualQueuedSource + 1], a
+ ; Bind the exact full identity, separately from facing/avatar/movement.
+ call .peer
+ ld a, [hli]
+ ld b, a
+ ld a, [hli]
+ ld c, a
+ ld a, [hli]
+ ld d, a
+ ld e, [hl]
+ push bc
+ push de
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, [wMobileBudgetIndex]
+ add a
+ add a
+ ld e, a
+ ld d, 0
+ ld hl, wMobileStableRemoteBindings
+ add hl, de
+ pop de
+ pop bc
+ ld a, b
+ ld [hli], a
+ ld a, c
+ ld [hli], a
+ ld a, d
+ ld [hli], a
+ ld [hl], e
+ ld a, [wMobileBudgetIndex]
+ add a
+ add a
+ add a
+ ld e, a
+ ld d, 0
+ ld hl, wMobileStablePoseBatch
+ add hl, de
+ ld d, h
+ ld e, l
+ ld hl, wMobileVirtualQueuedWindow
+ ld bc, 8
+ rst CopyBytes
+ ld hl, wMobileStablePoseGeneration
+ inc [hl]
+ ld a, [wMobileBudgetIndex]
+ ld e, a
+ ld d, 0
+ ld hl, .bits
+ add hl, de
+ ld a, [wMobileVirtualQueuedPeer]
+ or [hl]
+ ld [wMobileVirtualQueuedPeer], a
+ ld a, [wMobileStablePoseCanceled]
+ and a
+ jr nz, .failed
+ ld a, [wMobileBudgetOptional]
+ and a
+ jr nz, .early_return
+ xor a
+ ld [wMobileStablePosePreparing], a
+.early_return
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+ ret
+.failed
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, 1
+ ld [wMobileStablePoseCanceled], a
+ xor a
+ ld [wMobileVirtualQueuedPeer], a
+ ld [wMobileStablePosePreparing], a
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+ call .peer
+ ld bc, MOBILE_PEER_NATIVE_STAGE
+ add hl, bc
+ ld [hl], 0
+ ret
+.peer
+ ld a, [wMobileBudgetIndex]
+ add a
+ ld e, a
+ ld d, 0
+ ld hl, .peers
+ add hl, de
+ ld a, [hli]
+ ld h, [hl]
+ ld l, a
+ ret
+.peers
+ for peer, 1, MOBILE_PEERS + 1
+ dw wMobilePeer{d:peer}
+ endr
+.bits
+ db 1, 2, 4
+ASSERT BANK(MobileCompactColdUpload) == BANK(MobileVirtualAssetPointers)
+
+; Cold canonical RGB uses the native read-only selector directly. It neither
+; allocates a native palette nor writes either native palette buffer. Only
+; wPalState and wNeededObjPalGlow are selector inputs temporarily replaced.
+MobileCompactColdPalette:
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, [wPalFadeDelayFrames]
+ and a
+ jr nz, .failed
+ ld a, 1
+ ldh [rWBK], a
+ ld a, [wPalState]
+ push af
+ ld a, [wNeededObjPalGlow]
+ push af
+ ld a, CURR_PALSTATE
+ ld [wPalState], a
+ xor a
+ ld [wNeededObjPalGlow], a
+ ld a, [wMobileVirtualQueuedAvatar]
+ farcall LookupOBPalette
+ pop af
+ ld [wNeededObjPalGlow], a
+ pop af
+ ld [wPalState], a
+ push hl
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, [wMobileBudgetIndex]
+ add a
+ add a
+ add a
+ add LOW(wMobilePrivatePalColors)
+ ld e, a
+ adc HIGH(wMobilePrivatePalColors)
+ sub e
+ ld d, a
+ pop hl
+ ld bc, 8
+ ld a, BANK(LookupOBPalette)
+ call FarCopyBytes
+ ld a, [wMobileBudgetIndex]
+ ld e, a
+ ld d, 0
+ ld hl, wMobilePrivatePalIdentities
+ add hl, de
+ ld a, [wMobileVirtualQueuedAvatar]
+ ld [hl], a
+ ld hl, .bits
+ add hl, de
+ ld a, [hl]
+ cpl
+ ld hl, wMobilePrivatePalDirty
+ and [hl]
+ ld [hl], a
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+ call MobileCompactColdUpload.peer
+ ld bc, 54
+ add hl, bc
+ ld [hl], 1
+ and a
+ ret
+.failed
+ scf
+ ret
+.bits
+ db 1,2,4
+ASSERT BANK(MobileCompactColdPalette) == BANK(MobileVirtualAssetPointers)
+POPS

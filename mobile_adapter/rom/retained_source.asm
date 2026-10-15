@@ -29,6 +29,12 @@ MobileInvalidateNormalSource::
  ret
 
 MobileRejectNormalSource:
+ ld a, [wMobileStablePosePreparing]
+ and a
+ jr z, .not_preparing
+ ld a, 1
+ ld [wMobileStablePoseCanceled], a
+.not_preparing
  call MobileRejectNormalPresentation
  xor a
  ld [wMobileStableProducerActive], a
@@ -45,6 +51,7 @@ MobileRejectNormalSource:
 
 MobileRejectNormalPresentation:
  xor a
+ ld [wMobileCompactKeepPublication], a
  ld [wMobileStablePendingValid], a
  ld [wMobileStablePendingNative], a
  ld [wMobileStablePendingNative + 1], a
@@ -137,6 +144,8 @@ MobileCaptureNormalSource::
  ld a, MOBILE_BACKUP_BANK
  ldh [rWBK], a
  call MobileRejectNormalPresentation
+ xor a
+ ld [wMobileVirtualFastAdmission], a ; new source never inherits a prefix proof
  ld a, [wMobileStableFinalDecision]
  cp $82
  jr nz, .unlocked
@@ -158,6 +167,8 @@ MobileCaptureNormalSource::
  ld hl, wShadowOAM
  ld de, wMobileStableOriginalYs
  ld b, OAM_COUNT
+ xor a
+ ld [wMobileStableUnknownCount], a
 .ys
  ld a, [hli]
  ld [de], a
@@ -167,6 +178,27 @@ MobileCaptureNormalSource::
  inc hl
  dec b
  jr nz, .ys
+ ; Derive the finite unknown-span certificate from this completed producer,
+ ; rather than spending forty separate idle jobs on an empty effect list.
+ ld hl, wMobileStableOwners
+ ld de, wMobileStableOriginalYs
+ ld b, OAM_COUNT
+.unknown
+ ld a, [hli]
+ cp $ff
+ jr nz, .next_unknown
+ ld a, [de]
+ cp 9
+ jr c, .next_unknown
+ cp SCREEN_HEIGHT_PX + OAM_Y_OFS
+ jr nc, .next_unknown
+ ld a, [wMobileStableUnknownCount]
+ inc a
+ ld [wMobileStableUnknownCount], a
+.next_unknown
+ inc de
+ dec b
+ jr nz, .unknown
  ld hl, wShadowOAM + 1
  ld de, wMobileStableRawXTileFlags
  ld b, OAM_COUNT
@@ -443,3 +475,56 @@ MobileUnknownNativeWrite::
 MobileRetainedNormalSourceEnd::
 ASSERT BANK(wOBPals2) == MOBILE_BACKUP_BANK
 ASSERT wOBPals2 == $ddc0
+
+; Live peer/session mutation barrier. Preserve the native caller ABI and revoke
+; the candidate and immutable staged jobs before the first conflicting store.
+MobileVirtualRevokePoseBatch::
+ push af
+ push bc
+ push de
+ push hl
+ ldh a, [rWBK]
+ push af
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, [wMobileCompactKeepPublication]
+ and a
+ jr nz, .preserve_consumed_page
+ ; Peer stores do not mutate the already closed native producer. Retire
+ ; the joint candidate and pose ownership, retaining the exact native proof.
+ ld a, [wMobileStableSourceValid]
+ ld b, a
+ ld a, [wMobileStableActorViewValid]
+ ld c, a
+ push bc
+ call MobileRejectNormalPresentation
+ pop bc
+ ld a, b
+ ld [wMobileStableSourceValid], a
+ ld a, c
+ ld [wMobileStableActorViewValid], a
+ cp 1
+ jr nz, .native_not_ready
+ ld a, b
+ cp 1
+ jr nz, .native_not_ready
+ ld a, 1
+ ld [wMobileVirtualStage], a
+ jr .native_not_ready
+.preserve_consumed_page
+ ; The roster caller proved all consumed slots and resources unchanged. Cancel
+ ; new jobs before stores, while this old source/frame publication stays sealed.
+ ld a, 1
+ ld [wMobileVirtualStage], a
+.native_not_ready
+ xor a
+ ld [wMobileVirtualQueuedPeer], a
+ ld a, 1
+ ld [wMobileStablePoseCanceled], a
+ pop af
+ ldh [rWBK], a
+ pop hl
+ pop de
+ pop bc
+ pop af
+ ret

@@ -317,6 +317,7 @@ static void load_bindings(const std::string& path) {
         {"wMobileCompactNativeLength", 0xdb40},
         {"wMobileCompactNativeMask", 0xdb41},
         {"wMobileCompactNativePalette", 0xdb43},
+        {"wMobileCompactKeepPublication", 0xdb44},
         {"wMobileStableOriginalYs", 0xd840},
         {"wMobileStableOwners", 0xd868},
         {"wMobileStablePhases", 0xd890},

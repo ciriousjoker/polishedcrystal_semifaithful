@@ -349,6 +349,7 @@ MobileConsumeFrame:
 	ld a, [wMobileApp + 13]
 	cp 1
 	jp nz, .bad
+	call MobileVirtualRevokePoseBatch
 	ld hl, wMobileApp + 8
 	ld de, wMobilePlayerId
 	ld bc, 4
@@ -421,6 +422,27 @@ MobileConsumeFrame:
 	ld a, [wMobileApp + 3]
 	cp MOBILE_DELTA
 	jp z, MobileMergePeers
+	; Classify the entire validated ordered roster before the first live store.
+	; Revision-only refreshes preserve immutable presentation and pose jobs.
+	call MobileRosterPresentationEqual
+	jr nz, .roster_changed
+	ld a, 3
+	ld [wMobileDecodePhase], a
+	jr .roster_classified
+.roster_changed
+ ; Changed authoritative fields still revoke pending jobs before live stores.
+ ; A ready page can survive only when none of its consumed slots changed.
+ farcall MobileRosterConsumedPageEqual
+ jr nz, .revoke_roster
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, 1
+ ld [wMobileCompactKeepPublication], a
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+.revoke_roster
+	call MobileVirtualRevokePoseBatch
+.roster_classified
 	ld a, [wMobileApp + 12]
 	ld [wMobilePeerCount], a
 	and a
@@ -430,7 +452,9 @@ MobileConsumeFrame:
 	ld de, wMobilePeer1
 .copy_peer
 	push bc
-	call MobileInvalidatePeer
+	ld a, [wMobileDecodePhase]
+	cp 3
+	call nz, MobileInvalidatePeer
 	ld bc, MOBILE_PEER_RECORD_SIZE
 	rst CopyBytes
 	push hl
@@ -443,6 +467,12 @@ MobileConsumeFrame:
 	dec b
 	jr nz, .copy_peer
 .roster_done
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ xor a
+ ld [wMobileCompactKeepPublication], a
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
 	ld hl, wMobilePresenceCount
 	inc [hl]
 	jr nz, .accepted
@@ -461,10 +491,12 @@ MobileConsumeFrame:
 	jr nz, .bad
 	call .check_identity
 	jr c, .bad
+	call MobileVirtualRevokePoseBatch
 	xor a
 	ld [wMobilePlayerId], a
 	ld [wMobilePlayerId + 1], a
 	ld [wMobileOnline], a
+	call MobileVirtualRevokePoseBatch
 	ld [wMobilePeerCount], a
 	ld a, 5
 	ld [wMobileStep], a
@@ -583,16 +615,24 @@ MobileFindPeer:
 	ld a, b
 	and a
 	jr z, .missing
-	ld a, [de]
-	cp [hl]
-	jr nz, .next
-	inc de
-	inc hl
-	ld a, [de]
-	cp [hl]
-	dec de
-	dec hl
-	jr z, .found
+	push bc
+ push hl
+ push de
+ ld b, 4 ; full player and generation binding, never a delta ordinal
+.identity
+ ld a, [de]
+ cp [hl]
+ jr nz, .compared
+ inc de
+ inc hl
+ dec b
+ jr nz, .identity
+.compared
+ pop de
+ pop hl
+ pop bc
+ jr z, .found
+
 .next
 	push hl
 	ld hl, MOBILE_PEER_SIZE
@@ -614,7 +654,26 @@ MobileFindPeer:
 	ret
 
 MobileMergePeers:
-; All identity bindings were checked before publication. No partial delta commits.
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ xor a
+ ld [wMobileCompactKeepPublication], a
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+; Classify the entire validated delta before its first live record store.
+ farcall MobileDeltaPresentationEqual
+ jr z, .classified
+ farcall MobileRosterConsumedPageEqual
+ jr nz, .revoke
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, 1
+ ld [wMobileCompactKeepPublication], a
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+.revoke
+ call MobileVirtualRevokePoseBatch
+.classified
 	ld a, [wMobileApp + 12]
 	and a
 	jr z, .bad
@@ -623,6 +682,7 @@ MobileMergePeers:
 .loop
 	push bc
 	call MobileFindPeer
+ jr c, .canceled
 ; Prioritize one already validated changed record without increasing frame work.
 ; Private records have a 64-byte stride; subtraction remains valid across pages.
 	ld a, e
@@ -639,7 +699,15 @@ endr
 	dec b
 	jr nz, .loop
 	jmp MobileConsumeFrame.roster_done
+.canceled
+ pop bc
 .bad
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ xor a
+ ld [wMobileCompactKeepPublication], a
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
 	scf
 	ret
 
@@ -1004,23 +1072,21 @@ MobileInvalidatePeer:
 	inc hl
 	dec b
 	jr nz, .scene_byte
-	ld bc, 5 ; availability and selected appearance at record offsets 17..18
-	add hl, bc
-	ld a, e
-	add 5
-	ld e, a
-	jr nc, .appearance
-	inc d
+	; Position, facing, availability, avatar and movement at offsets 12..19.
+	; The caller writes these bytes only after this exact geometry barrier.
 .appearance
+	ld b, 8
+.appearance_byte
 	ld a, [de]
 	cp [hl]
 	jr nz, .changed
 	inc de
 	inc hl
-	ld a, [de]
-	cp [hl]
-	jr z, .same
+	dec b
+	jr nz, .appearance_byte
+	jr .same
 .changed
+	call MobileVirtualRevokePoseBatch
 	pop bc
 	pop de
 	push de
@@ -1030,9 +1096,16 @@ MobileInvalidatePeer:
 	ld hl, MOBILE_PEER_VISIBLE
 	add hl, de
 	ld [hl], 0
-	xor a
-	ld [wMobileVirtualPreviousOAM], a
-	ld [wMobileVirtualStage], a
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, [wMobileCompactKeepPublication]
+ and a
+ jr nz, .changed_page_ready
+ xor a
+ ld [wMobileVirtualPreviousOAM], a
+.changed_page_ready
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
 	jr .done
 .same
 	pop bc
@@ -1216,4 +1289,316 @@ MobileCopyCompatibilityHash::
 	ld bc, 32
 	rst CopyBytes
 	ret
+POPS
+
+; WBK=2. Classify every validated slot before any live roster store. An
+; unavailable append is harmless only with no resident, projected or pending
+; ownership in that slot. Surviving ordered identities and presentation match.
+; Count-dependent visible masks remain exact: the new slots are unavailable.
+MobileRosterPresentationEqual:
+ ld a, [wMobilePeerCount]
+ ld b, a
+ ld a, [wMobileApp + 12]
+ cp b
+ jp c, .changed
+for peer, 1, MOBILE_PEERS + 1
+ ld a, [wMobileApp + 12]
+ cp peer
+ jp c, .equal
+ ld a, [wMobilePeerCount]
+ cp peer
+ jr c, .append{d:peer}
+ ld hl, wMobileApp + 13 + (peer - 1) * MOBILE_PEER_RECORD_SIZE
+ ld de, wMobilePeer{d:peer}
+ ld b, 4
+.identity{d:peer}
+ ld a, [de]
+ cp [hl]
+ jp nz, .changed
+ inc de
+ inc hl
+ dec b
+ jr nz, .identity{d:peer}
+ inc de
+ inc de
+ inc hl
+ inc hl
+ ld b, MOBILE_PEER_RECORD_SIZE - 6
+.presentation{d:peer}
+ ld a, [de]
+ cp [hl]
+ jp nz, .changed
+ inc de
+ inc hl
+ dec b
+ jr nz, .presentation{d:peer}
+ jr .next{d:peer}
+.append{d:peer}
+ ld a, [wMobileApp + 13 + (peer - 1) * MOBILE_PEER_RECORD_SIZE + 17]
+ and a
+ jp nz, .changed
+ ld a, [wMobilePeer{d:peer} + MOBILE_PEER_VISIBLE]
+ and a
+ jp nz, .changed
+ ld a, [wMobilePeer{d:peer} + MOBILE_PEER_DRAW_VALID]
+ and a
+ jp nz, .changed
+ ld a, [wMobilePeer{d:peer} + MOBILE_PEER_NATIVE_STAGE]
+ and a
+ jp nz, .changed
+ ld a, [wMobileVirtualWindowOwners + peer - 1]
+ and a
+ jp nz, .changed
+ ld a, [wMobileVirtualQueuedPeer]
+ bit peer - 1, a
+ jp nz, .changed
+.next{d:peer}
+endr
+.equal
+ xor a
+ ret
+.changed
+ ld a, 1
+ and a
+ ret
+
+PUSHS
+SECTION "Mobile Consumed Roster Dependency", ROMX, BANK[MOBILE_ROM_BANK + 5]
+; A changed roster never becomes rendering equality. This independent proof
+; permits only the already published old epoch to reach its one next VBlank.
+; New preparation remains revoked and must consume the new accepted roster.
+MobileRosterConsumedPageEqual:
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, [wMobileStableSourceValid]
+ cp 1
+ jp nz, .changed
+ ld a, [wMobileStableActorViewValid]
+ cp 1
+ jp nz, .changed
+ ld a, [wMobileStablePendingValid]
+ cp 1
+ jp nz, .changed
+ ld a, [wMobileStableCapacityValid]
+ cp 1
+ jp nz, .changed
+ ld a, [wMobileVirtualPreviousOAM]
+ cp 1
+ jp nz, .changed
+ ld a, [wMobileVirtualFastAdmission]
+ cp 3
+ jp nz, .changed
+ ld a, [wMobileVirtualQueuedPeer]
+ and a
+ jp nz, .changed
+ ld a, [wMobileNativeGraphicsFence]
+ and a
+ jp nz, .changed
+ ld a, [wPalFadeDelayFrames]
+ and a
+ jp nz, .changed
+ ; Every consumed resident resource is checked, even when its record is
+ ; absent from a delta. Untouched slots are implicit unchanged input.
+for peer, 1, MOBILE_PEERS + 1
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, [wMobileStablePendingPrivate + 1]
+ bit peer + 4, a
+ jr z, .resource_ready{d:peer}
+ ld a, [wMobileVirtualWindowOwners + peer - 1]
+ cp peer
+ jp nz, .changed
+ ld a, [wMobilePrivatePalDirty]
+ bit peer - 1, a
+ jp nz, .changed
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+ ld a, [wMobilePeer{d:peer}NativeStage]
+ cp 7
+ jp nz, .changed
+.resource_ready{d:peer}
+endr
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+ ld a, [wMobileApp + 3]
+ cp MOBILE_DELTA
+ jp z, .delta
+for peer, 1, MOBILE_PEERS + 1
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, [wMobileStablePendingPrivate + 1]
+ bit peer + 4, a
+ jp z, .next{d:peer}
+ ld a, [wMobileVirtualWindowOwners + peer - 1]
+ cp peer
+ jp nz, .changed
+ ld a, [wMobilePrivatePalDirty]
+ bit peer - 1, a
+ jp nz, .changed
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+ ld a, [wMobileApp + 12]
+ cp peer
+ jp c, .changed
+ ld a, [wMobilePeer{d:peer}NativeStage]
+ cp 7
+ jp nz, .changed
+ ld hl, wMobileApp + 13 + (peer - 1) * MOBILE_PEER_RECORD_SIZE
+ ld de, wMobilePeer{d:peer}
+ ld b, 4
+.identity{d:peer}
+ ld a, [de]
+ cp [hl]
+ jp nz, .changed
+ inc de
+ inc hl
+ dec b
+ jr nz, .identity{d:peer}
+ inc hl
+ inc hl
+ inc de
+ inc de
+ ld b, MOBILE_PEER_RECORD_SIZE - 6
+.presentation{d:peer}
+ ld a, [de]
+ cp [hl]
+ jp nz, .changed
+ inc de
+ inc hl
+ dec b
+ jr nz, .presentation{d:peer}
+.next{d:peer}
+endr
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+ xor a
+ ret
+.delta
+ ld a, [wMobileApp + 12]
+ ld b, a
+ ld hl, wMobileApp + 13
+.delta_record
+ push bc
+ push hl
+ farcall MobileFindPeer
+ jr c, .delta_invalid
+ ld a, e
+ sub LOW(wMobilePeer1)
+ rept 6
+ rrca
+ endr
+ push de
+ ld e, a
+ ld d, 0
+ ld hl, .peer_bits
+ add hl, de
+ ld b, [hl]
+ ld a, MOBILE_BACKUP_BANK
+ ldh [rWBK], a
+ ld a, [wMobileStablePendingPrivate + 1]
+ and b
+ pop de
+ pop hl
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+ jr z, .delta_unconsumed
+ ; The changed record is consumed by the sealed page. Preserve only exact
+ ; identity/presentation, while revision changes remain harmless.
+ ld b, 4
+.delta_identity
+ ld a, [de]
+ cp [hl]
+ jr nz, .delta_changed
+ inc de
+ inc hl
+ dec b
+ jr nz, .delta_identity
+ inc de
+ inc de
+ inc hl
+ inc hl
+ ld b, MOBILE_PEER_RECORD_SIZE - 6
+.delta_presentation
+ ld a, [de]
+ cp [hl]
+ jr nz, .delta_changed
+ inc de
+ inc hl
+ dec b
+ jr nz, .delta_presentation
+ jr .delta_next
+.delta_unconsumed
+ ld bc, MOBILE_PEER_RECORD_SIZE
+ add hl, bc
+.delta_next
+ pop bc
+ dec b
+ jr nz, .delta_record
+ xor a
+ ret
+.delta_invalid
+ pop hl
+.delta_changed
+ pop bc
+ jp .changed
+.peer_bits
+ db $20,$40,$80
+
+.changed
+ ld a, MOBILE_WRAM_BANK
+ ldh [rWBK], a
+ ld a, 1
+ and a
+ ret
+POPS
+
+PUSHS
+SECTION "Mobile Exact Delta Dependency", ROMX, BANK[MOBILE_ROM_BANK + 5]
+MobileDeltaPresentationEqual:
+ ld a, [wMobileApp + 12]
+ and a
+ jr z, .changed
+ ld b, a
+ ld hl, wMobileApp + 13
+.record
+ push bc
+ push hl
+ farcall MobileFindPeer
+ jr c, .invalid
+ pop hl
+ ld b, 4
+.identity
+ ld a, [de]
+ cp [hl]
+ jr nz, .different
+ inc de
+ inc hl
+ dec b
+ jr nz, .identity
+ inc de
+ inc de
+ inc hl
+ inc hl
+ ld b, MOBILE_PEER_RECORD_SIZE - 6
+.presentation
+ ld a, [de]
+ cp [hl]
+ jr nz, .different
+ inc de
+ inc hl
+ dec b
+ jr nz, .presentation
+ pop bc
+ dec b
+ jr nz, .record
+ xor a
+ ret
+.invalid
+ pop hl
+.different
+ pop bc
+.changed
+ ld a, 1
+ and a
+ ret
 POPS
