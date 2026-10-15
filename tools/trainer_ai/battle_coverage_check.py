@@ -73,6 +73,21 @@ class CoverageGateTest(unittest.TestCase):
             if artifact["path"] == name:
                 artifact["sha256"] = coverage.sha(content)
 
+    def rewrite_manifest(self):
+        content = json.dumps(self.manifest).encode()
+        self.replace_retained("oracle.json", content)
+        self.report["manifest_sha256"] = coverage.sha(content)
+        self.case_report["manifest_sha256"] = self.report["manifest_sha256"]
+
+    def enable_banked_wram(self):
+        self.configuration["options"]["banked_wram"] = True
+        self.report["configuration"] = copy.deepcopy(self.configuration)
+        self.case_report["configuration"] = copy.deepcopy(self.configuration)
+        self.manifest["profile"] = "bounded-mbc3-banked-wram-div-event-tape"
+        self.manifest["banked_wram"] = True
+        self.case_report["cases"][0]["full_state_components"] = ["cpu", "hram", "wram-banks-0-7", "svbk"]
+        self.rewrite_manifest()
+
     def result(self):
         cases = self.root / "cases.json"
         cases.write_text(json.dumps(self.case_report))
@@ -244,6 +259,45 @@ class CoverageGateTest(unittest.TestCase):
 
     def test_fixed_level_scope_cannot_be_disabled(self):
         self.configuration["options"]["fixed_levels"] = False
+        self.assertFalse(self.result()["accepted"])
+
+    def test_banked_wram_consistent_profile_is_accepted(self):
+        self.enable_banked_wram()
+        self.assertTrue(self.result()["accepted"])
+
+    def test_flat_profile_rejects_banked_capability(self):
+        self.enable_banked_wram()
+        self.manifest["profile"] = "bounded-mbc3-flat-wram-div-event-tape"
+        self.rewrite_manifest()
+        self.assertFalse(self.result()["accepted"])
+
+    def test_banked_profile_requires_explicit_manifest_capability(self):
+        self.enable_banked_wram()
+        del self.manifest["banked_wram"]
+        self.rewrite_manifest()
+        self.assertFalse(self.result()["accepted"])
+
+    def test_banked_profile_requires_explicit_configured_capability(self):
+        self.enable_banked_wram()
+        for target in (self.configuration, self.report["configuration"], self.case_report["configuration"]):
+            del target["options"]["banked_wram"]
+        self.assertFalse(self.result()["accepted"])
+
+    def test_banked_manifest_capability_must_be_boolean(self):
+        self.enable_banked_wram()
+        self.manifest["banked_wram"] = 1
+        self.rewrite_manifest()
+        self.assertFalse(self.result()["accepted"])
+
+    def test_banked_configured_capability_must_be_boolean(self):
+        self.enable_banked_wram()
+        for target in (self.configuration, self.report["configuration"], self.case_report["configuration"]):
+            target["options"]["banked_wram"] = 1
+        self.assertFalse(self.result()["accepted"])
+
+    def test_banked_case_must_compare_all_banks_and_svbk(self):
+        self.enable_banked_wram()
+        self.case_report["cases"][0]["full_state_components"] = ["cpu", "hram"]
         self.assertFalse(self.result()["accepted"])
 
     def test_default_source_inventory(self):

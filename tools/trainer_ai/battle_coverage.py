@@ -236,12 +236,23 @@ def validate_configuration(configuration):
             raise ValueError(f"Option violates fixed-level ordinary M2 contract: {option}")
     if options.get("battle_style") not in ("set", "switch", "predict"):
         raise ValueError("Invalid battle style")
+    if type(options.get("banked_wram", False)) is not bool:
+        raise ValueError("banked_wram capability must be boolean")
 
 
 def execution_artifacts(report, originals, evidence_root, manifest, current):
     """Bind trusted runner receipts to retained bytes, not matching digest labels."""
-    if manifest.get("schema") != 1 or manifest.get("profile") != "bounded-mbc3-flat-wram-div-event-tape":
+    profiles = {"bounded-mbc3-flat-wram-div-event-tape": False,
+                "bounded-mbc3-banked-wram-div-event-tape": True}
+    profile = manifest.get("profile")
+    if manifest.get("schema") != 1 or profile not in profiles:
         raise ValueError("Unsupported execution manifest schema/profile")
+    manifest_banked = manifest.get("banked_wram", False)
+    configured_banked = report["configuration"]["options"].get("banked_wram", False)
+    if type(manifest_banked) is not bool or type(configured_banked) is not bool:
+        raise ValueError("banked_wram capability must be boolean")
+    if manifest_banked is not profiles[profile] or configured_banked is not manifest_banked:
+        raise ValueError("WRAM profile/capability mismatch")
     if not isinstance(manifest.get("entries"), dict) or not manifest["entries"]:
         raise ValueError("Execution manifest has no source entries")
     retained = {item["path"]: item for item in originals}
@@ -406,6 +417,11 @@ def evaluate(current, ledger, evidence_root: Path):
                         raise ValueError("Original case failed or is unsupported")
                     if case.get("full_state_comparisons", 0) < 1:
                         raise ValueError("Original case has no state comparison")
+                    if configuration["options"].get("banked_wram", False):
+                        components = case.get("full_state_components", [])
+                        required = {"cpu", "hram", "wram-banks-0-7", "svbk"}
+                        if not isinstance(components, list) or not required.issubset(set(components)):
+                            raise ValueError("Banked WRAM case lacks complete bank/SVBK state comparison")
                     case_rules = set(case.get("rule_keys", []))
                     if case_rules - set(rules):
                         raise ValueError("Original case contains unknown rule IDs")

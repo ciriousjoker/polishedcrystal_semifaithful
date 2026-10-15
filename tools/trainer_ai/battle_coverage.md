@@ -145,3 +145,23 @@ source's actual `NO_EXP_OPT` must be set in every retained starting WRAM snapsho
 merely declaring `experience: false` does not pass. This is a deliberate training
 ruleset selected by the user, rather than a claim of experience-enabled gameplay
 fidelity. Level/base-stat initialization from the team is still checked.
+
+## Optional CGB banked WRAM capability
+
+The legacy `bounded-mbc3-flat-wram-div-event-tape` manifest profile remains valid
+with `banked_wram` absent or explicitly false, including legacy configurations
+whose options omit that flag. The optional
+`bounded-mbc3-banked-wram-div-event-tape` profile instead requires explicit
+boolean `banked_wram: true` in both the manifest and configuration options.
+Truthy integers and profile/capability mismatches reject.
+
+For banked execution every original case must explicitly include
+`full_state_components: ["cpu", "hram", "wram-banks-0-7", "svbk"]`. Full-state
+oracle comparisons must include the complete CGB WRAM backing, every physical
+bank and raw SVBK selection, including bank-zero aliasing to bank one, rather
+than only the currently mapped C000-DFFF window. `initial_wram` remains the
+canonical 8 KiB bank-zero/bank-one snapshot used to decode runtime options; it is
+not a substitute for comparing all banked state. The gate checks consistent
+capability/evidence metadata; actual native and oracle bank semantics require
+separate executed proof. This capability does not promote any combat mechanism
+or change the fixed-level/no-experience contract.
