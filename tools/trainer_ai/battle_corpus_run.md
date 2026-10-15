@@ -449,3 +449,39 @@ twelve keys with the latest weather-inclusive 198-key ledger into
 `build/battle-corpus/combined-through-drain-recoil-o3`: 210 tested keys, 643
 missing required-rule failures and no invalid evidence. Historical artifacts
 were preserved unchanged. M2 remains incomplete.
+
+## Prepared real forced-Struggle follow-up
+
+The named resolver is prepared to accept requested Struggle only when the actual
+source legal mask contains exactly one typed `StruggleAction`. It never maps a
+learned Struggle move slot to a normal `MoveAction`. The fixture continues to
+start with known Tackle at zero PP; only its previous resolver-support blocker
+is removed. All move identity, target damage, recoil, source/Oracle comparison
+and exact replay gates remain unchanged. Old blocked reports are preserved.
+
+The prepared cheap resolver controls reject a request with no legal forced
+Struggle, duplicate forced actions or an invented learned Struggle slot. Fresh
+both-side seed-193 fights must additionally retain initial own Tackle/zero-PP
+observations and actual source Struggle execution. Source quarter-MaxHP recoil
+correctness remains the independent Oracle's responsibility. This follow-up
+has not been executed or added to coverage.
+
+## Executed real forced-Struggle checkpoint
+
+The typed resolver controls passed, including requests without legal forced
+Struggle and invented learned-move fallback rejection. Two fresh source fights,
+one per side with seed 193, then activated actual Struggle from initial known
+Tackle with zero PP. Both records contain typed `StruggleAction`, source move ID
+255, actor HP 90 to 68 at source MaxHP 90, and target HP 90 to 77 or 76. The
+14-round and 13-round fights reached source terminal and exact native replay,
+with 3,124 independent Oracle comparisons. Source quarter-MaxHP recoil was
+verified by the full comparison; no host mechanic was introduced.
+
+A separate actual-Oracle reset with legitimate Tackle at one PP produced a
+source legal mask without Struggle. The named request rejected before any fight
+step, retaining 113 source comparisons and the actual mask. Fresh source and
+retained evidence live under `build/battle-corpus/forced-struggle-o3-01` and
+`forced-struggle-retained-o3-01`; the original 20-positive/two-blocked reports
+remain unchanged. The existing merger added only the new Struggle move key to
+the latest 227-key ledger, producing `combined-through-forced-struggle-o3` with
+228 tested keys, 625 missing required-rule failures and no invalid evidence.

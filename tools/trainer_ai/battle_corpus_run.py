@@ -18,7 +18,7 @@ from battle_corpus import desired_moves, move_cases, scenario
 from battle_corpus_observers import (MoveFrame, observe_move, source_bindings,
                                      supported_effect, execution_boundaries)
 from battle_env import MoveAction, UnsupportedFight
-from battle_decisions import observation
+from battle_decisions import StruggleAction, observation
 
 FIRST_MOVES = ('TACKLE', 'THUNDER_WAVE', 'SWORDS_DANCE', 'GROWL', 'RECOVER',
                'REFLECT', 'LIGHT_SCREEN', 'RAIN_DANCE', 'SUNNY_DAY', 'SPLASH')
@@ -99,6 +99,11 @@ class ExecutionTrace:
 
 def choose_named(side, observation, actions, wanted, bindings):
     """Resolve only own observed moves and legal mask, with an explicit finish policy."""
+    if wanted == 'STRUGGLE':
+        selected = [action for action in actions if type(action) is StruggleAction]
+        if len(selected) != 1:
+            raise UnsupportedFight('Requested Struggle is not uniquely forced by the source legal mask')
+        return selected[0]
     if wanted == 'FINISH_LEGAL_ATTACK':
         own = next(p for p in observation['teams'][side] if p['active'])
         for name in ('TACKLE', 'WATER_GUN'):

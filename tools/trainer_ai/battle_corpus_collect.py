@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 # A changed boundary requires review, never an optimistic metadata translation.
 REVIEWED = {
     'battle_controller_check.py': 'd3621ffd1c9c142e496476e162833a91853992788d561b083b3a873d035dc9d4',
-    'battle_corpus_run.py': '4e15bdf233f339bae1c157d4f2a7bc815b0be7d5727a80fa192d9aaf8e380c21',
+    'battle_corpus_run.py': '6dbb9cb85842b36c17a9aee63539bae7fb618c1246db36f4774cf4c7301f135c',
     'battle_controller_fight.py': 'eb92e12bc7d1100da6e90e6382c04e8b32ce769c7747c2f679818774569deb79',
     'battle_controller.py': '6abe731e7eac74a3cae16673c2c6339ad985ddc455a1ba913d915f2f31cda9b3',
     'battle_controller_profile.py': '9cf85ef64a22eda7781b739119d4f9eb958a860453af12189900f7b84d13e33d',

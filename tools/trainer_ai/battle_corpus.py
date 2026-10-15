@@ -89,7 +89,7 @@ def _recipe(rule):
         prerequisites.append('Neutral Swift Swim and no items avoid recoil suppression or other HP effects.')
         if rule['name'] == 'STRUGGLE':
             actor['moves'], actor['pp'] = ('TACKLE',), (0,)
-            fixtures.append('Struggle requires the actual exhausted-PP StruggleAction; the named probe resolver does not select forced actions.')
+            prerequisites.append('Known Tackle starts at zero PP; the source legal mask must force the actual StruggleAction.')
     if effect == 'EFFECT_ROOST':
         actor['species'] = 'PIDGEY'
         expected.append('Flying type is removed during the turn and restored at the source end-turn point.')
