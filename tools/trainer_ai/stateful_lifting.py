@@ -154,7 +154,7 @@ def source_paths():
     paths=subprocess.check_output(['git','ls-files','-z'],cwd=ROOT).split(b'\0')
     return sorted(p.decode() for p in paths if p and not p.startswith(b'tools/trainer_ai/'))
 
-def build(rom_path,sym_path,entries,build_dir,source_root=None):
+def build(rom_path,sym_path,entries,build_dir,source_root=None,boundaries=(),excluded=()):
     build_dir=pathlib.Path(build_dir);build_dir.mkdir(parents=True,exist_ok=True)
     manifest_path=build_dir/'manifest.json';lib=build_dir/'stateful.pending.dylib'
     # Failed regeneration cannot leave an apparently current old binary or manifest.
@@ -172,7 +172,17 @@ def build(rom_path,sym_path,entries,build_dir,source_root=None):
         source_digests={p:sha(pathlib.Path(source_root)/p) for p in source_paths()}
     roots=[syms[e] if isinstance(e,str) else tuple(e) for e in entries]
     traps=[syms['Crash']] if 'Crash' in syms else []
-    blocks,seen=compile_rom(rom,roots,traps)
+    boundary_roots=[syms[e] if isinstance(e,str) else tuple(e) for e in boundaries]
+    excluded_roots=[syms[e] if isinstance(e,str) else tuple(e) for e in excluded]
+    machine_key=lambda root:root[1] if root[1]<0x4000 else (root[0]<<16)|root[1]
+    if {machine_key(r) for r in boundary_roots}&{machine_key(r) for r in traps+excluded_roots}:raise ValueError('Ambiguous native boundary')
+    blocks,seen=compile_rom(rom,roots,traps+boundary_roots+excluded_roots)
+    # Boundary events stop BEFORE the callee executes. Runtime never resumes or
+    # fabricates a callee return; the external profile owns any audited handling.
+    for bank,pc in boundary_roots:
+        key=pc if pc<0x4000 else (bank<<16)|pc
+        if key in blocks:blocks[key]='s->fault=5;'
+
     c=ABI+'static const uint8_t rom[]={'+','.join(map(str,rom))+'};\n'+RUNTIME
     c+='\nvoid stateful_run(State*s,uint32_t budget,uint16_t stop_pc){uint32_t used=0;while(!s->fault&&s->pc!=stop_pc){if(used++>=budget){s->fault=3;break;}s->steps++;switch(s->pc<0x4000?s->pc:((uint32_t)s->bank<<16)|s->pc){\n'
     c+='\n'.join(f'case {key}:{{{body}}}break;' for key,body in sorted(blocks.items()))
@@ -183,7 +193,7 @@ def build(rom_path,sym_path,entries,build_dir,source_root=None):
     lib=build_dir/('stateful-'+identity+'.dylib')
     subprocess.run(['cc','-std=c11','-O3','-shared','-fPIC',str(cpath),'-o',str(lib)],check=True)
     sha=lambda p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()
-    manifest={'schema':1,'library_path':str(lib.resolve()),'abi_sha256':hashlib.sha256(ABI.encode()).hexdigest(),'profile':'bounded-mbc3-flat-wram-div-event-tape','rom_sha256':rom_digest,'symbols_sha256':sym_digest,'generator_sha256':MODULE_DIGEST,'generated_c_sha256':sha(cpath),'library_sha256':sha(lib),'entries':dict(zip(map(str,entries),roots)),'explicit_crash_traps':traps,'blocks':len(blocks),'reachable_contexts':len(seen),'normalization':'none; real stack, return addresses and bank writes','limits':'WRAM0/WRAMX flat C000-DFFF, HRAM; only DIV MMIO reads; no interrupts, DMA, RTC, external RAM, WRAM banking or arbitrary unknown PC'}
+    manifest={'schema':1,'library_path':str(lib.resolve()),'abi_sha256':hashlib.sha256(ABI.encode()).hexdigest(),'profile':'bounded-mbc3-flat-wram-div-event-tape','rom_sha256':rom_digest,'symbols_sha256':sym_digest,'generator_sha256':MODULE_DIGEST,'generated_c_sha256':sha(cpath),'library_sha256':sha(lib),'entries':dict(zip(map(str,entries),roots)),'explicit_crash_traps':traps,'boundaries':dict(zip(map(str,boundaries),boundary_roots)),'excluded':dict(zip(map(str,excluded),excluded_roots)),'blocks':len(blocks),'reachable_contexts':len(seen),'normalization':'none; real stack, return addresses and bank writes','limits':'WRAM0/WRAMX flat C000-DFFF, HRAM; only DIV MMIO reads; no interrupts, DMA, RTC, external RAM, WRAM banking or arbitrary unknown PC'}
     if source_root:
         paths=source_paths()
         missing=[p for p in paths if not (pathlib.Path(source_root)/p).is_file()]
@@ -202,7 +212,7 @@ def build(rom_path,sym_path,entries,build_dir,source_root=None):
     manifest_path.write_text(json.dumps(manifest,indent=2)+'\n')
     return manifest
 
-def load_verified(build_dir, rom_path, sym_path, source_root=None, entries=None):
+def load_verified(build_dir, rom_path, sym_path, source_root=None, entries=None, boundaries=(), excluded=()):
     """Only load an artifact matching present inputs and generator, never stale output."""
     import ctypes
     build_dir=pathlib.Path(build_dir)
@@ -220,6 +230,8 @@ def load_verified(build_dir, rom_path, sym_path, source_root=None, entries=None)
         if manifest.get(key)!=value:raise ValueError('Stale native artifact: '+key)
     if entries is not None and set(manifest['entries'])!=set(entries):
         raise ValueError('Native entry configuration mismatch')
+    if set(manifest.get('boundaries',{}))!=set(map(str,boundaries)) or set(manifest.get('excluded',{}))!=set(map(str,excluded)):
+        raise ValueError('Native boundary configuration mismatch')
     if manifest.get('sources') and source_root is None:
         raise ValueError('Source root required for source-backed artifact')
     if source_root is not None:

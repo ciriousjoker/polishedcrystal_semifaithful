@@ -113,6 +113,19 @@ See [stateful_lifting.md](stateful_lifting.md) for the supported memory profile,
 source verification gate, reproducible commands and limitations. The old
 arithmetic fixture remains a separate, narrower experiment.
 
+## Restricted real-caller fights
+
+`battle_env.py` runs actual ROM-derived `DetermineMoveOrder` and `DoTurn` for an
+explicit Smeargle/Own Tempo/Tackle/Water Gun 1v1 experiment. Complete fights,
+source move-power updates, whole CPU/RAM comparisons and rejecting guards are
+reproducible with `battle_env_check.py` and `battle_env_updates.py`.
+
+This is a conditional headless profile with explicit presentation identity
+returns and seeded IID DIV events. It does not reproduce ordinary VBlank/RNG
+refresh or establish graphical-game equivalence. Unknown mechanics reject;
+unsupported Struggle and turn limits are truncations, never wins. See
+[battle_env.md](battle_env.md) for the exact contract and one-core commands.
+
 ## Evaluation ratings
 
 `ratings.py` fits scenario-balanced batch Bradley-Terry ratings on an Elo scale,

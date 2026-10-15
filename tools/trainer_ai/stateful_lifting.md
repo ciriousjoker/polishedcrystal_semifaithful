@@ -107,3 +107,31 @@ ROM/SYM bytes and source identities are captured before C compilation and
 checked again before publishing the manifest. Concurrent input changes and a
 generator file changed after Python import reject acceptance. Keep build output
 directories exclusive to one process.
+
+## Explicit optional boundary profiles
+
+`build` and `load_verified` accept optional `boundaries` and `excluded` entry
+lists. Their configuration is bound to the manifest. Default calls retain the
+previous profile. A boundary case stops before executing the callee with fault 5;
+the runtime never fabricates a return or resumes automatically. An external
+profile must verify its exact bank/PC, real return stack and explicitly defined
+semantics. Excluded entries and Crash remain fault 4 and must never resume as
+successful presentation events. Ambiguity checks normalize ROM0 machine keys,
+so a bank alias cannot turn Crash into an allowed event. See `battle_env.md` for
+the experimental frontend profile and its substantial fidelity limitations.
+
+## Optional explicit host boundaries
+
+`build(..., boundaries=(), excluded=())` can mark named symbols or bank/PC
+pairs. Both sets are bound into the acceptance manifest and must match at
+`load_verified`. Boundary cases stop before the callee with fault 5; excluded
+cases stop with fault 4 like terminal traps. ROM0 aliases are normalized before
+rejecting a boundary that overlaps Crash or an exclusion. Default behavior
+remains unchanged when both sets are empty.
+
+The lifting runtime does not resume a boundary or fabricate a return. A specific
+external profile must handle the event, validate the real stack and define its
+semantics. Treating a callee as an identity return is a changed environment, not
+proof that the original function has no side effects. The restricted battle
+experiment documents its conditional profile in `battle_env.md`; unknown faults
+must never be accepted as presentation events.
