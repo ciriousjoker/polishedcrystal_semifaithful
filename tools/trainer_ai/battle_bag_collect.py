@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 import battle_coverage as coverage
-from battle_corpus_collect import digest, read, require
+from battle_family_evidence import artifact_sink, bind_execution, finish, digest, read, require
 
 ROOT = Path(__file__).resolve().parents[2]
 # Reviewed execution checkpoint, not the possibly changed working-tree hosts.
@@ -106,72 +106,14 @@ def collect(args):
             'Executed host checkpoint identities differ from reviewed source')
     for name, expected in HOSTS.items():
         require(digest(args.host_checkpoint / name) == expected, 'Executed host source missing or changed: ' + name)
-    require(not args.output.exists() or not any(args.output.iterdir()), 'Output must be empty')
-    args.output.mkdir(parents=True, exist_ok=True)
-    artifacts = []
-
-    def retain(path, relative, expected=None):
-        payload = path.read_bytes()
-        actual = coverage.sha(payload)
-        require(expected is None or actual == expected, 'Retained bytes mismatch: ' + str(path))
-        destination = args.output / relative
-        destination.resolve().relative_to(args.output.resolve())
-        require(not destination.exists(), 'Retained path collision: ' + relative)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(payload)
-        artifacts.append(dict(path=relative, sha256=actual))
-        return relative
-
-    def write(relative, value):
-        path = args.output / relative
-        path.write_text(json.dumps(value, indent=2) + '\n')
-        artifacts.append(dict(path=relative, sha256=digest(path)))
-        return relative
-
+    retain, write, artifacts = artifact_sink(args.output)
     retain(args.report, 'raw/report.json')
     retain(args.inventory, 'raw/inventory.json')
     retain(args.host_checkpoint / 'identities.json', 'host/identities.json')
     for name, expected in HOSTS.items():
         retain(args.host_checkpoint / name, 'host/' + name, expected)
-    manifest = read(args.manifest)
-    require(digest(args.manifest) == report.get('manifest_sha256'), 'Executed manifest mismatch')
-    for path, expected in current['source_inputs'].items():
-        require(manifest.get('sources', {}).get(path) == expected, 'Manifest source mismatch: ' + path)
-    retain(args.manifest, 'execution/manifest.json', report['manifest_sha256'])
-    execution = {'generator': 'host/stateful_lifting.py'}
-    for kind, path in (('rom', args.rom), ('symbols', args.symbols), ('build_receipt', args.build_receipt)):
-        execution[kind] = retain(path, 'execution/' + kind + path.suffix,
-                                 manifest.get(kind + '_sha256') if kind != 'build_receipt' else None)
-    receipt = read(args.build_receipt)
-    require(receipt.get('build_log_sha256'), 'Original build log identity missing')
-    retain(args.build_log, 'execution/original-build.log', receipt['build_log_sha256'])
-    oracle = report.get('oracle_provenance', {})
-    require(oracle.get('schema') == 1 and oracle.get('kind') == 'instrumented-same-hooks-mgba' and
-            not oracle.get('libmgba_identity_error') and
-            oracle.get('libmgba', {}).get('identity_kind') == 'loaded-GBCoreCreate-symbol-dladdr',
-            'Actual loaded oracle dependency identity missing')
-    oracle_artifacts = {'source': 'host/battle_controller_oracle.c'}
-    for kind, path in (('library', args.oracle_library), ('libmgba', args.mgba_library)):
-        require(oracle.get(kind, {}).get('path'), 'Missing loaded oracle path: ' + kind)
-        oracle_artifacts[kind] = retain(path, 'execution/' + kind + '.dylib', oracle[kind]['sha256'])
-    require(oracle.get('source', {}).get('path') and
-            oracle['source'].get('sha256') == HOSTS['battle_controller_oracle.c'], 'Oracle C source mismatch')
-    for abi, name in (('State', 'stateful_fixture_check.py'), ('Hook', 'battle_env_check.py')):
-        require(oracle.get('abi_sources', {}).get(abi, {}).get('path') and
-                oracle['abi_sources'][abi].get('sha256') == HOSTS[name], 'Oracle ABI mismatch: ' + abi)
-    require(manifest.get('banked_wram') is True and manifest.get('lcd_disabled') is True,
-            'Bag checkpoint requires its actual banked WRAM and disabled LCD profile')
-    configuration = dict(mode='ordinary-trainer', ruleset='default-non-faithful',
-        profile_kind='headless-iid-div', roles=dict(player='scripted', enemy='scripted'),
-        options=dict(abilities=True, experience=False, fixed_levels=True, player_bag=True,
-                     battle_style='set', banked_wram=manifest.get('banked_wram', False),
-                     lcd_disabled=manifest.get('lcd_disabled', False)))
-    identity = {field: report[field] for field in
-                ('rom_sha256', 'symbols_sha256', 'generator_sha256', 'manifest_sha256')}
-    for field in ('rom_sha256', 'symbols_sha256', 'generator_sha256'):
-        require(identity[field] == manifest.get(field), 'Report execution identity mismatch: ' + field)
-    temporary = dict(configuration=configuration, execution_artifacts=execution, **identity)
-    _, symbols = coverage.execution_artifacts(temporary, artifacts, args.output, manifest, current)
+    manifest, execution, oracle, oracle_artifacts, configuration, identity, symbols = bind_execution(
+        args, current, report, HOSTS, retain, artifacts)
     rom = args.rom.read_bytes()
 
     def rom_bytes(label, offset, length):
@@ -285,20 +227,10 @@ def collect(args):
         blocked_controls=report.get('blocked_controls', []),
         excluded_corpus_cases=report.get('blocked_controls', []), limitations=report.get('limits', []),
         metadata_basis='Exact reviewed execution checkpoint and positive retained target witnesses; no negative-branch completeness claim.')
-    write('adapter.json', adapter)
-    ledger = dict(inventory_sha256=current['inventory_sha256'], configuration=configuration,
-        acceptance_scope='conditional-native-gameplay',
-        claims={key: dict(phase='tested-full-fight', evidence=['bag-family']) for key in sorted(accepted_rules)},
-        evidence={'bag-family': dict(path='adapter.json', sha256=digest(args.output / 'adapter.json'))})
-    verdict = coverage.evaluate(current, ledger, args.output)
-    require(all(f.startswith('Required rule lacks whole-fight evidence: ') for f in verdict['failures']),
-            'Strict gate rejected the retained bag adapter')
-    write('ledger.json', ledger)
-    write('acceptance.json', verdict)
-    write('collection.json', dict(collected_cases=len(records), collected_rules=sorted(accepted_rules),
-        blocked_controls=report.get('blocked_controls', []), m2_accepted=verdict['accepted']))
-    print(json.dumps(dict(collected_cases=len(records), collected_rules=len(accepted_rules), m2_accepted=verdict['accepted'])))
-    return 0
+    return finish(current, configuration, adapter, 'bag-family', args.output, write,
+        dict(collected_cases=len(records), collected_rules=sorted(accepted_rules),
+             blocked_controls=report.get('blocked_controls', [])))
+
 
 
 def main():

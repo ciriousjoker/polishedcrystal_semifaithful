@@ -83,3 +83,22 @@ Evidence: `build/battle-controller/bag-family-retained`,
 `build/battle-corpus/combined-with-bag-o3` in the external project. This checkpoint
 still leaves inner retry and overall M2 coverage open; it proves the listed
 positive restorative uses only.
+
+## Shared packaging preparation
+
+Byte retention, execution binding and final gate/ledger emission now live in
+`battle_family_evidence.py`, reused by the held-restorative collector. Bag
+witness/fixture/dispatch checks and explicit host pins remain here. Existing
+retained collections are untouched. The pre-extraction source is preserved in
+`subagents/m2-held-collection-01/artifacts/battle_bag_collect.before.py` in the
+external run. The authorized metadata-only validation produced byte-identical
+old/new collections, including all cases, artifacts, claims and verdicts. Both
+existing wrong-heal and wrong-target controls still reject without a ledger.
+
+For a historical run, supply its retained `execution/manifest.json`, ROM,
+symbols, receipt/log, Oracle libraries and `host` snapshot. The current native
+cache may represent a newer profile and must not substitute for that manifest.
+
+Evidence: `subagents/m2-held-collection-01/artifacts/validation-01` in the external
+run. The historical retained bag collection was hash-checked before and after
+validation and remained unchanged. No fight or build was rerun.
