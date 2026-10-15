@@ -31,7 +31,14 @@ currently also rejects rather than silently substituting a move.
 
 Replacement input takes fresh detached snapshots for both actors at every
 actual request. Pending targets and current enemy decisions are absent from
-those snapshots. There is no whole-turn replacement cache that could survive a
+those snapshots. Fresh nested actor snapshots use a shared pending-turn projection:
+the opposing EncoreCount high nibble comes from the frozen predecision state,
+while its actual low duration and every own field remain current. A changed
+opposing active party index gets a zero high nibble, so the previous member's
+lock cannot follow its replacement. The same projection applies to inner bag
+retry, outer battle-menu retry and Conversion. It writes no source RAM and
+does not change live legality queries. The actual SetChoiceLock packing source
+scaffold must still match. There is no whole-turn replacement cache that could survive a
 later faint or repeated entry-hazard KO. A separate explicit replacement policy
 chooses living reserves. Source callers still decide when and why to replace.
 
@@ -118,4 +125,6 @@ enemy input equality and missing/invalid-policy reset guards. See
 conservatively taken from the frozen predecision observation because source
 SetChoiceLock otherwise exposes the newly selected private move slot. Its live
 low countdown and all actual source RAM remain unchanged; the source packing
-scaffold is guarded.
+scaffold is guarded. Six complete bounded Baton Pass privacy fights passed
+8,747 comparisons and exact replay, including both actor orientations and
+changed opposing participants. See `battle_controller_pivot_privacy_check.md`.

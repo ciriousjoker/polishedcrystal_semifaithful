@@ -406,13 +406,40 @@ class ControllerFight:
         # Source owns rage/protect reset, slot consumption, item flag and carry.
         self._nested_call('AI_TryItem.used_item')
 
+    def _actor_observation(self, side):
+        """Keep fresh public state without the opposite pending move slot."""
+        current = observation(self.machine, side)
+        if self._pending is None:
+            return current
+        # SetChoiceLock commits the current move slot before either move runs.
+        # This projection affects actor input only, never source RAM or queries.
+        core = (self.machine.source_root / 'engine/battle/core.asm').read_text()
+        lock = re.search(r'^SetChoiceLock:\s*\n(.*?)^GetDisableEncoreMoves:', core, re.M | re.S)
+        lines = ([] if lock is None else
+                 [line.split(';', 1)[0].strip() for line in lock[1].splitlines()])
+        lines = [line for line in lines if line]
+        packing = ['ld a, [hl]', 'and $f', 'ld b, a', 'ld a, c', 'inc a',
+                   'swap a', 'or b', 'ld [hl], a']
+        if sum(lines[i:i + len(packing)] == packing
+               for i in range(len(lines) - len(packing) + 1)) != 1:
+            raise UnsupportedFight('Source choice-lock privacy encoding changed')
+        opposite = 1 - side
+        frozen = self.frozen_observations[side]
+        old = next(member['index'] for member in frozen['teams'][opposite] if member['active'])
+        active = next(member['index'] for member in current['teams'][opposite] if member['active'])
+        # A prior active member's lock must not follow a different participant.
+        high = frozen['battlefield'][opposite]['EncoreCount'] & 240 if old == active else 0
+        live = current['battlefield'][opposite]['EncoreCount']
+        current['battlefield'][opposite]['EncoreCount'] = (live & 15) | high
+        return current
+
     def _replacement(self, side):
         m = self.machine
         # Refreeze at every actual request. A whole-turn cache would become
         # stale after another faint or repeated entry-hazard KO. Pending switch
         # targets are absent from observation, so simultaneous callbacks cannot
         # reveal the other actor's selected replacement.
-        observations = tuple(observation(m, actor) for actor in (0, 1))
+        observations = tuple(self._actor_observation(actor) for actor in (0, 1))
         masks = tuple(tuple(SwitchAction(p['index']) for p in observations[actor]['teams'][actor]
                             if not p['active'] and p['HP'] and not p['egg']) for actor in (0, 1))
         if not masks[side]:
@@ -434,7 +461,7 @@ class ControllerFight:
         if len(self._bag_retry_records) >= 32:
             raise UnsupportedFight('Inner bag retry decision bound exceeded')
         m, previous = self.machine, self._bag.action
-        current = observation(m, 0)
+        current = self._actor_observation(0)
         current['bag_retry'] = dict(reason='ineffective-item-target',
                                    previous_action=encode_action(previous))
         choices = tuple(action for action in legal_actions(m, 0)
@@ -466,7 +493,7 @@ class ControllerFight:
         if len(self._retry_records) >= 32:
             raise UnsupportedFight('Player retry decision bound exceeded')
         m = self.machine
-        current = observation(m, 0)
+        current = self._actor_observation(0)
         mask = legal_actions(m, 0)
         action = self.retry_chooser(0, copy.deepcopy(current), copy.deepcopy(mask))
         if type(action) not in ACTION_TYPES or action not in mask:
@@ -586,23 +613,7 @@ class ControllerFight:
             raise UnsupportedFight('Conversion requires an explicit nested type policy')
         if len(self._conversion_records) >= 32:
             raise UnsupportedFight('Conversion nested input exceeded its bound')
-        current = observation(m, 0)
-        # Source SetChoiceLock packs the newly committed enemy move slot into
-        # this byte before execution. That high nibble is private this round;
-        # keep the actor's predecision value while exposing the live countdown.
-        core = (m.source_root / 'engine/battle/core.asm').read_text()
-        lock = re.search(r'^SetChoiceLock:\s*\n(.*?)^GetDisableEncoreMoves:', core, re.M | re.S)
-        lock_lines = ([] if lock is None else
-                      [line.split(';', 1)[0].strip() for line in lock[1].splitlines()])
-        lock_lines = [line for line in lock_lines if line]
-        packing = ['ld a, [hl]', 'and $f', 'ld b, a', 'ld a, c', 'inc a',
-                   'swap a', 'or b', 'ld [hl], a']
-        if sum(lock_lines[i:i + len(packing)] == packing
-               for i in range(len(lock_lines) - len(packing) + 1)) != 1:
-            raise UnsupportedFight('Source choice-lock privacy encoding changed')
-        live = current['battlefield'][1]['EncoreCount']
-        frozen = self.frozen_observations[0]['battlefield'][1]['EncoreCount']
-        current['battlefield'][1]['EncoreCount'] = (live & 15) | (frozen & 240)
+        current = self._actor_observation(0)
         own = next(member for member in current['teams'][0] if member['active'])
         unknown = m._constant('constants/type_constants.asm', 'UNKNOWN_T')
         choices = tuple(MoveAction(slot) for slot, move in enumerate(own['moves'])
