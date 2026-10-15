@@ -236,23 +236,34 @@ def validate_configuration(configuration):
             raise ValueError(f"Option violates fixed-level ordinary M2 contract: {option}")
     if options.get("battle_style") not in ("set", "switch", "predict"):
         raise ValueError("Invalid battle style")
-    if type(options.get("banked_wram", False)) is not bool:
-        raise ValueError("banked_wram capability must be boolean")
+    for capability in ("banked_wram", "lcd_disabled"):
+        if type(options.get(capability, False)) is not bool:
+            raise ValueError(capability + " capability must be boolean")
+
+
+def validate_execution_profile(manifest, options):
+    """Check the actual generator's declared memory/display capabilities."""
+    profiles = {
+        "bounded-mbc3-flat-wram-div-event-tape": (False, False),
+        "bounded-mbc3-flat-wram-lcd-disabled-div-event-tape": (False, True),
+        "bounded-mbc3-cgb-banked-wram-div-event-tape": (True, False),
+        "bounded-mbc3-cgb-banked-wram-lcd-disabled-div-event-tape": (True, True),
+    }
+    profile = manifest.get("profile")
+    if manifest.get("schema") != 1 or profile not in profiles:
+        raise ValueError("Unsupported execution manifest schema/profile")
+    for capability, required in zip(("banked_wram", "lcd_disabled"), profiles[profile]):
+        actual = manifest.get(capability, False)
+        configured = options.get(capability, False)
+        if type(actual) is not bool or type(configured) is not bool:
+            raise ValueError(capability + " capability must be boolean")
+        if actual is not required or configured is not actual:
+            raise ValueError("Execution profile/capability mismatch: " + capability)
 
 
 def execution_artifacts(report, originals, evidence_root, manifest, current):
     """Bind trusted runner receipts to retained bytes, not matching digest labels."""
-    profiles = {"bounded-mbc3-flat-wram-div-event-tape": False,
-                "bounded-mbc3-banked-wram-div-event-tape": True}
-    profile = manifest.get("profile")
-    if manifest.get("schema") != 1 or profile not in profiles:
-        raise ValueError("Unsupported execution manifest schema/profile")
-    manifest_banked = manifest.get("banked_wram", False)
-    configured_banked = report["configuration"]["options"].get("banked_wram", False)
-    if type(manifest_banked) is not bool or type(configured_banked) is not bool:
-        raise ValueError("banked_wram capability must be boolean")
-    if manifest_banked is not profiles[profile] or configured_banked is not manifest_banked:
-        raise ValueError("WRAM profile/capability mismatch")
+    validate_execution_profile(manifest, report["configuration"]["options"])
     if not isinstance(manifest.get("entries"), dict) or not manifest["entries"]:
         raise ValueError("Execution manifest has no source entries")
     retained = {item["path"]: item for item in originals}

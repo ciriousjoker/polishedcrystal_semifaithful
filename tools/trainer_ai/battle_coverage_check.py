@@ -83,7 +83,7 @@ class CoverageGateTest(unittest.TestCase):
         self.configuration["options"]["banked_wram"] = True
         self.report["configuration"] = copy.deepcopy(self.configuration)
         self.case_report["configuration"] = copy.deepcopy(self.configuration)
-        self.manifest["profile"] = "bounded-mbc3-banked-wram-div-event-tape"
+        self.manifest["profile"] = "bounded-mbc3-cgb-banked-wram-div-event-tape"
         self.manifest["banked_wram"] = True
         self.case_report["cases"][0]["full_state_components"] = ["cpu", "hram", "wram-banks-0-7", "svbk"]
         self.rewrite_manifest()
@@ -298,6 +298,59 @@ class CoverageGateTest(unittest.TestCase):
     def test_banked_case_must_compare_all_banks_and_svbk(self):
         self.enable_banked_wram()
         self.case_report["cases"][0]["full_state_components"] = ["cpu", "hram"]
+        self.assertFalse(self.result()["accepted"])
+
+    def enable_lcd_disabled(self, banked=True):
+        if banked:
+            self.enable_banked_wram()
+        for target in (self.configuration, self.report["configuration"], self.case_report["configuration"]):
+            target["options"]["lcd_disabled"] = True
+        self.manifest["lcd_disabled"] = True
+        self.manifest["profile"] = self.manifest["profile"].replace("-div-event-tape", "-lcd-disabled-div-event-tape")
+        self.rewrite_manifest()
+
+    def test_lcd_disabled_banked_profile_is_accepted(self):
+        self.enable_lcd_disabled()
+        self.assertTrue(self.result()["accepted"])
+
+    def test_lcd_disabled_flat_profile_is_accepted(self):
+        self.enable_lcd_disabled(banked=False)
+        self.assertTrue(self.result()["accepted"])
+
+    def test_incorrect_banked_profile_name_is_rejected(self):
+        self.enable_banked_wram()
+        self.manifest["profile"] = "bounded-mbc3-banked-wram-div-event-tape"
+        self.rewrite_manifest()
+        self.assertFalse(self.result()["accepted"])
+
+    def test_lcd_profile_requires_explicit_manifest_capability(self):
+        self.enable_lcd_disabled()
+        del self.manifest["lcd_disabled"]
+        self.rewrite_manifest()
+        self.assertFalse(self.result()["accepted"])
+
+    def test_lcd_profile_requires_explicit_configured_capability(self):
+        self.enable_lcd_disabled()
+        for target in (self.configuration, self.report["configuration"], self.case_report["configuration"]):
+            del target["options"]["lcd_disabled"]
+        self.assertFalse(self.result()["accepted"])
+
+    def test_lcd_manifest_capability_must_be_boolean(self):
+        self.enable_lcd_disabled()
+        self.manifest["lcd_disabled"] = 1
+        self.rewrite_manifest()
+        self.assertFalse(self.result()["accepted"])
+
+    def test_lcd_configured_capability_must_be_boolean(self):
+        self.enable_lcd_disabled()
+        for target in (self.configuration, self.report["configuration"], self.case_report["configuration"]):
+            target["options"]["lcd_disabled"] = 1
+        self.assertFalse(self.result()["accepted"])
+
+    def test_lcd_capability_rejects_enabled_lcd_profile(self):
+        self.enable_lcd_disabled()
+        self.manifest["profile"] = self.manifest["profile"].replace("-lcd-disabled", "")
+        self.rewrite_manifest()
         self.assertFalse(self.result()["accepted"])
 
     def test_default_source_inventory(self):

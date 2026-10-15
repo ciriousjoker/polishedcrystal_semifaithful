@@ -119,8 +119,9 @@ an unproven ledger, but cannot waive required ordinary-game rows.
 
 A report's `execution_artifacts` map names retained `rom`, `symbols`, `generator`
 and `build_receipt` files. Their actual bytes are hashed against the stateful
-manifest and report. The manifest must have schema 1, the expected
-`bounded-mbc3-flat-wram-div-event-tape` profile and nonempty source entries.
+manifest and report. The manifest must have schema 1, one supported flat or CGB
+banked execution profile with matching LCD capability, and nonempty source entries.
+The optional capability sections below define the exact supported profile names.
 The build receipt records schema 1, exact `inventory_sha256`, `rom_sha256`,
 `symbols_sha256`, `.gbc` target, `effective_defines: []` and nonempty
 `assembler_invocations` argv lists. Every invocation must identify `rgbasm`
@@ -151,7 +152,7 @@ fidelity. Level/base-stat initialization from the team is still checked.
 The legacy `bounded-mbc3-flat-wram-div-event-tape` manifest profile remains valid
 with `banked_wram` absent or explicitly false, including legacy configurations
 whose options omit that flag. The optional
-`bounded-mbc3-banked-wram-div-event-tape` profile instead requires explicit
+`bounded-mbc3-cgb-banked-wram-div-event-tape` profile instead requires explicit
 boolean `banked_wram: true` in both the manifest and configuration options.
 Truthy integers and profile/capability mismatches reject.
 
@@ -165,3 +166,20 @@ not a substitute for comparing all banked state. The gate checks consistent
 capability/evidence metadata; actual native and oracle bank semantics require
 separate executed proof. This capability does not promote any combat mechanism
 or change the fixed-level/no-experience contract.
+
+
+## Optional disabled LCD capability
+
+The generator's actual banked profile contains `cgb-banked-wram`. The previously
+listed `bounded-mbc3-banked-wram-div-event-tape` spelling was not emitted by the
+generator and is rejected. This corrects a gate integration defect; earlier
+synthetic fixture acceptance did not establish actual generator compatibility.
+
+Both flat and CGB banked profiles may additionally contain `-lcd-disabled` before
+`-div-event-tape`. Such a profile requires explicit Boolean `lcd_disabled: true`
+in the manifest and configuration. Without that suffix the capability is false;
+legacy absence remains false. Truthy integers, omitted true capabilities and
+profile mismatches reject. The capability models only a constant-zero FF40 read
+with writes still rejected. Its CPU/MMIO semantics and the ordinary frontend
+projection require separate actual-game evidence. It cannot promote mechanics
+coverage from configuration metadata alone.
