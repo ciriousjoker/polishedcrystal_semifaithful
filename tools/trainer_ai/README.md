@@ -126,6 +126,20 @@ refresh or establish graphical-game equivalence. Unknown mechanics reject;
 unsupported Struggle and turn limits are truncations, never wins. See
 [battle_env.md](battle_env.md) for the exact contract and one-core commands.
 
+## Experimental whole-fight learner pilot
+
+`policy_pilot.py` connects the restricted actual-caller environment to terminal
+win/loss REINFORCE, an exact integer forward pass with approximate STE updates,
+TAI4 export and checkpoint/resume. `policy_pilot_sm83_check.py` executes the
+learned binary through the existing SM83 runtime and mGBA oracle.
+`policy_pilot_ratings.py` compares only frozen initial/trained integer exports,
+clustering all stat orientations and actor roles by private event seed.
+
+The required profile is explicitly synthetic IID-DIV/no-frame 1v1. Results do
+not establish ordinary-game fidelity, full-roster learning, useful general
+strength or a final feature schema. See [policy_pilot_README.md](policy_pilot_README.md)
+for the bounded single-thread commands and retained pilot results.
+
 ## Evaluation ratings
 
 `ratings.py` fits scenario-balanced batch Bradley-Terry ratings on an Elo scale,
