@@ -4,6 +4,7 @@ Static opcode exclusions remain rejecting diagnostics. Reaching any excluded
 path is a coverage failure, never a successful battle transition.
 """
 import argparse
+import hashlib
 import json
 import pathlib
 import re
@@ -23,6 +24,8 @@ PRESENTATION = (*previous.PRESENTATION, 'PlaySlowCryBC',
     'LoadTempTileMapToTileMap', 'GetMemCGBLayout', 'ApplyTilemap',
     'FarCopyColorWRAM', 'SafeCopyTilemapAtOnce', 'MoveInfoBox',
     'LoadWeatherIconSprite', 'LoadBallIconGFX', 'Request2bpp', 'Copy2bpp', 'EnableLCD', 'WaitPressAorB_BlinkCursor')
+ABILITY_PRESENTATION = ('PerformAbilityGFX', 'PerformAbilityReplacementGFX')
+PRESENTATION = (*PRESENTATION, *ABILITY_PRESENTATION)
 CALL_ABIS = {'AnonBankPush': 'skip-byte', 'StackJumpTable': 'tail-table',
              'StandardStackJumpTable': 'tail-table', 'OffsetStackJumpTable': 'tail-table'}
 WRITE_ONLY_MMIO = (*range(0xff10, 0xff15), 0xff48)
@@ -129,6 +132,21 @@ def source_dispatch_roots(source_root, symbols):
 
 
 def config(symbols, source_root):
+    # These whole wrappers write presentation scratch, never ability state.
+    # Their callers and the AF return policy need review after source changes.
+    guarded = {
+        'engine/battle/ability_gfx.asm': '995c94c2f850b74f543bb8997b554cb4ae62a3e00ec0f367aeb6e3f24f535c33',
+        'engine/battle/abilities.asm': 'f29593451ed2e0be8dd89948d067845ae7aadaf4fd54b45c5541dcdcca1be0c5',
+        'engine/pokemon/abilities.asm': '032e6cfdd9c6122ec3e06068fcf1d98307c3f3a69dfd70641933aa500324a8eb',
+        'engine/gfx/vwf.asm': '1fe921160ddc8bd0a6c44bd3aea4146d4bd57b38c553ca0df5328050f6f4ab10',
+        'home/vwf.asm': 'bf3612939414de72fc0d32eb51261b8bbd482776e573f8a87216a723983491d0',
+        'home/farcall.asm': '00e73301550cac02599e1fc0feb5b258685e5c3e8b728dbad336c8fbb9f61276',
+        'constants/charmap.asm': '61a86882bf1849e549a2447c045283600df4e2b182dac2e936fbd04ba160a628',
+    }
+    for name, expected in guarded.items():
+        actual = hashlib.sha256((pathlib.Path(source_root) / name).read_bytes()).hexdigest()
+        if actual != expected:
+            raise ValueError('Ability presentation source requires review: ' + name)
     for name in (*ENTRIES, *BOUNDARIES):
         if name not in symbols:
             raise ValueError('Missing controller profile symbol: ' + name)

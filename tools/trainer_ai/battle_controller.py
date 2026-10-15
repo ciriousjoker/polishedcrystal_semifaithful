@@ -195,6 +195,13 @@ class ControllerMachine(NativeFight):
                 self.call_from_boundary('Move2DMenuCursor')
         elif event.name not in profile.PRESENTATION:
             raise UnsupportedFight('Unknown controller boundary')
+        elif event.name == 'PerformAbilityGFX':
+            # Final _ApplyAbilityTiles XOR A; caller restores BC/DE/HL.
+            self.state.a, self.state.f = 0, 0x80
+        elif event.name == 'PerformAbilityReplacementGFX':
+            # Final VWF CP '@', where the guarded charmap encodes '@' as $53.
+            # RunFunctionInWRA6 restores its WRAM bank while preserving AF.
+            self.state.a, self.state.f = 0x53, 0xc0
         self.return_from_boundary()
         return True
 
