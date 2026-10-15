@@ -354,3 +354,50 @@ contains 76 distinct tested-full-fight keys and 28 retained exclusions. The
 unchanged strict gate reports 777 missing required-rule failures and no invalid
 evidence. Native manifests remain attached to their original adapters; no
 manifest identity was forced across collections. M2 remains incomplete.
+
+## Executed active-inventory breadth retention
+
+The 113-case ready-supported breadth batch retained 69 positive fights and 44
+excluded cases in `build/battle-corpus/ready-moves-retained-o3-01`. Accepted
+cases contain 123,776 independent Oracle comparisons and claim 92 distinct keys,
+of which 86 are new relative to the preceding 76-key combined ledger. The
+collector used the exact fifteen frozen host-source snapshots and actual
+execution-time Oracle/library/ABI provenance. Collection exited zero in 1.20
+seconds. No original collection was rewritten.
+
+The existing merger combined the preceding ledger with the new collection into
+`build/battle-corpus/combined-through-ready-moves-o3`. It has 162 distinct
+whole-fight-tested keys, 72 retained exclusions, 691 missing required-rule
+failures and no invalid evidence. The 86 added keys comprise 69 move identities
+and seventeen previously unproved effect categories. This pass adds ordinary
+hit variants, fixed/level damage, primary status/confusion, selected primary
+stat changes, weather, safeguard and healing effects. Probabilistic secondary
+activations still require their own positive observations; M2 remains incomplete.
+
+## Prepared local first-action-faint damage admission
+
+The observer is prepared to admit its existing damage-only families in the
+same strict local phase used for status and secondary-stage effects. The
+collector's source/ROM/SYM boundary reconstruction and exact complete frame/
+trace matching remain unchanged. The existing miss-zero plus target-HP-loss
+semantic predicate permits the still-active target to reach zero HP before
+`ResolveFaints`. The historical Hyper Voice/Aeroblast blocked cases stay
+unchanged; four fresh two-sided fights and a consistently removed-damage
+semantic negative are still required. Reviewed observer hash refresh awaits
+coordinator source review. This section records unexecuted preparation.
+
+## Executed local damage retention
+
+The reviewed observer identity was advanced only after source freeze. Four
+fresh Hyper Voice/Aeroblast fights, both sides with seed 271, were retained under
+`build/battle-corpus/local-damage-retained-o3-01`. They contain 4,385 independent
+Oracle comparisons, source terminal and exact replay, with both move identities
+and the already covered normal-hit effect. A disposable case consistently
+restored target HP in frame and matching trace; semantic recomputation rejected
+it with exit 2 and no ledger.
+
+The existing merger combined this collection with the 162-key ledger into
+`build/battle-corpus/combined-through-local-damage-o3`: 164 distinct tested keys,
+689 missing required-rule failures, no invalid evidence and 72 preserved earlier
+exclusions. Original blocked Hyper Voice/Aeroblast reports remain unchanged;
+only fresh positive execution supplies their new claims. M2 remains incomplete.

@@ -23,7 +23,7 @@ REVIEWED = {
     'battle_controller_fight.py': 'eb92e12bc7d1100da6e90e6382c04e8b32ce769c7747c2f679818774569deb79',
     'battle_controller.py': '6abe731e7eac74a3cae16673c2c6339ad985ddc455a1ba913d915f2f31cda9b3',
     'battle_controller_profile.py': '9cf85ef64a22eda7781b739119d4f9eb958a860453af12189900f7b84d13e33d',
-    'battle_corpus_observers.py': '58cf50b72a14b849e88b84224479babe62c45f83959e7c556633347190fc087e',
+    'battle_corpus_observers.py': 'a8fc2c2c92e9240f233aee32b78076893e4d34546122dfd061fbe149ff2508fe',
 }
 REVIEWED_ORACLE_SOURCE = '7840c8b7a31bc6431518c5c61569cf961fc82a0ae40fd365f9768ebf12648e23'
 

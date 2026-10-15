@@ -316,9 +316,10 @@ def _neutral_fixture(frame, bindings, *, horsea=False):
 
 
 def _local_fixture(frame, bindings, effect):
-    """Permit reviewed status/confusion and secondary stage transitions."""
+    """Permit reviewed damage, status/confusion and secondary stage transitions."""
     stage_hit = effect.endswith('_HIT') and _stage_recipe(effect) is not None
-    if ((effect not in STATUS and effect not in {'EFFECT_CONFUSE', 'EFFECT_CONFUSE_HIT'} and not stage_hit) or
+    if ((effect not in DAMAGE_ONLY and effect not in STATUS and
+            effect not in {'EFFECT_CONFUSE', 'EFFECT_CONFUSE_HIT'} and not stage_hit) or
             not frame.move_execution_verified or not frame.observation_read_only_verified):
         return False
     interval = frame.source_interval

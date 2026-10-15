@@ -244,3 +244,71 @@ observer controls passed, and both consistently removed-stage and removed-damage
 collector negatives rejected. Exact cases live under
 `checks/corpus-secondary-stages-o3-01`; retained originals are under
 `build/battle-corpus/secondary-stages-retained-o3-01` in the external project.
+
+## Executed active-inventory breadth checkpoint
+
+The next batch was generated from current inventory using existing `move_cases`
+and `supported_effect`, selecting ready side-0/seed-271 cases whose move key
+lacked a positive claim in the 76-key ledger. It selected 113 moves, below the
+150-case limit. The exact names, active effects, prerequisites, input ledger
+hash and fifteen frozen host-source identities are retained in
+`subagents/m2-ready-moves-01/artifacts/selected-plan.json` in the external run.
+
+All 113 fights reached source terminal and exact native replay. Sixty-nine cases
+activated, forty-two were unsatisfied and two were blocked by the existing
+observer fixture. The accepted fights contain 123,776 independent Oracle
+comparisons. The measured full command took 294.10 seconds including Oracle and
+replay; this is no native-only throughput or model-quality measurement.
+
+Both blocked moves, Hyper Voice and Aeroblast, knocked the target from 90 HP to
+zero in their first action. Their actual local snapshots exist, but the current
+normal-damage observer still requires a controlled round with actual opposing
+Splash. That opponent action was absent after the knockout, so no coverage was
+claimed. There were no controller/native faults or truncations. Secondary-hit
+nonactivations remain visible rather than being inferred from move use.
+
+Exact output lives under `build/battle-corpus/ready-moves-o3-01`, with original
+fifteen host modules preserved under the task's `artifacts/frozen-runner`.
+Collection retained all accepted and excluded cases separately. Source inputs
+were checked unchanged before and after the batch. No engine, observer, runner,
+controller, profile or native artifact changed for this breadth pass.
+
+## Prepared local damage witness for first-action faint
+
+The local observer now has a prepared admission for the existing `DAMAGE_ONLY`
+effect set. It retains the exact action-local source boundaries, unchanged
+participants, read-only observation assertion and neutral Horsea/Swift Swim
+fixture. Existing damage semantics require miss byte zero and intended target
+HP loss. Zero target HP remains a valid state at the bound end-of-`PerformMove`
+call because `ResolveFaints` has not replaced that active participant yet.
+No numerical damage model or new diagnostic hook is added.
+
+This preparation does not alter the historical 113-case report. Fresh evidence
+must come from Hyper Voice and Aeroblast on both sides with seed 271, four full
+fights, after source review, hash refresh and CPU allocation. Planned command:
+
+```sh
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -B tools/trainer_ai/battle_corpus_run.py \
+  --artifact-root /Volumes/Storage/tmp/polished-ai \
+  --inventory /Volumes/Storage/tmp/polished-ai/build/battle-coverage/inventory.json \
+  --native-build /Volumes/Storage/tmp/polished-ai/build/battle-controller/native-o3 \
+  --optimization O3 \
+  --output /Volumes/Storage/tmp/polished-ai/build/battle-corpus/local-damage-o3-01 \
+  --moves HYPER_VOICE AEROBLAST --sides 0 1 --seeds 271 --max-turns 256
+```
+
+Synthetic positive target-knockout and negative user-only damage, no damage,
+miss, participant replacement, nonneutral context and missing source/read-only
+identity checks are prepared but have not run. All existing terminal, Oracle
+comparison, replay and collector trace-equality gates remain mandatory.
+
+## Executed local damage checkpoint
+
+The fresh Hyper Voice/Aeroblast batch passed on both sides with seed 271: four
+positive terminal fights and exact native replay, with 4,385 independent Oracle
+comparisons. The narrow local-damage admission observed first-action damage
+before faint resolution without requiring the later opposing Splash. Existing
+source, identity, read-only and neutral-fixture gates remained active. Synthetic
+observer controls passed. Raw output is retained under
+`build/battle-corpus/local-damage-o3-01`; the earlier 113-case report and its two
+blocked outcomes remain unchanged.

@@ -140,6 +140,24 @@ def check():
     assert observe_move(case, [replace(local, after=all_up)], bindings).state == 'activated'
     all_up['battlefield'][0]['stages'] = (8, 8, 8, 8, 7, 7, 7)
     assert observe_move(case, [replace(local, after=all_up)], bindings).state == 'unsatisfied'
+    # A target may reach zero HP while still active before ResolveFaints.
+    case.effect = 'EFFECT_NORMAL_HIT'
+    knockout = deepcopy(before)
+    knockout['teams'][1][0]['HP'] = 0
+    damage_frame = replace(local, after=knockout)
+    assert observe_move(case, [damage_frame], bindings).state == 'activated'
+    assert observe_move(case, [replace(damage_frame, after=before)], bindings).state == 'unsatisfied'
+    user_only = deepcopy(before)
+    user_only['teams'][0][0]['HP'] = 0
+    assert observe_move(case, [replace(damage_frame, after=user_only)], bindings).state == 'unsatisfied'
+    assert observe_move(case, [replace(damage_frame, attack_missed=1)], bindings).state == 'unsatisfied'
+    replacement = deepcopy(knockout)
+    replacement['teams'][1][0]['index'] = 1
+    assert observe_move(case, [replace(damage_frame, after=replacement)], bindings).state == 'blocked'
+    for confounded in (item, poisoned, weather):
+        assert observe_move(case, [replace(damage_frame, before=confounded)], bindings).state == 'blocked'
+    assert observe_move(case, [replace(damage_frame, source_interval=None)], bindings).state == 'blocked'
+    assert observe_move(case, [replace(damage_frame, observation_read_only_verified=False)], bindings).state == 'blocked'
     case.effect = 'EFFECT_RAIN_DANCE'
     wet = deepcopy(before)
     wet['weather'], wet['weather_turns'] = 1, 4
