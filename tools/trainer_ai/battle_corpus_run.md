@@ -312,3 +312,54 @@ source, identity, read-only and neutral-fixture gates remained active. Synthetic
 observer controls passed. Raw output is retained under
 `build/battle-corpus/local-damage-o3-01`; the earlier 113-case report and its two
 blocked outcomes remain unchanged.
+
+## Executed bounded rare-secondary seed selection
+
+A disposable first-turn experiment used the existing actual-Oracle controller,
+recorded segments, action-local observations and semantic observer to search
+side-0 seeds 1 through 32, stopping at each target's first positive transition.
+All five targets were found in 32 total probes: Poison Sting seed 2, Scald seed
+1, Spark seed 2, Metal Claw seed 13 and AncientPower seed 14. The prefixes took
+4.925 seconds and contained 5,982 source/Oracle comparisons. Prefix records have
+empty accepted-rule claims; they are fixture selection, never coverage or
+held-out evaluation.
+
+The unmodified full-fight runner then executed both sides at each selected seed.
+All ten fights reached source terminal and exact native replay. The five side-0
+cases activated; all five opposite-side cases remain unsatisfied. The positive
+full fights contain 7,190 independent Oracle comparisons. Existing collectors
+retained each target separately, then the existing merger combined them with
+the 168-key ledger into `build/battle-corpus/combined-through-rare-secondary-o3`.
+That ledger has 178 tested keys, 675 missing required-rule failures and no
+invalid evidence. New keys cover these five move identities and their five
+secondary effects, including all five AncientPower stage increases.
+
+Exact search provenance, seed outcomes, prefix observations, full-run commands,
+frozen fifteen host modules and measured timings live under
+`subagents/m2-rare-secondary-01/artifacts`. Full runner commands took 25.807
+seconds combined; collection took 1.835 seconds and merge 2.929 seconds. Runtime
+sources and native artifacts were unchanged. These deliberately selected
+positive fixtures do not measure training throughput or battle strength.
+
+## Executed opposite-side rare-secondary checkpoint
+
+A separate bounded side-1 prefix search found actual positive transitions for
+Poison Sting seed 1, Scald seed 3, Spark seed 1, Metal Claw seed 12 and
+AncientPower seed 16. It used 33 first-turn probes, 6,177 Oracle comparisons and
+5.868 seconds; the same per-move 1-through-32 cap was retained. Prefixes remained
+fixture-selection diagnostics with no coverage claims.
+
+The unmodified runner then executed only side 1 at those five selected seeds.
+All five full fights activated, reached source terminal and reproduced exact
+native replay, with 7,183 independent Oracle comparisons. Separate retained
+collections were merged with the previous ledger into
+`build/battle-corpus/combined-through-rare-secondary-both-sides-o3`. Its 178 keys
+and 675 remaining missing-rule failures are unchanged, with no invalid evidence;
+the additional evidence closes these five orientation gaps. Earlier opposite-
+side nonactivations remain in their original reports.
+
+Full runners took 16.887 seconds, collection 2.015 seconds and merge 4.023 seconds.
+Exact source snapshots, prefix outcomes, commands and provenance are retained
+under `subagents/m2-rare-secondary-side1-01/artifacts`. Selected positive fixtures
+are not held-out evaluation or model-strength evidence. Runtime sources and
+native artifacts were unchanged.
