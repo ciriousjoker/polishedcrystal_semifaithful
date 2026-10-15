@@ -50,17 +50,17 @@ adapter. Exact next command after allocation of the single CPU slot:
 
 ```sh
 python3 -B tools/trainer_ai/battle_bag_collect.py \
-  --inventory /Volumes/Storage/tmp/polished-ai/build/battle-coverage/inventory.json \
-  --report /Volumes/Storage/tmp/polished-ai/build/battle-controller/bag-family/report.json \
-  --host-checkpoint /Volumes/Storage/tmp/polished-ai/build/battle-controller/bag-family/host-source-checkpoint \
-  --manifest /Volumes/Storage/tmp/polished-ai/build/battle-controller/native-o3/manifest.json \
-  --rom /Volumes/Storage/tmp/polished-ai/build/stateful/game/polishedcrystal-3.2.3.gbc \
-  --symbols /Volumes/Storage/tmp/polished-ai/build/stateful/game/polishedcrystal-3.2.3.sym \
-  --build-receipt /Volumes/Storage/tmp/polished-ai/build/battle-coverage/original-build-receipt.json \
-  --build-log /Volumes/Storage/tmp/polished-ai/build/stateful/game-build.log \
-  --oracle-library /Volumes/Storage/tmp/polished-ai/build/battle-controller/controller-oracle-7840c8b7a31bc643.dylib \
-  --mgba-library /Volumes/Storage/tmp/polished-ai/build/stateful/mgba/lib/libmgba.0.10.5.dylib \
-  --output /Volumes/Storage/tmp/polished-ai/build/battle-controller/bag-family-retained
+  --inventory /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-coverage/inventory.json \
+  --report /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/bag-family/report.json \
+  --host-checkpoint /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/bag-family/host-source-checkpoint \
+  --manifest /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/native-o3/manifest.json \
+  --rom /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game/polishedcrystal-3.2.3.gbc \
+  --symbols /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game/polishedcrystal-3.2.3.sym \
+  --build-receipt /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-coverage/original-build-receipt.json \
+  --build-log /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game-build.log \
+  --oracle-library /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/controller-oracle-7840c8b7a31bc643.dylib \
+  --mgba-library /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/mgba/lib/libmgba.0.10.5.dylib \
+  --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/bag-family-retained
 ```
 
 Then invoke the independent strict gate with that ledger/evidence root. Collection

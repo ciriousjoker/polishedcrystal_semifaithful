@@ -41,7 +41,7 @@ checks also passed failure poisoning, unchanged live inventory/HP and explicit
 fresh-reset recovery. State comparison rejects nested cancellation as an ordinary turn
 action before any source transition.
 
-Retained report: `/Volumes/Storage/tmp/polished-ai/build/battle-controller/bag-retry/report.json`.
+Retained report: `/Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/bag-retry/report.json`.
 It includes initial WRAM, host-source hashes, ROM/SYM/native manifest identities
 and actual oracle C/library/libmGBA identities. The two cancellation cases had
 identical detached actor inputs despite different hidden enemy current actions.
@@ -49,7 +49,7 @@ identical detached actor inputs despite different hidden enemy current actions.
 Run only after the coordinator grants the project's single CPU slot:
 
 ```sh
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/battle_controller_bag_retry_check.py --artifact-root /Volumes/Storage/tmp/polished-ai --output /Volumes/Storage/tmp/polished-ai/build/battle-controller/bag-retry
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/battle_controller_bag_retry_check.py --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/bag-retry
 ```
 
 The detector covers this declared ineffective-target scaffold. Other menu

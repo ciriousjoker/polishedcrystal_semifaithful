@@ -53,13 +53,13 @@ Reproduce with serial compilation, one numerical thread and no GPU:
 ```sh
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -B \
   tools/trainer_ai/battle_status_profile.py \
-  --rom /Volumes/Storage/tmp/polished-ai/build/stateful/game/polishedcrystal-3.2.3.gbc \
-  --sym /Volumes/Storage/tmp/polished-ai/build/stateful/game/polishedcrystal-3.2.3.sym \
-  --source-root /Volumes/Storage/tmp/polished-ai/build/stateful/game \
-  --build-dir /Volumes/Storage/tmp/polished-ai/build/battle-status
+  --rom /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game/polishedcrystal-3.2.3.gbc \
+  --sym /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game/polishedcrystal-3.2.3.sym \
+  --source-root /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game \
+  --build-dir /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-status
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -B \
   tools/trainer_ai/battle_status_check.py \
-  --artifact-root /Volumes/Storage/tmp/polished-ai
+  --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai
 ```
 
 The checker reuses the baseline native library and mGBA oracle built by
@@ -84,7 +84,7 @@ fresh rerun of the complete original poison matrix:
 ```sh
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -B \
   tools/trainer_ai/battle_status_extended_check.py \
-  --artifact-root /Volumes/Storage/tmp/polished-ai
+  --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai
 ```
 
 `extended-report.json` records this continuation separately.

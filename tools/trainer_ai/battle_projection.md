@@ -1,6 +1,6 @@
 # Real frontend projection discriminator
 
-`battle_projection_check.py --project /Volumes/Storage/tmp/polished-ai` compiles
+`battle_projection_check.py --project /Volumes/Storage/Development/agentic_projects/polished_ai` compiles
 one independent mGBA adapter and runs six actual `UpdateHPBar` calls. There are
 **no presentation hooks**, patched return instructions or injected RNG outputs.
 LCD, VBlank interrupts, the actual VBlank0 handler and source OAM DMA code execute.

@@ -85,8 +85,8 @@ Example after acquiring the sole heavy CPU slot and building the native profile:
 
 ```sh
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/battle_controller_fight_check.py \
-  --artifact-root /Volumes/Storage/tmp/polished-ai \
-  --output /Volumes/Storage/tmp/polished-ai/build/battle-controller/typed-fights \
+  --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai \
+  --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/typed-fights \
   --cases neutral switch trainer-item player-bag --seeds 193
 ```
 

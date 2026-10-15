@@ -38,18 +38,18 @@ Exact next command, from the worktree after the coordinator allocates the CPU:
 
 ```sh
 python3 -B tools/trainer_ai/battle_coverage_merge.py \
-  --collection /Volumes/Storage/tmp/polished-ai/build/battle-corpus/oracle-provenance-retained-o3 \
-  --collection /Volumes/Storage/tmp/polished-ai/build/battle-corpus/stat-stage-retained-o3 \
-  --output /Volumes/Storage/tmp/polished-ai/build/battle-corpus/combined-retained-o3
+  --collection /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/oracle-provenance-retained-o3 \
+  --collection /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/stat-stage-retained-o3 \
+  --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/combined-retained-o3
 ```
 
 Then check the combined ledger independently:
 
 ```sh
 python3 -B tools/trainer_ai/battle_coverage.py \
-  --output /Volumes/Storage/tmp/polished-ai/build/battle-coverage/combined-retained-o3 \
-  --ledger /Volumes/Storage/tmp/polished-ai/build/battle-corpus/combined-retained-o3/ledger.json \
-  --evidence-root /Volumes/Storage/tmp/polished-ai/build/battle-corpus/combined-retained-o3
+  --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-coverage/combined-retained-o3 \
+  --ledger /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/combined-retained-o3/ledger.json \
+  --evidence-root /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/combined-retained-o3
 ```
 
 Collection success exits 0; the strict whole-M2 gate is still expected to exit 1

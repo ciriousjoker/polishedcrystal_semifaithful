@@ -44,7 +44,7 @@ The executed first stage uses the six handler representatives against the
 existing O3 native artifact:
 
 ```sh
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/battle_controller_bag_family.py --artifact-root /Volumes/Storage/tmp/polished-ai --output /Volumes/Storage/tmp/polished-ai/build/battle-controller/bag-family --seeds 193
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/battle_controller_bag_family.py --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/bag-family --seeds 193
 ```
 
 Use `--cases` to select additional named positive item cases. Other healing

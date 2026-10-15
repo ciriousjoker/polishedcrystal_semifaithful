@@ -23,8 +23,8 @@ After a CPU grant, metadata-only validation can run with:
 
 ```sh
 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 MKL_NUM_THREADS=1 \
-python3 -B /Volumes/Storage/tmp/polished-ai/subagents/m2-weather-collection-01/artifacts/validate_packaging.py \
-  --output /Volumes/Storage/tmp/polished-ai/subagents/m2-weather-collection-01/artifacts/validation-02
+python3 -B /Volumes/Storage/Development/agentic_projects/polished_ai/subagents/m2-weather-collection-01/artifacts/validate_packaging.py \
+  --output /Volumes/Storage/Development/agentic_projects/polished_ai/subagents/m2-weather-collection-01/artifacts/validation-02
 ```
 
 The metadata-only validator collects all twenty cases, expects eighteen rule keys, merges with the explicitly pinned canonical collection at `combined-through-abilities-hazards-o3`, then runs the unchanged strict gate. Missing required rules are expected; any invalid evidence rejects. It does not assume eighteen net new keys because the existing canonical collection may already contain overlapping move/effect evidence.
@@ -35,6 +35,6 @@ The outcome remains conditional native gameplay evidence. Presentation/input pro
 
 ## Validation evidence
 
-`/Volumes/Storage/tmp/polished-ai/subagents/m2-weather-collection-01/artifacts/validation-02/result.json` records the positive collection, merge with `combined-through-abilities-hazards-o3`, separate strict gate and all seven rejection commands. The original reports and cases stayed byte-identical. Negative controls rejected with exit 2 and emitted no ledger. Duration mutations failed source metadata reconstruction; residual, Cloud Nine and immunity mutations failed independently derived HP/type checks. Missing initial WRAM, changed retained host bytes and missing Oracle bytes failed their respective bindings.
+`/Volumes/Storage/Development/agentic_projects/polished_ai/subagents/m2-weather-collection-01/artifacts/validation-02/result.json` records the positive collection, merge with `combined-through-abilities-hazards-o3`, separate strict gate and all seven rejection commands. The original reports and cases stayed byte-identical. Negative controls rejected with exit 2 and emitted no ledger. Duration mutations failed source metadata reconstruction; residual, Cloud Nine and immunity mutations failed independently derived HP/type checks. Missing initial WRAM, changed retained host bytes and missing Oracle bytes failed their respective bindings.
 
 The original preparation run rejected on a Pokémon constants macro conditional after ordinary species IDs. The collector now stops that bounded species constant reader at `NUM_SPECIES`; unrelated extended-form macros are outside these fixtures. The successful rerun used the final collector bytes. Existing helpers, merger, gate, drivers and native artifacts were unchanged. The eighteen weather keys add ten distinct keys to the 188-key canonical ledger because four move and four effect keys already overlap.

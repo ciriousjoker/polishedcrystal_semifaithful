@@ -12,9 +12,9 @@ Start with one damage case and one side:
 
 ```sh
 python3 tools/trainer_ai/battle_corpus_run.py \
-  --artifact-root /Volumes/Storage/tmp/polished-ai \
-  --inventory /Volumes/Storage/tmp/polished-ai/build/battle-coverage/inventory.json \
-  --output /Volumes/Storage/tmp/polished-ai/checks/corpus-tackle-side0 \
+  --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai \
+  --inventory /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-coverage/inventory.json \
+  --output /Volumes/Storage/Development/agentic_projects/polished_ai/checks/corpus-tackle-side0 \
   --moves TACKLE --sides 0 --seeds 193
 ```
 
@@ -22,16 +22,16 @@ Then use a fresh output directory and expand to the first bounded list:
 
 ```sh
 python3 tools/trainer_ai/battle_corpus_run.py \
-  --artifact-root /Volumes/Storage/tmp/polished-ai \
-  --inventory /Volumes/Storage/tmp/polished-ai/build/battle-coverage/inventory.json \
-  --output /Volumes/Storage/tmp/polished-ai/checks/corpus-first-families \
+  --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai \
+  --inventory /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-coverage/inventory.json \
+  --output /Volumes/Storage/Development/agentic_projects/polished_ai/checks/corpus-first-families \
   --moves TACKLE THUNDER_WAVE SWORDS_DANCE GROWL RECOVER \
           REFLECT LIGHT_SCREEN RAIN_DANCE SUNNY_DAY SPLASH \
   --sides 0 1 --seeds 193 --max-turns 256
 ```
 
 To use the separately built optimized artifact, add
-`--native-build /Volumes/Storage/tmp/polished-ai/build/battle-controller/native-o3
+`--native-build /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/native-o3
 --optimization O3`. The default remains the existing `native` directory with
 `O0`. The selected directory and optimization are recorded in the report; the
 existing verified loader binds that configuration to its manifest.
@@ -104,11 +104,11 @@ next bounded actual command is:
 
 ```sh
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/battle_corpus_run.py \
-  --artifact-root /Volumes/Storage/tmp/polished-ai \
-  --inventory /Volumes/Storage/tmp/polished-ai/build/battle-coverage/inventory.json \
-  --native-build /Volumes/Storage/tmp/polished-ai/build/battle-controller/native-o3 \
+  --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai \
+  --inventory /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-coverage/inventory.json \
+  --native-build /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/native-o3 \
   --optimization O3 \
-  --output /Volumes/Storage/tmp/polished-ai/checks/corpus-secondary-local-o3-01 \
+  --output /Volumes/Storage/Development/agentic_projects/polished_ai/checks/corpus-secondary-local-o3-01 \
   --moves DYNAMICPUNCH POISON_STING SCALD SPARK \
   --sides 0 1 --seeds 193 194 --max-turns 256
 ```
@@ -208,11 +208,11 @@ are refreshed, and the coordinator grants CPU, the prepared batch is 24 cases:
 
 ```sh
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -B tools/trainer_ai/battle_corpus_run.py \
-  --artifact-root /Volumes/Storage/tmp/polished-ai \
-  --inventory /Volumes/Storage/tmp/polished-ai/build/battle-coverage/inventory.json \
-  --native-build /Volumes/Storage/tmp/polished-ai/build/battle-controller/native-o3 \
+  --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai \
+  --inventory /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-coverage/inventory.json \
+  --native-build /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/native-o3 \
   --optimization O3 \
-  --output /Volumes/Storage/tmp/polished-ai/checks/corpus-secondary-stages-o3-01 \
+  --output /Volumes/Storage/Development/agentic_projects/polished_ai/checks/corpus-secondary-stages-o3-01 \
   --moves FLAME_CHARGE MUD_SLAP ICY_WIND ROCK_SMASH METAL_CLAW ANCIENTPOWER \
   --sides 0 1 --seeds 193 194 --max-turns 256
 ```
@@ -289,11 +289,11 @@ fights, after source review, hash refresh and CPU allocation. Planned command:
 
 ```sh
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -B tools/trainer_ai/battle_corpus_run.py \
-  --artifact-root /Volumes/Storage/tmp/polished-ai \
-  --inventory /Volumes/Storage/tmp/polished-ai/build/battle-coverage/inventory.json \
-  --native-build /Volumes/Storage/tmp/polished-ai/build/battle-controller/native-o3 \
+  --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai \
+  --inventory /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-coverage/inventory.json \
+  --native-build /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/native-o3 \
   --optimization O3 \
-  --output /Volumes/Storage/tmp/polished-ai/build/battle-corpus/local-damage-o3-01 \
+  --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/local-damage-o3-01 \
   --moves HYPER_VOICE AEROBLAST --sides 0 1 --seeds 271 --max-turns 256
 ```
 
@@ -397,11 +397,11 @@ one canary:
 
 ```sh
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -B tools/trainer_ai/battle_corpus_run.py \
-  --artifact-root /Volumes/Storage/tmp/polished-ai \
-  --inventory /Volumes/Storage/tmp/polished-ai/build/battle-coverage/inventory.json \
-  --native-build /Volumes/Storage/tmp/polished-ai/build/battle-controller/native-o3 \
+  --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai \
+  --inventory /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-coverage/inventory.json \
+  --native-build /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/native-o3 \
   --optimization O3 \
-  --output /Volumes/Storage/tmp/polished-ai/build/battle-corpus/drain-recoil-canary-o3-01 \
+  --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/drain-recoil-canary-o3-01 \
   --moves GIGA_DRAIN --sides 0 --seeds 193 --max-turns 256
 ```
 
@@ -410,11 +410,11 @@ Struggle's two forced-action fixture gaps stay visibly blocked:
 
 ```sh
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -B tools/trainer_ai/battle_corpus_run.py \
-  --artifact-root /Volumes/Storage/tmp/polished-ai \
-  --inventory /Volumes/Storage/tmp/polished-ai/build/battle-coverage/inventory.json \
-  --native-build /Volumes/Storage/tmp/polished-ai/build/battle-controller/native-o3 \
+  --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai \
+  --inventory /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-coverage/inventory.json \
+  --native-build /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/native-o3 \
   --optimization O3 \
-  --output /Volumes/Storage/tmp/polished-ai/build/battle-corpus/drain-recoil-o3-01 \
+  --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/drain-recoil-o3-01 \
   --moves ABSORB MEGA_DRAIN LEECH_LIFE DRAINING_KISS DRAIN_PUNCH GIGA_DRAIN \
           TAKE_DOWN DOUBLE_EDGE BRAVE_BIRD WILD_CHARGE STRUGGLE \
   --sides 0 1 --seeds 193 --max-turns 256

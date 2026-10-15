@@ -30,7 +30,7 @@ host-source hashes and actually loaded oracle identities are retained.
 Run after the coordinator grants the sole CPU slot:
 
 ```sh
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/battle_controller_conversion_check.py --artifact-root /Volumes/Storage/tmp/polished-ai --output /Volumes/Storage/tmp/polished-ai/build/battle-controller/conversion
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/battle_controller_conversion_check.py --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/conversion
 ```
 
 No core, profile, Oracle, scenario or source-game code is changed. Existing
@@ -38,7 +38,7 @@ presentation/input projections remain conditional. Enemy Conversion continues
 through the actual source AI and is not covered by this nested player adapter.
 
 Evidence is retained at
-`/Volumes/Storage/tmp/polished-ai/build/battle-controller/conversion/report.json`.
+`/Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/conversion/report.json`.
 The two Normal-to-Water cases have identical nested actor-input hashes despite
 different hidden enemy current actions. Source SetChoiceLock stores that private
 slot in the high nibble of EncoreCount before execution; the nested observation

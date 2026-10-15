@@ -46,8 +46,8 @@ Run serially when the sole CPU-heavy execution slot is available:
 
 ```sh
 python3 tools/trainer_ai/network_runtime_check.py \
-  --build-dir /Volumes/Storage/tmp/polished-ai/build/network-runtime \
-  --mgba-prefix /Volumes/Storage/tmp/polished-ai/build/stateful/mgba
+  --build-dir /Volumes/Storage/Development/agentic_projects/polished_ai/build/network-runtime \
+  --mgba-prefix /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/mgba
 ```
 
 The checker assembles three shapes, seeds WRAM and the actual SM83 registers,
@@ -97,9 +97,9 @@ bank restoration and interrupt compatibility. No game source or Makefile changed
 
 ```sh
 python3 tools/trainer_ai/network_runtime_game_check.py \
-  --build-dir /Volumes/Storage/tmp/polished-ai/build/network-runtime/game-placement \
-  --game /Volumes/Storage/tmp/polished-ai/build/stateful/game \
-  --mgba-prefix /Volumes/Storage/tmp/polished-ai/build/stateful/mgba
+  --build-dir /Volumes/Storage/Development/agentic_projects/polished_ai/build/network-runtime/game-placement \
+  --game /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game \
+  --mgba-prefix /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/mgba
 ```
 
 The script links frozen game objects with the new object using the existing

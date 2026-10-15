@@ -66,7 +66,7 @@ limited to this synthetic experimental pool; no ordinary-game Elo or strength cl
 ## Reproduction commands
 
 Use the bundled Python 3.12 with NumPy. Supply verified artifacts and the worker's
-external `/Volumes/Storage/tmp/polished-ai/build/policy-pilot` output area. The
+external `/Volumes/Storage/Development/agentic_projects/polished_ai/build/policy-pilot` output area. The
 original execution received the sole CPU slot after independent fight review;
 any future heavy run needs resource orchestration, not a product approval file:
 

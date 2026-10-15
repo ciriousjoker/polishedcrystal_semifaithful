@@ -178,3 +178,10 @@ python3 -B tools/trainer_ai/training_check.py --artifact-dir /tmp/polished-ai-st
 
 Rating/storage/resource tooling does not remove the simulator's current fidelity
 boundary. Do not train or announce game strength using unsupported mechanics.
+
+
+## External run relocation
+
+The current external project directory is `/Volumes/Storage/Development/agentic_projects/polished_ai`. Human-facing project state is maintained only through the project CLI in its `human/` directory. Earlier reports and progress journals are frozen under `migration/legacy/`; source and execution snapshots retain their original absolute-path provenance.
+
+Command examples now use the current artifact location. This does not make relocated compiled caches execution-ready: original native manifests, compiler arguments and dynamic-library search paths may still identify the removed historical location. Rebuild when a new execution requires it, or establish separately recorded relocation provenance before reuse. Do not rewrite old proof files or create a compatibility symlink at the former run root.

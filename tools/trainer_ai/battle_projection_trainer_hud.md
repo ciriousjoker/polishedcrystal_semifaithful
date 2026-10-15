@@ -8,7 +8,7 @@ Run with a valid banked CGB controller snapshot taken at enemy replacement:
 ```
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -B \
   tools/trainer_ai/battle_projection_trainer_hud_check.py \
-  --project /Volumes/Storage/tmp/polished-ai \
+  --project /Volumes/Storage/Development/agentic_projects/polished_ai \
   --snapshot /absolute/path/to/enemy-ko.state \
   --metadata /absolute/path/to/enemy-ko.json
 ```

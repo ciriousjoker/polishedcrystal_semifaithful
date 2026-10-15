@@ -32,7 +32,7 @@ Run only after the coordinator grants the sole CPU slot and regenerates the
 existing O3 native profile:
 
 ```sh
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 python3 tools/trainer_ai/battle_controller_ability_check.py --artifact-root /Volumes/Storage/tmp/polished-ai --output /Volumes/Storage/tmp/polished-ai/build/battle-controller/ability-projection
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 python3 tools/trainer_ai/battle_controller_ability_check.py --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/ability-projection
 ```
 
 Same-hook comparisons alone do not validate the new presentation boundary.
@@ -66,8 +66,8 @@ matched logical Random outputs and does not establish hardware-state or future
 randomness-distribution equivalence. The continuation stops at the first policy
 decision; later full fights remain conditional on the declared presentation.
 
-Reports: `/Volumes/Storage/tmp/polished-ai/build/battle-controller/ability-projection/report.json`
-and `/Volumes/Storage/tmp/polished-ai/build/battle-controller/ability-wrapper-continuation/report.json`.
+Reports: `/Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/ability-projection/report.json`
+and `/Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/ability-wrapper-continuation/report.json`.
 The latter directory also holds complete physical states and
 `raw-difference-review.json`, with every difference's nearest source aliases.
 

@@ -77,15 +77,15 @@ binds every snapshot and the originating report hash.
 The actual first checkpoint used these three side-zero cases:
 
 ```sh
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/battle_controller_held_residual.py --artifact-root /Volumes/Storage/tmp/polished-ai --output /Volumes/Storage/tmp/polished-ai/build/battle-controller/held-residual-first --cases flame toxic sludge-other --sides 0 --seeds 193
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/battle_controller_held_residual.py --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/held-residual-first --cases flame toxic sludge-other --sides 0 --seeds 193
 ```
 
 After that checkpoint passed unchanged, the remaining three player cases and
 all six enemy cases ran in separate output directories:
 
 ```sh
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/battle_controller_held_residual.py --artifact-root /Volumes/Storage/tmp/polished-ai --output /Volumes/Storage/tmp/polished-ai/build/battle-controller/held-residual-player-rest --cases flame-fire toxic-poison sludge-poison --sides 0 --seeds 193
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/battle_controller_held_residual.py --artifact-root /Volumes/Storage/tmp/polished-ai --output /Volumes/Storage/tmp/polished-ai/build/battle-controller/held-residual-enemy --sides 1 --seeds 193
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/battle_controller_held_residual.py --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/held-residual-player-rest --cases flame-fire toxic-poison sludge-poison --sides 0 --seeds 193
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/battle_controller_held_residual.py --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/held-residual-enemy --sides 1 --seeds 193
 ```
 
 The three retained aggregate reports under `<run>/build/battle-controller` are:

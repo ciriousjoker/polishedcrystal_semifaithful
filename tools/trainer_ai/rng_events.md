@@ -66,11 +66,11 @@ private mGBA installation, run:
 
 ```sh
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/rng_events_check.py \
-  --rom /Volumes/Storage/tmp/polished-ai/build/stateful/game/polishedcrystal-3.2.3.gbc \
-  --sym /Volumes/Storage/tmp/polished-ai/build/stateful/game/polishedcrystal-3.2.3.sym \
-  --source /Volumes/Storage/tmp/polished-ai/build/stateful/game \
-  --prefix /Volumes/Storage/tmp/polished-ai/build/stateful/mgba \
-  --build /Volumes/Storage/tmp/polished-ai/build/rng-events
+  --rom /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game/polishedcrystal-3.2.3.gbc \
+  --sym /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game/polishedcrystal-3.2.3.sym \
+  --source /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game \
+  --prefix /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/mgba \
+  --build /Volumes/Storage/Development/agentic_projects/polished_ai/build/rng-events
 ```
 
 The command builds only its source-derived native artifact and tiny oracle wrapper.

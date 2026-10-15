@@ -52,11 +52,11 @@ Run only after the coordinator grants the sole CPU slot:
 
 ```sh
 python3 tools/trainer_ai/feature_runtime_check.py \
-  --build-dir /Volumes/Storage/tmp/polished-ai/build/feature-runtime \
-  --game /Volumes/Storage/tmp/polished-ai/build/stateful/game \
-  --mgba-prefix /Volumes/Storage/tmp/polished-ai/build/stateful/mgba \
-  --model /Volumes/Storage/tmp/polished-ai/build/policy-pilot/trained.tai4 \
-  --evaluation /Volumes/Storage/tmp/polished-ai/build/policy-pilot/evaluation.json
+  --build-dir /Volumes/Storage/Development/agentic_projects/polished_ai/build/feature-runtime \
+  --game /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game \
+  --mgba-prefix /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/mgba \
+  --model /Volumes/Storage/Development/agentic_projects/polished_ai/build/policy-pilot/trained.tai4 \
+  --evaluation /Volumes/Storage/Development/agentic_projects/polished_ai/build/policy-pilot/evaluation.json
 ```
 
 Measured cycles and actual linked ROM/WRAM/HRAM placement are recorded in the

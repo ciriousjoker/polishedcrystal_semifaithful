@@ -109,11 +109,11 @@ Serial, one numerical thread, no GPU. Run only with the coordinator's sole CPU
 slot. Prefix and full libraries are independent of the frozen baseline library.
 
 ```sh
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -B tools/trainer_ai/battle_party_profile.py --rom /Volumes/Storage/tmp/polished-ai/build/stateful/game/polishedcrystal-3.2.3.gbc --sym /Volumes/Storage/tmp/polished-ai/build/stateful/game/polishedcrystal-3.2.3.sym --source-root /Volumes/Storage/tmp/polished-ai/build/stateful/game --build-dir /Volumes/Storage/tmp/polished-ai/build/battle-party/prefix
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -B tools/trainer_ai/battle_party_probe.py --artifact-root /Volumes/Storage/tmp/polished-ai
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -B tools/trainer_ai/battle_party_profile.py --rom /Volumes/Storage/tmp/polished-ai/build/stateful/game/polishedcrystal-3.2.3.gbc --sym /Volumes/Storage/tmp/polished-ai/build/stateful/game/polishedcrystal-3.2.3.sym --source-root /Volumes/Storage/tmp/polished-ai/build/stateful/game --build-dir /Volumes/Storage/tmp/polished-ai/build/battle-party/sendin --full
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -B tools/trainer_ai/battle_party_check.py --artifact-root /Volumes/Storage/tmp/polished-ai
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -B tools/trainer_ai/battle_party_check.py --artifact-root /Volumes/Storage/tmp/polished-ai --guards-only
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -B tools/trainer_ai/battle_party_profile.py --rom /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game/polishedcrystal-3.2.3.gbc --sym /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game/polishedcrystal-3.2.3.sym --source-root /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game --build-dir /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-party/prefix
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -B tools/trainer_ai/battle_party_probe.py --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -B tools/trainer_ai/battle_party_profile.py --rom /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game/polishedcrystal-3.2.3.gbc --sym /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game/polishedcrystal-3.2.3.sym --source-root /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game --build-dir /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-party/sendin --full
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -B tools/trainer_ai/battle_party_check.py --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -B tools/trainer_ai/battle_party_check.py --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai --guards-only
 ```
 
 The accepted run produced:

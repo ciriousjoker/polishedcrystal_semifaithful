@@ -44,8 +44,8 @@ From the selected worktree, the first feedback batch is three fights:
 ```sh
 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 MKL_NUM_THREADS=1 \
 python3 tools/trainer_ai/battle_controller_weather.py \
-  --artifact-root /Volumes/Storage/tmp/polished-ai \
-  --output /Volumes/Storage/tmp/polished-ai/build/battle-controller/weather-feedback \
+  --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai \
+  --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/weather-feedback \
   --cases rain-move sand-stream snow-warning --sides 0 --seeds 193
 ```
 
@@ -54,8 +54,8 @@ After reviewing feedback, use separate serialized groups. The whole family can b
 ```sh
 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 MKL_NUM_THREADS=1 \
 python3 tools/trainer_ai/battle_controller_weather.py \
-  --artifact-root /Volumes/Storage/tmp/polished-ai \
-  --output /Volumes/Storage/tmp/polished-ai/build/battle-controller/weather \
+  --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai \
+  --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/weather \
   --seeds 193
 ```
 
@@ -71,8 +71,8 @@ Coverage is limited to these weather durations, isolated residuals, Rock/Ice typ
 
 Three serialized batches passed on the unchanged `dec3cb17a34aeeb9e0f36e44590d0890b7d0816ddff98fc7bb0346b9b32737b0` native manifest:
 
-- `/Volumes/Storage/tmp/polished-ai/build/battle-controller/weather-feedback/report.json`: first three cases.
-- `/Volumes/Storage/tmp/polished-ai/build/battle-controller/weather-remainder14/report.json`: fourteen remaining move, ability, Damp Rock and Cloud Nine cases.
-- `/Volumes/Storage/tmp/polished-ai/build/battle-controller/weather-remainder3/report.json`: mirrored first three cases.
+- `/Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/weather-feedback/report.json`: first three cases.
+- `/Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/weather-remainder14/report.json`: fourteen remaining move, ability, Damp Rock and Cloud Nine cases.
+- `/Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/weather-remainder3/report.json`: mirrored first three cases.
 
-`/Volumes/Storage/tmp/polished-ai/subagents/m2-weather-01/artifacts/summary.json` binds the reports and lists all twenty unique `(case, setter, seed)` keys. Aggregation independently verified every case evidence hash and every standalone initial-WRAM file's 8192-byte size and hash. Each executed report includes the conventional `host_sources` and `game_sources` mappings alongside retained input snapshots. Python driver bytes remain exactly those snapshotted by the executed reports.
+`/Volumes/Storage/Development/agentic_projects/polished_ai/subagents/m2-weather-01/artifacts/summary.json` binds the reports and lists all twenty unique `(case, setter, seed)` keys. Aggregation independently verified every case evidence hash and every standalone initial-WRAM file's 8192-byte size and hash. Each executed report includes the conventional `host_sources` and `game_sources` mappings alongside retained input snapshots. Python driver bytes remain exactly those snapshotted by the executed reports.

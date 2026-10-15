@@ -55,17 +55,17 @@ single CPU slot:
 
 ```sh
 python3 -B tools/trainer_ai/battle_corpus_collect.py \
-  --inventory /Volumes/Storage/tmp/polished-ai/build/battle-coverage/inventory.json \
-  --report /Volumes/Storage/tmp/polished-ai/build/battle-corpus/first-native-o3/report.json \
-  --case /Volumes/Storage/tmp/polished-ai/build/battle-corpus/first-native-o3/move-tackle-side0-seed193.json \
-  --manifest /Volumes/Storage/tmp/polished-ai/build/battle-controller/native-o3/manifest.json \
-  --rom /Volumes/Storage/tmp/polished-ai/build/stateful/game/polishedcrystal-3.2.3.gbc \
-  --symbols /Volumes/Storage/tmp/polished-ai/build/stateful/game/polishedcrystal-3.2.3.sym \
+  --inventory /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-coverage/inventory.json \
+  --report /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/first-native-o3/report.json \
+  --case /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/first-native-o3/move-tackle-side0-seed193.json \
+  --manifest /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/native-o3/manifest.json \
+  --rom /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game/polishedcrystal-3.2.3.gbc \
+  --symbols /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game/polishedcrystal-3.2.3.sym \
   --generator tools/trainer_ai/stateful_lifting.py \
-  --build-receipt /Volumes/Storage/tmp/polished-ai/build/battle-coverage/original-build-receipt.json \
-  --build-log /Volumes/Storage/tmp/polished-ai/build/stateful/game-build.log \
+  --build-receipt /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-coverage/original-build-receipt.json \
+  --build-log /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game-build.log \
   --runner-sources tools/trainer_ai \
-  --output /Volumes/Storage/tmp/polished-ai/build/battle-corpus/first-retained-o3
+  --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/first-retained-o3
 ```
 
 Then independently invoke the existing gate with the retained ledger and evidence
@@ -73,9 +73,9 @@ root. Its nonzero exit remains expected while required rules lack coverage:
 
 ```sh
 python3 -B tools/trainer_ai/battle_coverage.py \
-  --output /Volumes/Storage/tmp/polished-ai/build/battle-coverage/first-retained-o3 \
-  --ledger /Volumes/Storage/tmp/polished-ai/build/battle-corpus/first-retained-o3/ledger.json \
-  --evidence-root /Volumes/Storage/tmp/polished-ai/build/battle-corpus/first-retained-o3
+  --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-coverage/first-retained-o3 \
+  --ledger /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/first-retained-o3/ledger.json \
+  --evidence-root /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/first-retained-o3
 ```
 
 The collector also resolves the case's unique move row in the current inventory,
@@ -95,8 +95,8 @@ actual execution frames remain Tackle. Run this only in the allocated CPU slot:
 python3 -B - <<'PY'
 import json
 from pathlib import Path
-source = Path('/Volumes/Storage/tmp/polished-ai/build/battle-corpus/first-native-o3')
-target = Path('/Volumes/Storage/tmp/polished-ai/build/battle-corpus/collector-negative-substitution')
+source = Path('/Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/first-native-o3')
+target = Path('/Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/collector-negative-substitution')
 target.mkdir(exist_ok=False)
 case = json.loads((source / 'move-tackle-side0-seed193.json').read_text())
 report = json.loads((source / 'report.json').read_text())
@@ -123,21 +123,21 @@ activation`. Preserve the original execution outputs unchanged.
 ## Executed evidence before the Encore observer refinement
 
 The coordinator executed the first collector against the original frozen runner:
-`/Volumes/Storage/tmp/polished-ai/build/battle-corpus/first-retained-o3` retains
+`/Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/first-retained-o3` retains
 one accepted case and two rules. The ten-family, both-side batch collected
 17 accepted cases and 18 rules under
-`/Volumes/Storage/tmp/polished-ai/build/battle-corpus/first-families-retained-o3`.
+`/Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/first-families-retained-o3`.
 Three cases remain visibly excluded: Thunder Wave side 1 had no unconfounded
 opposing Splash execution, and both Splash cases lacked a positive projection
 witness under the original observer.
 
 The independent strict gate output is retained at
-`/Volumes/Storage/tmp/polished-ai/build/battle-coverage/first-families-retained-o3`.
+`/Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-coverage/first-families-retained-o3`.
 It reports no invalid evidence, with 835 required rules still missing full-fight
 coverage. M2 remains incomplete. The coordinator also executed the unobserved-rule,
 removed-HP-witness and stale-manifest negative checks; all three rejected with
 exit 2 and no ledger. Results are retained at
-`/Volumes/Storage/tmp/polished-ai/build/battle-corpus/collector-negative/report.json`.
+`/Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/collector-negative/report.json`.
 
 A subsequent source-reviewed observer refinement now compares only the low
 nibble of `EncoreCount` in Splash's no-effect projection. The actual source's
@@ -166,7 +166,7 @@ not record the separate C ROM oracle, loaded oracle dylib or direct State/Hook
 ABI modules. They remain useful historical conditional comparisons with this
 provenance limitation. No execution-time identity is reconstructed for them.
 The fresh Splash run already succeeded on both sides, retained under
-`/Volumes/Storage/tmp/polished-ai/build/battle-corpus/splash-retained-o3`, with
+`/Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/splash-retained-o3`, with
 only `move:SPLASH` and `effect:EFFECT_SPLASH`; this collection has the same
 historical oracle-provenance limitation.
 
@@ -191,34 +191,34 @@ Next fresh execution command, with the coordinator's sole CPU slot:
 
 ```sh
 python3 -B tools/trainer_ai/battle_corpus_run.py \
-  --artifact-root /Volumes/Storage/tmp/polished-ai \
-  --inventory /Volumes/Storage/tmp/polished-ai/build/battle-coverage/inventory.json \
-  --native-build /Volumes/Storage/tmp/polished-ai/build/battle-controller/native-o3 \
+  --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai \
+  --inventory /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-coverage/inventory.json \
+  --native-build /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/native-o3 \
   --optimization O3 --moves TACKLE SPLASH --sides 0 1 \
-  --output /Volumes/Storage/tmp/polished-ai/build/battle-corpus/oracle-provenance-native-o3
+  --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/oracle-provenance-native-o3
 ```
 
 Collect that fresh result:
 
 ```sh
 python3 -B tools/trainer_ai/battle_corpus_collect.py \
-  --inventory /Volumes/Storage/tmp/polished-ai/build/battle-coverage/inventory.json \
-  --report /Volumes/Storage/tmp/polished-ai/build/battle-corpus/oracle-provenance-native-o3/report.json \
-  --case /Volumes/Storage/tmp/polished-ai/build/battle-corpus/oracle-provenance-native-o3/move-tackle-side0-seed193.json \
-  --case /Volumes/Storage/tmp/polished-ai/build/battle-corpus/oracle-provenance-native-o3/move-tackle-side1-seed193.json \
-  --case /Volumes/Storage/tmp/polished-ai/build/battle-corpus/oracle-provenance-native-o3/move-splash-side0-seed193.json \
-  --case /Volumes/Storage/tmp/polished-ai/build/battle-corpus/oracle-provenance-native-o3/move-splash-side1-seed193.json \
-  --manifest /Volumes/Storage/tmp/polished-ai/build/battle-controller/native-o3/manifest.json \
-  --rom /Volumes/Storage/tmp/polished-ai/build/stateful/game/polishedcrystal-3.2.3.gbc \
-  --symbols /Volumes/Storage/tmp/polished-ai/build/stateful/game/polishedcrystal-3.2.3.sym \
+  --inventory /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-coverage/inventory.json \
+  --report /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/oracle-provenance-native-o3/report.json \
+  --case /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/oracle-provenance-native-o3/move-tackle-side0-seed193.json \
+  --case /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/oracle-provenance-native-o3/move-tackle-side1-seed193.json \
+  --case /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/oracle-provenance-native-o3/move-splash-side0-seed193.json \
+  --case /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/oracle-provenance-native-o3/move-splash-side1-seed193.json \
+  --manifest /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/native-o3/manifest.json \
+  --rom /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game/polishedcrystal-3.2.3.gbc \
+  --symbols /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game/polishedcrystal-3.2.3.sym \
   --generator tools/trainer_ai/stateful_lifting.py \
-  --build-receipt /Volumes/Storage/tmp/polished-ai/build/battle-coverage/original-build-receipt.json \
-  --build-log /Volumes/Storage/tmp/polished-ai/build/stateful/game-build.log \
+  --build-receipt /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-coverage/original-build-receipt.json \
+  --build-log /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/game-build.log \
   --runner-sources tools/trainer_ai \
   --oracle-source tools/trainer_ai/battle_controller_oracle.c \
-  --oracle-library /Volumes/Storage/tmp/polished-ai/build/battle-controller/controller-oracle-7840c8b7a31bc643.dylib \
-  --mgba-library /Volumes/Storage/tmp/polished-ai/build/stateful/mgba/lib/libmgba.0.10.5.dylib \
-  --output /Volumes/Storage/tmp/polished-ai/build/battle-corpus/oracle-provenance-retained-o3
+  --oracle-library /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/controller-oracle-7840c8b7a31bc643.dylib \
+  --mgba-library /Volumes/Storage/Development/agentic_projects/polished_ai/build/stateful/mgba/lib/libmgba.0.10.5.dylib \
+  --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/oracle-provenance-retained-o3
 ```
 
 These exact binary inputs are the existing configured files. The new raw cases

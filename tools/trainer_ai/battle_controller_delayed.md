@@ -66,8 +66,8 @@ fights, with no concurrent heavy process:
 
 ```sh
 python3 tools/trainer_ai/battle_controller_delayed.py \
-  --artifact-root /Volumes/Storage/tmp/polished-ai \
-  --output /Volumes/Storage/tmp/polished-ai/subagents/m2-delayed-residual-01/artifacts/first \
+  --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai \
+  --output /Volumes/Storage/Development/agentic_projects/polished_ai/subagents/m2-delayed-residual-01/artifacts/first \
   --cases leech perish wrap --sides 0 --seeds 193
 ```
 
@@ -75,8 +75,8 @@ If that run supplies trustworthy evidence, the full bounded invocation is:
 
 ```sh
 python3 tools/trainer_ai/battle_controller_delayed.py \
-  --artifact-root /Volumes/Storage/tmp/polished-ai \
-  --output /Volumes/Storage/tmp/polished-ai/subagents/m2-delayed-residual-01/artifacts/full \
+  --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai \
+  --output /Volumes/Storage/Development/agentic_projects/polished_ai/subagents/m2-delayed-residual-01/artifacts/full \
   --seeds 193
 ```
 
@@ -100,7 +100,7 @@ to 57 and caster HP 10 to 15 to 20 to 25. The witness follows this source behavi
 no engine code was changed. Failed first and diagnostic outputs are retained.
 
 Accepted evidence lives under
-`/Volumes/Storage/tmp/polished-ai/subagents/m2-delayed-residual-01/artifacts`:
+`/Volumes/Storage/Development/agentic_projects/polished_ai/subagents/m2-delayed-residual-01/artifacts`:
 `first-corrected/report.json` contains the initial three side-0 cases,
 `remaining-side0/report.json` contains the other five side-0 cases, and
 `remaining-side1/report.json` contains all eight side-1 cases. These three serial

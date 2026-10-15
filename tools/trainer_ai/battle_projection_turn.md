@@ -1,6 +1,6 @@
 # Mixed HP/HUD source continuation probe
 
-Run `battle_projection_turn_check.py --project /Volumes/Storage/tmp/polished-ai`
+Run `battle_projection_turn_check.py --project /Volumes/Storage/Development/agentic_projects/polished_ai`
 with the frozen controller snapshot in `build/battle-controller/snapshots`.
 The probe loads no lifted native engine. It compares two independent mGBA
 executions of actual BattleTurn.do_move followed by HandleBetweenTurnEffects.

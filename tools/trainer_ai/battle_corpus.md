@@ -89,8 +89,8 @@ catalog command and the focused factory checks with one CPU:
 
 ```sh
 python3 tools/trainer_ai/battle_corpus.py \
-  --inventory /Volumes/Storage/tmp/polished-ai/build/battle-coverage/inventory.json \
-  --output /Volumes/Storage/tmp/polished-ai/build/battle-coverage/move-corpus.json
+  --inventory /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-coverage/inventory.json \
+  --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-coverage/move-corpus.json
 ```
 
 Native compilation, emulator comparison and actual full fights require the

@@ -7,7 +7,7 @@ The original fight driver and all shared helpers, gate and merger remain frozen.
 
 `battle_delayed_collect.py` retains the exact completed 16-case family from three
 successful reports under
-`/Volumes/Storage/tmp/polished-ai/subagents/m2-delayed-residual-01/artifacts`:
+`/Volumes/Storage/Development/agentic_projects/polished_ai/subagents/m2-delayed-residual-01/artifacts`:
 `first-corrected`, `remaining-side0` and `remaining-side1`. Failed first attempts
 using an incorrect Leech Seed healing expectation are excluded. The executed
 23-file project host map is pinned in the collector, including driver SHA
@@ -61,9 +61,9 @@ After the CPU grant, the exact metadata-only validation command is:
 
 ```sh
 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 MKL_NUM_THREADS=1 \
-python3 -B /Volumes/Storage/tmp/polished-ai/subagents/m2-delayed-collection-01/artifacts/validate_packaging.py \
-  --canonical /Volumes/Storage/tmp/polished-ai/build/battle-corpus/combined-through-abilities-hazards-o3 \
-  --output /Volumes/Storage/tmp/polished-ai/subagents/m2-delayed-collection-01/artifacts/validation-01
+python3 -B /Volumes/Storage/Development/agentic_projects/polished_ai/subagents/m2-delayed-collection-01/artifacts/validate_packaging.py \
+  --canonical /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-corpus/combined-through-abilities-hazards-o3 \
+  --output /Volumes/Storage/Development/agentic_projects/polished_ai/subagents/m2-delayed-collection-01/artifacts/validation-01
 ```
 
 The coordinator may replace `--canonical` with its latest merge base at grant.
@@ -82,7 +82,7 @@ mutated. Each rejection must exit two without a ledger. The validator verifies
 original report/case hashes remain unchanged.
 
 Accepted evidence is under
-`/Volumes/Storage/tmp/polished-ai/subagents/m2-delayed-collection-01/artifacts/validation-01`.
+`/Volumes/Storage/Development/agentic_projects/polished_ai/subagents/m2-delayed-collection-01/artifacts/validation-01`.
 `retained/` contains the standalone family. `merged/` combines it with
 `combined-through-drain-recoil-o3`; `strict-gate/acceptance.json` reports 227
 tested keys, 626 missing required rules and zero invalid evidence. All seventeen

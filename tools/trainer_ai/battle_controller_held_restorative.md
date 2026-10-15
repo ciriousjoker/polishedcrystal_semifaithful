@@ -68,7 +68,7 @@ A complete 22-fight invocation, requiring the exclusive CPU slot and a current
 source-matched artifact, is:
 
 ```sh
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/battle_controller_held_restorative.py --artifact-root /Volumes/Storage/tmp/polished-ai --output /Volumes/Storage/tmp/polished-ai/build/battle-controller/held-restorative --seeds 193
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/battle_controller_held_restorative.py --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/held-restorative --seeds 193
 ```
 
 The actual execution preserved the first five side-zero cases, then ran only

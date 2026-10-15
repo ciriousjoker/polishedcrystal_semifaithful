@@ -27,19 +27,19 @@ noninterference or all presentation behavior.
 Run only after the coordinator allocates the sole CPU slot:
 
 ```sh
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/battle_controller_pivot_privacy_check.py --artifact-root /Volumes/Storage/tmp/polished-ai --output /Volumes/Storage/tmp/polished-ai/build/battle-controller/pivot-privacy
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/battle_controller_pivot_privacy_check.py --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/pivot-privacy
 ```
 
 The report retains source identities, ROM/SYM/manifest hashes, actually loaded
 Oracle provenance, initial WRAM and per-fight recorded comparisons. No game
 assembly, profile, Oracle, scenario initializer or core changes are needed.
 
-Evidence: `/Volumes/Storage/tmp/polished-ai/build/battle-controller/pivot-privacy/report.json`.
+Evidence: `/Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/pivot-privacy/report.json`.
 The affected three Conversion fights also passed 2,610 comparisons and exact
 replay with the same controller hash, including hidden-input equality and
 missing/invalid-policy poisoning/reset guards. Their report is at
-`/Volumes/Storage/tmp/polished-ai/build/battle-controller/pivot-privacy-conversion/report.json`.
+`/Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/pivot-privacy-conversion/report.json`.
 All four focused bag retry fights passed another 3,551 comparisons and exact
 replay, including the paired hidden-action cancel inputs and negative/reset
 guards. Report:
-`/Volumes/Storage/tmp/polished-ai/build/battle-controller/pivot-privacy-bag-retry/report.json`.
+`/Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/pivot-privacy-bag-retry/report.json`.

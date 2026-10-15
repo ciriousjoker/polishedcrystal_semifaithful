@@ -43,7 +43,7 @@ The first discriminating execution was one grounded Spikes case. After it
 passed, the full nine-condition, both-side family passed with this command:
 
 ```sh
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/battle_controller_hazards.py --artifact-root /Volumes/Storage/tmp/polished-ai --output /Volumes/Storage/tmp/polished-ai/build/battle-controller/hazards --seeds 193
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/battle_controller_hazards.py --artifact-root /Volumes/Storage/Development/agentic_projects/polished_ai --output /Volumes/Storage/Development/agentic_projects/polished_ai/build/battle-controller/hazards --seeds 193
 ```
 
 Default execution selects all nine conditions, both setter sides and one seed.
