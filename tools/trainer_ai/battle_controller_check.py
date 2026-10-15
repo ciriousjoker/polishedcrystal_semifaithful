@@ -5,6 +5,7 @@ import hashlib
 import json
 import pathlib
 import subprocess
+import sys
 from battle_controller import ControllerMachine
 from battle_scenarios import Scenario, initialize
 from battle_env import UnsupportedFight
@@ -43,6 +44,30 @@ class Oracle:
                 str(source), '-L' + str(prefix / 'lib'), '-lmgba',
                 '-Wl,-rpath,' + str(prefix / 'lib'), '-o', str(library)], check=True)
         self.oracle = C.CDLL(str(library))
+        identity = lambda path: dict(path=str(path.resolve()),
+            sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+        self.provenance = dict(schema=1, kind='instrumented-same-hooks-mgba',
+            source=identity(source), library=identity(pathlib.Path(self.oracle._name)),
+            abi_sources={name: identity(pathlib.Path(sys.modules[cls.__module__].__file__))
+                         for name, cls in (('State', State), ('Hook', Hook))})
+        # Resolve the actual loaded mGBA dependency through a symbol the oracle
+        # calls, rather than assuming the configured rpath selected that file.
+        class DlInfo(C.Structure):
+            _fields_ = [('name', C.c_char_p), ('base', C.c_void_p),
+                        ('symbol', C.c_char_p), ('address', C.c_void_p)]
+        try:
+            dladdr = C.CDLL(None).dladdr
+            dladdr.argtypes, dladdr.restype = [C.c_void_p, C.POINTER(DlInfo)], C.c_int
+            info = DlInfo()
+            if not dladdr(C.cast(self.oracle.GBCoreCreate, C.c_void_p), C.byref(info)) or not info.name:
+                raise ValueError('Cannot resolve loaded GBCoreCreate dependency')
+            dependency = pathlib.Path(info.name.decode()).resolve()
+            if dependency.parent != (prefix / 'lib').resolve() or not dependency.name.startswith('libmgba'):
+                raise ValueError('Loaded mGBA dependency is outside configured prefix')
+            self.provenance['libmgba'] = dict(**identity(dependency),
+                identity_kind='loaded-GBCoreCreate-symbol-dladdr')
+        except (AttributeError, OSError, ValueError) as error:
+            self.provenance['libmgba_identity_error'] = str(error)
         self.banked_wram = getattr(machine, 'banked_wram', False)
         self.run = self.oracle.oracle_run_banked if self.banked_wram else self.oracle.oracle_run
         self.oracle.oracle_open.argtypes = [C.c_char_p]

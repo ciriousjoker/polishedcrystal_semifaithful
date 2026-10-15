@@ -189,12 +189,14 @@ def run(args):
                     'battle_controller_fight.py', 'battle_controller_fight_check.py',
                     'battle_scenarios.py', 'battle_controller_check.py',
                     'battle_decisions.py', 'battle_controller.py', 'battle_controller_profile.py',
-                    'battle_env.py', 'battle_bag.py', 'battle_actions.py')
+                    'battle_env.py', 'battle_bag.py', 'battle_actions.py',
+                    'stateful_fixture_check.py', 'battle_env_check.py')
     provenance = {name: sha(Path(__file__).with_name(name)) for name in runner_files}
     for case in cases:
         summary = dict(case=case.name, state='blocked', accepted_rules=[])
         evidence = dict(case=case.record(), inventory_sha256=inventory['inventory_sha256'],
-                        source_inputs=inventory['source_inputs'], runner_sha256=provenance)
+                        source_inputs=inventory['source_inputs'], runner_sha256=provenance,
+                        oracle_provenance=oracle.provenance)
         recording, trace = None, None
         reset_complete = False
         start = len(oracle.rows)
