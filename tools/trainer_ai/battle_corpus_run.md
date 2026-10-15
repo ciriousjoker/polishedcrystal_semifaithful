@@ -485,3 +485,33 @@ retained evidence live under `build/battle-corpus/forced-struggle-o3-01` and
 remain unchanged. The existing merger added only the new Struggle move key to
 the latest 227-key ledger, producing `combined-through-forced-struggle-o3` with
 228 tested keys, 625 missing required-rule failures and no invalid evidence.
+
+## Executed wider rare-secondary checkpoint
+
+The bounded 16-move, two-orientation search completed after its required
+32-prefix review checkpoint. Across 574 actual-Oracle prefixes it found 30
+positive orientations for 15 moves. Thunderbolt exhausted seeds 1 through 64 on
+both sides: all 128 observed first actions knocked out the target, so no
+secondary paralysis activation was claimed. Source HP, chance and RNG were not
+patched to manufacture a positive fixture.
+
+The unmodified full runner then accepted all 30 selected exact-side/exact-seed
+fights, each reaching source terminal and exact native replay. Every first-turn
+frame matched its selected prefix exactly. These full fights contain 46,842
+independent Oracle comparisons. The disposable orchestration stops on runtime,
+blocked/truncated, replay or prefix/full-observation divergence, preserving
+partial results; no such failure occurred.
+
+Thirty retained orientation collections were merged with the 228-key baseline
+into `build/battle-corpus/combined-through-rare-secondary-wide-o3`: 246 tested
+keys, 607 missing required-rule failures and no invalid evidence. New claims
+cover fifteen move identities plus freeze-hit, attack-down-hit and special-
+defense-down-hit effects. Prefixes themselves still have empty accepted-rule
+claims. Exact selected seeds, observations, frozen host sources and provenance
+live in `subagents/m2-rare-secondary-wide-01/artifacts`.
+
+Measured search-loop cost was 111.27 seconds for 112,534 prefix comparisons;
+full runner commands took 93.69 seconds, collection 10.95 seconds and merge
+10.58 seconds. These deliberately selected fixtures are not held-out evaluation,
+training throughput or battle-strength evidence. No runtime source or native
+artifact changed, and the Thunderbolt fixture gap remains explicit.
