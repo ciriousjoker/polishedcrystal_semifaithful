@@ -14,7 +14,10 @@ ordinary graphical battle or general Polished Crystal simulator.
   exactly two source trainer slots. The player bag is a separate unsupported
   action path. `inventory=(name_or_none, name_or_none)` accepts Potion,
   Super Potion, Hyper Potion, Max Potion, Full Heal and Full Restore by their
-  uppercase underscore names. Duplicate items and empty slots are allowed.
+  uppercase underscore names. Duplicate items and empty slots are allowed. Occupied
+  supported slots remain action-legal even when their effect would be wasteful;
+  the policy replaces the original AI selection heuristics, including HP and
+  highest-level checks.
 
 Both actors choose from public observations and masks before either action is
 committed. Observations expose both complete fixture rosters and trainer

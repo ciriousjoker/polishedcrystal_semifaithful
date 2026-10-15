@@ -32,11 +32,15 @@ RUNTIME = r'''
 #define C 16
 static uint8_t rd(State*s,uint16_t p){
  if(p<0x8000){uint32_t o=p<0x4000?p:s->bank*0x4000u+p-0x4000;if(o>=sizeof(rom)){s->fault=2;return 0;}return rom[o];}
+ /* BANKED_WRAM_READ */
+ /* LCD_DISABLED_READ */
  if((p>=0xc000&&p<0xe000)||(p>=0xff80&&p<0xffff))return s->m[p];
  if(p==0xff04){if(s->event_pos>=s->event_count||s->event_pos>=4096){s->fault=2;return 0;}return s->events[s->event_pos++];}
  s->fault=2;return 0;
 }
 static void wr(State*s,uint16_t p,uint8_t v){
+ /* WRITE_ONLY_MMIO_PROJECTION */
+ /* BANKED_WRAM_WRITE */
  if(p>=0x2000&&p<0x4000){s->bank=v&127;if(!s->bank)s->bank=1;return;}
  if((p>=0xc000&&p<0xe000)||(p>=0xff80&&p<0xffff)){s->m[p]=v;return;}
  s->fault=2;
@@ -60,6 +64,7 @@ static void rotate(State*s,int kind,int r,int accumulator){unsigned a=reg(s,r),c
  case 6:v=(a<<4)|(a>>4);break;case 7:v=a>>1;c=a&1;break;}
  putreg(s,r,v);s->f=(c?C:0)|((v&255)||accumulator?0:Z);}
 static void addsp(State*s,int8_t v,int hl){uint16_t a=s->sp;unsigned u=(uint8_t)v;s->f=(((a&15)+(u&15))>15?H:0)|(((a&255)+u)>255?C:0);if(hl)putpair(s,2,a+v);else s->sp=a+v;}
+static void daa(State*s){unsigned a=s->a,fix=0,f=s->f;if(f&N){if(f&H)fix|=6;if(f&C)fix|=0x60;a-=fix;}else{if((f&H)||(a&15)>9)fix|=6;if((f&C)||a>0x99){fix|=0x60;f|=C;}a+=fix;}s->a=a;s->f=(f&(N|C))|(s->a?0:Z);}
 '''
 
 def parse_symbols(text):
@@ -73,7 +78,8 @@ def parse_symbols(text):
 def symbols(path):
     return parse_symbols(pathlib.Path(path).read_text())
 
-def compile_rom(rom, roots, traps=()):
+def compile_rom(rom, roots, traps=(), call_abis=None):
+    call_abis=call_abis or {}
     pending=list(roots);seen=set();blocks={};unsupported=[]
     def byte(bank,pc):
         off=pc if pc<0x4000 else bank*0x4000+pc-0x4000
@@ -86,7 +92,7 @@ def compile_rom(rom, roots, traps=()):
         key=pc if pc<0x4000 else (bank<<16)|pc
         if (bank,pc) in traps or (0,pc) in traps and pc<0x4000:
             blocks[key]='s->fault=4;';continue
-        op=byte(bank,pc);n=1;code=None;targets=[];fall=True
+        op=byte(bank,pc);n=1;code=None;targets=[];fall=True;fall_bank=bank
         def imm():return byte(bank,pc+1)
         def word():return imm()|(byte(bank,pc+2)<<8)
         cond=['!(s->f&Z)','s->f&Z','!(s->f&C)','s->f&C']
@@ -121,6 +127,16 @@ def compile_rom(rom, roots, traps=()):
             code=(f'push(s,{pc+n});' if call else '')+f's->pc={target};'
             if not uncond:code=f'if({cond[((op>>3)&3)]}){{{code}}}'
             targets=[(bank,target)];fall=call or not uncond
+            mode=call_abis.get((0 if target<0x4000 else bank,target)) if call else None
+            if mode:
+                if not uncond:raise ValueError('Conditional inline ABI call is not supported')
+                if mode=='tail-table':fall=False
+                elif mode=='skip-byte':
+                    if pc>=0x4000:raise ValueError('Banked inline-byte continuation requires a separate source proof')
+                    fall_bank=byte(bank,pc+3)&127
+                    if not fall_bank:fall_bank=1
+                    n=4
+                else:raise ValueError('Unknown resolved inline call ABI')
         elif op in (0xc9,0xc0,0xc8,0xd0,0xd8):
             code='s->pc=pop(s);';fall=op!=0xc9
             if fall:code=f'if({cond[(op>>3)&3]}){{{code}}}'
@@ -129,18 +145,20 @@ def compile_rom(rom, roots, traps=()):
             target=op&0x38;code=f'push(s,{pc+1});s->pc={target};';targets=[(bank,target)]
             if target==0x10:
                 dst=word()&0x7fff;db=byte(bank,pc+3);targets.append((db,dst));n=4
+                if word()&0x8000:fall=False  # farjp returns through DoNothing, never inline data continuation
             # Discovery skips farcall pointer data. Runtime pushes pc+1 exactly.
         elif op==0xcb:
             n=2;x=imm();r=x&7;k=(x>>3)&7
             if x<0x40:code=f'rotate(s,{k},{r},0);'
             elif x<0x80:code=f's->f=(s->f&C)|H|((reg(s,{r})&{1<<k})?0:Z);'
             else:code=f'putreg(s,{r},reg(s,{r}){ "&" if x<0xc0 else "|"}{255-(1<<k) if x<0xc0 else 1<<k});'
+        elif op==0x27:code='daa(s);'
         elif op==0x2f:code='s->a^=255;s->f|=N|H;'
         elif op==0x37:code='s->f=(s->f&Z)|C;'
         elif op==0x3f:code='s->f=(s->f&Z)|((s->f&C)?0:C);'
         if code is None:
             unsupported.append({'bank':bank,'pc':pc,'opcode':op});continue
-        if fall:targets.append((bank,(pc+n)&65535))
+        if fall:targets.append((fall_bank,(pc+n)&65535))
         pending.extend(targets)
         key=pc if pc<0x4000 else (bank<<16)|pc
         body=f's->pc={(pc+(1 if op&0xc7==0xc7 else n))&65535};{code}'
@@ -154,8 +172,40 @@ def source_paths():
     paths=subprocess.check_output(['git','ls-files','-z'],cwd=ROOT).split(b'\0')
     return sorted(p.decode() for p in paths if p and not p.startswith(b'tools/trainer_ai/'))
 
-def build(rom_path,sym_path,entries,build_dir,source_root=None,boundaries=(),excluded=()):
-    build_dir=pathlib.Path(build_dir);build_dir.mkdir(parents=True,exist_ok=True)
+def resolve_call_abis(symbols, call_abis):
+    """Resolve declarative source wrapper ABIs only for static discovery."""
+    resolved={}
+    for name,kind in (call_abis or {}).items():
+        if name not in symbols or kind not in ('skip-byte','tail-table'):
+            raise ValueError('Unknown inline call ABI symbol or kind')
+        bank,pc=symbols[name]
+        key=(0 if pc<0x4000 else bank,pc)
+        if key in resolved and resolved[key]!=kind:raise ValueError('Conflicting inline call ABI aliases')
+        resolved[key]=kind
+    return resolved
+
+
+def validate_write_only_mmio(addresses):
+    """Only explicitly audited write-only audio/OBJ palette sinks are available."""
+    addresses=tuple(addresses)
+    if any(type(address) is not int or (address not in range(0xff10,0xff15) and address!=0xff48) for address in addresses):
+        raise ValueError('Unsupported write-only MMIO projection address')
+    if len(set(addresses))!=len(addresses):raise ValueError('Duplicate write-only MMIO projection address')
+    return tuple(sorted(addresses))
+
+
+def validate_optimization(optimization):
+    if type(optimization) is not str or optimization not in ('O0','O1','O2','O3'):
+        raise ValueError('Unsupported native optimization configuration')
+    return optimization
+
+
+def build(rom_path,sym_path,entries,build_dir,source_root=None,boundaries=(),excluded=(),write_only_mmio=(),call_abis=None,optimization='O3',banked_wram=False,lcd_disabled=False):
+    optimization=validate_optimization(optimization)
+    if type(banked_wram) is not bool:raise ValueError('WRAM banking configuration must be Boolean')
+    if type(lcd_disabled) is not bool:raise ValueError('LCD-disabled configuration must be Boolean')
+    write_only_mmio=validate_write_only_mmio(write_only_mmio)
+    build_dir=pathlib.Path(build_dir).resolve();build_dir.mkdir(parents=True,exist_ok=True)
     manifest_path=build_dir/'manifest.json';lib=build_dir/'stateful.pending.dylib'
     # Failed regeneration cannot leave an apparently current old binary or manifest.
     for p in (manifest_path,lib):p.unlink(missing_ok=True)
@@ -176,24 +226,34 @@ def build(rom_path,sym_path,entries,build_dir,source_root=None,boundaries=(),exc
     excluded_roots=[syms[e] if isinstance(e,str) else tuple(e) for e in excluded]
     machine_key=lambda root:root[1] if root[1]<0x4000 else (root[0]<<16)|root[1]
     if {machine_key(r) for r in boundary_roots}&{machine_key(r) for r in traps+excluded_roots}:raise ValueError('Ambiguous native boundary')
-    blocks,seen=compile_rom(rom,roots,traps+boundary_roots+excluded_roots)
+    resolved_call_abis=resolve_call_abis(syms,call_abis)
+    blocks,seen=compile_rom(rom,roots,traps+boundary_roots+excluded_roots, resolved_call_abis)
     # Boundary events stop BEFORE the callee executes. Runtime never resumes or
     # fabricates a callee return; the external profile owns any audited handling.
     for bank,pc in boundary_roots:
         key=pc if pc<0x4000 else (bank<<16)|pc
         if key in blocks:blocks[key]='s->fault=5;'
 
-    c=ABI+'static const uint8_t rom[]={'+','.join(map(str,rom))+'};\n'+RUNTIME
-    c+='\nvoid stateful_run(State*s,uint32_t budget,uint16_t stop_pc){uint32_t used=0;while(!s->fault&&s->pc!=stop_pc){if(used++>=budget){s->fault=3;break;}s->steps++;switch(s->pc<0x4000?s->pc:((uint32_t)s->bank<<16)|s->pc){\n'
+    projection=('if('+ '||'.join('p=='+str(address) for address in write_only_mmio)+')return;') if write_only_mmio else ''
+    runtime=RUNTIME.replace('/* WRITE_ONLY_MMIO_PROJECTION */',projection)
+    banked_read='if(p==0xff70)return 0xf8|(s->m[0xff70]&7);if(p>=0xd000&&p<0xe000){unsigned b=s->m[0xff70]&7;if(b>1)return s->m[(b-2)*0x1000+p-0xd000];}' if banked_wram else ''
+    banked_write='if(p==0xff70){s->m[p]=v&7;return;}if(p>=0xd000&&p<0xe000){unsigned b=s->m[0xff70]&7;if(b>1){s->m[(b-2)*0x1000+p-0xd000]=v;return;}}' if banked_wram else ''
+    runtime=runtime.replace('/* BANKED_WRAM_READ */',banked_read).replace('/* BANKED_WRAM_WRITE */',banked_write)
+    runtime=runtime.replace('/* LCD_DISABLED_READ */','if(p==0xff40)return 0;' if lcd_disabled else '')
+    c=ABI+'static const uint8_t rom[]={'+','.join(map(str,rom))+'};\n'+runtime
+    c+='\nvoid stateful_run_banked(State*s,uint32_t budget,uint16_t stop_pc,uint16_t stop_bank){uint32_t used=0;while(!s->fault&&!(s->pc==stop_pc&&(stop_pc<0x4000||stop_pc>=0x8000||stop_bank==0xffff||s->bank==stop_bank))){if(used++>=budget){s->fault=3;break;}s->steps++;switch(s->pc<0x4000?s->pc:((uint32_t)s->bank<<16)|s->pc){\n'
     c+='\n'.join(f'case {key}:{{{body}}}break;' for key,body in sorted(blocks.items()))
     c+='\ndefault:s->fault=1;break;}}}\n'
+    c+='void stateful_run(State*s,uint32_t budget,uint16_t stop_pc){stateful_run_banked(s,budget,stop_pc,0xffff);}\n'
     cpath=build_dir/'stateful.c';cpath.write_text(c)
     compiler=subprocess.check_output(['cc','--version'],text=True)
-    identity=hashlib.sha256((c+compiler).encode()).hexdigest()
+    compile_flags=['cc','-std=c11','-'+optimization,'-shared','-fPIC']
+    identity=hashlib.sha256((c+compiler+json.dumps(compile_flags)).encode()).hexdigest()
     lib=build_dir/('stateful-'+identity+'.dylib')
-    subprocess.run(['cc','-std=c11','-O3','-shared','-fPIC',str(cpath),'-o',str(lib)],check=True)
+    compile_argv=[*compile_flags,str(cpath),'-o',str(lib)]
+    subprocess.run(compile_argv,check=True)
     sha=lambda p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()
-    manifest={'schema':1,'library_path':str(lib.resolve()),'abi_sha256':hashlib.sha256(ABI.encode()).hexdigest(),'profile':'bounded-mbc3-flat-wram-div-event-tape','rom_sha256':rom_digest,'symbols_sha256':sym_digest,'generator_sha256':MODULE_DIGEST,'generated_c_sha256':sha(cpath),'library_sha256':sha(lib),'entries':dict(zip(map(str,entries),roots)),'explicit_crash_traps':traps,'boundaries':dict(zip(map(str,boundaries),boundary_roots)),'excluded':dict(zip(map(str,excluded),excluded_roots)),'blocks':len(blocks),'reachable_contexts':len(seen),'normalization':'none; real stack, return addresses and bank writes','limits':'WRAM0/WRAMX flat C000-DFFF, HRAM; only DIV MMIO reads; no interrupts, DMA, RTC, external RAM, WRAM banking or arbitrary unknown PC'}
+    manifest={'schema':1,'call_abis':dict(call_abis or {}),'write_only_mmio':list(write_only_mmio),'library_path':str(lib.resolve()),'abi_sha256':hashlib.sha256(ABI.encode()).hexdigest(),'profile':'bounded-mbc3-flat-wram-div-event-tape','rom_sha256':rom_digest,'symbols_sha256':sym_digest,'generator_sha256':MODULE_DIGEST,'generated_c_sha256':sha(cpath),'library_sha256':sha(lib),'entries':dict(zip(map(str,entries),roots)),'explicit_crash_traps':traps,'boundaries':dict(zip(map(str,boundaries),boundary_roots)),'excluded':dict(zip(map(str,excluded),excluded_roots)),'blocks':len(blocks),'reachable_contexts':len(seen),'normalization':'none; real stack, return addresses and bank writes','limits':'WRAM0/WRAMX flat C000-DFFF, HRAM; only DIV MMIO reads; no interrupts, DMA, RTC, external RAM, WRAM banking or arbitrary unknown PC'}
     if source_root:
         paths=source_paths()
         missing=[p for p in paths if not (pathlib.Path(source_root)/p).is_file()]
@@ -206,16 +266,30 @@ def build(rom_path,sym_path,entries,build_dir,source_root=None,boundaries=(),exc
         manifest['source_profile']='tracked-tree-except-tools/trainer_ai/'
     else:manifest['source_profile']='ROM-only-no-source-proof'
     manifest['compiler']=subprocess.check_output(['cc','--version'],text=True).splitlines()[0]
+    manifest['optimization']=optimization
+    manifest['compile_argv']=compile_argv
+    manifest['banked_wram']=banked_wram
+    manifest['lcd_disabled']=lcd_disabled
+    if banked_wram:
+        manifest['profile']='bounded-mbc3-cgb-banked-wram-div-event-tape'
+        manifest['limits']='CGB WRAM0 C000-CFFF, canonical bank1 D000-DFFF, banks2..7 in State.m[0000:6000], FF70 raw low3 bits with 0 aliasing bank1, HRAM; DIV reads; no interrupts, DMA, RTC, external RAM, echo RAM or arbitrary unknown PC'
+    if lcd_disabled:
+        manifest['profile']=manifest['profile'].replace('-div-event-tape','-lcd-disabled-div-event-tape')
+        manifest['limits']+='; explicit headless LCDC reads return 0; LCDC writes remain rejected'
     if sha(__file__)!=MODULE_DIGEST:raise ValueError('Generator changed during generation')
     if sha(rom_path)!=rom_digest or sha(sym_path)!=sym_digest:
         raise ValueError('ROM or symbols changed during generation')
     manifest_path.write_text(json.dumps(manifest,indent=2)+'\n')
     return manifest
 
-def load_verified(build_dir, rom_path, sym_path, source_root=None, entries=None, boundaries=(), excluded=()):
+def load_verified(build_dir, rom_path, sym_path, source_root=None, entries=None, boundaries=(), excluded=(), write_only_mmio=(), call_abis=None, optimization='O3',banked_wram=False,lcd_disabled=False):
     """Only load an artifact matching present inputs and generator, never stale output."""
     import ctypes
-    build_dir=pathlib.Path(build_dir)
+    optimization=validate_optimization(optimization)
+    if type(banked_wram) is not bool:raise ValueError('WRAM banking configuration must be Boolean')
+    if type(lcd_disabled) is not bool:raise ValueError('LCD-disabled configuration must be Boolean')
+    write_only_mmio=validate_write_only_mmio(write_only_mmio)
+    build_dir=pathlib.Path(build_dir).resolve()
     manifest=json.loads((build_dir/'manifest.json').read_text())
     if hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest()!=MODULE_DIGEST:
         raise ValueError('Generator changed since module import')
@@ -225,10 +299,24 @@ def load_verified(build_dir, rom_path, sym_path, source_root=None, entries=None,
             'generated_c_sha256':sha(build_dir/'stateful.c'),
             'library_sha256':sha(manifest['library_path']),
             'compiler':subprocess.check_output(['cc','--version'],text=True).splitlines()[0],
-            'profile':'bounded-mbc3-flat-wram-div-event-tape'}
+            'profile':'bounded-mbc3-'+('cgb-banked-wram' if banked_wram else 'flat-wram')+('-lcd-disabled' if lcd_disabled else '')+'-div-event-tape'}
     for key,value in checks.items():
         if manifest.get(key)!=value:raise ValueError('Stale native artifact: '+key)
-    if entries is not None and set(manifest['entries'])!=set(entries):
+    if manifest.get('lcd_disabled') is not lcd_disabled:
+        raise ValueError('Native LCD-disabled configuration mismatch')
+    if manifest.get('banked_wram') is not banked_wram:
+        raise ValueError('Native WRAM banking configuration mismatch')
+    if manifest.get('optimization')!=optimization:
+        raise ValueError('Native optimization configuration mismatch')
+    expected_argv=['cc','-std=c11','-'+optimization,'-shared','-fPIC',str(build_dir/'stateful.c'),'-o',manifest['library_path']]
+    if manifest.get('compile_argv')!=expected_argv:
+        raise ValueError('Native compiler invocation configuration mismatch')
+    resolve_call_abis(symbols(sym_path),call_abis)
+    if manifest.get('call_abis',{})!=dict(call_abis or {}):
+        raise ValueError('Native inline call ABI configuration mismatch')
+    if manifest.get('write_only_mmio',[])!=list(write_only_mmio):
+        raise ValueError('Native write-only MMIO configuration mismatch')
+    if entries is not None and set(manifest['entries'])!=set(map(str,entries)):
         raise ValueError('Native entry configuration mismatch')
     if set(manifest.get('boundaries',{}))!=set(map(str,boundaries)) or set(manifest.get('excluded',{}))!=set(map(str,excluded)):
         raise ValueError('Native boundary configuration mismatch')
