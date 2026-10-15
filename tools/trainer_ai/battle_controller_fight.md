@@ -102,3 +102,20 @@ fights passed actual-ROM comparisons and exact native replay: HP and PP retarget
 and explicit cancellation with two different hidden enemy intents. Missing-policy
 and invalid-choice guards reject without consumption or a completed turn and
 require reset before recovery. See `battle_controller_bag_retry_check.md`.
+
+An optional `conversion_chooser` supplies the player's nested Conversion target
+at source move-menu type 2. It receives a detached observation and MoveAction
+slot mask computed from the active known moves' actual assembled types,
+excluding UNKNOWN_T and both current types. Zero-PP targets remain valid because
+this is a type choice rather than using that attack. There is no fallback to
+the original attack slot. Missing or invalid policy input rejects the fight.
+The actual Conversion source farcall operand, bank and live return frame are
+checked before this input is accepted. Source menu validation and type changes
+still execute. Three complete source fights passed 2,610 comparisons and exact
+native replay, including zero-PP targets, opposite conversion direction, hidden
+enemy input equality and missing/invalid-policy reset guards. See
+`battle_controller_conversion_check.md`. The enemy EncoreCount high nibble is
+conservatively taken from the frozen predecision observation because source
+SetChoiceLock otherwise exposes the newly selected private move slot. Its live
+low countdown and all actual source RAM remain unchanged; the source packing
+scaffold is guarded.

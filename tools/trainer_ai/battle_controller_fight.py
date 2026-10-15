@@ -121,13 +121,14 @@ class ControllerFight:
     defines the observation contract, before either actor commits an action.
     """
     def __init__(self, machine, *, chooser=None, replacement_chooser=None,
-                 retry_chooser=None, bag_retry_chooser=None, observer=None, max_turns=128):
+                 retry_chooser=None, bag_retry_chooser=None, conversion_chooser=None, observer=None, max_turns=128):
         if type(max_turns) is not int or not 1 <= max_turns <= 65535:
             raise UnsupportedFight('Invalid controller turn bound')
         self.machine = machine
         self.decision_boundary = decision_boundary(machine)
         self.chooser, self.replacement_chooser = chooser, replacement_chooser
         self.retry_chooser, self.bag_retry_chooser = retry_chooser, bag_retry_chooser
+        self.conversion_chooser = conversion_chooser
         self.observer, self.max_turns = observer, max_turns
         self._old_segment_checker = machine.segment_checker
         self._old_single_step_checker = machine.single_step_checker
@@ -143,6 +144,7 @@ class ControllerFight:
         self._replacement_records = []
         self._retry_records = []
         self._bag_retry_records = []
+        self._conversion_records = []
         machine.segment_checker = self._segment
         machine.single_step_checker = self._single_step
         machine.on_choice = self._choice
@@ -220,6 +222,7 @@ class ControllerFight:
         self._bag_attempted = False
         self._replacement_records, self._retry_records = [], []
         self._bag_retry_records = []
+        self._conversion_records = []
         self.records, self._div, self._boundaries = [], [], []
         initialize(m, scenario, seed)
         # The user explicitly selected fixed-level training. Require the real
@@ -328,6 +331,7 @@ class ControllerFight:
         self._replacement_records = []
         self._retry_records = []
         self._bag_retry_records = []
+        self._conversion_records = []
         self._replacement_cache = None
         self._div, self._boundaries = [], []
         before = self.observations()
@@ -359,6 +363,7 @@ class ControllerFight:
             replacement_choices=copy.deepcopy(self._replacement_records),
             retry_choices=copy.deepcopy(self._retry_records),
             bag_retry_choices=copy.deepcopy(self._bag_retry_records),
+            conversion_choices=copy.deepcopy(self._conversion_records),
             state_sha256=hashlib.sha256(bytes(m.state)).hexdigest()))
         self._emit('turn-after', transition=asdict(transition))
         return transition
@@ -550,11 +555,82 @@ class ControllerFight:
             raise UnsupportedFight('Unknown direct menu callback caller')
         return max(owners)[1]
 
+    def _conversion_input(self):
+        """Supply only the player's explicitly requested Conversion type target."""
+        m, state = self.machine, self.machine.state
+        source = (m.source_root / 'engine/battle/move_effects/conversion.asm').read_text()
+        lines = [line.split(';', 1)[0].strip() for line in source.splitlines()]
+        lines = [line for line in lines if line]
+        scaffold = ['ld a, 2', 'ld [wMoveSelectionMenuType], a', 'farcall MoveSelectionScreen']
+        if sum(lines[i:i + 3] == scaffold for i in range(len(lines) - 2)) != 1:
+            raise UnsupportedFight('Conversion nested input source scaffold changed')
+        bank, start = m.symbols['BattleCommand_conversion.player_choose_move']
+        end_bank, end = m.symbols['BattleCommand_conversion.enemy']
+        target_bank, target = m.symbols['MoveSelectionScreen']
+        rst_bank, rst = m.symbols['FarCall']
+        if bank != end_bank or rst_bank or rst not in range(0, 0x40, 8):
+            raise UnsupportedFight('Conversion nested input bank ABI changed')
+        encoded = bytes((0xc7 | rst, target & 255, target >> 8, target_bank))
+        region = m._rom_bytes('BattleCommand_conversion.player_choose_move', 0, end - start)
+        positions = [i for i in range(len(region) - 3) if region[i:i + 4] == encoded]
+        if len(positions) != 1:
+            raise UnsupportedFight('Conversion nested input assembled caller changed')
+        continuation = start + positions[0] + 4
+        frame = bytes((rst + 4, 0, bank, continuation & 255, continuation >> 8))
+        stack_top = m.address('wStackTop')
+        if not 0xc000 <= state.sp < stack_top <= 0xd000:
+            raise UnsupportedFight('Invalid Conversion callback stack')
+        if bytes(state.m[state.sp:stack_top]).count(frame) != 1 or m.byte('hBattleTurn') != 0:
+            raise UnsupportedFight('Move type menu is outside the actual player Conversion caller')
+        if self.conversion_chooser is None:
+            raise UnsupportedFight('Conversion requires an explicit nested type policy')
+        if len(self._conversion_records) >= 32:
+            raise UnsupportedFight('Conversion nested input exceeded its bound')
+        current = observation(m, 0)
+        # Source SetChoiceLock packs the newly committed enemy move slot into
+        # this byte before execution. That high nibble is private this round;
+        # keep the actor's predecision value while exposing the live countdown.
+        core = (m.source_root / 'engine/battle/core.asm').read_text()
+        lock = re.search(r'^SetChoiceLock:\s*\n(.*?)^GetDisableEncoreMoves:', core, re.M | re.S)
+        lock_lines = ([] if lock is None else
+                      [line.split(';', 1)[0].strip() for line in lock[1].splitlines()])
+        lock_lines = [line for line in lock_lines if line]
+        packing = ['ld a, [hl]', 'and $f', 'ld b, a', 'ld a, c', 'inc a',
+                   'swap a', 'or b', 'ld [hl], a']
+        if sum(lock_lines[i:i + len(packing)] == packing
+               for i in range(len(lock_lines) - len(packing) + 1)) != 1:
+            raise UnsupportedFight('Source choice-lock privacy encoding changed')
+        live = current['battlefield'][1]['EncoreCount']
+        frozen = self.frozen_observations[0]['battlefield'][1]['EncoreCount']
+        current['battlefield'][1]['EncoreCount'] = (live & 15) | (frozen & 240)
+        own = next(member for member in current['teams'][0] if member['active'])
+        unknown = m._constant('constants/type_constants.asm', 'UNKNOWN_T')
+        choices = tuple(MoveAction(slot) for slot, move in enumerate(own['moves'])
+                        if move and m.move_data(move)[3] != unknown
+                        and m.move_data(move)[3] not in own['types'])
+        if not choices:
+            raise UnsupportedFight('Conversion requested a menu without a legal type')
+        current['conversion'] = dict(reason='choose-known-move-type',
+                                     targets=tuple(dict(slot=choice.slot,
+                                         type=m.move_data(own['moves'][choice.slot])[3])
+                                         for choice in choices))
+        chosen = self.conversion_chooser(0, copy.deepcopy(current), copy.deepcopy(choices))
+        if type(chosen) is not MoveAction or type(chosen.slot) is not int or chosen not in choices:
+            raise UnsupportedFight('Conversion choice is outside its detached type mask')
+        self._conversion_records.append(encode_action(chosen))
+        self._emit('conversion-choice', observation=current,
+                   choices=tuple(encode_action(choice) for choice in choices),
+                   action=encode_action(chosen))
+        m._put('wMenuCursorY', chosen.slot + 1)
+        self._press()
+
     def _menu(self, owner):
         m = self.machine
         action = self._pending[0] if self._pending else None
         if owner == 'MoveSelectionScreen':
-            if self._bag is not None and m.byte('wMoveSelectionMenuType') == 1:
+            if m.byte('wMoveSelectionMenuType') == 2:
+                self._conversion_input()
+            elif self._bag is not None and m.byte('wMoveSelectionMenuType') == 1:
                 self._bag.input('pp_move')
             elif type(action) is MoveAction:
                 m._put('wMenuCursorY', action.slot + 1)
