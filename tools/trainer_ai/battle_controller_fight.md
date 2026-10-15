@@ -86,3 +86,19 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/battle_control
 The additional bounded cases can be requested with `--cases forced-charge
 struggle attract six-party`. They are prepared fixtures until their runner has
 actually passed against the current native artifact and ROM.
+
+An optional `bag_retry_chooser` handles an actually rejected item/target inside
+its party or bag menu. It is separate from `retry_chooser` at the outer battle
+menu. Detection requires the real no-effect text pointer and the exact
+source/ROM-validated `CantUseItemMessage` return into `ItemNotUsed_ExitMenu`.
+Repeated navigation is not a rejection event. The player receives a detached
+observation plus its own failed intent, and a detached mask containing retargets
+of that same item stack and `CancelBagAction`. Missing policy, invalid choices
+and unbounded retries reject. The original source still writes its zero success
+flag, changes menus and determines turn and inventory behavior. Explicit
+cancellation uses `BagInput.cancel()` to press B while unwinding; it does not
+write item effects or replace the enemy's pending intent. Four focused complete
+fights passed actual-ROM comparisons and exact native replay: HP and PP retargets,
+and explicit cancellation with two different hidden enemy intents. Missing-policy
+and invalid-choice guards reject without consumption or a completed turn and
+require reset before recovery. See `battle_controller_bag_retry_check.md`.

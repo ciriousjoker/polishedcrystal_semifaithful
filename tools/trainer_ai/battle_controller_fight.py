@@ -13,7 +13,7 @@ import re
 
 from battle_env import MoveAction, UnsupportedFight
 from battle_actions import SwitchAction, ItemAction
-from battle_bag import BagAction, BagInput
+from battle_bag import BagAction, BagInput, CancelBagAction, ineffective_item_prompt
 from battle_decisions import ContinueAction, StruggleAction, observation, legal_actions, _query
 from battle_scenarios import Scenario, initialize
 
@@ -121,13 +121,13 @@ class ControllerFight:
     defines the observation contract, before either actor commits an action.
     """
     def __init__(self, machine, *, chooser=None, replacement_chooser=None,
-                 retry_chooser=None, observer=None, max_turns=128):
+                 retry_chooser=None, bag_retry_chooser=None, observer=None, max_turns=128):
         if type(max_turns) is not int or not 1 <= max_turns <= 65535:
             raise UnsupportedFight('Invalid controller turn bound')
         self.machine = machine
         self.decision_boundary = decision_boundary(machine)
         self.chooser, self.replacement_chooser = chooser, replacement_chooser
-        self.retry_chooser = retry_chooser
+        self.retry_chooser, self.bag_retry_chooser = retry_chooser, bag_retry_chooser
         self.observer, self.max_turns = observer, max_turns
         self._old_segment_checker = machine.segment_checker
         self._old_single_step_checker = machine.single_step_checker
@@ -142,6 +142,7 @@ class ControllerFight:
         self._bag_attempted = False
         self._replacement_records = []
         self._retry_records = []
+        self._bag_retry_records = []
         machine.segment_checker = self._segment
         machine.single_step_checker = self._single_step
         machine.on_choice = self._choice
@@ -177,6 +178,9 @@ class ControllerFight:
             self._boundaries.append(boundary.name)
             self._emit('boundary', name=boundary.name, bank=boundary.bank,
                        pc=boundary.pc, turn=machine.turn)
+            if (boundary.name == 'PrintText' and self._bag is not None and
+                    self._pending is not None and ineffective_item_prompt(machine)):
+                self._retry_bag_target()
         return boundary, used
 
     def _single_step(self, machine):
@@ -215,6 +219,7 @@ class ControllerFight:
         self._pending = self._bag = self._replacement_cache = None
         self._bag_attempted = False
         self._replacement_records, self._retry_records = [], []
+        self._bag_retry_records = []
         self.records, self._div, self._boundaries = [], [], []
         initialize(m, scenario, seed)
         # The user explicitly selected fixed-level training. Require the real
@@ -322,6 +327,7 @@ class ControllerFight:
         self._bag_attempted = False
         self._replacement_records = []
         self._retry_records = []
+        self._bag_retry_records = []
         self._replacement_cache = None
         self._div, self._boundaries = [], []
         before = self.observations()
@@ -352,6 +358,7 @@ class ControllerFight:
             div_events=tuple(self._div), boundaries=tuple(self._boundaries),
             replacement_choices=copy.deepcopy(self._replacement_records),
             retry_choices=copy.deepcopy(self._retry_records),
+            bag_retry_choices=copy.deepcopy(self._bag_retry_records),
             state_sha256=hashlib.sha256(bytes(m.state)).hexdigest()))
         self._emit('turn-after', transition=asdict(transition))
         return transition
@@ -414,6 +421,39 @@ class ControllerFight:
         self._emit('replacement-choice', side=side, observations=observations,
                    action=encode_action(choice))
         return choice.index
+
+    def _retry_bag_target(self):
+        """Ask only after an actual source item attempt reported no effect."""
+        if self.bag_retry_chooser is None:
+            raise UnsupportedFight('Rejected bag target requires an explicit inner retry policy')
+        if len(self._bag_retry_records) >= 32:
+            raise UnsupportedFight('Inner bag retry decision bound exceeded')
+        m, previous = self.machine, self._bag.action
+        current = observation(m, 0)
+        current['bag_retry'] = dict(reason='ineffective-item-target',
+                                   previous_action=encode_action(previous))
+        choices = tuple(action for action in legal_actions(m, 0)
+                        if type(action) is BagAction and action.item == previous.item and
+                        action.stack == previous.stack) + (CancelBagAction(),)
+        choice = self.bag_retry_chooser(0, copy.deepcopy(current), copy.deepcopy(choices))
+        if type(choice) is CancelBagAction:
+            self._bag.cancel()
+            encoded = dict(type='CancelBagAction')
+        elif type(choice) is BagAction and choice in choices:
+            if any(type(value) is not int for value in asdict(choice).values()
+                   if isinstance(value, (int, bool))):
+                raise UnsupportedFight('Inner bag retry indices must be actual integers')
+            self._pending = (copy.deepcopy(choice), self._pending[1])
+            self._bag = BagInput(m, choice)
+            encoded = encode_action(choice)
+        else:
+            raise UnsupportedFight('Inner bag retry choice is outside its detached mask')
+        record = dict(reason='ineffective-item-target', previous_action=encode_action(previous),
+                      choice=encoded)
+        self._bag_retry_records.append(record)
+        self._emit('bag-retry', observation=current, choices=tuple(
+            dict(type='CancelBagAction') if type(action) is CancelBagAction else encode_action(action)
+            for action in choices), **record)
 
     def _retry_player(self):
         if self.retry_chooser is None:

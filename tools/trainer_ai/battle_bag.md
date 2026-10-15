@@ -1,6 +1,7 @@
 # Player bag adapter
 
-Status: code prepared, not yet validated or integrated into full fights.
+Status: integrated with positive full-fight evidence; the inner-retry extension
+is prepared pending focused validation.
 
 `battle_bag.py` defines player inventory independently of the enemy trainer's
 two item slots. `initialize_bag` writes initial inventory only. Item IDs, pockets
@@ -56,3 +57,14 @@ fight exercising its effect and later consequences. Routine parity alone is not
 whole-fight evidence. UI projection and the RNG event contract remain separate
 validation requirements. Item-attribute or handler Assembly changes must rebuild
 and invalidate stale native artifacts before rerunning these cases.
+
+The positive restorative source family now has separate full-fight evidence for
+18 items; see `battle_controller_bag_family.md`. `CancelBagAction` is a nested
+input choice for explicit rejected-attempt cancellation, not a top-level turn
+action. `ineffective_item_prompt` recognizes the actual source no-effect text
+caller and checks its ROM call/return scaffold. The controller may then request
+same-stack retarget or cancellation from an explicit detached actor callback.
+It never infers rejection from normal pocket navigation. Four focused complete
+source fights passed with HP/PP retargets and explicit cancellation, including
+unchanged hidden enemy intent and exact native replay. See
+`battle_controller_bag_retry_check.md` for evidence and rejection limits.

@@ -27,6 +27,34 @@ class BagAction:
     move: int | None = None
 
 
+@dataclass(frozen=True)
+class CancelBagAction:
+    """Explicitly press B while unwinding a rejected pending bag attempt."""
+
+
+def ineffective_item_prompt(machine):
+    """Identify the actual no-effect source caller of projected PrintText.
+
+    This is not inferred from repeated input callbacks or pocket navigation.
+    The original caller still executes its zero success flag and all returns.
+    """
+    s = machine.state
+    text_bank, text_pc = machine.symbols['WontHaveAnyEffectText']
+    if s.bank != text_bank or ((s.h << 8) | s.l) != text_pc:
+        return False
+    if not 0xc000 <= s.sp < 0xdffe:
+        raise UnsupportedFight('Invalid no-effect text call frame')
+    target = s.m[s.sp] | (s.m[s.sp+1] << 8)
+    bank, caller = machine.symbols['CantUseItemMessage']
+    if machine.symbols['ItemNotUsed_ExitMenu'] != (bank, caller+3):
+        raise UnsupportedFight('No-effect item return scaffold changed')
+    print_pc = machine.symbols['PrintText'][1]
+    expected = bytes((0xcd, print_pc & 255, print_pc >> 8))
+    if machine._rom_bytes('CantUseItemMessage', 0, 3) != expected:
+        raise UnsupportedFight('No-effect item text caller changed')
+    return s.bank == bank and target == caller+3
+
+
 POCKETS = {1: ('wNumItems', 'wItems', 'wItemsEnd'),
            2: ('wNumMedicine', 'wMedicine', 'wMedicineEnd'),
            3: ('wNumBalls', 'wBalls', 'wBallsEnd'),

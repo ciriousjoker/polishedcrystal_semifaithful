@@ -64,3 +64,11 @@ and loaded libmGBA bytes. These successful positive conditions do not resolve
 the explicitly blocked no-effect inner-menu retry or establish all restorative
 interactions, PP Ups or confusion-only cures. No blocked case is counted as
 passed and no broad M2 completion claim follows from this family.
+
+The subsequent dedicated extension in `battle_controller_bag_retry_check.md`
+now separately proves explicit no-effect retarget/cancellation for HP and PP
+items. The historical 18-case report and its blocked-control description remain
+unchanged. With that new host adapter, Potion, Ether and Revive were rerun as
+positive regressions: three terminal fights, 21 turns, 2,606 source comparisons
+and exact native replays, retained in
+`<run>/build/battle-controller/bag-retry-positive-regression/report.json`.
