@@ -56,7 +56,7 @@ design, rather than silently discarding unrelated data.
 
 ```sh
 cc -std=c11 -O2 -Wall -Wextra -Werror tools/trainer_ai/training_runtime_native.c -o /tmp/training-runtime
-python3 -B tools/trainer_ai/training_runtime.py --simulator /tmp/training-runtime --workers 2 --max-inflight 2 --batches 4 --fights-per-batch 250
+python3 -B tools/trainer_ai/training_runtime.py --simulator /tmp/training-runtime --workers 1 --max-inflight 1 --batches 4 --fights-per-batch 250
 python3 -B tools/trainer_ai/training_check.py --artifact-dir /tmp/training-storage-check
 ```
 
@@ -69,8 +69,9 @@ Thread supervisors launch at most the explicit worker count of single-threaded
 native processes. Pending and completed-but-unconsumed batches together stay
 within `--max-inflight`; output is streamed immediately. To fill N workers, set
 `--workers N --max-inflight N` or a larger inflight limit. Default workers and
-inflight batches are both 2. Increasing workers is an explicit future choice;
-current experiments must remain within the coordinated 2 to 3 core budget.
+inflight batches are both 1. Increasing workers is an explicit future choice;
+current experiments must use only one CPU-heavy process/thread total, including
+any learner, evaluation and oracle jobs.
 
 OMP, OpenBLAS, MKL, Accelerate and NumExpr thread limits are set to 1 before
 worker infrastructure or optional learning libraries could load, and children

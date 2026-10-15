@@ -35,8 +35,8 @@ def run_batch(executable, count, seed):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--simulator', required=True)
-    parser.add_argument('--workers', type=int, default=2)
-    parser.add_argument('--max-inflight', type=int, default=2,
+    parser.add_argument('--workers', type=int, default=1)
+    parser.add_argument('--max-inflight', type=int, default=1,
                         help='must be at least --workers to fill every worker')
     parser.add_argument('--batches', type=int, default=4)
     parser.add_argument('--fights-per-batch', type=int, default=250)

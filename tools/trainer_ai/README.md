@@ -138,14 +138,14 @@ allocation assumptions, interrupted writes and recovery limits are in `training.
 
 `training_runtime_native.c` exposes explicit seed ranges for the restricted
 synthetic simulator. `training_runtime.py` launches bounded single-thread native
-children with two workers/two in-flight batches by default. CPU library thread
+children with one worker/one in-flight batch by default. CPU library thread
 limits are set before imports and inherited. Future backend metadata includes
 CPU/CUDA/MPS; no learner or GPU kernel is implemented or started. Current tests
-must stay within the user's coordinated two-to-three CPU-task limit.
+must stay within the user's current one CPU-heavy process/thread limit.
 
 ```sh
 cc -std=c11 -O2 -Wall -Wextra -Werror tools/trainer_ai/training_runtime_native.c -o /tmp/polished-ai-runtime
-python3 -B tools/trainer_ai/training_runtime.py --simulator /tmp/polished-ai-runtime --workers 2 --max-inflight 2 --batches 4 --fights-per-batch 250
+python3 -B tools/trainer_ai/training_runtime.py --simulator /tmp/polished-ai-runtime --workers 1 --max-inflight 1 --batches 4 --fights-per-batch 250
 python3 -B tools/trainer_ai/training_check.py --artifact-dir /tmp/polished-ai-storage-check
 ```
 
