@@ -186,3 +186,61 @@ source-bound end and absence of nested starts still enforce interval identity.
 Original failed outputs remain under `checks/corpus-secondary-local-o3-01`.
 The corrected immutable outputs are `checks/corpus-secondary-local-o3-02` in the
 external project. No source mechanics, hooks, native artifact or Oracle changed.
+
+## Prepared secondary stat-stage batch
+
+The local observer is prepared to admit already recognized secondary stage-hit
+families, while retaining its neutral Horsea fixture and exact source-interval
+requirements. Activation needs target HP loss plus the named stage changing on
+the correct side in the correct direction. Primary stat moves retain their
+existing controlled-round path. `EFFECT_ALL_UP_HIT` adds the source's five-stat
+self-increase recipe; all five stages must increase together with actual damage.
+Accuracy and evasion are excluded from that five-stat recipe.
+
+Source `AttackUpHit`, `DefenseUpHit`, `SpeedUpHit`, `AllUpHit` and target-down
+scripts place used-move text before damage and their secondary stage operations.
+The source's `raisestathit` applies to the user, while `loweroppstathit` includes
+`STAT_TARGET | STAT_LOWER`. All effects finish before the existing final
+`PerformMove` tilemap call. No new trace or move-effect implementation is added.
+
+After current native/controller source is frozen and reviewed, source hash pins
+are refreshed, and the coordinator grants CPU, the prepared batch is 24 cases:
+
+```sh
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -B tools/trainer_ai/battle_corpus_run.py \
+  --artifact-root /Volumes/Storage/tmp/polished-ai \
+  --inventory /Volumes/Storage/tmp/polished-ai/build/battle-coverage/inventory.json \
+  --native-build /Volumes/Storage/tmp/polished-ai/build/battle-controller/native-o3 \
+  --optimization O3 \
+  --output /Volumes/Storage/tmp/polished-ai/checks/corpus-secondary-stages-o3-01 \
+  --moves FLAME_CHARGE MUD_SLAP ICY_WIND ROCK_SMASH METAL_CLAW ANCIENTPOWER \
+  --sides 0 1 --seeds 193 194 --max-turns 256
+```
+
+The current source/inventory maps Flame Charge to user Speed up, Mud-Slap to
+opponent Accuracy down, and Icy Wind to opponent Speed down, each at 100% effect
+chance on a successful hit. Metal Claw has 10% user Attack up and AncientPower
+10% all-five-stat self increase. The preparation incorrectly read Rock Smash's
+inactive faithful source branch as 50% Defense down. Its current non-faithful
+inventory effect is `EFFECT_BRICK_BREAK`, which needs an unsupported screen
+fixture and is retained as blocked. The executed checkpoint below supersedes
+these preparation assumptions. Existing confusion fights remain separately
+retained.
+
+## Executed secondary stage checkpoint
+
+The bounded 24-case batch completed: twelve positive cases, eight unsatisfied
+cases and four blocked cases. Flame Charge, Mud-Slap and Icy Wind activated on
+both sides for both seeds. Metal Claw and AncientPower did not activate their
+secondary stages in this bounded probe window. Rock Smash's current source
+inventory requires the separate Brick Break screen fixture, so all four cases
+were blocked before game execution. The unsupported cases were preserved.
+
+All twenty executed fights reached source terminal with exact native replay.
+The twelve accepted fights contribute 21,907 independent source/Oracle
+comparisons and six move/effect keys. There is no actual activation claim for
+Attack-up-hit, five-stat-up-hit, or Defense-down-hit from this batch. Synthetic
+observer controls passed, and both consistently removed-stage and removed-damage
+collector negatives rejected. Exact cases live under
+`checks/corpus-secondary-stages-o3-01`; retained originals are under
+`build/battle-corpus/secondary-stages-retained-o3-01` in the external project.

@@ -21,9 +21,9 @@ REVIEWED = {
     'battle_controller_check.py': 'd3621ffd1c9c142e496476e162833a91853992788d561b083b3a873d035dc9d4',
     'battle_corpus_run.py': '4e15bdf233f339bae1c157d4f2a7bc815b0be7d5727a80fa192d9aaf8e380c21',
     'battle_controller_fight.py': 'eb92e12bc7d1100da6e90e6382c04e8b32ce769c7747c2f679818774569deb79',
-    'battle_controller.py': '90f7698b0c83af407e1643debf979950f75285da4be8b888ed46eb8e08b8267f',
-    'battle_controller_profile.py': '6da8cfd259e9109e1e91626bef4c8d624200938132e076dd6a185592eadb39ba',
-    'battle_corpus_observers.py': '398c413a22101ac7a10ab75cf6369a0248ac134b3c832e88285b0d5f417f0cd7',
+    'battle_controller.py': '6abe731e7eac74a3cae16673c2c6339ad985ddc455a1ba913d915f2f31cda9b3',
+    'battle_controller_profile.py': '9cf85ef64a22eda7781b739119d4f9eb958a860453af12189900f7b84d13e33d',
+    'battle_corpus_observers.py': '58cf50b72a14b849e88b84224479babe62c45f83959e7c556633347190fc087e',
 }
 REVIEWED_ORACLE_SOURCE = '7840c8b7a31bc6431518c5c61569cf961fc82a0ae40fd365f9768ebf12648e23'
 

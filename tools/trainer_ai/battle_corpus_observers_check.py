@@ -103,6 +103,43 @@ def check():
     assert observe_move(case, [replace(local, after=confused)], bindings).state == 'unsatisfied'
     case.effect = 'EFFECT_POISON_HIT'
     assert observe_move(case, [local], bindings).state == 'unsatisfied'  # Wrong secondary status.
+    # Local secondary stages require damage and the intended side/stat/direction.
+    for effect, target_side, stat, direction in (
+            ('EFFECT_ATTACK_UP_HIT', 0, 0, 1),
+            ('EFFECT_DEFENSE_UP_HIT', 0, 1, 1),
+            ('EFFECT_SPEED_UP_HIT', 0, 2, 1),
+            ('EFFECT_DEFENSE_DOWN_HIT', 1, 1, -1),
+            ('EFFECT_SPEED_DOWN_HIT', 1, 2, -1),
+            ('EFFECT_ACCURACY_DOWN_HIT', 1, 5, -1)):
+        case.effect = effect
+        stage_after = deepcopy(no_status)
+        stages = list(stage_after['battlefield'][target_side]['stages'])
+        stages[stat] += direction
+        stage_after['battlefield'][target_side]['stages'] = tuple(stages)
+        stage_frame = replace(local, after=stage_after)
+        assert observe_move(case, [stage_frame], bindings).state == 'activated'
+        assert observe_move(case, [replace(stage_frame, after=no_status)], bindings).state == 'unsatisfied'
+        stage_only = deepcopy(stage_after)
+        stage_only['teams'][1][0]['HP'] = before['teams'][1][0]['HP']
+        assert observe_move(case, [replace(stage_frame, after=stage_only)], bindings).state == 'unsatisfied'
+        assert observe_move(case, [replace(stage_frame, attack_missed=1)], bindings).state == 'unsatisfied'
+        for wrong_side, wrong_stat, wrong_direction in (
+                (target_side ^ 1, stat, direction),
+                (target_side, (stat + 1) % 7, direction),
+                (target_side, stat, -direction)):
+            wrong = deepcopy(no_status)
+            wrong_stages = list(wrong['battlefield'][wrong_side]['stages'])
+            wrong_stages[wrong_stat] += wrong_direction
+            wrong['battlefield'][wrong_side]['stages'] = tuple(wrong_stages)
+            assert observe_move(case, [replace(stage_frame, after=wrong)], bindings).state == 'unsatisfied'
+        assert observe_move(case, [replace(stage_frame, before=item)], bindings).state == 'blocked'
+        assert observe_move(case, [replace(stage_frame, phase='controlled-source-turn')], bindings).state == 'blocked'
+    case.effect = 'EFFECT_ALL_UP_HIT'
+    all_up = deepcopy(no_status)
+    all_up['battlefield'][0]['stages'] = (8, 8, 8, 8, 8, 7, 7)
+    assert observe_move(case, [replace(local, after=all_up)], bindings).state == 'activated'
+    all_up['battlefield'][0]['stages'] = (8, 8, 8, 8, 7, 7, 7)
+    assert observe_move(case, [replace(local, after=all_up)], bindings).state == 'unsatisfied'
     case.effect = 'EFFECT_RAIN_DANCE'
     wet = deepcopy(before)
     wet['weather'], wet['weather_turns'] = 1, 4

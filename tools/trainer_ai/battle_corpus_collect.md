@@ -312,3 +312,45 @@ return codes are retained in
 checks passed after the shared binder refactor. The reviewed runner pin includes
 the narrowly corrected handling of the aliased end-of-move grammar scratch byte;
 old failed and retained artifacts were preserved unchanged.
+
+## Prepared secondary stage witness extension
+
+The observer now has a prepared extension for recognized secondary stat-stage
+hits and the source's five-stat `EFFECT_ALL_UP_HIT` recipe. The existing local
+collector gate applies unchanged: a complete source-bound interval and exact
+frame/trace observation equality are required before semantic recomputation.
+The observer additionally requires actual target damage and the correctly named
+stage changes on the intended side. No phase-only acceptance is introduced.
+
+This code preparation is unexecuted. The observer's REVIEWED digest intentionally
+still pins the preceding accepted version until coordinator review and the
+currently active controller/profile work are frozen. New native/controller
+identities also need independent review before refresh; no old collection is
+recomputed as new evidence. Planned semantic negative controls consistently
+remove stage change or damage from both frame and trace, keeping them equal,
+so rejection must reach semantic recomputation. Frame-only changes continue to
+reject at trace equality. None of these controls have run for the stage change.
+
+## Executed secondary stage retention and combined ledger
+
+The secondary stage collector retained twelve accepted fights and all twelve
+excluded cases from the 24-case batch. Accepted Flame Charge, Mud-Slap and Icy
+Wind cases add six move/effect keys with 21,907 independent Oracle comparisons
+and exact terminal replay. Eight Metal Claw/AncientPower nonactivations remain
+unsatisfied; four Rock Smash cases remain unsupported because the current source
+inventory maps that move to Brick Break rather than the inactive faithful
+branch's Defense-down-hit effect.
+
+Both semantic negatives changed the frame and matching trace consistently:
+removing stage changes while keeping damage, and removing damage while keeping
+stage changes. Both rejected at semantic recomputation with exit 2 and no
+ledger. Details are in
+`subagents/m2-secondary-stages-01/artifacts/negative-results.json`.
+
+The existing merger then combined the previous 68-key collection, the two-key
+confusion collection, and this six-key stage collection without rewriting their
+original artifacts. New `build/battle-corpus/combined-through-secondary-stages-o3`
+contains 76 distinct tested-full-fight keys and 28 retained exclusions. The
+unchanged strict gate reports 777 missing required-rule failures and no invalid
+evidence. Native manifests remain attached to their original adapters; no
+manifest identity was forced across collections. M2 remains incomplete.

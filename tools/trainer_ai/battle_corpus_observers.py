@@ -102,6 +102,7 @@ STATS = ('ATTACK', 'DEFENSE', 'SPEED', 'SP_ATK', 'SP_DEF', 'ACCURACY', 'EVASION'
 # Each tuple is side relative to actor, stage array index, direction. Numeric
 # increment size, saturation, ability interactions and damage stay ROM-owned.
 COMPOUND_STAGES = {
+    'EFFECT_ALL_UP_HIT': ((0, 0, 1), (0, 1, 1), (0, 2, 1), (0, 3, 1), (0, 4, 1)),
     'EFFECT_BULK_UP': ((0, 0, 1), (0, 1, 1)),
     'EFFECT_CALM_MIND': ((0, 3, 1), (0, 4, 1)),
     'EFFECT_GROWTH': ((0, 0, 1), (0, 3, 1)),
@@ -315,8 +316,9 @@ def _neutral_fixture(frame, bindings, *, horsea=False):
 
 
 def _local_fixture(frame, bindings, effect):
-    """Permit only reviewed status/confusion transitions in a real local span."""
-    if (effect not in STATUS and effect not in {'EFFECT_CONFUSE', 'EFFECT_CONFUSE_HIT'} or
+    """Permit reviewed status/confusion and secondary stage transitions."""
+    stage_hit = effect.endswith('_HIT') and _stage_recipe(effect) is not None
+    if ((effect not in STATUS and effect not in {'EFFECT_CONFUSE', 'EFFECT_CONFUSE_HIT'} and not stage_hit) or
             not frame.move_execution_verified or not frame.observation_read_only_verified):
         return False
     interval = frame.source_interval
