@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import re
 import sys
 from types import SimpleNamespace
 
@@ -18,11 +19,11 @@ ROOT = Path(__file__).resolve().parents[2]
 # A changed boundary requires review, never an optimistic metadata translation.
 REVIEWED = {
     'battle_controller_check.py': 'd3621ffd1c9c142e496476e162833a91853992788d561b083b3a873d035dc9d4',
-    'battle_corpus_run.py': 'a47853077c6af4eb954e47059ac1a56279af066c7e8e587bc181ea78dc60c903',
-    'battle_controller_fight.py': '7bcc2cd656ea726208629c149578d1c1771586b1e8b7911d91cf17b598427771',
+    'battle_corpus_run.py': '4e15bdf233f339bae1c157d4f2a7bc815b0be7d5727a80fa192d9aaf8e380c21',
+    'battle_controller_fight.py': 'eb92e12bc7d1100da6e90e6382c04e8b32ce769c7747c2f679818774569deb79',
     'battle_controller.py': '90f7698b0c83af407e1643debf979950f75285da4be8b888ed46eb8e08b8267f',
     'battle_controller_profile.py': '6da8cfd259e9109e1e91626bef4c8d624200938132e076dd6a185592eadb39ba',
-    'battle_corpus_observers.py': 'b0d64e84330b8e12fc33d23be46c2299d5ef81883623e5d95ba1154300af2680',
+    'battle_corpus_observers.py': '398c413a22101ac7a10ab75cf6369a0248ac134b3c832e88285b0d5f417f0cd7',
 }
 REVIEWED_ORACLE_SOURCE = '7840c8b7a31bc6431518c5c61569cf961fc82a0ae40fd365f9768ebf12648e23'
 
@@ -38,6 +39,38 @@ def digest(path):
 
 def read(path):
     return json.loads(path.read_text())
+
+
+def validate_local_witness(case, frame, plan, move, boundaries):
+    """Cross-check the local frame with its unique actual execution trace row."""
+    interval = frame.get('source_interval')
+    require(isinstance(interval, dict), 'Local witness lacks a source interval')
+    turn = interval.get('turn')
+    require(type(turn) is int and 0 <= turn < len(plan.get('prelude', [])) + plan['probe_turns'],
+            'Local witness is outside its bounded source probe window')
+    require(interval.get('side') == plan['actor_side'] and
+            interval.get('move') == move['identifier'], 'Local interval identity disagrees with case')
+    require(frame.get('source_commands') == [] and
+            frame.get('observation_read_only_verified') is True,
+            'Local witness lacks reviewed read-only observations')
+    require(interval.get('used_call') == boundaries[0] and interval.get('end_call') == boundaries[1],
+            'Local callsites disagree with actual source/ROM/SYM boundaries')
+    trace = case.get('execution_trace')
+    require(isinstance(trace, list), 'Local witness lacks actual execution trace')
+    matching = [row for row in trace if row.get('turn') == turn and
+                row.get('side') == plan['actor_side']]
+    require(len(matching) == 1, 'Local witness has missing or ambiguous actual execution')
+    row = matching[0]
+    require(row.get('move') == move['identifier'] and
+            type(row.get('attack_missed')) is int and row['attack_missed'] == frame.get('attack_missed') and
+            row.get('used_call') == boundaries[0] and row.get('end_call') == boundaries[1] and
+            row.get('observation_read_only_verified') is True,
+            'Local witness differs from actual matched source execution')
+    for key in ('before', 'after'):
+        value = frame.get(key)
+        require(isinstance(value, dict) and value == row.get(key) and
+                value.get('turn') == turn and value.get('side') == plan['actor_side'],
+                'Local witness observation differs from actual execution trace: ' + key)
 
 
 def collect(args):
@@ -134,6 +167,7 @@ def collect(args):
     records, blocked, all_rules = [], [], set()
     configuration = None
     symbols = None
+    local_boundaries = None
     for index, row in enumerate(rows):
         path = inputs[expected_paths[index]]
         case = read(path)
@@ -193,7 +227,8 @@ def collect(args):
                 0 <= frame_index < len(case.get('frames', [])), 'Missing actual activation witness')
         frame = case['frames'][frame_index]
         require(frame.get('move_execution_verified') is True and
-                frame.get('phase') == 'controlled-source-turn', 'Activation lacks verified source turn')
+                frame.get('phase') in ('controlled-source-turn', 'source-action-span'),
+                'Activation lacks verified source interval')
         plan = case['case']
         moves = [r for r in current['rules'] if r['group'] == 'move' and r['name'] == plan.get('move')]
         require(len(moves) == 1, 'Case move is not uniquely present in source inventory')
@@ -205,6 +240,21 @@ def collect(args):
                 frame.get('actor_side') == plan['actor_side'] and
                 frame.get('executed_move') == move['identifier'],
                 'Witness actor or executed move disagrees with source-bound case')
+        if frame['phase'] == 'source-action-span':
+            if local_boundaries is None:
+                # Use only retained, manifest-hash-checked artifact bytes. The
+                # shared pure binder rechecks source scaffolds and unique ROM
+                # near calls independently of the raw case's declared contracts.
+                source_symbols = {}
+                for raw in (args.output / execution['symbols']).read_text().splitlines():
+                    match = re.fullmatch(r'([0-9a-fA-F]{2}):([0-9a-fA-F]{4}) (\S+)', raw.strip())
+                    if match:
+                        require(match[3] not in source_symbols, 'Duplicate source boundary symbol')
+                        source_symbols[match[3]] = (int(match[1], 16), int(match[2], 16))
+                local_boundaries = observer.execution_boundaries(SimpleNamespace(
+                    source_root=args.root, symbols=source_symbols,
+                    rom=(args.output / execution['rom']).read_bytes()))
+            validate_local_witness(case, frame, plan, move, local_boundaries)
         rules = result.get('accepted_rules', [])
         require(rules == expected_rules and rules == semantic.get('candidate_rules') and
                 rules == plan.get('candidate_rules') and

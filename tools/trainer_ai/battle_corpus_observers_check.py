@@ -7,12 +7,13 @@ from battle_corpus_observers import MoveFrame, observe_move
 
 def observation():
     member = dict(index=0, active=True, HP=80, MaxHP=100, status=0, item=0,
-                  ability=9, moves=(1, 2, 0, 0), pp=(20, 20, 0, 0), types=(1, 1))
+                  ability=9, species=116, form=0, egg=False,
+                  moves=(1, 2, 0, 0), pp=(20, 20, 0, 0), types=(1, 1))
     field = dict(volatile={'confused': False}, stages=(7,) * 7,
                  reflect_turns=0, light_screen_turns=0, safeguard_turns=0, mist_turns=0,
                  spikes=0, toxic_spikes=0, FutureSightCount=0, TrappingMove=0,
                  WrapCount=0, PerishCount=0, ConfuseCount=0, TurnsTaken=0, EncoreCount=0)
-    return dict(teams=((deepcopy(member),), (deepcopy(member),)),
+    return dict(turn=0, teams=((deepcopy(member),), (deepcopy(member),)),
                 battlefield=(deepcopy(field), deepcopy(field)), weather=0,
                 weather_turns=0, trick_room=0)
 
@@ -21,7 +22,8 @@ def check():
     bindings = dict(inventory_sha256='source', moves={'PROBE': 1, 'SPLASH': 2},
                     status_masks=dict(PSN=8, BRN=16, FRZ=32, PAR=64, TOX=128),
                     sleep_mask=7, encore_duration_mask=15, weather=dict(WEATHER_NONE=0, WEATHER_RAIN=1, WEATHER_SUN=2,
-                                               WEATHER_SANDSTORM=3, WEATHER_HAIL=4), neutral_ability=9)
+                                               WEATHER_SANDSTORM=3, WEATHER_HAIL=4), neutral_ability=9,
+                    neutral_species=116)
     case = SimpleNamespace(inventory_sha256='source', actor_side=0, move='PROBE',
                            effect='EFFECT_NORMAL_HIT', candidate_rules=('move:PROBE', 'effect:EFFECT_NORMAL_HIT'))
     before, after = observation(), observation()
@@ -64,6 +66,43 @@ def check():
     assert observe_move(case, [status_frame], bindings).state == 'activated'
     case.effect = 'EFFECT_BURN_HIT'
     assert observe_move(case, [status_frame], bindings).state == 'blocked'  # secondary needs isolated span
+    # Synthetic boundaries are predicate inputs only. They are never evidence
+    # of an executed source callsite, whole-fight oracle comparison or replay.
+    interval = dict(turn=0, side=0, move=1,
+        used_call=dict(source='engine/battle/used_move_text.asm', start='DisplayUsedMoveText',
+                       target='StdBattleTextbox', bank=1, return_pc=0x4103, scaffold_hex='cd0042c30043'),
+        end_call=dict(source='engine/battle/core.asm', start='PerformMove',
+                      target='LoadTileMapToTempTileMap', bank=2, return_pc=0x5103, scaffold_hex='cd0052'))
+    secondary = deepcopy(before)
+    secondary['teams'][1][0]['status'] = 16
+    secondary['teams'][1][0]['HP'] -= 5
+    local = replace(controlled, phase='source-action-span', source_interval=interval,
+                    observation_read_only_verified=True, opponent_executed_move=None, after=secondary)
+    assert observe_move(case, [local], bindings).state == 'activated'
+    assert observe_move(case, [replace(local, attack_missed=1)], bindings).state == 'unsatisfied'
+    assert observe_move(case, [replace(local, source_interval=None)], bindings).state == 'blocked'
+    assert observe_move(case, [replace(local, observation_read_only_verified=False)], bindings).state == 'blocked'
+    wrong_turn = {**interval, 'turn': 1}
+    assert observe_move(case, [replace(local, source_interval=wrong_turn)], bindings).state == 'blocked'
+    no_damage = deepcopy(secondary)
+    no_damage['teams'][1][0]['HP'] = before['teams'][1][0]['HP']
+    assert observe_move(case, [replace(local, after=no_damage)], bindings).state == 'unsatisfied'
+    no_status = deepcopy(secondary)
+    no_status['teams'][1][0]['status'] = 0
+    assert observe_move(case, [replace(local, after=no_status)], bindings).state == 'unsatisfied'
+    for key, value in (('species', 1), ('ability', 10), ('item', 1), ('status', 8)):
+        confounded = deepcopy(before)
+        confounded['teams'][1][0][key] = value
+        assert observe_move(case, [replace(local, before=confounded)], bindings).state == 'blocked'
+    case.effect = 'EFFECT_CONFUSE_HIT'
+    confused = deepcopy(no_status)
+    confused['battlefield'][1]['volatile']['confused'] = True
+    confused['battlefield'][1]['ConfuseCount'] = 3
+    assert observe_move(case, [replace(local, after=confused)], bindings).state == 'activated'
+    confused['battlefield'][1]['ConfuseCount'] = 0
+    assert observe_move(case, [replace(local, after=confused)], bindings).state == 'unsatisfied'
+    case.effect = 'EFFECT_POISON_HIT'
+    assert observe_move(case, [local], bindings).state == 'unsatisfied'  # Wrong secondary status.
     case.effect = 'EFFECT_RAIN_DANCE'
     wet = deepcopy(before)
     wet['weather'], wet['weather_turns'] = 1, 4

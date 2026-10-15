@@ -6,6 +6,54 @@ Diagnostics and source command traces are validation-only, never AI inputs.
 """
 from dataclasses import dataclass
 import hashlib
+import re
+
+
+def near_call_boundary(machine, path, start_label, end_label, scaffold, target, suffix):
+    """Pure source/ROM/SYM binding shared by execution and evidence retention."""
+    source = (machine.source_root / path).read_text()
+    short = start_label.split('.')[-1]
+    marker = '.' + short if '.' in start_label else start_label
+    match = re.search(r'^' + re.escape(marker) + r':?\s*\n(.*?)^' +
+                      re.escape(end_label) + r':?\s*\n', source, re.M | re.S)
+    if match is None:
+        raise ValueError('Diagnostic source region changed: ' + start_label)
+    code = [line.split(';', 1)[0].strip() for line in match[1].splitlines()]
+    code = [line for line in code if line]
+    if sum(code[i:i + len(scaffold)] == scaffold for i in range(len(code))) != 1:
+        raise ValueError('Diagnostic source scaffold changed: ' + start_label)
+    bank, start = machine.symbols[start_label]
+    end_bank, end = machine.symbols[end_label]
+    if bank != end_bank or not 0x4000 <= start < end < 0x8000:
+        raise ValueError('Diagnostic region must occupy one switchable bank')
+    target_bank, address = machine.symbols[target]
+    if address >= 0x4000 and target_bank != bank:
+        raise ValueError('Diagnostic near call changed banks: ' + target)
+    encoded = bytes((0xcd, address & 255, address >> 8)) + suffix
+    offset = bank * 0x4000 + start - 0x4000
+    region = machine.rom[offset:offset + end - start]
+    hits = [i for i in range(len(region) - len(encoded) + 1)
+            if region[i:i + len(encoded)] == encoded]
+    if len(hits) != 1:
+        raise ValueError('Diagnostic assembled scaffold is unknown or ambiguous')
+    return dict(bank=bank, return_pc=start + hits[0] + 3,
+                source=path, start=start_label, target=target, scaffold_hex=encoded.hex())
+
+
+def execution_boundaries(machine):
+    """Bind existing used-text and end-PerformMove hooks without native imports."""
+    apply_bank, apply_pc = machine.symbols['ApplyTilemapInVBlank']
+    used_bank, _ = machine.symbols['DisplayUsedMoveText']
+    if apply_pc >= 0x4000 and apply_bank != used_bank:
+        raise ValueError('Used-move tail jump changed banks')
+    used = near_call_boundary(machine, 'engine/battle/used_move_text.asm',
+        'DisplayUsedMoveText', 'UpdateUsedMoves',
+        ['call StdBattleTextbox', 'jmp ApplyTilemapInVBlank'], 'StdBattleTextbox',
+        bytes((0xc3, apply_pc & 255, apply_pc >> 8)))
+    end = near_call_boundary(machine, 'engine/battle/core.asm',
+        'PerformMove', 'ResolveFaints',
+        ['call LoadTileMapToTempTileMap'], 'LoadTileMapToTempTileMap', b'')
+    return used, end
 
 
 @dataclass(frozen=True)
@@ -19,6 +67,8 @@ class MoveFrame:
     phase: str = 'single-source-move'
     opponent_executed_move: int | None = None
     move_execution_verified: bool = False
+    source_interval: dict | None = None
+    observation_read_only_verified: bool = False
 
 
 @dataclass(frozen=True)
@@ -68,7 +118,8 @@ def source_bindings(machine, inventory):
     """Resolve observer masks through the runner's same-source constant reader."""
     for path in ('constants/battle_constants.asm', 'data/moves/moves.asm',
                  'constants/move_constants.asm', 'constants/move_effect_constants.asm',
-                 'constants/ability_constants.asm', 'engine/battle/endturn.asm'):
+                 'constants/ability_constants.asm', 'constants/pokemon_constants.asm',
+                 'engine/battle/endturn.asm'):
         actual = hashlib.sha256((machine.source_root / path).read_bytes()).hexdigest()
         if inventory['source_inputs'].get(path) != actual:
             raise ValueError('Observer source binding is stale: ' + path)
@@ -99,7 +150,8 @@ def source_bindings(machine, inventory):
                 sleep_mask=7,
                 weather={name: machine._constant('constants/battle_constants.asm', name)
                          for name in ('WEATHER_NONE', *(name for name, _ in WEATHER.values()))},
-                neutral_ability=machine._constant('constants/ability_constants.asm', 'SWIFT_SWIM'))
+                neutral_ability=machine._constant('constants/ability_constants.asm', 'SWIFT_SWIM'),
+                neutral_species=machine._constant('constants/pokemon_constants.asm', 'HORSEA'))
 
 
 def _active(observation, side):
@@ -123,7 +175,9 @@ def _changed_hp(frame, side, direction):
 
 
 def _command(frame, name):
-    return name in frame.source_commands or frame.phase == 'controlled-source-turn'
+    # Source interval phases infer narrow semantic transitions from isolated
+    # fixtures. They do not claim that individual BattleCommands were traced.
+    return name in frame.source_commands or frame.phase in {'controlled-source-turn', 'source-action-span'}
 
 
 def _damage(frame):
@@ -235,6 +289,53 @@ def _activated(effect, frame, bindings):
     return False
 
 
+def _neutral_fixture(frame, bindings, *, horsea=False):
+    """Shared neutral context, independent of the opposing round action."""
+    if any(not _same_participant(frame, side) for side in (0, 1)):
+        return False
+    before = frame.before
+    if (before['weather'] != bindings['weather']['WEATHER_NONE'] or before['weather_turns'] or
+            before['trick_room']):
+        return False
+    if any(member['status'] or member['item'] for team in before['teams'] for member in team):
+        return False
+    if any(_active(before, side)['ability'] != bindings['neutral_ability'] for side in (0, 1)):
+        return False
+    if horsea and any(member['species'] != bindings['neutral_species'] or member['form'] or
+                      member['egg'] for team in before['teams'] for member in team):
+        return False
+    for field in before['battlefield']:
+        if any(field['volatile'].values()):
+            return False
+        if any(field[name] for name in ('reflect_turns', 'light_screen_turns', 'safeguard_turns',
+                                        'mist_turns', 'spikes', 'toxic_spikes', 'FutureSightCount',
+                                        'TrappingMove', 'WrapCount', 'PerishCount')):
+            return False
+    return True
+
+
+def _local_fixture(frame, bindings, effect):
+    """Permit only reviewed status/confusion transitions in a real local span."""
+    if (effect not in STATUS and effect not in {'EFFECT_CONFUSE', 'EFFECT_CONFUSE_HIT'} or
+            not frame.move_execution_verified or not frame.observation_read_only_verified):
+        return False
+    interval = frame.source_interval
+    if not interval or (interval['side'], interval['move']) != (frame.actor_side, frame.executed_move):
+        return False
+    if interval['turn'] != frame.before['turn'] or interval['turn'] != frame.after['turn']:
+        return False
+    for name, source, start, target in (
+            ('used_call', 'engine/battle/used_move_text.asm', 'DisplayUsedMoveText', 'StdBattleTextbox'),
+            ('end_call', 'engine/battle/core.asm', 'PerformMove', 'LoadTileMapToTempTileMap')):
+        call = interval[name]
+        if (call['source'], call['start'], call['target']) != (source, start, target):
+            return False
+        if not (type(call['bank']) is int and 0x4000 < call['return_pc'] < 0x8000 and
+                call['scaffold_hex'].startswith('cd')):
+            return False
+    return _neutral_fixture(frame, bindings, horsea=True)
+
+
 def _controlled_fixture(frame, bindings, effect):
     """Derive a narrow noninterference condition from explicit observations.
 
@@ -252,24 +353,7 @@ def _controlled_fixture(frame, bindings, effect):
                       {'EFFECT_HEAL', 'EFFECT_HEALING_LIGHT', 'EFFECT_SPLASH', 'EFFECT_CONFUSE'}):
         if _stage_recipe(effect) is None:
             return False
-    if any(not _same_participant(frame, side) for side in (0, 1)):
-        return False
-    before = frame.before
-    if (before['weather'] != bindings['weather']['WEATHER_NONE'] or before['weather_turns'] or
-            before['trick_room']):
-        return False
-    if any(member['status'] or member['item'] for team in before['teams'] for member in team):
-        return False
-    if any(_active(before, side)['ability'] != bindings['neutral_ability'] for side in (0, 1)):
-        return False
-    for field in before['battlefield']:
-        if any(field['volatile'].values()):
-            return False
-        if any(field[name] for name in ('reflect_turns', 'light_screen_turns', 'safeguard_turns',
-                                        'mist_turns', 'spikes', 'toxic_spikes', 'FutureSightCount',
-                                        'TrappingMove', 'WrapCount', 'PerishCount')):
-            return False
-    return True
+    return _neutral_fixture(frame, bindings)
 
 
 def observe_move(case, frames, bindings):
@@ -292,6 +376,9 @@ def observe_move(case, frames, bindings):
         try:
             if frame.phase == 'controlled-source-turn':
                 if not _controlled_fixture(frame, bindings, case.effect):
+                    continue
+            elif frame.phase == 'source-action-span':
+                if not _local_fixture(frame, bindings, case.effect):
                     continue
             elif frame.phase == 'single-source-move':
                 if 'BattleCommand_usedmovetext' not in frame.source_commands:

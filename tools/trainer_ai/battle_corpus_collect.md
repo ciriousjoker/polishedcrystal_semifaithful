@@ -246,3 +246,69 @@ libmgba identity, writing no ledger in each rejection. Evidence lives under
 in the external project. The independent strict gate retains all other missing
 mechanics and the frontend limitation; M2 remains incomplete. The independent
 review found the provenance issue resolved in source before this fresh run.
+
+## Prepared local secondary-effect witness retention
+
+The new `source-action-span` phase has a separate witness gate. It does not gain
+coverage from its phase name or source hashes alone. The collector reconstructs
+both existing source callsites using the retained, manifest-checked ROM and SYM
+bytes and current inventory-bound source scaffolds. The runner and collector
+share the pure `execution_boundaries` binder in the reviewed observer module;
+no controller or native library is imported for collection.
+
+A local frame must identify a turn inside the explicit prelude/probe window,
+have empty individual-command diagnostics and verified read-only observations,
+and match exactly one actual execution-trace row for that turn and side. Actual
+move, miss result, both complete callsite contracts, and both complete before/
+after observations must agree with the trace. The callsite contracts must also
+equal the independently reconstructed source/ROM/SYM contracts. The existing
+semantic observer then independently recomputes the status/confusion transition,
+including secondary damage and neutral-fixture restrictions. Complete source
+terminal, independent Oracle comparisons, execution-time provenance and exact
+RecordedRun replay remain mandatory. Existing controlled-round witnesses keep
+their previous semantic checks and opposing-Splash restriction.
+
+This extension is code preparation only. The coordinator passed the original
+synthetic observer checks before the pure binder was factored; the current
+factored version and collector changes have not been imported or executed.
+Reviewed source hashes must be refreshed after the remaining controller writer
+freezes its final source. Old retained evidence is not rewritten or relabeled.
+
+After the bounded actual secondary run and positive retention, the next negative
+controls should each use disposable reports/cases and a fresh empty output:
+
+- Remove or duplicate the matching execution-trace row. Expected rejection:
+  `Local witness has missing or ambiguous actual execution`.
+- Change only the frame's target HP/status observation while leaving its trace
+  untouched. Expected rejection: `Local witness observation differs from actual
+  execution trace`.
+- Change both frame and trace callsite return PCs together. Expected rejection:
+  `Local callsites disagree with actual source/ROM/SYM boundaries`.
+- Remove secondary damage or the matching new status/confusion from both frame
+  and trace, preserving their equality. Expected rejection by independently
+  recomputed semantic activation.
+
+Each negative command must exit 2 and leave no ledger. These checks are planned,
+not executed evidence; absent actual secondary activation still contributes no
+claim and is retained as unsatisfied or blocked.
+
+## Executed local retention and rejection checks
+
+The reviewed local extension has now retained the corrected sixteen-case batch
+under `build/battle-corpus/secondary-local-retained-o3-01` in the external project.
+Two DynamicPunch fights contribute `move:DYNAMICPUNCH` and
+`effect:EFFECT_CONFUSE_HIT`; fourteen unsatisfied cases remain raw exclusions.
+The accepted cases contain 3,426 full source/Oracle comparisons and exact native
+replay. Collection exited zero. Its standalone strict gate reports 851 remaining
+missing-rule failures and no invalid evidence; this collection does not replace
+or merge the earlier retained collections, and M2 remains incomplete.
+
+All four planned local negative checks were executed against a positive case.
+Removing its trace row, changing only the frame observation, changing the same
+callsite in frame and trace, and consistently removing secondary confusion each
+rejected at the intended assertion with exit 2 and no ledger. Exact logs and
+return codes are retained in
+`subagents/m2-move-spans-01/artifacts/negative-results.json`. The pure observer
+checks passed after the shared binder refactor. The reviewed runner pin includes
+the narrowly corrected handling of the aliased end-of-move grammar scratch byte;
+old failed and retained artifacts were preserved unchanged.

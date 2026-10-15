@@ -4,19 +4,21 @@ Run serially in the project's heavy CPU slot. No mechanic is accepted merely
 because an action was submitted, PP fell, or a terminal fight was reached.
 """
 from dataclasses import asdict
+from copy import deepcopy
 import argparse
 import hashlib
 import json
 from pathlib import Path
-import re
 
 from battle_controller import ControllerMachine
 from battle_controller_check import Oracle
 from battle_controller_fight import ControllerFight
 from battle_controller_fight_check import RecordedRun, first_attack, first_replacement
 from battle_corpus import desired_moves, move_cases, scenario
-from battle_corpus_observers import MoveFrame, observe_move, source_bindings, supported_effect
+from battle_corpus_observers import (MoveFrame, observe_move, source_bindings,
+                                     supported_effect, execution_boundaries)
 from battle_env import MoveAction, UnsupportedFight
+from battle_decisions import observation
 
 FIRST_MOVES = ('TACKLE', 'THUNDER_WAVE', 'SWORDS_DANCE', 'GROWL', 'RECOVER',
                'REFLECT', 'LIGHT_SCREEN', 'RAIN_DANCE', 'SUNNY_DAY', 'SPLASH')
@@ -26,55 +28,26 @@ def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def near_call_boundary(machine, path, start_label, end_label, scaffold, target, suffix):
-    """Require a reviewed source scaffold and one matching assembled callsite."""
-    source = (machine.source_root / path).read_text()
-    # Local RGBDS labels can omit the colon.
-    short = start_label.split('.')[-1]
-    marker = '.' + short if '.' in start_label else start_label
-    match = re.search(r'^' + re.escape(marker) + r':?\s*\n(.*?)^' +
-                      re.escape(end_label) + r':?\s*\n', source, re.M | re.S)
-    if match is None:
-        raise UnsupportedFight('Diagnostic source region changed: ' + start_label)
-    code = [line.split(';', 1)[0].strip() for line in match[1].splitlines()]
-    code = [line for line in code if line]
-    if sum(code[i:i + len(scaffold)] == scaffold for i in range(len(code))) != 1:
-        raise UnsupportedFight('Diagnostic source scaffold changed: ' + start_label)
-    bank, start = machine.symbols[start_label]
-    end_bank, end = machine.symbols[end_label]
-    if bank != end_bank or not 0x4000 <= start < end < 0x8000:
-        raise UnsupportedFight('Diagnostic region must occupy one switchable bank')
-    target_bank, address = machine.symbols[target]
-    if address >= 0x4000 and target_bank != bank:
-        raise UnsupportedFight('Diagnostic near call changed banks: ' + target)
-    encoded = bytes((0xcd, address & 255, address >> 8)) + suffix
-    offset = bank * 0x4000 + start - 0x4000
-    region = machine.rom[offset:offset + end - start]
-    hits = [i for i in range(len(region) - len(encoded) + 1)
-            if region[i:i + len(encoded)] == encoded]
-    if len(hits) != 1:
-        raise UnsupportedFight('Diagnostic assembled scaffold is unknown or ambiguous')
-    return dict(bank=bank, return_pc=start + hits[0] + 3,
-                source=path, start=start_label, target=target, scaffold_hex=encoded.hex())
-
-
 class ExecutionTrace:
     """Read-only diagnostics at existing presentation hooks, never actor data."""
-    def __init__(self, machine):
-        apply_bank, apply_pc = machine.symbols['ApplyTilemapInVBlank']
-        used_bank, _ = machine.symbols['DisplayUsedMoveText']
-        if apply_pc >= 0x4000 and apply_bank != used_bank:
-            raise UnsupportedFight('Used-move tail jump changed banks')
-        # jmp expands to jp here; reject any source/build change to that ABI.
-        self.used = near_call_boundary(machine, 'engine/battle/used_move_text.asm',
-            'DisplayUsedMoveText', 'UpdateUsedMoves',
-            ['call StdBattleTextbox', 'jmp ApplyTilemapInVBlank'], 'StdBattleTextbox',
-            bytes((0xc3, apply_pc & 255, apply_pc >> 8)))
-        self.end = near_call_boundary(machine, 'engine/battle/core.asm',
-            'PerformMove', 'ResolveFaints',
-            ['call LoadTileMapToTempTileMap'], 'LoadTileMapToTempTileMap', b'')
+    def __init__(self, machine, actor_side=None, probe_turns=0):
+        self.used, self.end = execution_boundaries(machine)
         self.rows = []
-        self.pending = {}
+        self.pending = None
+        self.actor_side = actor_side
+        self.probe_turns = probe_turns
+
+    @staticmethod
+    def snapshot(machine, side):
+        # Read the live source state, not ControllerFight's frozen turn-start
+        # actor inputs. Observation queries execute on isolated copies. Assert
+        # that the complete live CPU/RAM/event tape and RNG remain unchanged.
+        state = bytes(machine.state)
+        rng = machine.rng.rng.getstate()
+        result = deepcopy(observation(machine, side))
+        if bytes(machine.state) != state or machine.rng.rng.getstate() != rng:
+            raise UnsupportedFight('Action-local observation mutated live State or RNG')
+        return result
 
     @staticmethod
     def matches(machine, contract):
@@ -88,19 +61,33 @@ class ExecutionTrace:
         if event is None:
             return
         if event.name == self.used['target'] and self.matches(machine, self.used):
+            if self.pending is not None:
+                raise UnsupportedFight('Nested or missing-end actual move span')
             side = machine.byte('hBattleTurn')
             if side not in (0, 1):
                 raise UnsupportedFight('Invalid actual move actor')
             row = dict(turn=machine.turn, side=side, move=machine.byte('wMoveGrammar'),
                        attack_missed=None, used_call=self.used, end_call=None)
+            if side == self.actor_side and machine.turn < self.probe_turns:
+                row['before'] = self.snapshot(machine, side)
             self.rows.append(row)
-            self.pending[side] = row
+            self.pending = row
         elif event.name == self.end['target'] and self.matches(machine, self.end):
             side = machine.byte('hBattleTurn')
-            row = self.pending.pop(side, None)
-            if row is not None and row['turn'] == machine.turn:
+            row = self.pending
+            self.pending = None
+            if row is not None:
+                if row['side'] != side or row['turn'] != machine.turn:
+                    raise UnsupportedFight('Actual move span identity changed before its end')
+                # wMoveGrammar aliases damage-stat scratch storage. Only the
+                # used-text call owns its move identity; retain the later byte
+                # for diagnostics without treating it as another move witness.
+                row['end_move_grammar_scratch'] = machine.byte('wMoveGrammar')
                 row['attack_missed'] = machine.byte('wAttackMissed')
                 row['end_call'] = self.end
+                if 'before' in row:
+                    row['after'] = self.snapshot(machine, side)
+                    row['observation_read_only_verified'] = True
 
     def segment(self, delegate):
         def checked(machine, stop, stop_bank=None):
@@ -148,6 +135,17 @@ def execute(fight, case, bindings, trace):
         transition = fight.step(actions_for(fight, case, bindings))
         states.append(RecordedRun.digest(fight.machine))
         actual = trace.rows[first:]
+        if trace.pending is not None:
+            raise UnsupportedFight('Actual move span did not finish within its source round')
+        for row in actual:
+            if 'after' not in row:
+                continue
+            frames.append(MoveFrame(row['before'], row['after'], row['side'], row['move'],
+                (), row['attack_missed'], phase='source-action-span',
+                move_execution_verified=True,
+                source_interval=dict(turn=row['turn'], side=row['side'], move=row['move'],
+                    used_call=row['used_call'], end_call=row['end_call']),
+                observation_read_only_verified=row['observation_read_only_verified']))
         # A round is never represented as an isolated move. Ambiguous repeated
         # execution, absent opposing Splash, or missing actor-local miss blocks it.
         own = [r for r in actual if r['side'] == case.actor_side and r['attack_missed'] is not None]
@@ -204,7 +202,7 @@ def run(args):
             if not case.ready or not supported_effect(case.effect):
                 raise UnsupportedFight('Fixture or semantic observer is unsupported')
             recording = RecordedRun(oracle)
-            trace = ExecutionTrace(machine)
+            trace = ExecutionTrace(machine, case.actor_side, len(case.prelude) + case.probe_turns)
             fight._old_segment_checker = trace.segment(recording.capture_segment)
             fight._old_single_step_checker = recording.capture_one
             start = len(oracle.rows)
@@ -227,7 +225,7 @@ def run(args):
                 summary.update(state='truncated' if fight.truncated else 'blocked',
                                reason='No complete source terminal fight')
             else:
-                replay_trace = ExecutionTrace(machine)
+                replay_trace = ExecutionTrace(machine, case.actor_side, len(case.prelude) + case.probe_turns)
                 fight._old_segment_checker = replay_trace.segment(recording.replay_segment)
                 fight._old_single_step_checker = recording.replay_one
                 reset_complete = False

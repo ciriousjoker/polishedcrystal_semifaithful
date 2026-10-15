@@ -74,6 +74,51 @@ require neutral baseline fixtures and actual opposing Splash, and reject
 unsupported/confounded secondary effects. A missed or skipped opposing Splash
 can leave status cases blocked even when another visible transition occurred.
 
+The prepared `source-action-span` path additionally retains complete detached
+source observations at the actual used-text call and its matching end-of-
+`PerformMove` call, for the selected actor during the bounded probe turns. It
+reads the live observation accessor directly, because the fight's public actor
+observation remains frozen at the previous decision. Every capture asserts that
+the complete live State bytes and RNG state are unchanged. These diagnostic
+observations are retained in the execution trace and frames, and exact replay
+must reproduce them. They are never added to actor inputs.
+
+Local spans preserve actual turn, side, move, miss result and both source/ROM
+callsite contracts. Nested starts, identity changes and spans still pending at
+the next round boundary reject execution. No individual BattleCommand execution
+is invented: `source_commands` stays empty for this phase. The reviewed local
+observer permits only existing primary status/confusion and their secondary-hit
+families, requires neutral Horsea with Swift Swim, no items, baseline status,
+volatiles or active field effects, and unchanged participants. The used-text to
+end-of-`PerformMove` interval excludes the opponent action and end-turn residual
+processing. Neutral abilities/items exclude on-hit attribution conflicts.
+Secondary effects need both actual target HP loss and newly applied matching
+status or positive confusion duration. Local acceptance does not require the
+opponent to complete Splash later in the round. Controlled-round observers
+retain their existing opposing-Splash restriction and reject secondary effects.
+
+This path and the added synthetic false-positive checks are code preparation
+only. They have not been imported, run or accepted against actual game evidence.
+After coordinator review, collector hash refresh and CPU-slot allocation, the
+next bounded actual command is:
+
+```sh
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 tools/trainer_ai/battle_corpus_run.py \
+  --artifact-root /Volumes/Storage/tmp/polished-ai \
+  --inventory /Volumes/Storage/tmp/polished-ai/build/battle-coverage/inventory.json \
+  --native-build /Volumes/Storage/tmp/polished-ai/build/battle-controller/native-o3 \
+  --optimization O3 \
+  --output /Volumes/Storage/tmp/polished-ai/checks/corpus-secondary-local-o3-01 \
+  --moves DYNAMICPUNCH POISON_STING SCALD SPARK \
+  --sides 0 1 --seeds 193 194 --max-turns 256
+```
+
+These four move names are present in the current inventory. DynamicPunch has
+100% secondary confusion chance after a successful 50%-accuracy hit; the other
+three have 30% secondary chance. Two fixed seeds give sixteen bounded full-fight
+cases. An absent hit or secondary activation remains unsatisfied or blocked,
+and no result is promoted without terminal/oracle/exact-replay evidence.
+
 A row is accepted only when the semantic observer reports activation, the full
 fight reaches an actual source terminal without truncation/fault, all source
 segments compare with independent mGBA CPU/memory execution, and taped native
@@ -115,3 +160,29 @@ Only the observed `move:TACKLE` and `effect:EFFECT_NORMAL_HIT` are candidate
 coverage keys from this checkpoint. No other move, ordinary frontend projection
 or complete M2 coverage follows from this result. The broader command above and
 coverage-registry integration remain pending.
+
+## Executed local secondary checkpoint
+
+The bounded four-move, two-side, two-seed run has now executed against the frozen
+O3 controller. All sixteen fights reached source terminal and exact RecordedRun
+replay. DynamicPunch activated on side 0 with seed 193 and side 1 with seed 194;
+the other fourteen cases remain unsatisfied. Only `move:DYNAMICPUNCH` and
+`effect:EFFECT_CONFUSE_HIT` gained positive witnesses. Poison Sting, Scald and
+Spark gained no coverage from this run.
+
+The accepted action-local snapshots show target HP 90 to 65 with confusion
+count 0 to 2, and target HP 90 to 64 with confusion count 0 to 4, respectively.
+Both have actual miss byte zero. The source-controlled full fights each lasted
+sixteen rounds. The retained accepted fights contain 3,426 independent Oracle
+comparison rows in total, with terminal and exact replay evidence.
+
+An initial attempt rejected every case because it incorrectly assumed
+`wMoveGrammar` remained a move identifier at the final boundary. The source
+aliases that byte with `wApplyStatLevelMultipliersToEnemy` in `ram/wramx.asm`;
+`engine/battle/core.asm` writes the latter during battle processing. The corrected
+runner preserves move identity only at the bound used-text call and retains the
+later scratch byte explicitly as `end_move_grammar_scratch`. Matching side, turn,
+source-bound end and absence of nested starts still enforce interval identity.
+Original failed outputs remain under `checks/corpus-secondary-local-o3-01`.
+The corrected immutable outputs are `checks/corpus-secondary-local-o3-02` in the
+external project. No source mechanics, hooks, native artifact or Oracle changed.
