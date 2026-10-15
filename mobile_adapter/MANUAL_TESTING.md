@@ -77,7 +77,7 @@ and resource-critical drawing may temporarily defer avatars; ordinary exploratio
 must show all three peers when they share the viewport. Select+A keeps the roster
 and rendering status available in a safe idle scene. Detailed finite coverage
 boundaries and remaining acceptance failures are recorded in the external
-[project run](/Volumes/Storage/tmp/mobileadapter/README.md).
+[project run](/Volumes/Storage/Development/agentic_projects/polished_multiplayer/README.md).
 
 The Mobile Adapter popup describes the emulator peripheral. Its initialization
 log can appear with emulation disabled, so the popup alone does not prove a Rust

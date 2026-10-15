@@ -8,9 +8,9 @@ through one WebSocket to a hosted lobby owner. The socket-independent Rust rules
 are shared by the embedded owner, native hosted simulator and WASM Durable Object.
 
 Project planning, binding requirements and current acceptance status now live in
-an external [agentic project run](/Volumes/Storage/tmp/mobileadapter/README.md).
-Milestone 2 remains open; see that run's STATE and acceptance matrix for the
-current failures and evidence. This repository retains product code, tests,
+an external [agentic project run](/Volumes/Storage/Development/agentic_projects/polished_multiplayer/README.md).
+Milestone 2 remains open. That run's human data is authoritative for scope,
+constraints and acceptance; STATE records technical ownership and evidence. This repository retains product code, tests,
 protocol specifications and operating instructions.
 Remote avatars use private records and independent rendering, without native
 NPC leases, removal permissions or map edits. The normal mobile target now uses
